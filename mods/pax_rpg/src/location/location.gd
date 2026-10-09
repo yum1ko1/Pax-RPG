@@ -264,26 +264,22 @@ func _physics_process(delta: float) -> void:
 		move = move.normalized()
 	var running := Input.is_physical_key_pressed(KEY_SHIFT)
 	var speed := _hf("run_speed", 5.0) if running else _hf("walk_speed", 2.4)
-	if _hero != null and _hero.armed and not running:
-		speed *= _hf("armed_speed_factor", 1.0)
+	if _hero != null and _hero.armed:
+		speed *= _hf("armed_run_factor", 0.8) if running else _hf("armed_speed_factor", 1.0)
 	var vel := _player.velocity
 	vel.x = move.x * speed
 	vel.z = move.z * speed
 	var space := Input.is_physical_key_pressed(KEY_SPACE) and not _typing()
 	if on_floor:
 		if space and not _space_down and not locked:
-			if _hero != null and _hero.has("Jump"):
-				_hero.jump(on_floor)            # отрыв — когда анимация присела (tick вернёт jump)
-			else:
-				vel.y = _hf("jump_speed", 7.0)
+			if _hero == null or _hero.jump(on_floor):
+				vel.y = _hf("jump_speed", 7.0)   # отрыв сразу; анимация прыжка — с момента отрыва
 	else:
 		vel.y -= _f("gravity", 20.0) * delta
 	_space_down = space
 	var moving := move.length() > 0.01 and on_floor
 	if _hero != null:
-		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running)
-		if r.jump:
-			vel.y = _hf("jump_speed", 7.0)
+		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		var step: Vector3 = r.root
 		if step != Vector3.ZERO and delta > 0.0:
 			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
@@ -292,6 +288,8 @@ func _physics_process(delta: float) -> void:
 			vel.z = w.z / delta
 	_player.velocity = vel
 	_player.move_and_slide()
+	if _hero != null:
+		_hero.cape_wind(_player.velocity)
 	if move.length() > 0.01 and not locked:
 		var want := atan2(-move.x, -move.z)   # «нос» смотрит по -Z
 		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, want, minf(1.0, delta * 12.0))

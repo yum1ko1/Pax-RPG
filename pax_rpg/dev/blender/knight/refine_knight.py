@@ -431,6 +431,13 @@ if img is not None:
             if not region[u] and ok[u] and (loose[u] or strict[u]):
                 region[u] = True
                 stack.append(u)
+    # рваный подол: тёмные лоскуты по краю — добрать 4 кольцами соседей внизу, где плащ (за ногами и по бокам)
+    hem = ok & (co[:, 2] < 0.75)
+    for _ in range(4):
+        add = np.zeros(len(co), dtype=bool)
+        add[ev[:, 0]] |= region[ev[:, 1]]
+        add[ev[:, 1]] |= region[ev[:, 0]]
+        region |= add & hem
     # влияние плаща: рампа сверху, затем сглаживание по соседям — без резких швов (иначе — «иглы»)
     infl = region * np.clip((Z_TOP - co[:, 2]) / 0.28, 0, 1)
     deg = np.bincount(ev.ravel(), minlength=len(co)).astype(np.float64)
