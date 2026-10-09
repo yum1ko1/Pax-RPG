@@ -1,0 +1,6 @@
+*.import
+*.uid
+.godot/
+__pycache__/
+*.blend1
+pax_rpg/dev/godot_test/.godot/
