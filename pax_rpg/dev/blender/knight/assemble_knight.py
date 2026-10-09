@@ -202,10 +202,22 @@ def frame_m(origin, ydir, zhint):
     return M
 
 
+FOREARM = {RHAND: find_bone("rightforearm"), LHAND: find_bone("leftforearm")}
+
+
 def grip_point(bone, f=None):
-    M = world(bone, f)
-    b = rig.data.bones[bone]
-    return M.translation + (M.to_3x3() @ Vector((0, b.length * 0.45, 0)))
+    """Середина кулака: продолжение предплечья за запястье на 8 см (длины костей Meshy для этого не годятся)."""
+    w = world(bone, f).translation
+    e = (MW @ pb[FOREARM[bone]].matrix).translation
+    return w + (w - e).normalized() * 0.08
+
+
+def facing(f):
+    """Куда смотрит таз на кадре f (горизонталь); в покое рыцарь смотрит на -Y."""
+    Mh = (MW @ pb[HIPS].matrix).to_3x3().normalized()
+    v = Mh @ HIPS_FWD
+    v.z = 0
+    return v.normalized()
 
 
 def attach(name, bone, Mworld):
@@ -230,22 +242,21 @@ for p in pb:
     p.rotation_euler = (0, 0, 0)
 bpy.context.view_layer.update()
 Mc = world(CHEST)
+HIPS_FWD = (MW @ pb[HIPS].matrix).to_3x3().normalized().inverted() @ Vector((0, -1, 0))
 height = max((o.matrix_world @ v.co).z for o in body for v in o.data.vertices) if body else 1.9
 c = Mc.translation
 back_grip = Vector((c.x - 0.20, c.y + 0.24, c.z + 0.30))
 back_dir = Vector((0.38, 0.06, -0.92))
 sword_back = attach("Sword_Back", CHEST, frame_m(back_grip, back_dir, Vector((0, 1, 0))))
 
-# в руке: стойка — первый кадр Attack1; клинок — от левой руки к правой и дальше (правая — у гарды)
-use(rig, clips["Attack1"])
-f0 = int(clips["Attack1"].frame_range[0])
-R, L = grip_point(RHAND, f0), grip_point(LHAND, f0)
-blade = R - L
-fwd = Vector((0, -1, 0.35))
-if blade.length < 0.06 or blade.dot(fwd) < 0:
-    blade = fwd if blade.length < 0.06 else -blade
-side = blade.cross(Vector((0, 0, 1))) if abs(blade.normalized().z) < 0.95 else Vector((1, 0, 0))
-hand_M = frame_m(R, blade, side)                    # плоскость клинка — вбок, кромка — по ходу удара
+# в руке: последний кадр Draw — стойка, клинок вперёд-вверх от правого кулака
+use(rig, clips["Draw"])
+f_end = int(clips["Draw"].frame_range[1])
+R, L = grip_point(RHAND, f_end), grip_point(LHAND, f_end)
+fw = facing(f_end)
+blade = (fw + Vector((0, 0, 0.75))).normalized()
+side = blade.cross(Vector((0, 0, 1))).normalized()
+hand_M = frame_m(R, blade, side)                    # плоскость клинка — вбок, кромка — вниз, к врагу
 sword_hand = attach("Sword_Hand", RHAND, hand_M)
 log.append(f"hands at guard: R {tuple(round(x, 2) for x in R)} L {tuple(round(x, 2) for x in L)} dist {round((R - L).length, 2)}")
 
