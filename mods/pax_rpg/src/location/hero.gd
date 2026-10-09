@@ -73,7 +73,11 @@ static func _tip_of(n: Node3D) -> Vector3:
 	if mi == null or mi.mesh == null:
 		return Vector3.ZERO
 	var box := mi.mesh.get_aabb()
-	var to_node := n.global_transform.affine_inverse() * mi.global_transform if mi != n else Transform3D.IDENTITY
+	var to_node := Transform3D.IDENTITY          # сетка в осях меча — по локальным, модель ещё не в дереве
+	var c: Node = mi
+	while c != n and c is Node3D:
+		to_node = (c as Node3D).transform * to_node
+		c = c.get_parent()
 	var best := Vector3.ZERO
 	for i: int in 8:
 		var p := to_node * box.get_endpoint(i)
