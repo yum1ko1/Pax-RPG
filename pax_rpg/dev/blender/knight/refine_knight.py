@@ -236,15 +236,26 @@ run = clips["Run"]
 f0, f1 = int(run.frame_range[0]), int(run.frame_range[1])
 act = new_action("RunArmed")
 drag_made = False
+# Тяжёлый меч не мотается за плечом: направление бега одно на весь цикл (таз в беге виляет — по нему рука
+# ходила бы из стороны в сторону), рука следует за плечом лишь на треть его тряски, кисть держит меч
+# в одном повороте — меч плывёт за рыцарем, а не дёргается.
+fw, side = FWD.copy(), FWD.cross(UP)
+shs = []
+for f in range(f0, f1 + 1):
+    apply(capture(run, f))
+    turn_bone("Spine01", Quaternion(side, math.radians(-8)))
+    shs.append(head(UA))
+sh_mean = sum(shs, Vector()) / len(shs)
+RH_RUN = None
 for f in range(f0, f1 + 1):
     pose = capture(run, f)
     apply(pose)
-    fw = facing()
-    side = fw.cross(UP)                   # вправо от бега
     turn_bone("Spine01", Quaternion(side, math.radians(-8)))        # наклон вперёд — тяжело
-    sh = head(UA)
-    bob = 0.03 * math.sin(2 * math.pi * (f - f0) / max(1, f1 - f0) * 2)
-    ik_arm(sh - fw * 0.30 + side * 0.10 - UP * (0.60 + bob), -fw * 0.4 + side * 0.6)
+    sh = sh_mean + (head(UA) - sh_mean) * 0.35
+    ik_arm(sh - fw * 0.30 + side * 0.10 - UP * 0.60, -fw * 0.4 + side * 0.6)
+    if RH_RUN is None:
+        RH_RUN = rot_w(HA)
+    set_rot_w(HA, RH_RUN)
     if not drag_made:                     # меч волочится: остриё на земле позади
         grip = head(HA) + rot_w(HA) @ T_OFF
         dz = 0.05 - grip.z
@@ -374,7 +385,7 @@ def smooth(x):
     return x * x * (3 - 2 * x)
 
 
-GRAB_F, DRAW_LEN = 11, 44                 # кадр хвата; конец доставания
+GRAB_F, DRAW_LEN = 13, 54                 # кадр хвата; конец доставания
 apply(P_IDLE)
 RH_GRAB, W_GRAB = hand_for(q_back.to_matrix(), back_grip)
 ik_arm(W_GRAB, KEYS[0][3])
@@ -398,13 +409,18 @@ def draw_pose(f):
         apply(pose)
         return
     u = (f - GRAB_F) / (DRAW_LEN - GRAB_F)
-    u = u * u * (3 - 2 * u) * 0.35 + u * 0.65   # мягкий старт и посадка, но середина — быстрая дуга
+    u = u * u * (3 - 2 * u) * 0.6 + u * 0.4     # мягкий старт с крюка и тяжёлая посадка, середина — дуга
     base = blend(P_IDLE, P_GUARD, smooth((u - 0.35) / 0.55))
     apply(base)
     # корпус: рывок назад на снятии, наклон вперёд, когда меч падает, и присед от веса
-    lean = -5 * math.sin(math.pi * min(1, u / 0.3)) if u < 0.3 else 9 * math.sin(math.pi * min(1, (u - 0.5) / 0.5))
+    if u < 0.3:
+        lean = -5 * math.sin(math.pi * u / 0.3)
+    elif u < 0.5:
+        lean = 0.0
+    else:
+        lean = 10 * math.sin(math.pi * (u - 0.5) / 0.5)
     turn_bone("Spine01", Quaternion(side, math.radians(-lean)))
-    drop = 0.06 * math.sin(math.pi * min(1, max(0, (u - 0.62) / 0.38)))
+    drop = 0.08 * math.sin(math.pi * min(1, max(0, (u - 0.62) / 0.38)))
     if drop:
         pb[HIPS].matrix = MWi @ Matrix.Translation(-UP * drop) @ MW @ pb[HIPS].matrix
         vl.update()
@@ -425,12 +441,12 @@ def draw_pose(f):
 
 act = new_action("Draw")
 for f in range(0, DRAW_LEN + 1):
-    if f <= GRAB_F and f not in (0, 4, 7, GRAB_F):
+    if f <= GRAB_F and f not in (0, 5, 9, GRAB_F):
         continue                          # тянущаяся рука — по ключам, Blender сгладит
     draw_pose(f)
     key(act, f)
 # Убрать: путь назад, у крюка медленнее (меч надо попасть рукоятью в зажим)
-SH_MAP = [(0, DRAW_LEN), (8, 34), (20, 22), (30, GRAB_F + 2), (36, GRAB_F), (48, 0)]
+SH_MAP = [(0, DRAW_LEN), (11, 41), (26, 26), (38, GRAB_F + 2), (45, GRAB_F), (58, 0)]
 SHEATHE_LEN = SH_MAP[-1][0]
 act = new_action("Sheathe")
 for s_f in range(0, SHEATHE_LEN + 1):
@@ -449,6 +465,21 @@ meta["sword_switch"] = {"Draw": {"frame": GRAB_F, "time": round(GRAB_F / FPS, 3)
 for n in ("Draw", "Sheathe", "Jump"):
     meta["root_motion"].pop(n, None)
 
+# На ходу: ноги и таз — из шага (Walk по кругу), всё выше пояса — из доставания. Рука берёт меч относительно
+# груди, а меч на спине висит на груди — хват совпадает и при шаге.
+LEGS = {HIPS} | {f"{s_}{b_}" for s_ in ("Left", "Right") for b_ in ("UpLeg", "Leg", "Foot", "ToeBase")}
+walk = clips["Walk"]
+w0, w1 = int(walk.frame_range[0]), int(walk.frame_range[1])
+for src in ("Draw", "Sheathe"):
+    a = clips[src]
+    s0, s1 = int(a.frame_range[0]), int(a.frame_range[1])
+    act = new_action(src + "Walk")
+    for f in range(s0, s1 + 1):
+        up_ = capture(a, f)
+        lg = capture(walk, w0 + (f - s0) % max(1, w1 - w0))
+        apply({n: (lg[n] if n in LEGS else up_[n]) for n in up_})
+        key(act, f - s0)
+
 # ---------- 4. меч не уходит в землю; удар о землю ----------
 def tip_and_grip(ob):
     o, R = sword_frame(ob)
@@ -458,16 +489,19 @@ def tip_and_grip(ob):
 impact = {}
 for name, ob, mode in (("Attack1", sw_hand, "floor"), ("Attack2", sw_hand, "floor"), ("Attack3", sw_hand, "floor"),
                        ("Draw", sw_hand, "floor"), ("Sheathe", sw_hand, "floor"),
+                       ("DrawWalk", sw_hand, "floor"), ("SheatheWalk", sw_hand, "floor"),
                        ("RunArmed", bpy.data.objects["Sword_Drag"], "pin")):
     a = clips[name]
     fr = range(int(a.frame_range[0]), int(a.frame_range[1]) + 1)
     _prev.clear()
     lowest = None
     fixed = 0
+    tips = {}
     for f in fr:
         pose = capture(a, f)
         apply(pose)
         tip, o, R = tip_and_grip(ob)
+        tips[f] = tip.z
         if lowest is None or tip.z < lowest[1]:
             lowest = (f, tip.z)
         want = 0.04
@@ -488,7 +522,11 @@ for name, ob, mode in (("Attack1", sw_hand, "floor"), ("Attack2", sw_hand, "floo
         if changed:
             key(a, f)
             fixed += 1
-    impact[name] = round((lowest[0] - fr[0]) / FPS, 3)
+    # удар о землю — первый кадр касания перед самой низкой точкой (а не сама низшая точка: она позже)
+    touch = lowest[0]
+    while touch - 1 in tips and tips[touch - 1] < 0.12:
+        touch -= 1
+    impact[name] = round((touch - fr[0]) / FPS, 3)
     log.append(f"{name}: tip lowest {round(lowest[1], 2)} m at {impact[name]} s, fixed frames {fixed}")
 meta["impact"] = {"Attack3": impact["Attack3"]}
 
@@ -543,8 +581,10 @@ if img is not None:
                 region[u] = True
                 stack.append(u)
     # рваный подол: тёмные лоскуты по краю — добрать 4 кольцами соседей внизу, где плащ (за ногами и по бокам)
-    hem = ok & (co[:, 2] < 0.75)
-    for _ in range(4):
+    # подол до самых сапог: за серединой ног (сзади) и ниже колен — 9 колец
+    hips_y = float((MW @ pb[HIPS].head).y)
+    hem = ok & (co[:, 2] < 0.8) & (co[:, 1] > hips_y - 0.03)
+    for _ in range(9):
         add = np.zeros(len(co), dtype=bool)
         add[ev[:, 0]] |= region[ev[:, 1]]
         add[ev[:, 1]] |= region[ev[:, 0]]

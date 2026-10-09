@@ -24,10 +24,9 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("Draw", f, v) for f in (0, 7, 11, 16, 22, 28, 33, 38, 44) for v in ("FRONT34", "BACK34")] + \
-        [("Sheathe", f, "BACK34") for f in (8, 20, 30, 36, 48)] + [("Idle", 0, "BACK"), ("Idle", 0, "RIGHT")] + \
-        [("IdleArmed", 0, "FRONT34"), ("RunArmed", 0.3, "RIGHT"), ("RunArmed", 0.7, "FRONT34"),
-         ("Attack3", "impact", "FRONT34"), ("Attack3", "impact", "RIGHT"), ("Run", 0.3, "BACK")]
+SHOTS = [("Draw", f, "BACK34") for f in (13, 20, 28, 36, 44, 54)] + \
+        [("DrawWalk", f, "FRONT34") for f in (0, 20, 36, 54)] + \
+        [("RunArmed", t, "RIGHT") for t in (0.0, 0.25, 0.5, 0.75)] + [("Run", 0.3, "BACK")]
 files = []
 
 
@@ -52,9 +51,9 @@ for clip, t, view in SHOTS:
         show("Sword_Drag")
     elif clip in ("Run", "Idle"):
         show("Sword_Back")
-    elif clip == "Sheathe":
+    elif clip.startswith("Sheathe"):
         show("Sword_Hand" if sw_t < meta["sword_switch"]["Sheathe"]["time"] else "Sword_Back")
-    elif clip == "Draw":
+    elif clip.startswith("Draw"):
         show("Sword_Hand" if sw_t >= meta["sword_switch"]["Draw"]["time"] else "Sword_Back")
     else:
         show("Sword_Hand")
@@ -72,6 +71,7 @@ for p in pb:
 show("Sword_Back")
 bpy.context.view_layer.update()
 files += U.shot("k2_cape_test", (0, 0, 1.0), 3.0, ("RIGHT", "BACK"), res=450)
+files += U.shot("k2_cape_low", (0, 0, 0.35), 1.2, ("RIGHT", "BACK", "LEFT"), res=450)
 for p in pb:
     p.rotation_quaternion = (1, 0, 0, 0)
 result["files"] = [p.split("\\")[-1] for p in files]

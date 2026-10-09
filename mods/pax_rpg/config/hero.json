@@ -1,5 +1,5 @@
 {
-	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа. Словари по клипам ({\"Attack1\": …}) — своё значение для каждого удара: combo_cancel — с какой доли клипа начинается следующий удар, если нажат; combo_skip — сколько секунд замаха следующего удара пропустить; attack_end — где удар без продолжения кончается и уходит в стойку; combo_grace — сколько секунд после этого нажатие ещё продолжает комбо. cape_* — пружинные кости плаща.",
+	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа. Словари по клипам ({\"Attack1\": …}) — своё значение для каждого удара: combo_cancel — с какой доли клипа начинается следующий удар, если нажат; combo_skip — сколько секунд замаха следующего удара пропустить; attack_end — где удар без продолжения кончается и уходит в стойку; combo_grace — сколько секунд после этого нажатие ещё продолжает комбо; sword_follow — как быстро волочащийся меч догоняет руку (меньше — тяжелее); impact_lead — звук удара о землю на столько секунд раньше касания. cape_* — пружинные кости плаща.",
 	"model": "models/knight.glb",
 	"anim_meta": "models/knight_anim.json",
 	"capsule_height": 1.9,
@@ -29,8 +29,8 @@
 		"Attack1": 0.37,
 		"Attack2": 0.67,
 		"Attack3": 1.03,
-		"Draw": 1.0,
-		"Sheathe": 0.5
+		"Draw": 1.2,
+		"Sheathe": 0.73
 	},
 	"swing_lead": 0.55,
 	"swing_volume_db": -4.0,
@@ -39,6 +39,8 @@
 	"combo_grace": 0.5,
 	"blend_run_armed": 0.5,
 	"sword_floor": 0.04,
+	"sword_follow": 7.0,
+	"impact_lead": 0.05,
 	"combo_skip": {
 		"Attack2": 0.15,
 		"Attack3": 0.45
@@ -49,16 +51,18 @@
 		"Attack3": 0.6
 	},
 	"attack_speed": {
-		"Attack1": 1.0,
-		"Attack2": 1.05,
-		"Attack3": 1.05
+		"Attack1": 0.88,
+		"Attack2": 0.9,
+		"Attack3": 0.88
 	},
 	"blend_in": {
 		"Attack1": 0.15,
-		"Attack2": 0.12,
-		"Attack3": 0.12,
-		"Draw": 0.2,
-		"Sheathe": 0.2,
+		"Attack2": 0.18,
+		"Attack3": 0.18,
+		"Draw": 0.25,
+		"Sheathe": 0.25,
+		"DrawWalk": 0.3,
+		"SheatheWalk": 0.3,
 		"Jump": 0.1
 	},
 	"blend_loop": 0.35,

@@ -248,7 +248,9 @@ func _physics_process(delta: float) -> void:
 	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
 	var f := (Input.is_physical_key_pressed(KEY_F) or Input.is_key_pressed(KEY_F)) and not _typing()
 	if (_f_queued or (f and not _f_down)) and _hero != null:
-		_hero.toggle_sword(on_floor)
+		var wasd := Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_A) \
+			or Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_D)
+		_hero.toggle_sword(on_floor, wasd)
 	_f_queued = false
 	_f_down = f
 	if _lmb_queued and _hero != null:
@@ -264,9 +266,9 @@ func _physics_process(delta: float) -> void:
 	var move := right * input.x - forward * input.y
 	if move.length() > 1.0:
 		move = move.normalized()
-	var running := Input.is_physical_key_pressed(KEY_SHIFT)
+	var running := Input.is_physical_key_pressed(KEY_SHIFT) and not (_hero != null and _hero.walk_only())
 	var speed := _hf("run_speed", 5.0) if running else _hf("walk_speed", 2.4)
-	if _hero != null and _hero.armed:
+	if _hero != null and (_hero.armed or _hero.walk_only()):
 		speed *= _hf("armed_run_factor", 0.8) if running else _hf("armed_speed_factor", 1.0)
 	var vel := _player.velocity
 	vel.x = move.x * speed

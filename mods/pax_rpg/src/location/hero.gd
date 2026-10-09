@@ -7,7 +7,8 @@ extends RefCounted
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed"]
-const ONCE := ["Draw", "Sheathe", "Jump", "Attack1", "Attack2", "Attack3"]
+const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3"]
+const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
 var meta: Dictionary = {}           # *_anim.json: root_motion, sword_switch, impact, cape
@@ -27,6 +28,8 @@ var _drag_rest := Transform3D.IDENTITY
 var _tip := Vector3.ZERO            # остриё в осях меча (из габаритов сетки)
 var _drag_w := 0.0                  # 0 — меч в руке как в стойке, 1 — волочится; между — плавный переход
 var _on_floor := true
+var _sword_q := Quaternion.IDENTITY   # поворот волочащегося меча с отставанием — он тяжёлый
+var _sword_lag := false
 var _prev_off := Vector2.ZERO       # root motion: смещение клипа на прошлом кадре
 var _swing: AudioStreamPlayer       # свист меча (sounds/swing_*.wav)
 var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wav)
@@ -157,7 +160,12 @@ func has(n: String) -> bool:
 
 
 func locks_move() -> bool:
-	return action != "" and action != "Jump"
+	return action != "" and action != "Jump" and action not in ON_THE_GO
+
+
+## Достаёт или убирает меч на ходу — бежать нельзя, только шаг.
+func walk_only() -> bool:
+	return action in ON_THE_GO
 
 
 # ---------- плащ: пружинные кости ----------
@@ -205,10 +213,12 @@ func cape_wind(velocity: Vector3) -> void:
 
 # ---------- команды ----------
 
-func toggle_sword(on_floor: bool) -> void:
+func toggle_sword(on_floor: bool, moving := false) -> void:
 	if anim == null or action != "" or not on_floor:
 		return
 	var n := "Sheathe" if armed else "Draw"
+	if moving and has(n + "Walk"):
+		n += "Walk"
 	if not has(n):
 		armed = not armed
 		_show_sword(0.0)
@@ -248,7 +258,7 @@ func _play_once(n: String, skip := 0.0) -> void:
 	_prev_off = Vector2.ZERO
 	_swing_done = false
 	_impact_done = false
-	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else 1.0
+	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
 	anim.play(n, _per("blend_in", n, 0.15))
 	if skip > 0.0:
 		anim.seek(skip, true)
@@ -261,9 +271,9 @@ func _on_finished(n: StringName) -> void:
 
 
 func _end_action() -> void:
-	if action == "Draw":
+	if action.begins_with("Draw"):
 		armed = true
-	elif action == "Sheathe":
+	elif action.begins_with("Sheathe"):
 		armed = false
 	var i := ATTACKS.find(action)
 	if i >= 0 and i + 1 < ATTACKS.size():
@@ -337,13 +347,15 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 
 func _sounds() -> void:
 	var peaks: Dictionary = cfg.get("swing_peaks", {})
-	if _swing != null and not _swing_done and peaks.has(action) \
-			and _pos() >= float(peaks[action]) - _f("swing_lead", 0.55):
+	var base := action.trim_suffix("Walk")
+	if _swing != null and not _swing_done and peaks.has(base) \
+			and _pos() >= float(peaks[base]) - _f("swing_lead", 0.55):
 		_swing_done = true
 		_swing.volume_db = _f("swing_volume_db", -4.0) + (0.0 if action in ATTACKS else -6.0)
 		_swing.play()
 	var imp: Dictionary = meta.get("impact", {})
-	if _impact != null and not _impact_done and imp.has(action) and _pos() >= float(imp[action]):
+	if _impact != null and not _impact_done and imp.has(action) \
+			and _pos() >= float(imp[action]) - _f("impact_lead", 0.05) * anim.speed_scale:
 		_impact_done = true
 		_impact.play()
 
@@ -381,9 +393,9 @@ func _show_sword(delta: float) -> void:
 		return
 	var sw: Dictionary = meta.get("sword_switch", {})
 	var in_hand := armed
-	if action == "Draw":
+	if action.begins_with("Draw"):
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
-	elif action == "Sheathe":
+	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
 	elif action in ATTACKS:
 		in_hand = true
@@ -403,7 +415,16 @@ func _show_sword(delta: float) -> void:
 		var qa := a.basis.get_rotation_quaternion()
 		var qb := b.basis.get_rotation_quaternion()
 		var sc := a.basis.get_scale()
-		_sword_hand.global_transform = Transform3D(Basis(qa.slerp(qb, k)).scaled(sc), a.origin.lerp(b.origin, k))
+		var q := qa.slerp(qb, k)
+		if _sword_lag and delta > 0.0:
+			if _sword_q.dot(q) < 0.0:
+				q = -q
+			q = _sword_q.slerp(q, 1.0 - exp(-delta * _f("sword_follow", 7.0)))   # меч догоняет руку с запозданием
+		_sword_q = q
+		_sword_lag = true
+		_sword_hand.global_transform = Transform3D(Basis(q).scaled(sc), a.origin.lerp(b.origin, k))
+	else:
+		_sword_lag = false
 	_keep_above_floor()
 
 
