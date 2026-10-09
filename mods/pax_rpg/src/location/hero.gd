@@ -39,6 +39,7 @@ var _impact_done := false
 var _skel: Skeleton3D
 var _cloth: SoftBody3D              # плащ — ткань (models/*_cape.glb), пришита к груди, бьётся о тело
 var _cloth_anchors: Array = []      # [Node3D, кость] — грудь и плечи в мире, к ним пришит верх плаща
+var _cloth_xform := Transform3D.IDENTITY   # где ткань создана: её сетка — в этих осях
 var _cloth_pin_left := 0            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
 var _colliders: Array = []          # [AnimatableBody3D, кость от, кость до] — капсулы тела для ткани
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
@@ -222,6 +223,7 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	sb.mesh = mesh
 	sb.top_level = true
 	sb.transform = model.global_transform * local
+	_cloth_xform = sb.transform
 	sb.collision_layer = 0
 	sb.collision_mask = 1 | CLOTH_LAYER
 	sb.simulation_precision = int(_f("cape_precision", 6))
@@ -270,31 +272,39 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	_move_colliders()
 
 
-## Верх плаща пришивается по всей ширине: сетка делится на полосы по X, в каждой — точки у её верхнего края (верх
-## плаща у плеч ниже, чем у шеи: один общий порог пришил бы только середину). Каждая точка — к ближней из костей
-## груди, плеч и шеи. Номера точек — как их сваривает сервер физики (одинаковые позиции — одна точка, по порядку).
-func _pin_cloth() -> void:
+## Верх плаща пришивается по всей ширине: точки делятся на полосы по X, в каждой пришиваются те, что у её верхнего
+## края (у плеч верх ниже, чем у шеи), — каждая к ближней из костей груди, плеч и шеи. Позиции берутся у самих точек
+## мягкого тела (не по номерам вершин сетки — сервер физики мог сварить их по-своему). false — точки ещё не готовы.
+func _pin_cloth() -> bool:
 	var cape: Dictionary = meta.get("cape", {})
-	var verts: PackedVector3Array = _cloth.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	var seen := {}
-	var pts := PackedVector3Array()
-	for v: Vector3 in verts:
-		if not seen.has(v):
-			seen[v] = pts.size()
-			pts.append(v)
+	var n := (_cloth.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var raw := PackedVector3Array()
+	var c := Vector3.ZERO
+	for i: int in n:
+		var p: Vector3 = _cloth.get_point_transform(i)
+		raw.append(p)
+		c += p
+	if n == 0 or c == Vector3.ZERO:
+		return false
+	c /= float(n)
+	# точки — в мире или в осях узла: что ближе к телу, то и верно
+	var to_local := _cloth_xform.affine_inverse()
+	var global := c.distance_to(model.global_position) < (_cloth_xform * c).distance_to(model.global_position)
 	var strip := _f("cape_pin_strip", 0.05)
 	var band := float(cape.get("pin_band", 0.08))
+	var loc := PackedVector3Array()
 	var tops := {}
-	for p: Vector3 in pts:
-		var k := int(floor(p.x / strip))
-		tops[k] = maxf(float(tops.get(k, -INF)), p.y)
-	var to_world := _cloth.global_transform
-	var n_pinned := 0
-	for i: int in pts.size():
-		var p := pts[i]
-		if p.y < float(tops[int(floor(p.x / strip))]) - band:
+	for p: Vector3 in raw:
+		var l := to_local * p if global else p
+		loc.append(l)
+		var k := int(floor(l.x / strip))
+		tops[k] = maxf(float(tops.get(k, -INF)), l.y)
+	var pinned := 0
+	for i: int in n:
+		var l := loc[i]
+		if l.y < float(tops[int(floor(l.x / strip))]) - band:
 			continue
-		var w := to_world * p
+		var w := _cloth_xform * l
 		var best: Node3D = null
 		var bd := INF
 		for an: Array in _cloth_anchors:
@@ -304,8 +314,9 @@ func _pin_cloth() -> void:
 				bd = d
 				best = node
 		_cloth.set_point_pinned(i, true, _cloth.get_path_to(best))
-		n_pinned += 1
-	_mod.log_info("Pax RPG: cape pinned %d of %d points" % [n_pinned, pts.size()])
+		pinned += 1
+	_mod.log_info("Pax RPG: cape pinned %d of %d points (%s)" % [pinned, n, "global" if global else "local"])
+	return true
 
 
 func _move_colliders() -> void:
@@ -324,8 +335,8 @@ func _cloth_tick() -> void:
 		return
 	if _cloth_pin_left > 0:
 		_cloth_pin_left -= 1
-		if _cloth_pin_left == 0:
-			_pin_cloth()
+		if _cloth_pin_left == 0 and not _pin_cloth():
+			_cloth_pin_left = 1                  # точки мягкого тела ещё не созданы — через кадр
 		return
 	for an: Array in _cloth_anchors:
 		(an[0] as Node3D).global_transform = _bone_world(int(an[1]))

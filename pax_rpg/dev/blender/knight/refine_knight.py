@@ -685,10 +685,35 @@ if len(cape_ids) > 200:
         md.ratio = CAPE_TARGET / n0
         bpy.ops.object.modifier_apply(modifier="dec")
     log.append(f"cape cloth: dropped {len(kill)} loose verts, kept {kept} pieces, {n0} -> {len(cape.data.vertices)} verts")
+    # однотонная ткань без развёртки и с гладкими нормалями: в glb ни одна вершина не дробится на швах, номера точек
+    # мягкого тела в игре = номера вершин сетки (иначе верх пришивался к случайным точкам — «рваные куски»)
+    cm = cape.data
+    cv = col[cape_ids] if len(cape_ids) else np.array([[0.12, 0.08, 0.2]])
+    srgb = np.clip(np.median(cv, axis=0), 0, 1)
+    lin = [float(c) ** 2.2 for c in srgb]
+    mat = bpy.data.materials.get("CapeCloth") or bpy.data.materials.new("CapeCloth")
+    mat.use_nodes = True
+    mat.use_backface_culling = False
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = (*lin, 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.9
+    bsdf.inputs["Metallic"].default_value = 0.0
+    cm.materials.clear()
+    cm.materials.append(mat)
+    for uv in list(cm.uv_layers):
+        cm.uv_layers.remove(uv)
+    for ca in list(cm.color_attributes):
+        cm.color_attributes.remove(ca)
+    for an in ("sharp_edge", "sharp_face"):
+        if an in cm.attributes:
+            cm.attributes.remove(cm.attributes[an])
+    if cm.has_custom_normals:
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+    cm.shade_smooth()
+    log.append(f"cape colour srgb {[round(float(c), 3) for c in srgb]}")
     cape_path = os.path.join(OUT, "knight_cape.glb")
     bpy.ops.export_scene.gltf(filepath=cape_path, export_format="GLB", use_selection=True, export_animations=False,
-                              export_skins=False, export_yup=True, export_image_format="JPEG",
-                              export_jpeg_quality=88)
+                              export_skins=False, export_yup=True, export_texcoords=False, export_tangents=False)
     scn.collection.objects.unlink(cape)          # в knight.glb плаща нет — он отдельной тканью
     meta["cape"] = {"cloth": "models/knight_cape.glb", "pin_band": PIN_BAND}
 # прыжок финального удара: высота таза по кадрам (для настройки полёта в игре)

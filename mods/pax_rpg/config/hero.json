@@ -47,8 +47,8 @@
 	"jump_skip": 0.3,
 	"combo_grace": 0.5,
 	"clip_speed": {
-		"Dodge": 0.95,
-		"DodgeArmed": 0.85
+		"Dodge": 1.3,
+		"DodgeArmed": 1.15
 	},
 	"blend_run_armed": 0.5,
 	"sword_floor": 0.04,
