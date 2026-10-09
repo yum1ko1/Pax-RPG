@@ -89,6 +89,7 @@
 		"sounds/impact_3.wav"
 	],
 	"impact_volume_db": 0.0,
+	"cape_debug": true,
 	"cape_precision": 6,
 	"cape_mass": 1.2,
 	"cape_stiffness": 0.6,

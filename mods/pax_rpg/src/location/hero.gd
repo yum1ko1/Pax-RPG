@@ -40,7 +40,9 @@ var _skel: Skeleton3D
 var _cloth: SoftBody3D              # плащ — ткань (models/*_cape.glb), пришита к груди, бьётся о тело
 var _cloth_anchors: Array = []      # [Node3D, кость] — грудь и плечи в мире, к ним пришит верх плаща
 var _cloth_xform := Transform3D.IDENTITY   # где ткань создана: её сетка — в этих осях
-var _cloth_pin_left := 0            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
+var _cloth_pin_left := 0
+var _dbg_frames := 0
+var _dbg_point := 0               # самая нижняя точка плаща — для cape_debug            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
 var _colliders: Array = []          # [AnimatableBody3D, кость от, кость до] — капсулы тела для ткани
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
 var _trail_mat: StandardMaterial3D
@@ -315,6 +317,11 @@ func _pin_cloth() -> bool:
 				best = node
 		_cloth.set_point_pinned(i, true, _cloth.get_path_to(best))
 		pinned += 1
+	var low := INF
+	for i: int in n:
+		if loc[i].y < low:
+			low = loc[i].y
+			_dbg_point = i
 	_mod.log_info("Pax RPG: cape pinned %d of %d points (%s)" % [pinned, n, "global" if global else "local"])
 	return true
 
@@ -341,6 +348,12 @@ func _cloth_tick() -> void:
 	for an: Array in _cloth_anchors:
 		(an[0] as Node3D).global_transform = _bone_world(int(an[1]))
 	_move_colliders()
+	if bool(cfg.get("cape_debug", false)):
+		_dbg_frames += 1
+		if _dbg_frames % 60 == 0:
+			var hem: Vector3 = _cloth.get_point_transform(_dbg_point)
+			var top: Vector3 = (_cloth_anchors[0][0] as Node3D).global_position
+			_mod.log_info("cape dbg: hem %s top %s model %s" % [hem, top, model.global_position])
 
 
 ## Ткань сама тянется за телом — ветер больше не нужен (оставлено для location.gd).
