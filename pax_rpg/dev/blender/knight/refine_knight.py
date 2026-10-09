@@ -7,8 +7,8 @@
     перекатывают через правое плечо, левая рука ловит рукоять — см. раздел 3; путь задан для меча, руки — IK;
   - меч не уходит в землю: в ударах кисть поворачивается так, чтобы остриё оставалось над землёй; кадр, где
     остриё ниже всего в Attack3, — удар о землю (звук);
-  - плащ: цепочки костей Cape_<i>_<j> за спиной, вершины плаща (по цвету текстуры) перевешены на них —
-    в игре их качает SpringBoneSimulator3D;
+  - плащ: вершины плаща (по цвету текстуры) отрезаются в отдельную сетку knight_cape.glb — в игре это ткань
+    SoftBody3D, пришитая к груди и сталкивающаяся с телом;
   - экспорт <W>/knight/knight.glb и knight_anim.json.
 Оси Blender: Z вверх, рыцарь смотрит на -Y, правая рука — -X. Арматура Meshy в сантиметрах (масштаб объекта 0,01):
 все цели считаются в мире (метры), позы ставятся через pose_bone.matrix.
@@ -530,7 +530,7 @@ for name, ob, mode in (("Attack1", sw_hand, "floor"), ("Attack2", sw_hand, "floo
     log.append(f"{name}: tip lowest {round(lowest[1], 2)} m at {impact[name]} s, fixed frames {fixed}")
 meta["impact"] = {"Attack3": impact["Attack3"]}
 
-# ---------- 5. плащ: кости и веса ----------
+# ---------- 5. плащ: какие вершины — плащ ----------
 ob = body[0]
 me = ob.data
 img = None
@@ -602,34 +602,12 @@ if img is not None:
     cape_ids = np.flatnonzero(cape_mask)
 log.append(f"cape vertices {len(cape_ids)} of {len(me.vertices)}")
 
-cape_bones = []
+# Плащ — ткань: в игре это SoftBody3D (настоящая сетка с массой и столкновениями с телом), а не кости. Здесь его
+# отрезают от тела, отвязывают от скелета (сетка в позе покоя, метры), выкидывают куски, которые не дотягиваются
+# до плеч (их не к чему прикрепить — повисли бы в воздухе), упрощают до ~CAPE_TARGET вершин и пишут отдельным
+# knight_cape.glb. Верхняя полоса PIN_BAND в игре пришита к груди.
+CAPE_TARGET, PIN_BAND = 900, 0.08
 if len(cape_ids) > 200:
-    cc = co[np.flatnonzero(infl > 0.5)]
-    zs = [Z_TOP - (Z_TOP - Z_BOT) * j / SEG for j in range(SEG + 1)]
-    bpy.context.view_layer.objects.active = rig
-    use(None)
-    bpy.ops.object.mode_set(mode="EDIT")
-    eb = rig.data.edit_bones
-    for nm in [b.name for b in eb if b.name.startswith("Cape_")]:
-        eb.remove(eb[nm])
-    for i, x in enumerate(CHAINS_X):
-        pts = []
-        for z in zs:
-            sel = cc[(np.abs(cc[:, 0] - x) < 0.09) & (np.abs(cc[:, 2] - z) < 0.09)]
-            y = float(np.percentile(sel[:, 1], 70)) if len(sel) else 0.12
-            pts.append(MWi @ Vector((x, y, z)))
-        par = eb[CHEST]
-        for j in range(SEG):
-            b = eb.new(f"Cape_{i}_{j}")
-            b.head, b.tail = pts[j], pts[j + 1]
-            b.parent = par
-            b.use_connect = j > 0
-            par = b
-            cape_bones.append(b.name)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    # плащ — отдельная сетка: грани, где влияние плаща больше трети, отрезаются от тела. Так подол не тянет за
-    # собой сапоги (у общих вершин веса делились — оттуда «остатки плаща у ног»), а у отрезанного плаща
-    # влияние костей плаща — полное ниже плеч, без размытия по краям.
     face_in = np.zeros(len(me.polygons), dtype=bool)
     for poly in me.polygons:
         face_in[poly.index] = float(np.mean(infl[list(poly.vertices)])) > 0.35
@@ -650,29 +628,62 @@ if len(cape_ids) > 200:
     bpy.ops.object.mode_set(mode="OBJECT")
     cape = [o for o in vl.objects if o.select_get() and o != ob][0]
     cape.name = "Knight_cape"
-    cm = cape.data
-    for nm in cape_bones:
-        if nm not in cape.vertex_groups:
-            cape.vertex_groups.new(name=nm)
-    groups = {g.index: g for g in cape.vertex_groups}
-    for v in cm.vertices:
-        x, y, z = cape.matrix_world @ v.co
-        t = min(1.0, max(0.0, (Z_TOP - z) / 0.28))          # у плеч держится за тело, ниже — только плащ
-        if t <= 0:
+    for m in list(cape.modifiers):
+        cape.modifiers.remove(m)
+    cape.vertex_groups.clear()
+    mw = cape.matrix_world.copy()
+    cape.parent = None
+    cape.data.transform(mw)
+    cape.matrix_world = Matrix.Identity(4)
+    bm = bmesh.new()
+    bm.from_mesh(cape.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.002)
+    bm.verts.ensure_lookup_table()
+    top = max(v.co.z for v in bm.verts)
+    seen, kill, kept = set(), [], 0
+    for v0 in bm.verts:
+        if v0.index in seen:
             continue
-        for g in list(v.groups):
-            if not groups[g.group].name.startswith("Cape_"):
-                groups[g.group].add([v.index], g.weight * (1 - t), "REPLACE")
-        fx = float(np.clip(np.interp(x, CHAINS_X, range(len(CHAINS_X))), 0, len(CHAINS_X) - 1))
-        fz = float(np.clip((Z_TOP - z) / (Z_TOP - Z_BOT) * SEG - 0.5, 0, SEG - 1))
-        for ci, wx in ((int(fx), 1 - (fx - int(fx))), (min(int(fx) + 1, len(CHAINS_X) - 1), fx - int(fx))):
-            for sj, wz in ((int(fz), 1 - (fz - int(fz))), (min(int(fz) + 1, SEG - 1), fz - int(fz))):
-                w = t * wx * wz
-                if w > 1e-3:
-                    cape.vertex_groups[f"Cape_{ci}_{sj}"].add([v.index], w, "ADD")
-    log.append(f"cape mesh {len(cm.vertices)} verts, body left {len(me.vertices)}")
-    meta["cape"] = {"chains": [[f"Cape_{i}_0", f"Cape_{i}_{SEG - 1}"] for i in range(len(CHAINS_X))]}
-log.append(f"cape bones {len(cape_bones)}")
+        comp, stack = [], [v0]
+        seen.add(v0.index)
+        while stack:
+            v = stack.pop()
+            comp.append(v)
+            for e in v.link_edges:
+                u = e.other_vert(v)
+                if u.index not in seen:
+                    seen.add(u.index)
+                    stack.append(u)
+        if max(v.co.z for v in comp) < top - PIN_BAND:
+            kill += comp
+        else:
+            kept += 1
+    bmesh.ops.delete(bm, geom=kill, context="VERTS")
+    bm.to_mesh(cape.data)
+    bm.free()
+    n0 = len(cape.data.vertices)
+    for o in vl.objects:
+        o.select_set(False)
+    vl.objects.active = cape
+    cape.select_set(True)
+    if n0 > CAPE_TARGET:
+        md = cape.modifiers.new("dec", "DECIMATE")
+        md.ratio = CAPE_TARGET / n0
+        bpy.ops.object.modifier_apply(modifier="dec")
+    log.append(f"cape cloth: dropped {len(kill)} loose verts, kept {kept} pieces, {n0} -> {len(cape.data.vertices)} verts")
+    cape_path = os.path.join(OUT, "knight_cape.glb")
+    bpy.ops.export_scene.gltf(filepath=cape_path, export_format="GLB", use_selection=True, export_animations=False,
+                              export_skins=False, export_yup=True, export_image_format="JPEG",
+                              export_jpeg_quality=88)
+    scn.collection.objects.unlink(cape)          # в knight.glb плаща нет — он отдельной тканью
+    meta["cape"] = {"cloth": "models/knight_cape.glb", "pin_band": PIN_BAND}
+# прыжок финального удара: высота таза по кадрам (для настройки полёта в игре)
+a3 = clips["Attack3"]
+hz = []
+for f in range(int(a3.frame_range[0]), int(a3.frame_range[1]) + 1):
+    capture(a3, f)
+    hz.append(round(head(HIPS).z, 2))
+log.append(f"Attack3 hips z every 3 frames: {hz[::3]}")
 
 # ---------- экспорт ----------
 for img2 in bpy.data.images:

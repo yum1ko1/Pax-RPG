@@ -24,9 +24,7 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("Draw", f, "BACK34") for f in (13, 20, 28, 36, 44, 54)] + \
-        [("DrawWalk", f, "FRONT34") for f in (0, 20, 36, 54)] + \
-        [("RunArmed", t, "RIGHT") for t in (0.0, 0.25, 0.5, 0.75)] + [("Run", 0.3, "BACK")]
+SHOTS = [("Attack3", t, "RIGHT") for t in (0.2, 0.35, 0.5, 0.65)] + [("IdleArmed", 0, "BACK")]
 files = []
 
 
@@ -70,14 +68,11 @@ for p in pb:
         p.rotation_quaternion = Quaternion(Vector((1, 0, 0)), math.radians(40))
 show("Sword_Back")
 bpy.context.view_layer.update()
-files += U.shot("k2_cape_test", (0, 0, 1.0), 3.0, ("RIGHT", "BACK"), res=450)
-files += U.shot("k2_cape_low", (0, 0, 0.35), 1.2, ("RIGHT", "BACK", "LEFT"), res=450)
+files += U.shot("k2_body_low", (0, 0, 0.35), 1.2, ("RIGHT", "BACK"), res=450)   # у ног — ничего от плаща
 cape = bpy.data.objects.get("Knight_cape")
 bodies = [o for o in scn.objects if o.name.startswith("Knight_body")]
-if cape is not None:                       # плащ отдельно: что отрезано от тела
-    for p in pb:
-        if p.name.startswith("Cape_"):
-            p.rotation_quaternion = (1, 0, 0, 0)
+if cape is not None:                       # ткань плаща отдельно (в сцене её нет — она в knight_cape.glb)
+    scn.collection.objects.link(cape)
     for o in bodies:
         o.hide_render = True
         o.hide_set(True)
@@ -87,6 +82,5 @@ if cape is not None:                       # плащ отдельно: что �
     for o in bodies:
         o.hide_render = False
         o.hide_set(False)
-for p in pb:
-    p.rotation_quaternion = (1, 0, 0, 0)
+    scn.collection.objects.unlink(cape)
 result["files"] = [p.split("\\")[-1] for p in files]
