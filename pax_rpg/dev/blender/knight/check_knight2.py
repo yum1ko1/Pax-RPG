@@ -80,11 +80,13 @@ if cape is not None:                       # плащ отдельно: что �
             p.rotation_quaternion = (1, 0, 0, 0)
     for o in bodies:
         o.hide_render = True
+        o.hide_set(True)
     show("")
     bpy.context.view_layer.update()
     files += U.shot("k2_cape_only", (0, 0, 0.9), 2.2, ("BACK", "RIGHT"), res=450)
     for o in bodies:
         o.hide_render = False
+        o.hide_set(False)
 for p in pb:
     p.rotation_quaternion = (1, 0, 0, 0)
 result["files"] = [p.split("\\")[-1] for p in files]
