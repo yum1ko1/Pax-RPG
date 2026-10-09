@@ -7,7 +7,8 @@ extends RefCounted
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed"]
-const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3"]
+const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
+	"DodgeArmed"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
@@ -37,8 +38,7 @@ var _swing_done := false
 var _impact_done := false
 var _skel: Skeleton3D
 var _cloth: SoftBody3D              # плащ — ткань (models/*_cape.glb), пришита к груди, бьётся о тело
-var _cloth_anchor: Node3D           # грудь (Spine02) в мире — к ней пришита верхняя полоса плаща
-var _cloth_bone := -1
+var _cloth_anchors: Array = []      # [Node3D, кость] — грудь и плечи в мире, к ним пришит верх плаща
 var _cloth_pin_left := 0            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
 var _colliders: Array = []          # [AnimatableBody3D, кость от, кость до] — капсулы тела для ткани
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
@@ -201,9 +201,8 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	_skel = _find_skeleton(model)
 	if path == "" or _skel == null:
 		return
-	_cloth_bone = _skel.find_bone(str(cape.get("pin_bone", "Spine02")))
 	var src := _mod.model(path)
-	if src == null or _cloth_bone < 0:
+	if src == null:
 		return
 	var mi: MeshInstance3D = null
 	for c: Node in src.find_children("*", "MeshInstance3D", true, false):
@@ -235,10 +234,17 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	if owner_body != null:
 		sb.add_collision_exception_with(owner_body)
 	_cloth = sb
-	_cloth_anchor = Node3D.new()
-	_cloth_anchor.top_level = true
-	model.add_child(_cloth_anchor)
-	_cloth_anchor.global_transform = _bone_world(_cloth_bone, true)   # пришиваем в позе покоя — как сетка
+	for bn: Variant in cape.get("pin_bones", ["Spine02", "LeftShoulder", "RightShoulder", "neck"]):
+		var bi := _skel.find_bone(str(bn))
+		if bi < 0:
+			continue
+		var an := Node3D.new()
+		an.top_level = true
+		model.add_child(an)
+		an.global_transform = _bone_world(bi, true)    # пришиваем в позе покоя — как сетка
+		_cloth_anchors.append([an, bi])
+	if _cloth_anchors.is_empty():
+		return
 	_cloth_pin_left = 1
 	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.15],
 			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
@@ -264,8 +270,9 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	_move_colliders()
 
 
-## Верх плаща пришивается к груди: точки сетки — как их сваривает сервер физики (одинаковые позиции — одна точка,
-## по порядку первого появления).
+## Верх плаща пришивается по всей ширине: сетка делится на полосы по X, в каждой — точки у её верхнего края (верх
+## плаща у плеч ниже, чем у шеи: один общий порог пришил бы только середину). Каждая точка — к ближней из костей
+## груди, плеч и шеи. Номера точек — как их сваривает сервер физики (одинаковые позиции — одна точка, по порядку).
 func _pin_cloth() -> void:
 	var cape: Dictionary = meta.get("cape", {})
 	var verts: PackedVector3Array = _cloth.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
@@ -275,14 +282,30 @@ func _pin_cloth() -> void:
 		if not seen.has(v):
 			seen[v] = pts.size()
 			pts.append(v)
-	var top := -INF
-	for p: Vector3 in pts:
-		top = maxf(top, p.y)
+	var strip := _f("cape_pin_strip", 0.05)
 	var band := float(cape.get("pin_band", 0.08))
-	var ap := _cloth.get_path_to(_cloth_anchor)
+	var tops := {}
+	for p: Vector3 in pts:
+		var k := int(floor(p.x / strip))
+		tops[k] = maxf(float(tops.get(k, -INF)), p.y)
+	var to_world := _cloth.global_transform
+	var n_pinned := 0
 	for i: int in pts.size():
-		if pts[i].y > top - band:
-			_cloth.set_point_pinned(i, true, ap)
+		var p := pts[i]
+		if p.y < float(tops[int(floor(p.x / strip))]) - band:
+			continue
+		var w := to_world * p
+		var best: Node3D = null
+		var bd := INF
+		for an: Array in _cloth_anchors:
+			var node: Node3D = an[0]
+			var d := node.global_position.distance_to(w)
+			if d < bd:
+				bd = d
+				best = node
+		_cloth.set_point_pinned(i, true, _cloth.get_path_to(best))
+		n_pinned += 1
+	_mod.log_info("Pax RPG: cape pinned %d of %d points" % [n_pinned, pts.size()])
 
 
 func _move_colliders() -> void:
@@ -304,7 +327,8 @@ func _cloth_tick() -> void:
 		if _cloth_pin_left == 0:
 			_pin_cloth()
 		return
-	_cloth_anchor.global_transform = _bone_world(_cloth_bone)
+	for an: Array in _cloth_anchors:
+		(an[0] as Node3D).global_transform = _bone_world(int(an[1]))
 	_move_colliders()
 
 
@@ -465,6 +489,18 @@ func attack(on_floor: bool) -> void:
 			_play_once("Attack1")
 	elif action in ATTACKS and action != ATTACKS[-1]:
 		_queued = true                      # следующий удар — сразу после взмаха этого
+
+
+## Уворот (Alt): кувырок туда, куда смотрит герой (location.gd разворачивает его по направлению ввода).
+## С мечом — свой клип, тяжелее и дальше.
+func dodge(on_floor: bool) -> bool:
+	if anim == null or not on_floor or action != "":
+		return false
+	var n := "DodgeArmed" if armed and has("DodgeArmed") else "Dodge"
+	if not has(n):
+		return false
+	_play_once(n)
+	return true
 
 
 ## Прыжок: анимация с момента отрыва (без долгого приседа), отрыв — сразу (tick вернёт jump).

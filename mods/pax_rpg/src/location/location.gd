@@ -33,6 +33,7 @@ var _f_down := false               # F была нажата в прошлом �
 var _f_queued := false             # нажатие F пришло событием (короткое — опрос мог его не застать)
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
+var _alt_down := false             # уворот — по нажатию Alt, не по удержанию
 var game: PaxGame                  # задаёт travel.gd: пока мы на локации, время мира стоит
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
@@ -266,6 +267,15 @@ func _physics_process(delta: float) -> void:
 	var move := right * input.x - forward * input.y
 	if move.length() > 1.0:
 		move = move.normalized()
+	# уворот (Alt): развернуть героя по вводу (без ввода — куда смотрит) и кувырок; дальше его ведёт root motion
+	var alt := Input.is_physical_key_pressed(KEY_ALT) and not _typing()
+	if alt and not _alt_down and not locked and _hero != null:
+		var wish := right * input.x - forward * input.y
+		if _hero.dodge(on_floor):
+			if wish.length() > 0.01:
+				_body_mesh.rotation.y = atan2(-wish.x, -wish.z)
+			locked = true
+	_alt_down = alt
 	var running := Input.is_physical_key_pressed(KEY_SHIFT) and not (_hero != null and _hero.walk_only())
 	var speed := _hf("run_speed", 5.0) if running else _hf("walk_speed", 2.4)
 	if _hero != null and (_hero.armed or _hero.walk_only()):
@@ -332,7 +342,7 @@ func _update_hud() -> void:
 	_hud.text = "\n".join(lines)
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT]
 
 
 func _input(event: InputEvent) -> void:

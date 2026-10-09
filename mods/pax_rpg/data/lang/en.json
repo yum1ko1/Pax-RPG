@@ -12,7 +12,7 @@
 	"pax_rpg_world_map": "World map",
 	"pax_rpg_gate": "Exit",
 	"pax_rpg_gate_hint": "E — back to the world map",
-	"pax_rpg_controls": "WASD — walk · Shift — run · Space — jump · F — draw / sheathe the sword · LMB — strike (three in a row — combo) · RMB + mouse — turn the camera",
+	"pax_rpg_controls": "WASD — walk · Shift — run · Space — jump · F — draw / sheathe the sword · LMB — strike (three in a row — combo) · Alt — dodge · RMB + mouse — turn the camera",
 	"pax_rpg_narrator_enter_1": "The road winds through blue forests. Ahead lies {city}.",
 	"pax_rpg_narrator_enter_2": "Pink mana clouds sink lower. You enter {city}.",
 	"pax_rpg_narrator_enter_3": "The guards at the gate watch you pass. {city} does not like strangers.",
