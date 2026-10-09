@@ -34,18 +34,34 @@ def use(ob, action):
         ob.animation_data.action_slot = action.slots[0]
 
 
-use(rig, bpy.data.actions["Idle"])
+# В glb — только наши пять анимаций: каждая своей дорожкой NLA (режим ACTIONS забрал бы и действия
+# Meshy-героя из этого же файла — у них те же имена костей).
+ad = rig.animation_data
+for tr in list(ad.nla_tracks):
+    ad.nla_tracks.remove(tr)
+for name in ACTIONS:
+    act = bpy.data.actions[name]
+    tr = ad.nla_tracks.new()
+    tr.name = name
+    st = tr.strips.new(name, int(act.frame_range[0]), act)
+    if hasattr(st, "action_slot") and len(getattr(act, "slots", [])):
+        st.action_slot = act.slots[0]
+ad.action = None
 scn.frame_set(0)
 path = os.path.join(W, "hero_simple.glb")
 bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_active_scene=True,
-                          export_animation_mode="ACTIONS", export_force_sampling=True, export_frame_step=1,
+                          export_animation_mode="NLA_TRACKS", export_force_sampling=True, export_frame_step=1,
                           export_yup=True)
+for tr in list(ad.nla_tracks):
+    ad.nla_tracks.remove(tr)
+use(rig, bpy.data.actions["Idle"])
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(W, "simple_hero.blend"), copy=True)
 result["glb_kb"] = round(os.path.getsize(path) / 1024)
 
 # ---- проверка: импорт во временную сцену
 before_obj, before_act = set(bpy.data.objects), set(bpy.data.actions)
 chk = bpy.data.scenes.new("SH_glb_check")
+chk.render.fps = scn.render.fps            # иначе кадры glb пересчитаются под 24 к/с
 win.scene = chk
 bpy.ops.import_scene.gltf(filepath=path)
 new_act = [a for a in bpy.data.actions if a not in before_act]
