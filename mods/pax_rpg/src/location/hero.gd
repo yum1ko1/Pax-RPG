@@ -25,7 +25,7 @@ var _swing: AudioStreamPlayer       # свист меча (sounds/swing_*.wav)
 var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wav)
 var _swing_done := false
 var _impact_done := false
-var _cape: Node                     # SpringBoneSimulator3D плаща
+var _cape: SpringBoneSimulator3D    # пружинные кости плаща
 var _mod: PaxMod
 
 
@@ -129,45 +129,43 @@ func locks_move() -> bool:
 
 func _make_cape() -> void:
 	var chains: Variant = (meta.get("cape", {}) as Dictionary).get("chains", [])
-	if not (chains is Array) or (chains as Array).is_empty() or not ClassDB.class_exists("SpringBoneSimulator3D"):
+	if not (chains is Array) or (chains as Array).is_empty():
 		return
 	var sk := _find_skeleton(model)
 	if sk == null:
 		return
-	_cape = ClassDB.instantiate("SpringBoneSimulator3D")
-	sk.add_child(_cape)
+	var sim := SpringBoneSimulator3D.new()
+	sk.add_child(sim)
+	_cape = sim
 	var n := (chains as Array).size()
-	_cape.call("set_setting_count", n)
+	sim.setting_count = n
 	for i in n:
 		var ch: Array = chains[i]
-		_cape.call("set_root_bone_name", i, str(ch[0]))
-		_cape.call("set_end_bone_name", i, str(ch[1]))
-		_cape.call("set_extend_end_bone", i, true)
-		_cape.call("set_end_bone_length", i, _f("cape_end_length", 0.25))
-		_cape.call("set_radius", i, _f("cape_radius", 0.05))
-		_cape.call("set_stiffness", i, _f("cape_stiffness", 0.35))
-		_cape.call("set_drag", i, _f("cape_drag", 0.35))
-		_cape.call("set_gravity", i, _f("cape_gravity", 1.2))
-		_cape.call("set_gravity_direction", i, Vector3.DOWN)
+		sim.set_root_bone_name(i, str(ch[0]))
+		sim.set_end_bone_name(i, str(ch[1]))
+		sim.set_extend_end_bone(i, true)
+		sim.set_end_bone_length(i, _f("cape_end_length", 0.25))
+		sim.set_radius(i, _f("cape_radius", 0.05))
+		sim.set_stiffness(i, _f("cape_stiffness", 0.35))
+		sim.set_drag(i, _f("cape_drag", 0.35))
+		sim.set_gravity(i, _f("cape_gravity", 1.2))
+		sim.set_gravity_direction(i, Vector3.DOWN)
 	# тело, о которое бьётся плащ: шары на тазу, бёдрах, коленях
-	var cls := "SpringBoneCollisionSphere3D" if ClassDB.class_exists("SpringBoneCollisionSphere3D") else ""
-	if cls != "":
-		for b: Variant in [["Hips", 0.2], ["LeftUpLeg", 0.15], ["RightUpLeg", 0.15], ["LeftLeg", 0.13],
-				["RightLeg", 0.13], ["Spine01", 0.2]]:
-			if sk.find_bone(str(b[0])) < 0:
-				continue
-			var s: Node = ClassDB.instantiate(cls)
-			s.call("set_bone_name", str(b[0]))
-			s.call("set_radius", float(b[1]))
-			_cape.add_child(s)
+	for b: Array in [["Hips", 0.2], ["LeftUpLeg", 0.15], ["RightUpLeg", 0.15], ["LeftLeg", 0.13],
+			["RightLeg", 0.13], ["Spine01", 0.2]]:
+		if sk.find_bone(str(b[0])) < 0:
+			continue
+		var sph := SpringBoneCollisionSphere3D.new()
+		sph.bone_name = str(b[0])
+		sph.radius = float(b[1])
+		sim.add_child(sph)
 
 
-## Ветер от бега: плащ отлетает назад по скорости (world — скорость тела в мире).
+## Ветер от бега: плащ отлетает назад по скорости тела (в мире).
 func cape_wind(velocity: Vector3) -> void:
 	if _cape == null:
 		return
-	var v := Vector3(velocity.x, 0.0, velocity.z)
-	_cape.call("set_external_force", -v * _f("cape_wind", 0.12) + Vector3(0.0, 0.0, 0.0))
+	_cape.external_force = -Vector3(velocity.x, 0.0, velocity.z) * _f("cape_wind", 0.12)
 
 
 # ---------- команды ----------
