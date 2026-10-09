@@ -5,6 +5,12 @@ var _lang := {}
 func path(r: String) -> String: return "res://mods/pax_rpg/" + r
 func read_text(r: String) -> String: return FileAccess.get_file_as_string(path(r))
 func shader(r: String) -> Shader: return load(path(r))
+func model(r: String) -> Node3D:   # как Pax.model в игре: glb из папки мода через GLTFDocument
+	var doc := GLTFDocument.new()
+	var st := GLTFState.new()
+	if doc.append_from_file(ProjectSettings.globalize_path(path(r)), st) != OK:
+		return null
+	return doc.generate_scene(st) as Node3D
 func texture(r: String) -> Texture2D:
 	var img := Image.load_from_file(ProjectSettings.globalize_path(path(r)))
 	return ImageTexture.create_from_image(img) if img != null else null

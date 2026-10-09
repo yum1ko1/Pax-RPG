@@ -1,14 +1,18 @@
 extends CanvasLayer
 ## Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет,
-## мир игры его не видит): платформа, несколько блоков, ворота выхода и герой — пока овал. WASD — ходьба
-## относительно камеры, Shift — бег, Пробел — прыжок, правая кнопка мыши + движение — поворот камеры,
-## E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
+## мир игры его не видит): платформа, несколько блоков, ворота выхода и герой — простой демон с катаной
+## (models/hero_simple.glb, собран скриптом pax_rpg/dev/blender/simple_hero; нет файла — овал). WASD — ходьба
+## относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, правая кнопка мыши + движение —
+## поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
 signal exit_requested
 
 const GATE_RADIUS := 2.6           # м, насколько близко к воротам E работает
 const FALL_Y := -20.0              # упал с платформы — обратно на старт
 const START := Vector3(0.0, 1.2, 8.0)
+const HERO_MODEL := "models/hero_simple.glb"
+const STRIDE_SPEED := 1.9          # м/с, при которой шаг анимации Walk совпадает с ходом (ноги не скользят)
+const BLEND := 0.15                # с, переход между анимациями
 
 var mod: PaxMod
 var cfg: Dictionary = {}
@@ -25,6 +29,9 @@ var _city_name := ""
 var _yaw := 0.0
 var _turning := false
 var _near_gate := false
+var _anim: AnimationPlayer         # анимации героя; null — герой-овал
+var _armed := false                # меч в руке
+var _busy := ""                    # идёт Draw или Sheathe — до конца ходить нельзя
 
 
 func setup(m: PaxMod) -> void:
@@ -182,9 +189,27 @@ func _make_player() -> void:
 	cap.height = 1.8
 	shape.shape = cap
 	_player.add_child(shape)
-	# Герой пока — овал (вытянутая сфера) и «нос» спереди, чтобы видеть, куда он смотрит.
 	_body_mesh = Node3D.new()
 	_player.add_child(_body_mesh)
+	_anim = null
+	_armed = false
+	_busy = ""
+	var hero: Node3D = mod.model(HERO_MODEL)
+	if hero != null:
+		hero.position = Vector3(0.0, -cap.height / 2.0, 0.0)   # ступни — на низ капсулы
+		hero.rotation.y = PI                                    # glb смотрит на +Z, вперёд у героя — -Z
+		_body_mesh.add_child(hero)
+		_anim = _find_anim(hero)
+		if _anim != null:
+			for n: String in ["Idle", "Walk", "WalkArmed"]:
+				if _anim.has_animation(n):
+					_anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+			_anim.animation_finished.connect(_on_anim_finished)
+			_anim.play("Idle")
+		_view.add_child(_player)
+		return
+	mod.log_warning("Pax RPG: %s did not load — the hero is an oval" % HERO_MODEL)
+	# Запасной герой — овал (вытянутая сфера) и «нос» спереди, чтобы видеть, куда он смотрит.
 	var oval := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.5
@@ -207,6 +232,46 @@ func _make_player() -> void:
 	_view.add_child(_player)
 
 
+static func _find_anim(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c: Node in n.get_children():
+		var a := _find_anim(c)
+		if a != null:
+			return a
+	return null
+
+
+## Анимация по состоянию: Draw / Sheathe доигрывают до конца, потом — ходьба или стойка, с мечом или без.
+func _animate(moving: bool, speed: float) -> void:
+	if _anim == null or _busy != "":
+		return
+	var want := ("WalkArmed" if _armed else "Walk") if moving else ("Draw" if _armed else "Idle")
+	if want == "Draw":                      # стойка с мечом — последний кадр Draw
+		if _anim.current_animation != "Draw" or _anim.is_playing():
+			_anim.play("Draw", BLEND)
+			_anim.seek(_anim.current_animation_length, true)
+			_anim.pause()
+		return
+	if _anim.current_animation != want or not _anim.is_playing():
+		_anim.play(want, BLEND)
+	_anim.speed_scale = speed / STRIDE_SPEED if moving else 1.0
+
+
+func _toggle_sword() -> void:
+	if _anim == null or _busy != "" or not _player.is_on_floor():
+		return
+	_busy = "Sheathe" if _armed else "Draw"
+	_anim.speed_scale = 1.0
+	_anim.play(_busy, BLEND)
+
+
+func _on_anim_finished(n: StringName) -> void:
+	if String(n) == _busy:
+		_armed = _busy == "Draw"
+		_busy = ""
+
+
 # ---------- управление ----------
 
 func _typing() -> bool:
@@ -218,7 +283,7 @@ func _physics_process(delta: float) -> void:
 	if not active or not is_instance_valid(_player):
 		return
 	var input := Vector2.ZERO
-	if not _typing():
+	if not _typing() and _busy == "":
 		input = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 			float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
 	var forward := Vector3(0.0, 0.0, -1.0).rotated(Vector3.UP, _yaw)
@@ -226,7 +291,7 @@ func _physics_process(delta: float) -> void:
 	var move := right * input.x - forward * input.y
 	if move.length() > 1.0:
 		move = move.normalized()
-	var speed := _f("run_speed", 9.0) if Input.is_physical_key_pressed(KEY_SHIFT) else _f("walk_speed", 5.0)
+	var speed := _f("run_speed", 5.0) if Input.is_physical_key_pressed(KEY_SHIFT) else _f("walk_speed", 2.4)
 	var vel := _player.velocity
 	vel.x = move.x * speed
 	vel.z = move.z * speed
@@ -237,6 +302,7 @@ func _physics_process(delta: float) -> void:
 		vel.y -= _f("gravity", 20.0) * delta
 	_player.velocity = vel
 	_player.move_and_slide()
+	_animate(move.length() > 0.01 and _player.is_on_floor(), speed * move.length())
 	if move.length() > 0.01:
 		var want := atan2(-move.x, -move.z)   # «нос» смотрит по -Z
 		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, want, minf(1.0, delta * 12.0))
@@ -268,7 +334,7 @@ func _update_hud() -> void:
 	_hud.text = "\n".join(lines)
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_Q, KEY_SPACE, KEY_SHIFT]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT]
 
 
 func _input(event: InputEvent) -> void:
@@ -290,3 +356,5 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
+		if key.pressed and not key.echo and key.physical_keycode == KEY_F:
+			_toggle_sword()

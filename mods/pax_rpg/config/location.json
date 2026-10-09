@@ -1,8 +1,8 @@
 {
 	"_note": "Локация-прототип: платформа, герой-овал, ворота выхода. Метры и секунды.",
 	"platform_size": 40.0,
-	"walk_speed": 5.0,
-	"run_speed": 9.0,
+	"walk_speed": 2.4,
+	"run_speed": 5.0,
 	"jump_speed": 7.0,
 	"gravity": 20.0,
 	"turn_speed": 0.006,

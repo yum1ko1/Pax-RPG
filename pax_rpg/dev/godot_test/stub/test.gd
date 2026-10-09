@@ -63,6 +63,30 @@ func _physics_process(d: float) -> void:
 				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_location.png")
 				var p1: Vector3 = loc.get("_player").position
 				print("player after 1s W ", p1, " moved ", (p1 - (get_meta("p0") as Vector3)).length())
+				var an: AnimationPlayer = loc.get("_anim")
+				print("hero model: ", an != null, "  anims: ", an.get_animation_list() if an else [], "  playing: ", an.current_animation if an else "")
+				_key(KEY_F, true); _key(KEY_F, false)
+				step = 10; t = 0
+		10:
+			if t > 0.45 and not has_meta("mid"):
+				set_meta("mid", true)
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_drawing.png")
+			if t > 1.8:
+				print("armed after F: ", loc.get("_armed"), "  busy: '", loc.get("_busy"), "'")
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_armed.png")
+				_key(KEY_A, true)
+				step = 11; t = 0
+		11:
+			if t > 0.7:
+				var an: AnimationPlayer = loc.get("_anim")
+				print("walking armed: ", an.current_animation, " speed_scale ", an.speed_scale)
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_walkarmed.png")
+				_key(KEY_A, false)
+				_key(KEY_F, true); _key(KEY_F, false)
+				step = 12; t = 0
+		12:
+			if t > 1.8:
+				print("armed after 2nd F: ", loc.get("_armed"))
 				_key(KEY_SPACE, true); step = 4; t = 0
 		4:
 			if t > 0.25:
