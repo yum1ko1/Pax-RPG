@@ -5,6 +5,11 @@ var _lang := {}
 func path(r: String) -> String: return "res://mods/pax_rpg/" + r
 func read_text(r: String) -> String: return FileAccess.get_file_as_string(path(r))
 func shader(r: String) -> Shader: return load(path(r))
+func sound(r: String) -> AudioStream:   # как Pax.sound в игре: wav/ogg из папки мода
+	var b := FileAccess.get_file_as_bytes(path(r))
+	if b.is_empty():
+		return null
+	return AudioStreamWAV.load_from_buffer(b) if r.ends_with(".wav") else AudioStreamOggVorbis.load_from_buffer(b)
 func model(r: String) -> Node3D:   # как Pax.model в игре: glb из папки мода через GLTFDocument
 	var doc := GLTFDocument.new()
 	var st := GLTFState.new()

@@ -16,5 +16,10 @@
 	"combo_cancel": 0.62,
 	"root_motion_scale": 0.8,
 	"root_motion_lateral": 0.5,
-	"blend": 0.15
+	"blend": 0.15,
+	"swing_files": ["sounds/swing_1.wav", "sounds/swing_2.wav", "sounds/swing_3.wav", "sounds/swing_4.wav", "sounds/swing_5.wav", "sounds/swing_6.wav"],
+	"swing_peaks": {"Attack1": 0.37, "Attack2": 0.67, "Attack3": 1.03, "Draw": 1.47, "Sheathe": 0.87},
+	"swing_lead": 0.55,
+	"swing_volume_db": -4.0,
+	"swing_pitch_spread": 1.06
 }

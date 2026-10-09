@@ -21,6 +21,8 @@ var _jump_done := false
 var _sword_back: Node3D
 var _sword_hand: Node3D
 var _prev_off := Vector2.ZERO       # root motion: смещение клипа на прошлом кадре
+var _swing: AudioStreamPlayer       # свист меча: случайный из вариантов (pax_rpg/dev/audio/sword_swing.py)
+var _swing_done := false
 
 
 func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
@@ -34,6 +36,21 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 		meta = parsed if parsed is Dictionary else {}
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
+	var files: Variant = cfg.get("swing_files", [])
+	if files is Array and not (files as Array).is_empty():
+		var rnd := AudioStreamRandomizer.new()
+		rnd.playback_mode = AudioStreamRandomizer.PLAYBACK_RANDOM_NO_REPEATS
+		rnd.random_pitch = _f("swing_pitch_spread", 1.06)      # ещё ±6 % высоты к шести вариантам
+		rnd.random_volume_offset_db = 1.5
+		for f: Variant in files:
+			var st: AudioStream = mod.sound(str(f))
+			if st != null:
+				rnd.add_stream(-1, st)
+		if rnd.streams_count > 0:
+			_swing = AudioStreamPlayer.new()      # не 3D: у SubViewport локации нет своего слушателя
+			_swing.stream = rnd
+			_swing.volume_db = _f("swing_volume_db", -4.0)
+			model.add_child(_swing)
 	return model
 
 
@@ -115,6 +132,7 @@ func _play_once(n: String) -> void:
 	_queued = false
 	_armed_pose = false
 	_prev_off = Vector2.ZERO
+	_swing_done = false
 	anim.speed_scale = 1.0
 	anim.play(n, _f("blend", 0.15))
 
@@ -155,6 +173,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool) -> Dictionary
 		_jump_done = true
 		out.jump = true
 	if action != "":
+		_swing_sound()
 		out.root = _root_step()
 	else:
 		_idle_or_walk(moving, speed, running)
@@ -182,6 +201,19 @@ func _idle_or_walk(moving: bool, speed: float, running: bool) -> void:
 	if anim.current_animation != want or not anim.is_playing():
 		anim.play(want, _f("blend", 0.15))
 	anim.speed_scale = clampf(speed / stride, 0.5, 2.0)
+
+
+## Свист меча: пик звука (swing_lead с от начала) совпадает с самым быстрым движением руки в клипе (swing_peaks).
+func _swing_sound() -> void:
+	if _swing == null or _swing_done:
+		return
+	var peaks: Dictionary = cfg.get("swing_peaks", {})
+	if not peaks.has(action):
+		return
+	if anim.current_animation_position >= float(peaks[action]) - _f("swing_lead", 0.55):
+		_swing_done = true
+		_swing.volume_db = _f("swing_volume_db", -4.0) + (0.0 if action in ATTACKS else -6.0)
+		_swing.play()
 
 
 ## Смещение тела за кадр из root motion клипа (то, что вынуто из анимации при сборке).
