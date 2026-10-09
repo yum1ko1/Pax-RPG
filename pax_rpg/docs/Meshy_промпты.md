@@ -52,15 +52,15 @@ silhouette, game-ready character, stylized realism, muted blue and teal fabric.
 Сначала сравнить мужскую и женскую модели в одной сцене Blender, потом делать риг. Рост около
 1,8 м и 1,7 м, ступни на нуле.
 
-## Воин Юрумы (азиатское фэнтези) — тело без оружия
+## Воин Юрумы из расы демонов (азиатское фэнтези) — тело без оружия
 
 ```
 Full-body East Asian fantasy warrior, young adult male, athletic lean build, game character base mesh,
 standing in a strict A-pose, arms 45 degrees away from the body, open relaxed hands with fingers apart,
-legs slightly apart, facing forward, perfectly symmetrical. Human, no horns. Long white hair tied in a high
-topknot bun close to the head, calm face. Bare toned chest, wide flowing white hakama trousers with blue ornamental patterns, long blue
+legs slightly apart, facing forward, perfectly symmetrical. Demon race: two curved dark horns on the forehead,
+long white hair tied in a high topknot bun close to the head, calm face. Bare toned chest, wide flowing white hakama trousers with blue ornamental patterns, long blue
 sash belt, dark wrist bracers, simple cloth shoes. Hands are empty. No weapons, no sword, no scabbard,
-no shield, no cape, no pedestal, no base, no horns, standing directly on the ground. Stylized realism, game-ready.
+no shield, no cape, no pedestal, no base, standing directly on the ground. Stylized realism, game-ready.
 ```
 
 ## Его катана — отдельная генерация
