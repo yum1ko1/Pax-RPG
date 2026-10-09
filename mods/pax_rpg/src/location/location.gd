@@ -1,18 +1,16 @@
 extends CanvasLayer
 ## Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет,
-## мир игры его не видит): платформа, несколько блоков, ворота выхода и герой — простой демон с катаной
-## (models/hero_simple.glb, собран скриптом pax_rpg/dev/blender/simple_hero; нет файла — овал). WASD — ходьба
-## относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, правая кнопка мыши + движение —
-## поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
+## мир игры его не видит): платформа, несколько блоков, ворота выхода и герой (config/hero.json: модель, скорости,
+## комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел —
+## прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот
+## камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
 signal exit_requested
 
 const GATE_RADIUS := 2.6           # м, насколько близко к воротам E работает
 const FALL_Y := -20.0              # упал с платформы — обратно на старт
 const START := Vector3(0.0, 1.2, 8.0)
-const HERO_MODEL := "models/hero_simple.glb"
-const STRIDE_SPEED := 1.9          # м/с, при которой шаг анимации Walk совпадает с ходом (ноги не скользят)
-const BLEND := 0.15                # с, переход между анимациями
+const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 
 var mod: PaxMod
 var cfg: Dictionary = {}
@@ -29,9 +27,12 @@ var _city_name := ""
 var _yaw := 0.0
 var _turning := false
 var _near_gate := false
-var _anim: AnimationPlayer         # анимации героя; null — герой-овал
-var _armed := false                # меч в руке
-var _busy := ""                    # идёт Draw или Sheathe — до конца ходить нельзя
+var hero_cfg: Dictionary = {}      # config/hero.json
+var _hero: Hero                    # модель и её анимации; null — герой-овал
+var _f_down := false               # F была нажата в прошлом кадре — достаём меч по нажатию, не по удержанию
+var _f_queued := false             # нажатие F пришло событием (короткое — опрос мог его не застать)
+var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
+var _space_down := false
 
 
 func setup(m: PaxMod) -> void:
@@ -41,6 +42,8 @@ func setup(m: PaxMod) -> void:
 	visible = false
 	var parsed: Variant = JSON.parse_string(m.read_text("config/location.json"))
 	cfg = parsed if parsed is Dictionary else {}
+	var hp: Variant = JSON.parse_string(m.read_text("config/hero.json"))
+	hero_cfg = hp if hp is Dictionary else {}
 
 
 func _f(key: String, fallback: float) -> float:
@@ -185,30 +188,23 @@ func _make_player() -> void:
 	_player.position = START
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.4
-	cap.height = 1.8
+	cap.radius = float(hero_cfg.get("capsule_radius", 0.4))
+	cap.height = float(hero_cfg.get("capsule_height", 1.8))
 	shape.shape = cap
 	_player.add_child(shape)
 	_body_mesh = Node3D.new()
 	_player.add_child(_body_mesh)
-	_anim = null
-	_armed = false
-	_busy = ""
-	var hero: Node3D = mod.model(HERO_MODEL)
-	if hero != null:
-		hero.position = Vector3(0.0, -cap.height / 2.0, 0.0)   # ступни — на низ капсулы
-		hero.rotation.y = PI                                    # glb смотрит на +Z, вперёд у героя — -Z
-		_body_mesh.add_child(hero)
-		_anim = _find_anim(hero)
-		if _anim != null:
-			for n: String in ["Idle", "Walk", "WalkArmed"]:
-				if _anim.has_animation(n):
-					_anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
-			_anim.animation_finished.connect(_on_anim_finished)
-			_anim.play("Idle")
-		_view.add_child(_player)
+	_hero = Hero.new()
+	var model := _hero.load_model(mod, hero_cfg)
+	if model != null:
+		model.position = Vector3(0.0, -cap.height / 2.0, 0.0)   # ступни — на низ капсулы
+		model.rotation.y = PI                                    # glb смотрит на +Z, вперёд у героя — -Z
+		_body_mesh.add_child(model)
+		_view.add_child(_player)            # сначала в дерево: вне дерева AnimationPlayer не играет
+		_hero.start()
 		return
-	mod.log_warning("Pax RPG: %s did not load — the hero is an oval" % HERO_MODEL)
+	_hero = null
+	mod.log_warning("Pax RPG: %s did not load — the hero is an oval" % str(hero_cfg.get("model", "?")))
 	# Запасной герой — овал (вытянутая сфера) и «нос» спереди, чтобы видеть, куда он смотрит.
 	var oval := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
@@ -232,44 +228,8 @@ func _make_player() -> void:
 	_view.add_child(_player)
 
 
-static func _find_anim(n: Node) -> AnimationPlayer:
-	if n is AnimationPlayer:
-		return n
-	for c: Node in n.get_children():
-		var a := _find_anim(c)
-		if a != null:
-			return a
-	return null
-
-
-## Анимация по состоянию: Draw / Sheathe доигрывают до конца, потом — ходьба или стойка, с мечом или без.
-func _animate(moving: bool, speed: float) -> void:
-	if _anim == null or _busy != "":
-		return
-	var want := ("WalkArmed" if _armed else "Walk") if moving else ("Draw" if _armed else "Idle")
-	if want == "Draw":                      # стойка с мечом — последний кадр Draw
-		if _anim.current_animation != "Draw" or _anim.is_playing():
-			_anim.play("Draw", BLEND)
-			_anim.seek(_anim.current_animation_length, true)
-			_anim.pause()
-		return
-	if _anim.current_animation != want or not _anim.is_playing():
-		_anim.play(want, BLEND)
-	_anim.speed_scale = speed / STRIDE_SPEED if moving else 1.0
-
-
-func _toggle_sword() -> void:
-	if _anim == null or _busy != "" or not _player.is_on_floor():
-		return
-	_busy = "Sheathe" if _armed else "Draw"
-	_anim.speed_scale = 1.0
-	_anim.play(_busy, BLEND)
-
-
-func _on_anim_finished(n: StringName) -> void:
-	if String(n) == _busy:
-		_armed = _busy == "Draw"
-		_busy = ""
+func _hf(key: String, fallback: float) -> float:
+	return float(hero_cfg.get(key, cfg.get(key, fallback)))
 
 
 # ---------- управление ----------
@@ -282,8 +242,19 @@ func _typing() -> bool:
 func _physics_process(delta: float) -> void:
 	if not active or not is_instance_valid(_player):
 		return
+	var on_floor := _player.is_on_floor()
+	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
+	var f := (Input.is_physical_key_pressed(KEY_F) or Input.is_key_pressed(KEY_F)) and not _typing()
+	if (_f_queued or (f and not _f_down)) and _hero != null:
+		_hero.toggle_sword(on_floor)
+	_f_queued = false
+	_f_down = f
+	if _lmb_queued and _hero != null:
+		_hero.attack(on_floor)
+	_lmb_queued = false
+	var locked := _hero != null and _hero.locks_move()
 	var input := Vector2.ZERO
-	if not _typing() and _busy == "":
+	if not _typing() and not locked:
 		input = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 			float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
 	var forward := Vector3(0.0, 0.0, -1.0).rotated(Vector3.UP, _yaw)
@@ -291,19 +262,37 @@ func _physics_process(delta: float) -> void:
 	var move := right * input.x - forward * input.y
 	if move.length() > 1.0:
 		move = move.normalized()
-	var speed := _f("run_speed", 5.0) if Input.is_physical_key_pressed(KEY_SHIFT) else _f("walk_speed", 2.4)
+	var running := Input.is_physical_key_pressed(KEY_SHIFT)
+	var speed := _hf("run_speed", 5.0) if running else _hf("walk_speed", 2.4)
+	if _hero != null and _hero.armed and not running:
+		speed *= _hf("armed_speed_factor", 1.0)
 	var vel := _player.velocity
 	vel.x = move.x * speed
 	vel.z = move.z * speed
-	if _player.is_on_floor():
-		if Input.is_physical_key_pressed(KEY_SPACE) and not _typing():
-			vel.y = _f("jump_speed", 7.0)
+	var space := Input.is_physical_key_pressed(KEY_SPACE) and not _typing()
+	if on_floor:
+		if space and not _space_down and not locked:
+			if _hero != null and _hero.has("Jump"):
+				_hero.jump(on_floor)            # отрыв — когда анимация присела (tick вернёт jump)
+			else:
+				vel.y = _hf("jump_speed", 7.0)
 	else:
 		vel.y -= _f("gravity", 20.0) * delta
+	_space_down = space
+	var moving := move.length() > 0.01 and on_floor
+	if _hero != null:
+		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running)
+		if r.jump:
+			vel.y = _hf("jump_speed", 7.0)
+		var step: Vector3 = r.root
+		if step != Vector3.ZERO and delta > 0.0:
+			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
+			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
+			vel.x = w.x / delta
+			vel.z = w.z / delta
 	_player.velocity = vel
 	_player.move_and_slide()
-	_animate(move.length() > 0.01 and _player.is_on_floor(), speed * move.length())
-	if move.length() > 0.01:
+	if move.length() > 0.01 and not locked:
 		var want := atan2(-move.x, -move.z)   # «нос» смотрит по -Z
 		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, want, minf(1.0, delta * 12.0))
 	if _player.position.y < FALL_Y:
@@ -344,6 +333,8 @@ func _input(event: InputEvent) -> void:
 		var mb: InputEventMouseButton = event
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
 			_turning = mb.pressed
+		elif mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			_lmb_queued = true                   # удар; повтор во время удара — следующий удар комбо
 		get_viewport().set_input_as_handled()   # колесо и щелчки — не камере игры под локацией
 		return
 	if event is InputEventMouseMotion:
@@ -356,5 +347,5 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
-		if key.pressed and not key.echo and key.physical_keycode == KEY_F:
-			_toggle_sword()
+		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):
+			_f_queued = true

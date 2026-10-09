@@ -1,0 +1,20 @@
+{
+	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа.",
+	"model": "models/knight.glb",
+	"anim_meta": "models/knight_anim.json",
+	"capsule_height": 1.9,
+	"capsule_radius": 0.4,
+	"walk_speed": 1.7,
+	"run_speed": 4.2,
+	"armed_speed_factor": 0.85,
+	"stride_walk": 1.5,
+	"stride_walk_armed": 1.3,
+	"stride_run": 4.0,
+	"jump_speed": 6.0,
+	"jump_takeoff": 0.3,
+	"combo_window": 0.3,
+	"combo_cancel": 0.62,
+	"root_motion_scale": 0.8,
+	"root_motion_lateral": 0.5,
+	"blend": 0.15
+}

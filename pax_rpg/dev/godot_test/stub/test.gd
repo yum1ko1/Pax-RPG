@@ -25,6 +25,11 @@ func _ready() -> void:
 func _key(k: Key, down: bool) -> void:
 	var e := InputEventKey.new(); e.physical_keycode = k; e.keycode = k; e.pressed = down
 	Input.parse_input_event(e)
+func _click() -> void:
+	var e := InputEventMouseButton.new(); e.button_index = MOUSE_BUTTON_LEFT; e.pressed = true; e.position = Vector2(640, 360)
+	Input.parse_input_event(e)
+	var e2 := InputEventMouseButton.new(); e2.button_index = MOUSE_BUTTON_LEFT; e2.pressed = false; e2.position = Vector2(640, 360)
+	Input.parse_input_event(e2)
 func _physics_process(d: float) -> void:
 	t += d
 	var travel = mod.get("travel"); var loc = mod.get("location"); var pl = mod.get("planet")
@@ -63,33 +68,44 @@ func _physics_process(d: float) -> void:
 				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_location.png")
 				var p1: Vector3 = loc.get("_player").position
 				print("player after 1s W ", p1, " moved ", (p1 - (get_meta("p0") as Vector3)).length())
-				var an: AnimationPlayer = loc.get("_anim")
+				var hero = loc.get("_hero")
+				var an: AnimationPlayer = hero.anim if hero else null
 				print("hero model: ", an != null, "  anims: ", an.get_animation_list() if an else [], "  playing: ", an.current_animation if an else "")
 				_key(KEY_F, true); _key(KEY_F, false)
 				step = 10; t = 0
 		10:
-			if t > 0.45 and not has_meta("mid"):
+			if t > 1.0 and not has_meta("mid"):
 				set_meta("mid", true)
 				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_drawing.png")
-			if t > 1.8:
-				print("armed after F: ", loc.get("_armed"), "  busy: '", loc.get("_busy"), "'")
+			if t > 3.8:
+				var hero = loc.get("_hero")
+				print("armed after F: ", hero.armed, "  action: '", hero.action, "'")
 				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_armed.png")
-				_key(KEY_A, true)
+				set_meta("p_before", loc.get("_player").position)
+				_click()
 				step = 11; t = 0
 		11:
-			if t > 0.7:
-				var an: AnimationPlayer = loc.get("_anim")
-				print("walking armed: ", an.current_animation, " speed_scale ", an.speed_scale)
-				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_walkarmed.png")
-				_key(KEY_A, false)
+			var hero = loc.get("_hero")
+			if t > 0.9 and not has_meta("c2"):
+				set_meta("c2", true); _click(); print("during ", hero.action, " pos ", hero.anim.current_animation_position)
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_attack1.png")
+			if t > 2.4 and not has_meta("c3"):
+				set_meta("c3", true); _click(); print("during ", hero.action)
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_attack2.png")
+			if t > 4.2 and not has_meta("s3"):
+				set_meta("s3", true); print("during ", hero.action)
+				get_viewport().get_texture().get_image().save_png("/tmp/pax_rpg_shot_attack3.png")
+			if t > 7.5:
+				var p1: Vector3 = loc.get("_player").position
+				print("after combo action='", hero.action, "' moved ", (p1 - (get_meta("p_before") as Vector3)).length())
 				_key(KEY_F, true); _key(KEY_F, false)
 				step = 12; t = 0
 		12:
-			if t > 1.8:
-				print("armed after 2nd F: ", loc.get("_armed"))
+			if t > 3.5:
+				print("armed after 2nd F: ", loc.get("_hero").armed)
 				_key(KEY_SPACE, true); step = 4; t = 0
 		4:
-			if t > 0.25:
+			if t > 0.7:
 				print("player y mid-jump ", loc.get("_player").position.y)
 				_key(KEY_SPACE, false)
 				var gp: Vector3 = loc.get("_gate_pos")
