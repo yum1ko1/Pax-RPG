@@ -584,7 +584,7 @@ if img is not None:
     # подол до самых сапог: за серединой ног (сзади) и ниже колен — 9 колец
     hips_y = float((MW @ pb[HIPS].head).y)
     hem = ok & (co[:, 2] < 0.8) & (co[:, 1] > hips_y - 0.03)
-    for _ in range(9):
+    for _ in range(6):
         add = np.zeros(len(co), dtype=bool)
         add[ev[:, 0]] |= region[ev[:, 1]]
         add[ev[:, 1]] |= region[ev[:, 0]]
@@ -627,28 +627,50 @@ if len(cape_ids) > 200:
             par = b
             cape_bones.append(b.name)
     bpy.ops.object.mode_set(mode="OBJECT")
-    # веса: две ближние цепочки по X, вдоль цепочки — по высоте; верх плавно остаётся на старых весах
+    # плащ — отдельная сетка: грани, где влияние плаща больше трети, отрезаются от тела. Так подол не тянет за
+    # собой сапоги (у общих вершин веса делились — оттуда «остатки плаща у ног»), а у отрезанного плаща
+    # влияние костей плаща — полное ниже плеч, без размытия по краям.
+    face_in = np.zeros(len(me.polygons), dtype=bool)
+    for poly in me.polygons:
+        face_in[poly.index] = float(np.mean(infl[list(poly.vertices)])) > 0.35
+    old_cape = bpy.data.objects.get("Knight_cape")
+    if old_cape is not None:
+        bpy.data.objects.remove(old_cape, do_unlink=True)
+    for o in vl.objects:
+        o.select_set(False)
+    vl.objects.active = ob
+    ob.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_mode(type="FACE")
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    me.polygons.foreach_set("select", face_in.tolist())
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.separate(type="SELECTED")
+    bpy.ops.object.mode_set(mode="OBJECT")
+    cape = [o for o in vl.objects if o.select_get() and o != ob][0]
+    cape.name = "Knight_cape"
+    cm = cape.data
     for nm in cape_bones:
-        if nm not in ob.vertex_groups:
-            ob.vertex_groups.new(name=nm)
-    groups = {g.index: g for g in ob.vertex_groups}
-    for vid in (int(v) for v in cape_ids):
-        x, y, z = (float(c) for c in co[vid])
-        t = float(infl[vid])
+        if nm not in cape.vertex_groups:
+            cape.vertex_groups.new(name=nm)
+    groups = {g.index: g for g in cape.vertex_groups}
+    for v in cm.vertices:
+        x, y, z = cape.matrix_world @ v.co
+        t = min(1.0, max(0.0, (Z_TOP - z) / 0.28))          # у плеч держится за тело, ниже — только плащ
         if t <= 0:
             continue
-        v = me.vertices[vid]
-        for g in v.groups:
+        for g in list(v.groups):
             if not groups[g.group].name.startswith("Cape_"):
-                groups[g.group].add([vid], g.weight * (1 - t), "REPLACE")
+                groups[g.group].add([v.index], g.weight * (1 - t), "REPLACE")
         fx = float(np.clip(np.interp(x, CHAINS_X, range(len(CHAINS_X))), 0, len(CHAINS_X) - 1))
         fz = float(np.clip((Z_TOP - z) / (Z_TOP - Z_BOT) * SEG - 0.5, 0, SEG - 1))
         for ci, wx in ((int(fx), 1 - (fx - int(fx))), (min(int(fx) + 1, len(CHAINS_X) - 1), fx - int(fx))):
             for sj, wz in ((int(fz), 1 - (fz - int(fz))), (min(int(fz) + 1, SEG - 1), fz - int(fz))):
                 w = t * wx * wz
                 if w > 1e-3:
-                    g = ob.vertex_groups[f"Cape_{ci}_{sj}"]
-                    g.add([vid], w, "ADD")
+                    cape.vertex_groups[f"Cape_{ci}_{sj}"].add([v.index], w, "ADD")
+    log.append(f"cape mesh {len(cm.vertices)} verts, body left {len(me.vertices)}")
     meta["cape"] = {"chains": [[f"Cape_{i}_0", f"Cape_{i}_{SEG - 1}"] for i in range(len(CHAINS_X))]}
 log.append(f"cape bones {len(cape_bones)}")
 

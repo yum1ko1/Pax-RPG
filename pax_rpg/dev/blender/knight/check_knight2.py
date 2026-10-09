@@ -72,6 +72,19 @@ show("Sword_Back")
 bpy.context.view_layer.update()
 files += U.shot("k2_cape_test", (0, 0, 1.0), 3.0, ("RIGHT", "BACK"), res=450)
 files += U.shot("k2_cape_low", (0, 0, 0.35), 1.2, ("RIGHT", "BACK", "LEFT"), res=450)
+cape = bpy.data.objects.get("Knight_cape")
+bodies = [o for o in scn.objects if o.name.startswith("Knight_body")]
+if cape is not None:                       # плащ отдельно: что отрезано от тела
+    for p in pb:
+        if p.name.startswith("Cape_"):
+            p.rotation_quaternion = (1, 0, 0, 0)
+    for o in bodies:
+        o.hide_render = True
+    show("")
+    bpy.context.view_layer.update()
+    files += U.shot("k2_cape_only", (0, 0, 0.9), 2.2, ("BACK", "RIGHT"), res=450)
+    for o in bodies:
+        o.hide_render = False
 for p in pb:
     p.rotation_quaternion = (1, 0, 0, 0)
 result["files"] = [p.split("\\")[-1] for p in files]
