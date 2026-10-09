@@ -59,8 +59,9 @@ co = np.array([tuple(body.matrix_world @ v.co) for v in body.data.vertices])
 hips = head("Hips")
 ls, rs = head("LeftShoulder"), head("RightShoulder")
 z_top = max(ls.z, rs.z) + 0.05
-half_top = max(abs(ls.x - hips.x), abs(rs.x - hips.x)) + 0.10
-half_bot = half_top + 0.12
+la, ra = head("LeftArm"), head("RightArm")           # плечевые суставы: ключицы у этой модели почти у шеи
+half_top = max(abs(la.x - hips.x), abs(ra.x - hips.x)) + 0.02
+half_bot = half_top + 0.10
 back = co[co[:, 1] > hips.y]                    # +Y — спина (рыцарь смотрит на -Y)
 log.append(f"z_top {z_top:.2f}, half width {half_top:.2f}..{half_bot:.2f}, back verts {len(back)}")
 
