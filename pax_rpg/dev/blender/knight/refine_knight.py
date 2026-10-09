@@ -7,8 +7,8 @@
     перекатывают через правое плечо, левая рука ловит рукоять — см. раздел 3; путь задан для меча, руки — IK;
   - меч не уходит в землю: в ударах кисть поворачивается так, чтобы остриё оставалось над землёй; кадр, где
     остриё ниже всего в Attack3, — удар о землю (звук);
-  - плащ: вершины плаща (по цвету текстуры) отрезаются в отдельную сетку knight_cape.glb — в игре это ткань
-    SoftBody3D, пришитая к груди и сталкивающаяся с телом;
+  - плащ снимается с модели: вершины плаща (по цвету текстуры) отрезаются и выбрасываются — плащ теперь
+    отдельный предмет, его строит build_cape.py;
   - экспорт <W>/knight/knight.glb и knight_anim.json.
 Оси Blender: Z вверх, рыцарь смотрит на -Y, правая рука — -X. Арматура Meshy в сантиметрах (масштаб объекта 0,01):
 все цели считаются в мире (метры), позы ставятся через pose_bone.matrix.
@@ -616,10 +616,7 @@ if img is not None:
     cape_ids = np.flatnonzero(cape_mask)
 log.append(f"cape vertices {len(cape_ids)} of {len(me.vertices)}")
 
-# Плащ — ткань: в игре это SoftBody3D (настоящая сетка с массой и столкновениями с телом), а не кости. Здесь его
-# отрезают от тела, отвязывают от скелета (сетка в позе покоя, метры), выкидывают куски, которые не дотягиваются
-# до плеч (их не к чему прикрепить — повисли бы в воздухе), упрощают до ~CAPE_TARGET вершин и пишут отдельным
-# knight_cape.glb. Верхняя полоса PIN_BAND в игре пришита к груди.
+# Плащ снимается с тела: грани, где влияние плаща больше трети, отрезаются в объект Knight_cape и убираются из сцены.
 CAPE_TARGET, PIN_BAND = 900, 0.08
 if len(cape_ids) > 200:
     face_in = np.zeros(len(me.polygons), dtype=bool)
@@ -642,80 +639,9 @@ if len(cape_ids) > 200:
     bpy.ops.object.mode_set(mode="OBJECT")
     cape = [o for o in vl.objects if o.select_get() and o != ob][0]
     cape.name = "Knight_cape"
-    for m in list(cape.modifiers):
-        cape.modifiers.remove(m)
-    cape.vertex_groups.clear()
-    mw = cape.matrix_world.copy()
-    cape.parent = None
-    cape.data.transform(mw)
-    cape.matrix_world = Matrix.Identity(4)
-    bm = bmesh.new()
-    bm.from_mesh(cape.data)
-    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.002)
-    bm.verts.ensure_lookup_table()
-    top = max(v.co.z for v in bm.verts)
-    seen, kill, kept = set(), [], 0
-    for v0 in bm.verts:
-        if v0.index in seen:
-            continue
-        comp, stack = [], [v0]
-        seen.add(v0.index)
-        while stack:
-            v = stack.pop()
-            comp.append(v)
-            for e in v.link_edges:
-                u = e.other_vert(v)
-                if u.index not in seen:
-                    seen.add(u.index)
-                    stack.append(u)
-        if max(v.co.z for v in comp) < top - PIN_BAND:
-            kill += comp
-        else:
-            kept += 1
-    bmesh.ops.delete(bm, geom=kill, context="VERTS")
-    bm.to_mesh(cape.data)
-    bm.free()
-    n0 = len(cape.data.vertices)
-    for o in vl.objects:
-        o.select_set(False)
-    vl.objects.active = cape
-    cape.select_set(True)
-    if n0 > CAPE_TARGET:
-        md = cape.modifiers.new("dec", "DECIMATE")
-        md.ratio = CAPE_TARGET / n0
-        bpy.ops.object.modifier_apply(modifier="dec")
-    log.append(f"cape cloth: dropped {len(kill)} loose verts, kept {kept} pieces, {n0} -> {len(cape.data.vertices)} verts")
-    # однотонная ткань без развёртки и с гладкими нормалями: в glb ни одна вершина не дробится на швах, номера точек
-    # мягкого тела в игре = номера вершин сетки (иначе верх пришивался к случайным точкам — «рваные куски»)
-    cm = cape.data
-    cv = col[cape_ids] if len(cape_ids) else np.array([[0.12, 0.08, 0.2]])
-    srgb = np.clip(np.median(cv, axis=0), 0, 1)
-    lin = [float(c) ** 2.2 for c in srgb]
-    mat = bpy.data.materials.get("CapeCloth") or bpy.data.materials.new("CapeCloth")
-    mat.use_nodes = True
-    mat.use_backface_culling = False
-    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
-    bsdf.inputs["Base Color"].default_value = (*lin, 1.0)
-    bsdf.inputs["Roughness"].default_value = 0.9
-    bsdf.inputs["Metallic"].default_value = 0.0
-    cm.materials.clear()
-    cm.materials.append(mat)
-    for uv in list(cm.uv_layers):
-        cm.uv_layers.remove(uv)
-    for ca in list(cm.color_attributes):
-        cm.color_attributes.remove(ca)
-    for an in ("sharp_edge", "sharp_face"):
-        if an in cm.attributes:
-            cm.attributes.remove(cm.attributes[an])
-    if cm.has_custom_normals:
-        bpy.ops.mesh.customdata_custom_splitnormals_clear()
-    cm.shade_smooth()
-    log.append(f"cape colour srgb {[round(float(c), 3) for c in srgb]}")
-    cape_path = os.path.join(OUT, "knight_cape.glb")
-    bpy.ops.export_scene.gltf(filepath=cape_path, export_format="GLB", use_selection=True, export_animations=False,
-                              export_skins=False, export_yup=True, export_texcoords=False, export_tangents=False)
-    scn.collection.objects.unlink(cape)          # в knight.glb плаща нет — он отдельной тканью
-    meta["cape"] = {"cloth": "models/knight_cape.glb", "pin_band": PIN_BAND}
+    scn.collection.objects.unlink(cape)          # плащ с модели снят: плащ — отдельный предмет (build_cape.py)
+    log.append(f"cape removed from the body: {len(cape.data.vertices)} verts")
+meta.pop("cape", None)
 # прыжок финального удара: высота таза по кадрам (для настройки полёта в игре)
 a3 = clips["Attack3"]
 hz = []
