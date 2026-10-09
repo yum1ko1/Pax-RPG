@@ -345,8 +345,6 @@ body.box((0.075, -0.13, 0.88), (0.035, 0.012, 0.22), BLUE, "Hips", rot=Matrix.Ro
 # торс
 body.cyl((0, 0, 1.03), (0, 0, 1.22), 0.125, 0.14, SKIN, "Spine", flat=0.72)
 body.sphere((0, 0.005, 1.29), (0.185, 0.125, 0.15), SKIN, "Chest")
-for s in (1, -1):
-    body.sphere((s * 0.075, -0.09, 1.31), (0.07, 0.04, 0.05), SKIN, "Chest")     # грудные мышцы
 # шея и голова
 body.cyl((0, 0, 1.38), (0, 0, 1.53), 0.05, 0.045, SKIN, "Neck")
 body.sphere((0, -0.005, 1.62), (0.092, 0.102, 0.118), SKIN, "Head")
@@ -560,6 +558,8 @@ for f in range(0, 25, 2):
     key(f, 1.0)
 
 rig.animation_data.action = bpy.data.actions["Idle"]
+if hasattr(rig.animation_data, "action_slot") and len(getattr(bpy.data.actions["Idle"], "slots", [])):
+    rig.animation_data.action_slot = bpy.data.actions["Idle"].slots[0]
 scn.frame_start, scn.frame_end = 0, 60
 scn.frame_set(0)
 

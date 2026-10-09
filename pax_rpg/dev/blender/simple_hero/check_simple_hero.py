@@ -28,11 +28,20 @@ scn = bpy.data.scenes["SimpleHero"]
 win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["SimpleHero_rig"]
+
+
+def use(action):
+    """Blender 5: у действия есть «слоты» — без слота поза не меняется."""
+    rig.animation_data.action = action
+    if hasattr(rig.animation_data, "action_slot") and len(getattr(action, "slots", [])):
+        rig.animation_data.action_slot = action.slots[0]
+
+
 files = []
 for act, f, view in SHOTS:
-    rig.animation_data.action = bpy.data.actions[act]
+    use(bpy.data.actions[act])
     scn.frame_set(f)
     files += U.shot(f"sh_{act.lower()}{f:02d}", (0, 0, 1.0), 2.3, (view,), res=450)
-rig.animation_data.action = bpy.data.actions["Idle"]
+use(bpy.data.actions["Idle"])
 scn.frame_set(0)
 result["files"] = [p.split("\\")[-1] for p in files]
