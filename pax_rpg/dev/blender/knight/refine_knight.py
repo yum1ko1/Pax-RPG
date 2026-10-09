@@ -263,8 +263,8 @@ apply(P_IDLE)
 fw = facing()
 side = fw.cross(UP)
 c = head(CHEST)
-back_grip = c - side * 0.17 - fw * 0.20 + UP * 0.36           # рукоять над правым плечом, за спиной
-back_dir = (side * 0.40 - fw * 0.06 - UP * 0.91).normalized()   # клинок к левому бедру
+back_grip = c + side * 0.17 - fw * 0.20 + UP * 0.36           # рукоять над правым плечом (side — вправо), за спиной
+back_dir = (-side * 0.40 - fw * 0.06 - UP * 0.91).normalized()  # клинок к левому бедру
 # ориентация хвата у плеча: крен меча вокруг клинка — какой удобнее запястью
 apply(P_GUARD)
 a_fwd = rot_w(HA).transposed() @ (head(HA) - head(FA)).normalized()
@@ -392,7 +392,10 @@ for m in me.materials:
                 lk = [l for l in m.node_tree.links if l.from_node == n and l.to_socket.name == "Base Color"]
                 if lk:
                     img = n.image
+CHAINS_X = (-0.30, -0.15, 0.0, 0.15, 0.30)
+Z_TOP, Z_BOT, SEG = 1.38, 0.18, 4
 cape_ids = []
+infl = None
 if img is not None:
     w_, h_ = img.size
     px = np.empty(w_ * h_ * 4, dtype=np.float32)
@@ -407,17 +410,43 @@ if img is not None:
     ys = np.clip((vuv[:, 1] % 1.0) * (h_ - 1), 0, h_ - 1).astype(int)
     col = px[ys, xs, :3]
     co = np.array([tuple(ob.matrix_world @ v.co) for v in me.vertices])
-    purple = (col[:, 2] > col[:, 1] * 1.25) & (col[:, 2] > 0.06) & (col[:, 0] > col[:, 1] * 1.05)
-    behind = co[:, 1] > np.median(co[:, 1]) - 0.05
-    cape_mask = purple & (co[:, 2] < 1.52) & (co[:, 2] > 0.05) & behind
+    strict = (col[:, 2] > col[:, 1] * 1.25) & (col[:, 2] > 0.06) & (col[:, 0] > col[:, 1] * 1.05)
+    loose = (col[:, 2] > col[:, 1] * 1.08) & (col[:, 2] > 0.03)
+    chest_y = float((MW @ pb[CHEST].head).y)
+    # плащ — связная область: от явно фиолетовых вершин растём по рёбрам в «похоже фиолетовые»
+    ev = np.empty(len(me.edges) * 2, dtype=np.int64)
+    me.edges.foreach_get("vertices", ev)
+    ev = ev.reshape(-1, 2)
+    nb = [[] for _ in range(len(me.vertices))]
+    for a_, b_ in ev:
+        nb[a_].append(b_)
+        nb[b_].append(a_)
+    ok = (co[:, 2] < 1.55) & (co[:, 1] > chest_y - 0.12)
+    region = np.zeros(len(co), dtype=bool)
+    stack = [int(v) for v in np.flatnonzero(strict & ok)]
+    region[stack] = True
+    while stack:
+        v = stack.pop()
+        for u in nb[v]:
+            if not region[u] and ok[u] and (loose[u] or strict[u]):
+                region[u] = True
+                stack.append(u)
+    # влияние плаща: рампа сверху, затем сглаживание по соседям — без резких швов (иначе — «иглы»)
+    infl = region * np.clip((Z_TOP - co[:, 2]) / 0.28, 0, 1)
+    deg = np.bincount(ev.ravel(), minlength=len(co)).astype(np.float64)
+    for _ in range(8):
+        acc = infl.astype(np.float64).copy()
+        np.add.at(acc, ev[:, 0], infl[ev[:, 1]])
+        np.add.at(acc, ev[:, 1], infl[ev[:, 0]])
+        infl = acc / (1 + deg)
+    infl = np.clip(infl * 1.15, 0, 1)
+    cape_mask = infl > 0.02
     cape_ids = np.flatnonzero(cape_mask)
 log.append(f"cape vertices {len(cape_ids)} of {len(me.vertices)}")
 
-CHAINS_X = (-0.30, -0.15, 0.0, 0.15, 0.30)
-Z_TOP, Z_BOT, SEG = 1.38, 0.18, 4
 cape_bones = []
 if len(cape_ids) > 200:
-    cc = co[cape_ids]
+    cc = co[np.flatnonzero(infl > 0.5)]
     zs = [Z_TOP - (Z_TOP - Z_BOT) * j / SEG for j in range(SEG + 1)]
     bpy.context.view_layer.objects.active = rig
     use(None)
@@ -447,8 +476,7 @@ if len(cape_ids) > 200:
     groups = {g.index: g for g in ob.vertex_groups}
     for vid in (int(v) for v in cape_ids):
         x, y, z = (float(c) for c in co[vid])
-        t = float(np.clip((Z_TOP - z) / 0.28, 0, 1))
-        t = t * t * (3 - 2 * t)
+        t = float(infl[vid])
         if t <= 0:
             continue
         v = me.vertices[vid]
