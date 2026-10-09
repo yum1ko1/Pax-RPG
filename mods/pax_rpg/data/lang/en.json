@@ -1,0 +1,22 @@
+{
+	"pax_rpg_city_azur_tell": "Azur-Tell",
+	"pax_rpg_city_haddur": "Haddur",
+	"pax_rpg_city_gharn": "Gharn",
+	"pax_rpg_city_saerit": "Saerit",
+	"pax_rpg_city_bloom_court": "Bloom Court",
+	"pax_rpg_city_vell_port": "Vell Port",
+	"pax_rpg_city_crystal_gate": "Crystal Gate",
+	"pax_rpg_city_sherraks_ford": "Sherraks Ford",
+	"pax_rpg_city_jungle_hold": "Jungle Hold",
+	"pax_rpg_city_moonglade": "Moonglade",
+	"pax_rpg_world_map": "World map",
+	"pax_rpg_gate": "Exit",
+	"pax_rpg_gate_hint": "E — back to the world map",
+	"pax_rpg_controls": "WASD — walk · Shift — run · Space — jump · RMB + mouse — turn the camera",
+	"pax_rpg_narrator_enter_1": "The road winds through blue forests. Ahead lies {city}.",
+	"pax_rpg_narrator_enter_2": "Pink mana clouds sink lower. You enter {city}.",
+	"pax_rpg_narrator_enter_3": "The guards at the gate watch you pass. {city} does not like strangers.",
+	"pax_rpg_narrator_enter_4": "Mana mist trembles over the roofs. {city} greets you with the noise of its streets.",
+	"pax_rpg_narrator_leave_1": "You leave the city. The world of Yuruma lies before you again.",
+	"pax_rpg_narrator_leave_2": "The gate closes behind you. Where now?"
+}

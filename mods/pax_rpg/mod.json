@@ -1,0 +1,20 @@
+{
+	"$schema": "../../docs/modding/schemas/mod.schema.json",
+	"id": "pax_rpg",
+	"name": {
+		"en": "Pax RPG",
+		"ru": "Pax RPG"
+	},
+	"version": "0.0.1",
+	"api": 1,
+	"game_version": ">=0.28.0",
+	"authors": ["Babichev Maxim"],
+	"description": {
+		"en": "Prototype of an RPG in Pax Universe: the planet Yuruma instead of Earth, cities on the globe; a click on a city loads its location — a platform where the hero (an oval for now) walks with WASD; the gate leads back to the world map.",
+		"ru": "Прототип RPG в Pax Universe: планета Юрума вместо Земли, города на глобусе; щелчок по городу загружает его локацию — платформу, где герой (пока овал) ходит на WASD; ворота возвращают на карту мира."
+	},
+	"tags": ["rpg", "3d"],
+	"depends": [],
+	"conflicts": ["pax_corpinc3d"],
+	"entry": "main.gd"
+}

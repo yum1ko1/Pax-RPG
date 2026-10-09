@@ -25,6 +25,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 OUT = Path(__file__).resolve().parents[1] / "reference" / "yuruma"
+# Текстура планеты для мода Pax RPG (поверхность + мановые облака, без подписей).
+MOD_TEXTURES = Path(__file__).resolve().parents[2] / "mods" / "pax_rpg" / "textures"
 
 SEA_LEVEL = 0.0
 LAND_SHARE_TARGET = 0.36
@@ -553,6 +555,8 @@ def main() -> None:
     pol.save(OUT / "yuruma_empires.png")
     labelled = color.copy()
     labelled = lerp(labelled, PAL["cloud"], clouds * 0.7)
+    MOD_TEXTURES.mkdir(parents=True, exist_ok=True)
+    to_img(labelled).save(MOD_TEXTURES / "yuruma_surface.png")
     map_view = label_map(to_img(labelled), h, owner, False)
     map_view.save(OUT / "yuruma_map.png")
 

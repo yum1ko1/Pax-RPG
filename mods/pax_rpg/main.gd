@@ -1,0 +1,41 @@
+extends PaxMod
+## Pax RPG — прототип RPG в Pax Universe. Сейчас только механика: планета Юрума вместо Земли (planet/), города на
+## глобусе; щелчок по городу — экран загрузки (travel/) и локация-платформа (location/), где герой-овал ходит
+## на WASD; ворота на локации возвращают на карту мира. main.gd только регистрирует части.
+
+const Planet := preload("res://mods/pax_rpg/src/planet/planet.gd")
+const Location := preload("res://mods/pax_rpg/src/location/location.gd")
+const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
+const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
+
+var planet: Planet
+var location: Location
+var loading: Loading
+var travel: Travel
+
+
+func _mod_loaded() -> void:
+	planet = Planet.new()
+	planet.setup(self)
+	add_child(planet)
+	location = Location.new()
+	location.setup(self)
+	add_child(location)
+	loading = Loading.new()
+	loading.setup()
+	add_child(loading)
+	travel = Travel.new()
+	travel.setup(self, planet, location, loading)
+	add_child(travel)
+
+
+func _mod_unloaded() -> void:
+	if is_instance_valid(location):
+		location.clear()
+	if is_instance_valid(planet):
+		planet.restore()
+
+
+func _world_ready(g: PaxGame) -> void:
+	planet.start(g)
+	travel.start(g)

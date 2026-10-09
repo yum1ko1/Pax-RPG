@@ -1,0 +1,22 @@
+{
+	"_note": "Города Юрумы на глобусе: lat/lon в градусах по карте yuruma_surface.png (pax_rpg/dev/yuruma_planet.py). Имена — data/lang: pax_rpg_city_<id>.",
+	"cities": [
+		{"id": "azur_tell", "lat": 22.1, "lon": -70.0, "empire": "azure", "capital": true},
+		{"id": "haddur", "lat": 38.1, "lon": -22.1, "empire": "haddur", "capital": true},
+		{"id": "gharn", "lat": 0.1, "lon": 51.9, "empire": "gharn", "capital": true},
+		{"id": "saerit", "lat": -24.0, "lon": 89.9, "empire": "saerit", "capital": true},
+		{"id": "bloom_court", "lat": -38.1, "lon": -150.0, "empire": "bloom", "capital": true},
+		{"id": "vell_port", "lat": 12.0, "lon": -95.0, "empire": "azure"},
+		{"id": "crystal_gate", "lat": 51.9, "lon": -40.0, "empire": "haddur"},
+		{"id": "sherraks_ford", "lat": -5.0, "lon": 75.0, "empire": "gharn"},
+		{"id": "jungle_hold", "lat": 6.6, "lon": 93.4, "empire": "saerit"},
+		{"id": "moonglade", "lat": -25.0, "lon": -165.0, "empire": "bloom"}
+	],
+	"empire_colors": {
+		"azure": "#3d8bff",
+		"haddur": "#9a8cff",
+		"gharn": "#ff5a6a",
+		"saerit": "#ffb347",
+		"bloom": "#ff7fd0"
+	}
+}

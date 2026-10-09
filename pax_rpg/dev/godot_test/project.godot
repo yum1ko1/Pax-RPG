@@ -1,0 +1,9 @@
+config_version=5
+[application]
+config/name="pax_rpg_test"
+run/main_scene="res://stub/test.tscn"
+[physics]
+common/physics_ticks_per_second=60
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
