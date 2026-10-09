@@ -480,6 +480,19 @@ for src in ("Draw", "Sheathe"):
         apply({n: (lg[n] if n in LEGS else up_[n]) for n in up_})
         key(act, f - s0)
 
+# ---------- 3б. уворот с мечом: кувырок, правая рука прижимает меч к боку клинком назад (как в беге) ----------
+RARM = ("RightShoulder", UA, FA, HA)
+P_CARRY = capture(clips["RunArmed"], clips["RunArmed"].frame_range[0])
+da = clips["DodgeArmed"]
+d0, d1 = int(da.frame_range[0]), int(da.frame_range[1])
+src = da.copy()
+act = new_action("DodgeArmed")
+for f in range(d0, d1 + 1):
+    pose = capture(src, f)
+    pose.update({n: P_CARRY[n] for n in RARM})
+    apply(pose)
+    key(act, f - d0)
+bpy.data.actions.remove(src)
 # ---------- 4. меч не уходит в землю; удар о землю ----------
 def tip_and_grip(ob):
     o, R = sword_frame(ob)
@@ -490,6 +503,7 @@ impact = {}
 for name, ob, mode in (("Attack1", sw_hand, "floor"), ("Attack2", sw_hand, "floor"), ("Attack3", sw_hand, "floor"),
                        ("Draw", sw_hand, "floor"), ("Sheathe", sw_hand, "floor"),
                        ("DrawWalk", sw_hand, "floor"), ("SheatheWalk", sw_hand, "floor"),
+                       ("DodgeArmed", sw_hand, "floor"),
                        ("RunArmed", bpy.data.objects["Sword_Drag"], "pin")):
     a = clips[name]
     fr = range(int(a.frame_range[0]), int(a.frame_range[1]) + 1)

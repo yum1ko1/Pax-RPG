@@ -113,6 +113,8 @@ SOURCES = [
     ("Idle", "anim_Library/animation_glb_url.glb", "idle"),
     ("Jump", "anim_Library/animation_glb_url.glb", "jump"),
     ("WalkArmed", "anim_Library/animation_glb_url.glb", "walk"),
+    ("Dodge", "anim_Dodge/animation_glb_url.glb", "roll_dodge"),          # библиотека Meshy 158 (риг 2)
+    ("DodgeArmed", "anim_Dodge/animation_glb_url.glb", "roll_dodge_2"),   # 160; руки с мечом — refine_knight.py
 ]
 clips = {}
 cache = {}
@@ -123,7 +125,7 @@ for name, rel, pick in SOURCES:
         drop_scene(win.scene)
     acts = cache[rel]
     if pick:
-        cand = [a for a in acts if pick in a.name.lower()]
+        cand = sorted([a for a in acts if pick in a.name.lower()], key=lambda a: len(a.name))   # точнее — короче
     else:
         cand = sorted(acts, key=lambda a: a.frame_range[1] - a.frame_range[0], reverse=True)
     if not cand:
@@ -159,7 +161,7 @@ def frames(a):
 
 
 # ---------- root motion: смещение таза по горизонтали — в json, клип — на месте ----------
-ROOT_CLIPS = ("Draw", "Sheathe", "Attack1", "Attack2", "Attack3", "Jump")
+ROOT_CLIPS = ("Draw", "Sheathe", "Attack1", "Attack2", "Attack3", "Jump", "Dodge", "DodgeArmed")
 INPLACE = ("Walk", "Run", "WalkArmed", "Idle")
 motion = {}
 for name, a in clips.items():

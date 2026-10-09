@@ -24,7 +24,8 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("Attack3", t, "RIGHT") for t in (0.2, 0.35, 0.5, 0.65)] + [("IdleArmed", 0, "BACK")]
+SHOTS = [("Dodge", t, "RIGHT") for t in (0.15, 0.35, 0.55, 0.8)] + \
+        [("DodgeArmed", t, "RIGHT") for t in (0.15, 0.35, 0.55, 0.8)]
 files = []
 
 
@@ -47,7 +48,7 @@ for clip, t, view in SHOTS:
     sw_t = (f - f0) / 30
     if clip == "RunArmed":
         show("Sword_Drag")
-    elif clip in ("Run", "Idle"):
+    elif clip in ("Run", "Idle", "Dodge"):
         show("Sword_Back")
     elif clip.startswith("Sheathe"):
         show("Sword_Hand" if sw_t < meta["sword_switch"]["Sheathe"]["time"] else "Sword_Back")
