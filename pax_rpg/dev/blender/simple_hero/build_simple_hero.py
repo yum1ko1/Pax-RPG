@@ -421,11 +421,23 @@ scabbard = sh.to_object("SimpleHero_saya", rig)
 
 
 # ---------- анимации ----------
+_cur = []
+
+
+def attach(a):
+    rig.animation_data.action = a
+    if hasattr(rig.animation_data, "action_slot") and len(getattr(a, "slots", [])):
+        rig.animation_data.action_slot = a.slots[0]       # Blender 5: без слота поза не меняется
+
+
 def new_action(name):
+    """Действие висит на риге только в момент записи ключа: иначе каждое vl.update() возвращает
+    костям значения из уже записанных ключей и затирает позу, которую ставит скрипт."""
     a = bpy.data.actions.new(name)
     a.use_fake_user = True
     rig.animation_data_create()
-    rig.animation_data.action = a
+    rig.animation_data.action = None
+    _cur[:] = [a]
     return a
 
 
@@ -434,6 +446,7 @@ _prev = {}
 
 def key(f, hand_infl):
     pb["Weapon"].constraints["Hand"].influence = hand_infl
+    attach(_cur[0])
     for p in pb:
         q = p.rotation_quaternion
         if p.name in _prev and _prev[p.name].dot(q) < 0:   # тот же знак, что у прошлого ключа — без кувырков
@@ -442,6 +455,7 @@ def key(f, hand_infl):
         p.keyframe_insert("rotation_quaternion", frame=f)
         p.keyframe_insert("location", frame=f)
     pb["Weapon"].constraints["Hand"].keyframe_insert("influence", frame=f)
+    rig.animation_data.action = None
 
 
 def relaxed_arms(swing=0.0, side_only=None):
@@ -557,9 +571,7 @@ for f in range(0, 25, 2):
     errs[f"WalkArmed{f}"] = (round(e, 4), round(bend, 1))
     key(f, 1.0)
 
-rig.animation_data.action = bpy.data.actions["Idle"]
-if hasattr(rig.animation_data, "action_slot") and len(getattr(bpy.data.actions["Idle"], "slots", [])):
-    rig.animation_data.action_slot = bpy.data.actions["Idle"].slots[0]
+attach(bpy.data.actions["Idle"])
 scn.frame_start, scn.frame_end = 0, 60
 scn.frame_set(0)
 
