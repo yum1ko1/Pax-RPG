@@ -38,8 +38,14 @@ if old is not None:
     for o in list(old.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.data.scenes.remove(old)
-for a in [a for a in bpy.data.actions if a.name.startswith("SH_")]:
-    bpy.data.actions.remove(a)
+ACTIONS = ("Idle", "Walk", "WalkArmed", "Draw", "Sheathe")
+for a in list(bpy.data.actions):          # имена анимаций нужны свободными: они же имена в glb
+    base = a.name.split(".")[0]
+    if base in ACTIONS:
+        if any("Hero2" in sl.identifier for sl in getattr(a, "slots", [])):
+            a.name = "Hero2_" + base      # действия Meshy-героя из того же файла
+        else:
+            bpy.data.actions.remove(a)    # прошлый прогон этого скрипта
 scn = bpy.data.scenes.new("SimpleHero")
 scn.render.fps = FPS
 win = bpy.context.window or bpy.context.window_manager.windows[0]
