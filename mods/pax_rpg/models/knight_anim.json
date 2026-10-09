@@ -13,7 +13,7 @@
    "length": 3.467
   },
   "Draw": {
-   "length": 1.467
+   "length": 1.8
   },
   "Idle": {
    "length": 4.0
@@ -25,7 +25,7 @@
    "length": 0.633
   },
   "Sheathe": {
-   "length": 1.6
+   "length": 1.9
   },
   "Walk": {
    "length": 1.033
@@ -38,6 +38,12 @@
   },
   "RunArmed": {
    "length": 0.633
+  },
+  "DrawWalk": {
+   "length": 1.8
+  },
+  "SheatheWalk": {
+   "length": 1.9
   }
  },
  "root_motion": {
@@ -1082,16 +1088,16 @@
  },
  "sword_switch": {
   "Draw": {
-   "frame": 11,
-   "time": 0.367
+   "frame": 13,
+   "time": 0.433
   },
   "Sheathe": {
-   "frame": 36,
-   "time": 1.2
+   "frame": 45,
+   "time": 1.5
   }
  },
  "impact": {
-  "Attack3": 1.633
+  "Attack3": 1.1
  },
  "cape": {
   "chains": [
