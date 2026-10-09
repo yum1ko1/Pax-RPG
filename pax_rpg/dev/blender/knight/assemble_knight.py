@@ -76,9 +76,12 @@ for a in acts:
     bpy.data.actions.remove(a)
 rig = next(o for o in objs if o.type == "ARMATURE")
 rig.name = "Knight_rig"
-body = [o for o in objs if o.type == "MESH"]
-for o in body:
-    o.name = "Knight_body" if len(body) == 1 else o.name
+body = [o for o in objs if o.type == "MESH" and (o.parent == rig or any(m.type == "ARMATURE" for m in o.modifiers))]
+for o in [o for o in objs if o.type == "MESH" and o not in body]:
+    bpy.data.objects.remove(o, do_unlink=True)          # посторонние сетки в файле (вспомогательные сферы и т. п.)
+body.sort(key=lambda o: -len(o.data.vertices))
+for i, o in enumerate(body):
+    o.name = "Knight_body" if i == 0 else f"Knight_body_{i}"
 bones = [b.name for b in rig.data.bones]
 log.append(f"bones {len(bones)}: {bones[:40]}")
 
