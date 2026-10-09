@@ -1100,27 +1100,7 @@
   "Attack3": 1.1
  },
  "cape": {
-  "chains": [
-   [
-    "Cape_0_0",
-    "Cape_0_3"
-   ],
-   [
-    "Cape_1_0",
-    "Cape_1_3"
-   ],
-   [
-    "Cape_2_0",
-    "Cape_2_3"
-   ],
-   [
-    "Cape_3_0",
-    "Cape_3_3"
-   ],
-   [
-    "Cape_4_0",
-    "Cape_4_3"
-   ]
-  ]
+  "cloth": "models/knight_cape.glb",
+  "pin_band": 0.08
  }
 }

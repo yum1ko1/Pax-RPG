@@ -35,7 +35,16 @@ var _swing: AudioStreamPlayer       # свист меча (sounds/swing_*.wav)
 var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wav)
 var _swing_done := false
 var _impact_done := false
-var _cape: SpringBoneSimulator3D    # пружинные кости плаща
+var _skel: Skeleton3D
+var _cloth: SoftBody3D              # плащ — ткань (models/*_cape.glb), пришита к груди, бьётся о тело
+var _cloth_anchor: Node3D           # грудь (Spine02) в мире — к ней пришита верхняя полоса плаща
+var _cloth_bone := -1
+var _cloth_pin_left := 0            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
+var _colliders: Array = []          # [AnimatableBody3D, кость от, кость до] — капсулы тела для ткани
+var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
+var _trail_mat: StandardMaterial3D
+var _trail: Array = []              # [время, у гарды, остриё]
+var _clock := 0.0
 var _mod: PaxMod
 
 
@@ -89,6 +98,9 @@ static func _tip_of(n: Node3D) -> Vector3:
 	return tip
 
 
+const CLOTH_LAYER := 1 << 4           # слой капсул тела: с ними сталкивается только ткань
+
+
 ## Плеер со случайным из вариантов звука (без повторов подряд) и разбросом высоты.
 func _player(files: Variant, pitch: float, volume: float) -> AudioStreamPlayer:
 	if not (files is Array) or (files as Array).is_empty():
@@ -111,7 +123,7 @@ func _player(files: Variant, pitch: float, volume: float) -> AudioStreamPlayer:
 
 
 ## После того как модель в дереве (вне дерева AnimationPlayer не играет).
-func start() -> void:
+func start(owner_body: PhysicsBody3D = null) -> void:
 	anim = _find_anim(model)
 	if anim == null:
 		return
@@ -123,7 +135,8 @@ func start() -> void:
 			anim.get_animation(n).loop_mode = Animation.LOOP_NONE
 	anim.animation_finished.connect(_on_finished)
 	anim.play("Idle")
-	_make_cape()
+	_make_cloth(owner_body)
+	_make_trail()
 	_show_sword(0.0)
 
 
@@ -174,45 +187,254 @@ func walk_only() -> bool:
 
 # ---------- плащ: пружинные кости ----------
 
-func _make_cape() -> void:
-	var chains: Variant = (meta.get("cape", {}) as Dictionary).get("chains", [])
-	if not (chains is Array) or (chains as Array).is_empty():
+func _bone_world(idx: int, rest := false) -> Transform3D:
+	var t := _skel.get_bone_global_rest(idx) if rest else _skel.get_bone_global_pose(idx)
+	var g := _skel.global_transform * t
+	return Transform3D(g.basis.orthonormalized(), g.origin)
+
+
+## Плащ — ткань SoftBody3D из отдельной сетки (поза покоя модели): верхняя полоса пришита к груди, ниже — свободна
+## и сталкивается с капсулами тела (таз, бёдра, голени, спина) и с землёй, но не с капсулой персонажа.
+func _make_cloth(owner_body: PhysicsBody3D) -> void:
+	var cape: Dictionary = meta.get("cape", {})
+	var path := str(cape.get("cloth", ""))
+	_skel = _find_skeleton(model)
+	if path == "" or _skel == null:
 		return
-	var sk := _find_skeleton(model)
-	if sk == null:
+	_cloth_bone = _skel.find_bone(str(cape.get("pin_bone", "Spine02")))
+	var src := _mod.model(path)
+	if src == null or _cloth_bone < 0:
 		return
-	var sim := SpringBoneSimulator3D.new()
-	sk.add_child(sim)
-	_cape = sim
-	var n := (chains as Array).size()
-	sim.setting_count = n
-	for i in n:
-		var ch: Array = chains[i]
-		sim.set_root_bone_name(i, str(ch[0]))
-		sim.set_end_bone_name(i, str(ch[1]))
-		sim.set_extend_end_bone(i, true)
-		sim.set_end_bone_length(i, _f("cape_end_length", 0.25))
-		sim.set_radius(i, _f("cape_radius", 0.05))
-		sim.set_stiffness(i, _f("cape_stiffness", 0.35))
-		sim.set_drag(i, _f("cape_drag", 0.35))
-		sim.set_gravity(i, _f("cape_gravity", 1.2))
-		sim.set_gravity_direction(i, Vector3.DOWN)
-	# тело, о которое бьётся плащ: шары на тазу, бёдрах, коленях
-	for b: Array in [["Hips", 0.2], ["LeftUpLeg", 0.15], ["RightUpLeg", 0.15], ["LeftLeg", 0.13],
-			["RightLeg", 0.13], ["Spine01", 0.2]]:
-		if sk.find_bone(str(b[0])) < 0:
+	var mi: MeshInstance3D = null
+	for c: Node in src.find_children("*", "MeshInstance3D", true, false):
+		mi = c as MeshInstance3D
+		break
+	if mi == null or mi.mesh == null:
+		src.free()
+		return
+	var local := Transform3D.IDENTITY
+	var n: Node = mi
+	while n != src and n is Node3D:
+		local = (n as Node3D).transform * local
+		n = n.get_parent()
+	var mesh := mi.mesh
+	src.free()
+	var sb := SoftBody3D.new()
+	sb.mesh = mesh
+	sb.top_level = true
+	sb.transform = model.global_transform * local
+	sb.collision_layer = 0
+	sb.collision_mask = 1 | CLOTH_LAYER
+	sb.simulation_precision = int(_f("cape_precision", 6))
+	sb.total_mass = _f("cape_mass", 1.2)
+	sb.linear_stiffness = _f("cape_stiffness", 0.6)
+	sb.damping_coefficient = _f("cape_damping", 0.04)
+	sb.drag_coefficient = _f("cape_drag", 0.02)
+	sb.pressure_coefficient = 0.0
+	model.add_child(sb)
+	if owner_body != null:
+		sb.add_collision_exception_with(owner_body)
+	_cloth = sb
+	_cloth_anchor = Node3D.new()
+	_cloth_anchor.top_level = true
+	model.add_child(_cloth_anchor)
+	_cloth_anchor.global_transform = _bone_world(_cloth_bone, true)   # пришиваем в позе покоя — как сетка
+	_cloth_pin_left = 1
+	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.15],
+			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
+			["LeftLeg", "LeftFoot", 0.08], ["RightLeg", "RightFoot", 0.08]]:
+		var ia := _skel.find_bone(str(d[0]))
+		var ib := _skel.find_bone(str(d[1]))
+		if ia < 0 or ib < 0:
 			continue
-		var sph := SpringBoneCollisionSphere3D.new()
-		sph.bone_name = str(b[0])
-		sph.radius = float(b[1])
-		sim.add_child(sph)
+		var body := AnimatableBody3D.new()
+		body.top_level = true
+		body.sync_to_physics = false
+		body.collision_layer = CLOTH_LAYER
+		body.collision_mask = 0
+		var sh := CollisionShape3D.new()
+		var cap := CapsuleShape3D.new()
+		var len_ := (_bone_world(ib, true).origin - _bone_world(ia, true).origin).length()
+		cap.radius = float(d[2]) * _f("cape_body_scale", 1.0)
+		cap.height = len_ + cap.radius * 2.0
+		sh.shape = cap
+		body.add_child(sh)
+		model.add_child(body)
+		_colliders.append([body, ia, ib])
+	_move_colliders()
 
 
-## Ветер от бега: плащ отлетает назад по скорости тела (в мире).
-func cape_wind(velocity: Vector3) -> void:
-	if _cape == null:
+## Верх плаща пришивается к груди: точки сетки — как их сваривает сервер физики (одинаковые позиции — одна точка,
+## по порядку первого появления).
+func _pin_cloth() -> void:
+	var cape: Dictionary = meta.get("cape", {})
+	var verts: PackedVector3Array = _cloth.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var seen := {}
+	var pts := PackedVector3Array()
+	for v: Vector3 in verts:
+		if not seen.has(v):
+			seen[v] = pts.size()
+			pts.append(v)
+	var top := -INF
+	for p: Vector3 in pts:
+		top = maxf(top, p.y)
+	var band := float(cape.get("pin_band", 0.08))
+	var ap := _cloth.get_path_to(_cloth_anchor)
+	for i: int in pts.size():
+		if pts[i].y > top - band:
+			_cloth.set_point_pinned(i, true, ap)
+
+
+func _move_colliders() -> void:
+	for c: Array in _colliders:
+		var body: AnimatableBody3D = c[0]
+		var a := _bone_world(int(c[1])).origin
+		var b := _bone_world(int(c[2])).origin
+		var dir := b - a
+		if dir.length() < 0.001:
+			continue
+		body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
+
+
+func _cloth_tick() -> void:
+	if _cloth == null or not _cloth.is_inside_tree():
 		return
-	_cape.external_force = -Vector3(velocity.x, 0.0, velocity.z) * _f("cape_wind", 0.12)
+	if _cloth_pin_left > 0:
+		_cloth_pin_left -= 1
+		if _cloth_pin_left == 0:
+			_pin_cloth()
+		return
+	_cloth_anchor.global_transform = _bone_world(_cloth_bone)
+	_move_colliders()
+
+
+## Ткань сама тянется за телом — ветер больше не нужен (оставлено для location.gd).
+func cape_wind(_velocity: Vector3) -> void:
+	pass
+
+
+# ---------- след взмаха ----------
+
+func _make_trail() -> void:
+	if _sword_hand == null:
+		return
+	_trail_mesh = ImmediateMesh.new()
+	_trail_mat = StandardMaterial3D.new()
+	_trail_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_trail_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_trail_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_trail_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_trail_mat.vertex_color_use_as_albedo = true
+	_trail_mat.no_depth_test = false
+	var mi := MeshInstance3D.new()
+	mi.mesh = _trail_mesh
+	mi.top_level = true
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(mi)
+
+
+## Полоса между четвертью клинка и остриём за последние trail_life с — только в ударах и только пока меч летит
+## быстро: видно дугу, которую накрывает удар.
+func _trail_tick(delta: float) -> void:
+	if _trail_mesh == null:
+		return
+	_clock += delta
+	var life := _f("trail_life", 0.2)
+	if action in ATTACKS and _sword_hand.visible and _sword_hand.is_inside_tree() and delta > 0.0:
+		var g := _sword_hand.global_transform
+		var tip := g * _tip
+		var base := g * (_tip * 0.25)
+		var fast := true
+		if not _trail.is_empty():
+			var last: Array = _trail[-1]
+			fast = (tip - (last[2] as Vector3)).length() / delta > _f("trail_speed", 4.0)
+		if fast:
+			_trail.append([_clock, base, tip])
+	while not _trail.is_empty() and _clock - float((_trail[0] as Array)[0]) > life:
+		_trail.pop_front()
+	_trail_mesh.clear_surfaces()
+	if _trail.size() < 2:
+		return
+	var col: Array = cfg.get("trail_color", [0.8, 0.45, 1.0])
+	var c := Color(float(col[0]), float(col[1]), float(col[2]))
+	_trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _trail_mat)
+	for p: Array in _trail:
+		var k := clampf(1.0 - (_clock - float(p[0])) / life, 0.0, 1.0)
+		_trail_mesh.surface_set_color(Color(c, 0.05 * k))
+		_trail_mesh.surface_add_vertex(p[1])
+		_trail_mesh.surface_set_color(Color(c, _f("trail_alpha", 0.6) * k * k))
+		_trail_mesh.surface_add_vertex(p[2])
+	_trail_mesh.surface_end()
+
+
+# ---------- удар о землю: кольцо и пыль под героем ----------
+
+func _ground_burst() -> void:
+	if not model.is_inside_tree():
+		return
+	var at := model.global_position + Vector3(0.0, 0.03, 0.0)
+	var col: Array = cfg.get("trail_color", [0.8, 0.45, 1.0])
+	var c := Color(float(col[0]), float(col[1]), float(col[2]))
+	var ring := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.42
+	tor.outer_radius = 0.5
+	tor.rings = 48
+	ring.mesh = tor
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	rm.albedo_color = Color(c, 0.8)
+	ring.material_override = rm
+	ring.top_level = true
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	model.add_child(ring)
+	ring.global_transform = Transform3D(Basis().scaled(Vector3(1.0, 0.15, 1.0)), at)
+	var r := _f("burst_radius", 3.0)
+	var t := ring.create_tween().set_parallel(true)
+	t.tween_property(ring, "scale", Vector3(r, 0.15, r), 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	t.tween_property(rm, "albedo_color", Color(c, 0.0), 0.45)
+	t.chain().tween_callback(ring.queue_free)
+	var dust := CPUParticles3D.new()
+	dust.top_level = true
+	dust.one_shot = true
+	dust.explosiveness = 0.95
+	dust.amount = 48
+	dust.lifetime = 0.8
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	dust.emission_ring_axis = Vector3.UP
+	dust.emission_ring_radius = 0.6
+	dust.emission_ring_inner_radius = 0.2
+	dust.emission_ring_height = 0.05
+	dust.direction = Vector3(0.0, 1.0, 0.0)
+	dust.spread = 75.0
+	dust.initial_velocity_min = 2.0
+	dust.initial_velocity_max = 4.5
+	dust.gravity = Vector3(0.0, -6.0, 0.0)
+	dust.damping_min = 2.0
+	dust.damping_max = 4.0
+	dust.scale_amount_min = 0.6
+	dust.scale_amount_max = 1.4
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.4))
+	curve.add_point(Vector2(0.3, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	dust.scale_amount_curve = curve
+	var q := QuadMesh.new()
+	q.size = Vector2(0.22, 0.22)
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dm.vertex_color_use_as_albedo = true
+	q.material = dm
+	dust.mesh = q
+	dust.color = Color(0.55, 0.5, 0.62, 0.55)
+	model.add_child(dust)
+	dust.global_position = at
+	dust.emitting = true
+	dust.finished.connect(dust.queue_free)
 
 
 # ---------- команды ----------
@@ -316,6 +538,15 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 			_play_once(nxt, _per("combo_skip", nxt, 0.0))
 		elif not _queued and _frac() >= _per("attack_end", action, 0.5):
 			_end_action()                    # без продолжения — сразу в стойку, управление вернулось
+	if action in ATTACKS:
+		# прыжок удара (air: [с, по, во сколько медленнее]) — герой дольше висит в воздухе
+		var air: Variant = (cfg.get("air", {}) as Dictionary).get(action, [])
+		if air is Array and (air as Array).size() == 3:
+			var t := _pos()
+			var a0 := float(air[0])
+			var a1 := float(air[1])
+			var k := smoothstep(a0, a0 + 0.12, t) * (1.0 - smoothstep(a1 - 0.12, a1, t))
+			anim.speed_scale = _per("attack_speed", action, 1.0) * lerpf(1.0, float(air[2]), k)
 	if action == "Jump":
 		if not on_floor:
 			_airborne = true
@@ -328,6 +559,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_loop(moving, speed, running)
 	_on_floor = on_floor
 	_show_sword(delta)
+	_trail_tick(delta)
+	_cloth_tick()
 	return out
 
 
@@ -362,6 +595,7 @@ func _sounds() -> void:
 			and _pos() >= float(imp[action]) - _f("impact_lead", 0.05) * anim.speed_scale:
 		_impact_done = true
 		_impact.play()
+		_ground_burst()
 
 
 func _root_at(t: float) -> Vector2:

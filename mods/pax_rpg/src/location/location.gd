@@ -203,7 +203,7 @@ func _make_player() -> void:
 		model.rotation.y = PI                                    # glb смотрит на +Z, вперёд у героя — -Z
 		_body_mesh.add_child(model)
 		_view.add_child(_player)            # сначала в дерево: вне дерева AnimationPlayer не играет
-		_hero.start()
+		_hero.start(_player)
 		return
 	_hero = null
 	mod.log_warning("Pax RPG: %s did not load — the hero is an oval" % str(hero_cfg.get("model", "?")))
