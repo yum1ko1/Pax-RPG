@@ -445,8 +445,8 @@ if len(cape_ids) > 200:
         if nm not in ob.vertex_groups:
             ob.vertex_groups.new(name=nm)
     groups = {g.index: g for g in ob.vertex_groups}
-    for vid in cape_ids:
-        x, y, z = co[vid]
+    for vid in (int(v) for v in cape_ids):
+        x, y, z = (float(c) for c in co[vid])
         t = float(np.clip((Z_TOP - z) / 0.28, 0, 1))
         t = t * t * (3 - 2 * t)
         if t <= 0:
