@@ -16,10 +16,17 @@ var anim: AnimationPlayer
 var armed := false
 var action := ""                    # разовый клип: Draw / Sheathe / Jump / AttackN; "" — ходьба и стойки
 var _queued := false                # удар нажат во время текущего — следующий удар комбо
+var _combo_next := ""               # удар кончился — ещё combo_grace с нажатие продолжает комбо этим ударом
+var _combo_left := 0.0
 var _airborne := false
 var _sword_back: Node3D
 var _sword_hand: Node3D
-var _sword_drag: Node3D
+var _sword_drag: Node3D            # только как цель: где меч в беге; виден всегда _sword_hand
+var _hand_rest := Transform3D.IDENTITY
+var _drag_rest := Transform3D.IDENTITY
+var _tip := Vector3.ZERO            # остриё в осях меча (из габаритов сетки)
+var _drag_w := 0.0                  # 0 — меч в руке как в стойке, 1 — волочится; между — плавный переход
+var _on_floor := true
 var _prev_off := Vector2.ZERO       # root motion: смещение клипа на прошлом кадре
 var _swing: AudioStreamPlayer       # свист меча (sounds/swing_*.wav)
 var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wav)
@@ -42,9 +49,37 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
 	_sword_drag = model.find_child("Sword_Drag", true, false) as Node3D
+	if _sword_hand != null:
+		_hand_rest = _sword_hand.transform
+		_tip = _tip_of(_sword_hand)
+	if _sword_drag != null:
+		_drag_rest = _sword_drag.transform
+		_sword_drag.visible = false
 	_swing = _player(cfg.get("swing_files", []), _f("swing_pitch_spread", 1.06), _f("swing_volume_db", -4.0))
 	_impact = _player(cfg.get("impact_files", []), 1.04, _f("impact_volume_db", 0.0))
 	return model
+
+
+## Остриё: дальняя от хвата точка габаритов сетки меча (в осях узла меча).
+static func _tip_of(n: Node3D) -> Vector3:
+	var mi: MeshInstance3D = n as MeshInstance3D
+	if mi == null:
+		for c: Node in n.find_children("*", "MeshInstance3D", true, false):
+			mi = c as MeshInstance3D
+			break
+	if mi == null or mi.mesh == null:
+		return Vector3.ZERO
+	var box := mi.mesh.get_aabb()
+	var to_node := n.global_transform.affine_inverse() * mi.global_transform if mi != n else Transform3D.IDENTITY
+	var best := Vector3.ZERO
+	for i: int in 8:
+		var p := to_node * box.get_endpoint(i)
+		if p.length() > best.length():
+			best = p
+	var ax := best.abs().max_axis_index()        # остриё — по длинной оси, посередине ширины
+	var tip := Vector3.ZERO
+	tip[ax] = best[ax]
+	return tip
 
 
 ## Плеер со случайным из вариантов звука (без повторов подряд) и разбросом высоты.
@@ -82,7 +117,7 @@ func start() -> void:
 	anim.animation_finished.connect(_on_finished)
 	anim.play("Idle")
 	_make_cape()
-	_show_sword()
+	_show_sword(0.0)
 
 
 static func _find_anim(n: Node) -> AnimationPlayer:
@@ -176,7 +211,7 @@ func toggle_sword(on_floor: bool) -> void:
 	var n := "Sheathe" if armed else "Draw"
 	if not has(n):
 		armed = not armed
-		_show_sword()
+		_show_sword(0.0)
 		return
 	_play_once(n)
 
@@ -188,7 +223,10 @@ func attack(on_floor: bool) -> void:
 		if not armed:
 			toggle_sword(on_floor)          # меч за спиной — сперва достать
 			return
-		_play_once("Attack1")
+		if _combo_left > 0.0 and _combo_next != "" and has(_combo_next):
+			_play_once(_combo_next, _per("combo_skip", _combo_next, 0.0))   # успел после конца удара
+		else:
+			_play_once("Attack1")
 	elif action in ATTACKS and action != ATTACKS[-1]:
 		_queued = true                      # следующий удар — сразу после взмаха этого
 
@@ -227,6 +265,12 @@ func _end_action() -> void:
 		armed = true
 	elif action == "Sheathe":
 		armed = false
+	var i := ATTACKS.find(action)
+	if i >= 0 and i + 1 < ATTACKS.size():
+		_combo_next = ATTACKS[i + 1]
+		_combo_left = _f("combo_grace", 0.45)
+	else:
+		_combo_left = 0.0
 	action = ""
 
 
@@ -243,10 +287,11 @@ func _frac() -> float:
 # ---------- кадр ----------
 
 ## Возвращает {"root": Vector3 — смещение за кадр в осях модели (модель смотрит на +Z)}.
-func tick(_delta: float, moving: bool, speed: float, running: bool, on_floor: bool) -> Dictionary:
+func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: bool) -> Dictionary:
 	var out := {"root": Vector3.ZERO}
 	if anim == null:
 		return out
+	_combo_left = maxf(0.0, _combo_left - delta)
 	if action != "" and not anim.is_playing():
 		_end_action()                        # сигнал конца не пришёл — не застрять
 	if action in ATTACKS:
@@ -267,7 +312,8 @@ func tick(_delta: float, moving: bool, speed: float, running: bool, on_floor: bo
 		out.root = _root_step()
 	else:
 		_loop(moving, speed, running)
-	_show_sword()
+	_on_floor = on_floor
+	_show_sword(delta)
 	return out
 
 
@@ -282,7 +328,10 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			want = "WalkArmed" if armed and has("WalkArmed") else "Walk"
 			stride = _f("stride_walk_armed", 1.3) if want == "WalkArmed" else _f("stride_walk", 1.5)
 	if anim.current_animation != want or not anim.is_playing():
-		anim.play(want, _f("blend_loop", 0.3))
+		var bl := _f("blend_loop", 0.3)
+		if want == "RunArmed" or anim.current_animation == "RunArmed":
+			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
+		anim.play(want, bl)
 	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
 
 
@@ -325,8 +374,9 @@ func _root_step() -> Vector3:
 	return Vector3(d.x * s * _f("root_motion_lateral", 0.5), 0.0, d.y * s)
 
 
-## Меч там, где он сейчас: на спине, в руке или волочится в беге.
-func _show_sword() -> void:
+## Меч там, где он сейчас: на спине или в руке. В беге он плавно перекладывается в «волочится» (цель — узел
+## Sword_Drag) и в любом клипе не уходит в землю: если остриё ниже пола — меч поворачивается на хвате вверх.
+func _show_sword(delta: float) -> void:
 	if _sword_back == null or _sword_hand == null:
 		return
 	var sw: Dictionary = meta.get("sword_switch", {})
@@ -337,8 +387,43 @@ func _show_sword() -> void:
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
 	elif action in ATTACKS:
 		in_hand = true
-	var drag := in_hand and action == "" and anim != null and anim.current_animation == "RunArmed" and _sword_drag != null
-	_sword_hand.visible = in_hand and not drag
+	_sword_hand.visible = in_hand
 	_sword_back.visible = not in_hand
-	if _sword_drag != null:
-		_sword_drag.visible = drag
+	if not in_hand:
+		_drag_w = 0.0
+		return
+	var drag := action == "" and anim != null and anim.current_animation == "RunArmed" and _sword_drag != null
+	var dur := maxf(0.05, _f("blend_run_armed", 0.5))
+	_drag_w = move_toward(_drag_w, 1.0 if drag else 0.0, delta / dur) if delta > 0.0 else (1.0 if drag else 0.0)
+	_sword_hand.transform = _hand_rest
+	if _drag_w > 0.0 and _sword_drag != null and _sword_drag.is_inside_tree():
+		var k := smoothstep(0.0, 1.0, _drag_w)
+		var a := _sword_hand.global_transform
+		var b := _sword_drag.get_parent_node_3d().global_transform * _drag_rest
+		var qa := a.basis.get_rotation_quaternion()
+		var qb := b.basis.get_rotation_quaternion()
+		var sc := a.basis.get_scale()
+		_sword_hand.global_transform = Transform3D(Basis(qa.slerp(qb, k)).scaled(sc), a.origin.lerp(b.origin, k))
+	_keep_above_floor()
+
+
+func _keep_above_floor() -> void:
+	if not _on_floor or _tip == Vector3.ZERO or not _sword_hand.is_inside_tree():
+		return
+	var g := _sword_hand.global_transform
+	var floor_y := model.global_position.y + _f("sword_floor", 0.04)
+	var tip := g * _tip
+	if tip.y >= floor_y:
+		return
+	var v := tip - g.origin
+	var n := v.length()
+	if n < 0.01:
+		return
+	var vz := clampf((floor_y - g.origin.y) / n, -0.999, 0.999)
+	var h := Vector2(v.x, v.z)
+	if h.length() < 0.001:
+		h = Vector2(0.0, 1.0)
+	h = h.normalized() * sqrt(1.0 - vz * vz)
+	var v2 := Vector3(h.x, vz, h.y)
+	var q := Quaternion(v / n, v2)
+	_sword_hand.global_transform = Transform3D(Basis(q) * g.basis, g.origin)

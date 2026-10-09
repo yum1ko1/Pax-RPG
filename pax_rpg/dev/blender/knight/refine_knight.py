@@ -3,8 +3,8 @@
 Через мост: exec(open(<файл>).read(), {"result": {}}). Делает:
   - IdleArmed — стойка с мечом (первый кадр Attack1 + дыхание), к ней плавно возвращаются удары;
   - RunArmed — бег (клип Run), правая рука опущена назад, меч (Sword_Drag) волочится остриём по земле;
-  - Draw / Sheathe заново, своим IK: рука тянется за правое плечо к рукояти, берёт меч, вытаскивает его дугой над
-    головой и опускает в стойку; Sheathe — то же назад. Меч на спине ставится ровно туда, где его берёт рука;
+  - Draw / Sheathe: меч висит открыто на зажиме (плашмя к спине, наискось), его снимают рывком с крюка и
+    перекатывают через правое плечо, левая рука ловит рукоять — см. раздел 3; путь задан для меча, руки — IK;
   - меч не уходит в землю: в ударах кисть поворачивается так, чтобы остриё оставалось над землёй; кадр, где
     остриё ниже всего в Attack3, — удар о землю (звук);
   - плащ: цепочки костей Cape_<i>_<j> за спиной, вершины плаща (по цвету текстуры) перевешены на них —
@@ -258,83 +258,194 @@ for f in range(f0, f1 + 1):
         drag_made = True
     key(act, f)
 
-# ---------- 3. новые Draw / Sheathe ----------
+# ---------- 3. Draw / Sheathe: как на самом деле снимают со спины меч в рост человека ----------
+# Двуручник 2,2 м из ножен за спиной не вытянуть — руки не хватит. Поэтому он висит открыто, на зажиме-крюке:
+# рукоять над правым плечом, клинок наискось к левому бедру, плашмя к спине. Достаём:
+#   1) правая рука через плечо берёт рукоять (локоть вверх);
+#   2) рывок вверх-назад — клинок снимается с крюка и отходит от спины;
+#   3) меч перекатывается через правое плечо: рукоять идёт вперёд над плечом, остриё описывает дугу за спиной
+#      и встаёт вверх — клинок ни разу не тянется вдоль себя;
+#   4) с высоты над головой меч падает вперёд-вниз, левая рука ловит рукоять у навершия, вес приседает рыцаря,
+#      и оба выходят в стойку.
+# Убираем — тот же путь назад, медленнее у крюка: меч поднимается над головой, переваливается через плечо,
+# остриё уходит вниз за спину, рукоять ложится на зажим, рука отпускает.
+# Путь задан для самого меча (точка хвата + направление клинка + поворот плашмя); руки догоняют его IK.
+LUA, LFA, LHA = "LeftArm", "LeftForeArm", "LeftHand"
+use(None)
+for p in pb:
+    p.rotation_quaternion = (1, 0, 0, 0)
+    p.location = (0, 0, 0)
+vl.update()
+LL1 = (head(LFA) - head(LUA)).length
+LL2 = (head(LHA) - head(LFA)).length
+
+
+def ik_left(Wt, pole):
+    S = head(LUA)
+    v = Wt - S
+    d = min(v.length, LL1 + LL2 - 0.002)
+    u = v.normalized()
+    a = (LL1 * LL1 - LL2 * LL2 + d * d) / (2 * d)
+    h = math.sqrt(max(0.0, LL1 * LL1 - a * a))
+    pv = (pole - u * pole.dot(u)).normalized()
+    E = S + u * a + pv * h
+    turn_bone(LUA, (head(LFA) - S).rotation_difference(E - S))
+    turn_bone(LFA, (head(LHA) - head(LFA)).rotation_difference(S + u * d - head(LFA)))
+
+
+def elbow_pole(ua, fa, ha):
+    s_, e_, w_ = head(ua), head(fa), head(ha)
+    m = (s_ + w_) / 2
+    return (e_ - m).normalized()
+
+
 apply(P_IDLE)
 fw = facing()
-side = fw.cross(UP)
+side = fw.cross(UP)                       # вправо
 c = head(CHEST)
-back_grip = c + side * 0.17 - fw * 0.20 + UP * 0.36           # рукоять над правым плечом (side — вправо), за спиной
-back_dir = (-side * 0.40 - fw * 0.06 - UP * 0.91).normalized()  # клинок к левому бедру
-# ориентация хвата у плеча: крен меча вокруг клинка — какой удобнее запястью
+sh_r = head(UA)
+# зажим на спине: рукоять над правым плечом, чуть отступив от спины; клинок к левому бедру
+back_grip = c + side * 0.16 - fw * 0.24 + UP * 0.34
+back_dir = (-side * 0.42 - UP * 0.90 - fw * 0.04).normalized()
+# стойка: где меч и левая рука в ней
 apply(P_GUARD)
-a_fwd = rot_w(HA).transposed() @ (head(HA) - head(FA)).normalized()
+O_G, R_G = sword_frame(sw_hand)
+L_REL = R_G.transposed() @ (head(LHA) - O_G)
+LR_REL = R_G.transposed() @ rot_w(LHA)
+POLE_G = elbow_pole(UA, FA, HA)
+POLE_GL = elbow_pole(LUA, LFA, LHA)
 apply(P_IDLE)
-pole_grab = (UP * 0.7 + side * 0.5 + fw * 0.4).normalized()
-best = None
-for k in range(36):
-    R0 = frame3(back_dir, -fw)
-    Rf = R0 @ Matrix.Rotation(math.radians(k * 10), 3, "Y")
-    Rh, Wt = hand_for(Rf, back_grip)
-    apply(P_IDLE)
-    ik_arm(Wt, pole_grab)
-    bend = math.degrees((Rh @ a_fwd).angle(head(HA) - head(FA)))
-    miss = (head(HA) - Wt).length
-    score = bend + miss * 500
-    if best is None or score < best[0]:
-        best = (score, Rf, Rh, Wt, bend, miss)
-_, RF_BACK, RH_GRAB, W_GRAB, bend, miss = best
-log.append(f"grab: wrist bend {round(bend)}°, reach miss {round(miss * 100, 1)} cm")
+POLE_IL = elbow_pole(LUA, LFA, LHA)
+
+
+def sframe(d, zhint):
+    return frame3(d, zhint).to_quaternion()
+
+
+# ключи пути меча: (u — доля пути, точка хвата, поворот меча, полюс локтя правой руки)
+Z_BACK = -fw                               # плашмя к спине (нормаль плашки — назад от спины)
+q_back = sframe(back_dir, Z_BACK)
+q_guard = R_G.to_quaternion()
+KEYS = [
+    (0.00, back_grip, q_back, UP * 0.6 + side * 0.6 + fw * 0.3),
+    (0.14, back_grip + UP * 0.12 - fw * 0.10 + side * 0.05,                          # рывок с крюка
+     sframe((back_dir - fw * 0.35).normalized(), Z_BACK), UP * 0.6 + side * 0.6 + fw * 0.3),
+    (0.38, sh_r + UP * 0.28 - fw * 0.02 + side * 0.04,                                # над плечом, остриё назад
+     sframe((-fw * 0.85 + UP * 0.35 - side * 0.25).normalized(), side), UP * 0.4 + side * 0.9),
+    (0.58, sh_r + UP * 0.45 + fw * 0.16 - side * 0.14,                                # над головой, остриё вверх
+     sframe((UP * 0.80 - fw * 0.55 - side * 0.10).normalized(), side), side * 0.9 + fw * 0.2),
+    (0.80, O_G + UP * -0.06 + fw * 0.06,                                              # упал вперёд — вес тянет
+     (Quaternion(side, math.radians(-14)) @ q_guard), POLE_G),
+    (1.00, O_G, q_guard, POLE_G),
+]
+# плашка не перекручивается: знак нормали у каждого ключа — ближе к следующему (стойка задана)
+for i in range(len(KEYS) - 2, -1, -1):
+    u_, o_, q_, p_ = KEYS[i]
+    flip = q_ @ Quaternion(Vector((0, 1, 0)), math.pi)
+    nxt = KEYS[i + 1][2]
+    if abs(flip.dot(nxt)) > abs(q_.dot(nxt)):
+        KEYS[i] = (u_, o_, flip, p_)
+q_back = KEYS[0][2]
+
+
+def catmull(p0, p1, p2, p3, t):
+    t2, t3 = t * t, t * t * t
+    return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3)
+
+
+def path(u):
+    """Меч на доле пути u: точка хвата, поворот, полюс локтя."""
+    for i in range(len(KEYS) - 1):
+        if u <= KEYS[i + 1][0] or i == len(KEYS) - 2:
+            break
+    u0, u1 = KEYS[i][0], KEYS[i + 1][0]
+    t = min(1.0, max(0.0, (u - u0) / (u1 - u0)))
+    P = [KEYS[max(0, min(len(KEYS) - 1, j))][1] for j in (i - 1, i, i + 1, i + 2)]
+    o = catmull(*P, t)
+    qa, qb = KEYS[i][2], KEYS[i + 1][2]
+    if qa.dot(qb) < 0:
+        qb = -qb
+    pole = KEYS[i][3].lerp(KEYS[i + 1][3], t)
+    return o, qa.slerp(qb, t), pole
+
+
+def smooth(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3 - 2 * x)
+
+
+GRAB_F, DRAW_LEN = 11, 44                 # кадр хвата; конец доставания
 apply(P_IDLE)
-ik_arm(W_GRAB, pole_grab)
+RH_GRAB, W_GRAB = hand_for(q_back.to_matrix(), back_grip)
+ik_arm(W_GRAB, KEYS[0][3])
 set_rot_w(HA, RH_GRAB)
+log.append(f"grab: reach miss {round((head(HA) - W_GRAB).length * 100, 1)} cm")
 P_GRAB = current()
-Mback = RF_BACK.to_4x4()
+Mback = q_back.to_matrix().to_4x4()
 Mback.translation = back_grip
 sw_back = attach("Sword_Back", CHEST, Mback)
-# над головой: меч вытащен вверх-назад
+# рука тянется к рукояти: кисть перед плечом, выше — не сквозь голову и наплечник
 apply(P_IDLE)
-up_dir = (UP * 0.9 - fw * 0.30 - side * 0.15).normalized()
-Rh_up, W_up = hand_for(frame3(up_dir, side), head(UA) + UP * 0.40 - fw * 0.02 - side * 0.04)
-ik_arm(W_up, (UP * 0.2 + side * 0.9).normalized())
-set_rot_w(HA, Rh_up)
-P_UP = current()
-# на полпути к рукояти
-apply(P_IDLE)
-W_half = head(UA) + UP * 0.22 + fw * 0.12 - side * 0.05
-ik_arm(W_half, pole_grab)
+ik_arm(sh_r + UP * 0.30 + fw * 0.16 + side * 0.10, UP * 0.3 + side * 0.9)
 P_HALF = current()
 
 
-def lean(pose, deg, hips_drop=0.0):
-    apply(pose)
-    if deg:
-        turn_bone("Spine01", Quaternion(facing().cross(UP), math.radians(-deg)))
-    if hips_drop:
-        pb[HIPS].matrix = MWi @ Matrix.Translation(-UP * hips_drop) @ MW @ pb[HIPS].matrix
+def draw_pose(f):
+    """Поза доставания на кадре f (0..DRAW_LEN)."""
+    if f <= GRAB_F:
+        t = f / GRAB_F
+        pose = blend(P_IDLE, P_HALF, smooth(t / 0.55)) if t < 0.55 else blend(P_HALF, P_GRAB, smooth((t - 0.55) / 0.45))
+        apply(pose)
+        return
+    u = (f - GRAB_F) / (DRAW_LEN - GRAB_F)
+    u = u * u * (3 - 2 * u) * 0.35 + u * 0.65   # мягкий старт и посадка, но середина — быстрая дуга
+    base = blend(P_IDLE, P_GUARD, smooth((u - 0.35) / 0.55))
+    apply(base)
+    # корпус: рывок назад на снятии, наклон вперёд, когда меч падает, и присед от веса
+    lean = -5 * math.sin(math.pi * min(1, u / 0.3)) if u < 0.3 else 9 * math.sin(math.pi * min(1, (u - 0.5) / 0.5))
+    turn_bone("Spine01", Quaternion(side, math.radians(-lean)))
+    drop = 0.06 * math.sin(math.pi * min(1, max(0, (u - 0.62) / 0.38)))
+    if drop:
+        pb[HIPS].matrix = MWi @ Matrix.Translation(-UP * drop) @ MW @ pb[HIPS].matrix
         vl.update()
-    return current()
+    o, q, pole = path(u)
+    Rh, Wt = hand_for(q.to_matrix(), o)
+    ik_arm(Wt, pole)
+    set_rot_w(HA, Rh)
+    # левая рука: ловит рукоять, когда меч пошёл вниз (u 0.55..0.75), дальше держит у навершия
+    k = smooth((u - 0.55) / 0.2)
+    if k > 0:
+        R = q.to_matrix()
+        lw = o + R @ L_REL
+        idle_l = head(LHA)
+        ik_left(idle_l.lerp(lw, k), POLE_IL.lerp(POLE_GL, k).normalized())
+        if k > 0.5:
+            set_rot_w(LHA, R @ LR_REL)
 
 
-DRAW_KEYS = [  # кадр, поза
-    (0, P_IDLE),
-    (8, P_HALF),
-    (13, P_GRAB),
-    (17, lean(P_GRAB, -4, 0.03)),            # рывок — меч тяжёлый
-    (25, lean(P_UP, -6)),
-    (31, lean(P_GUARD, 8, 0.06)),            # меч опускается — вес тянет вниз
-    (40, P_GUARD),
-]
-GRAB_F, DRAW_LEN = 13, 40
 act = new_action("Draw")
-for f, pose in DRAW_KEYS:
-    apply(pose)
+for f in range(0, DRAW_LEN + 1):
+    if f <= GRAB_F and f not in (0, 4, 7, GRAB_F):
+        continue                          # тянущаяся рука — по ключам, Blender сгладит
+    draw_pose(f)
     key(act, f)
+# Убрать: путь назад, у крюка медленнее (меч надо попасть рукоятью в зажим)
+SH_MAP = [(0, DRAW_LEN), (8, 34), (20, 22), (30, GRAB_F + 2), (36, GRAB_F), (48, 0)]
+SHEATHE_LEN = SH_MAP[-1][0]
 act = new_action("Sheathe")
-for f, pose in reversed(DRAW_KEYS):
-    apply(pose)
-    key(act, DRAW_LEN - f)
+for s_f in range(0, SHEATHE_LEN + 1):
+    for j in range(len(SH_MAP) - 1):
+        if s_f <= SH_MAP[j + 1][0]:
+            break
+    (a0, d0), (a1, d1) = SH_MAP[j], SH_MAP[j + 1]
+    df = d0 + (d1 - d0) * (s_f - a0) / (a1 - a0)
+    if df < GRAB_F and s_f % 3:
+        continue
+    draw_pose(df)
+    key(act, s_f)
+REL_F = SH_MAP[-2][0]                     # кадр, где рука отпускает меч на зажиме
 meta["sword_switch"] = {"Draw": {"frame": GRAB_F, "time": round(GRAB_F / FPS, 3)},
-                        "Sheathe": {"frame": DRAW_LEN - GRAB_F, "time": round((DRAW_LEN - GRAB_F) / FPS, 3)}}
+                        "Sheathe": {"frame": REL_F, "time": round(REL_F / FPS, 3)}}
 for n in ("Draw", "Sheathe", "Jump"):
     meta["root_motion"].pop(n, None)
 

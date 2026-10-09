@@ -33,6 +33,8 @@ var _f_down := false               # F была нажата в прошлом �
 var _f_queued := false             # нажатие F пришло событием (короткое — опрос мог его не застать)
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
+var game: PaxGame                  # задаёт travel.gd: пока мы на локации, время мира стоит
+var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
 func setup(m: PaxMod) -> void:
@@ -277,6 +279,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		vel.y -= _f("gravity", 20.0) * delta
 	_space_down = space
+	# игра слушает пробел раньше нас и запускает время — пока пробел нажат и чуть после, держим паузу
+	if space:
+		_hold_pause = 0.3
+	if _hold_pause > 0.0:
+		_hold_pause -= delta
+		if game != null and bool(cfg.get("pause_world", true)):
+			game.set_speed(0)
 	var moving := move.length() > 0.01 and on_floor
 	if _hero != null:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)

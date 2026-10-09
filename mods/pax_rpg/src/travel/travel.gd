@@ -31,6 +31,7 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 
 func start(g: PaxGame) -> void:
 	game = g
+	location.game = g
 
 
 func _line(prefix: String, count: int, city_name: String) -> String:
