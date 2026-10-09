@@ -30,6 +30,10 @@ def shot(name, target, size, views=("FRONT",), res=900):
     if cam.name not in scene.collection.objects:
         scene.collection.objects.link(cam)
     scene.camera = cam
+    # в рендер — только то, что видно в окне (скрытое в окне иначе всё равно рисуется)
+    saved = {o.name: o.hide_render for o in bpy.data.objects}
+    for o in bpy.data.objects:
+        o.hide_render = o.hide_get() if o.name in bpy.context.view_layer.objects else True
     os.makedirs(os.path.join(W, "shots"), exist_ok=True)
     out = []
     t = Vector(target)
@@ -41,6 +45,9 @@ def shot(name, target, size, views=("FRONT",), res=900):
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
         out.append(path)
+    for name, hr in saved.items():
+        if name in bpy.data.objects:
+            bpy.data.objects[name].hide_render = hr
     scene.camera = prev_cam
     scene.render.engine = eng
     return out
