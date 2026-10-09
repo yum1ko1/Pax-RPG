@@ -1,0 +1,39 @@
+{
+	"_note": "Черновик. Броски при создании персонажа Pax RPG: запас маны и предрасположенность.",
+	"reserve": [
+		{"id": "void", "ru": "Пустота", "chance": 0.04, "mana": 0, "regen": 0.0, "perk": "magic_resistance"},
+		{"id": "spark", "ru": "Искра", "chance": 0.22, "mana": 20, "regen": 0.5},
+		{"id": "brook", "ru": "Ручей", "chance": 0.34, "mana": 40, "regen": 1.0},
+		{"id": "river", "ru": "Река", "chance": 0.25, "mana": 70, "regen": 1.6},
+		{"id": "lake", "ru": "Озеро", "chance": 0.12, "mana": 110, "regen": 2.4},
+		{"id": "ocean", "ru": "Океан", "chance": 0.03, "mana": 180, "regen": 3.5, "perk": "mana_surge"}
+	],
+	"affinity": {
+		"schools": [
+			{"id": "abjuration", "ru": "Ограждение"},
+			{"id": "conjuration", "ru": "Вызов"},
+			{"id": "divination", "ru": "Прорицание"},
+			{"id": "enchantment", "ru": "Очарование"},
+			{"id": "evocation", "ru": "Воплощение"},
+			{"id": "illusion", "ru": "Иллюзия"},
+			{"id": "necromancy", "ru": "Некромантия"},
+			{"id": "transmutation", "ru": "Преобразование"}
+		],
+		"second_school_chance": 0.25,
+		"primary_bonus": 0.25,
+		"secondary_bonus": 0.1
+	},
+	"species_shift": {
+		"elf": {"reserve_steps": 1, "schools": ["enchantment", "illusion"]},
+		"human": {"reserve_steps": 0},
+		"dwarf": {"reserve_steps": 0, "schools": ["abjuration", "transmutation"]},
+		"goliath": {"reserve_steps": -1, "perk": "stone_endurance"},
+		"orc": {"reserve_steps": -1, "perk": "relentless"},
+		"dragonborn": {"reserve_steps": 0, "schools": ["evocation"]},
+		"gnome": {"reserve_steps": 1, "schools": ["illusion", "transmutation"]},
+		"halfling": {"reserve_steps": 0, "schools": ["divination"]},
+		"tiefling": {"reserve_steps": 0, "schools": ["necromancy", "conjuration"]},
+		"aasimar": {"reserve_steps": 1, "schools": ["abjuration", "divination"]}
+	},
+	"birth_text_ru": "Вы рождены с запасом маны «{reserve}» и предрасположенностью к школе «{school}»."
+}
