@@ -40,7 +40,7 @@ def shot(name, target, size, views=("FRONT",), res=900):
     for v in views:
         d = DIRS[v].normalized()
         cam.location = t + d * 5
-        cam.rotation_euler = (t - cam.location).to_track_quat("-Z", "Z" if v != "TOP" else "Y").to_euler()
+        cam.rotation_euler = (t - cam.location).to_track_quat("-Z", "Y").to_euler()
         path = os.path.join(W, "shots", f"{name}_{v.lower()}.png")
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
