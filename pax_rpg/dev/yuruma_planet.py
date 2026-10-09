@@ -9,6 +9,7 @@
     yuruma_clouds.png      — мановые облака (альфа)
     yuruma_empires.png     — политическая карта: 5 империй, провинции
     yuruma_regions.png     — провинции цветами-регионами (для импорта карты в игру)
+    yuruma_provinces.json  — цвет провинции → империя (для сценария)
     yuruma_globe_*.png     — вид из космоса
     yuruma_sheet.png       — сводный лист-референс
 
@@ -368,9 +369,13 @@ def political_map(color: np.ndarray, h: np.ndarray, prov: np.ndarray, emp: np.nd
     return np.clip(out, 0, 1)
 
 
-def region_map(prov: np.ndarray, seed: int) -> np.ndarray:
+def region_colors(count: int, seed: int) -> np.ndarray:
     rng = np.random.default_rng(seed + 9)
-    cols = rng.integers(16, 240, size=(prov.max() + 1, 3)).astype(np.uint8)
+    return rng.integers(16, 240, size=(count, 3)).astype(np.uint8)
+
+
+def region_map(prov: np.ndarray, seed: int) -> np.ndarray:
+    cols = region_colors(prov.max() + 1, seed)
     out = np.zeros(prov.shape + (3,), dtype=np.uint8)
     land = prov >= 0
     out[land] = cols[prov[land]]
@@ -550,6 +555,11 @@ def main() -> None:
     to_img(color).save(OUT / "yuruma_color.png")
     Image.fromarray((clouds * 255).astype(np.uint8)).save(OUT / "yuruma_clouds.png")
     Image.fromarray(region_map(prov, args.seed)).save(OUT / "yuruma_regions.png")
+    # таблица провинций для сценария (pax_rpg/dev/yuruma_scenario.py): цвет на yuruma_regions.png → империя
+    cols = region_colors(prov.max() + 1, args.seed)
+    table = [{"color": "#%02x%02x%02x" % tuple(int(c) for c in cols[k]), "empire": EMPIRES[emp[k]][1]}
+             for k in range(prov.max() + 1)]
+    (OUT / "yuruma_provinces.json").write_text(json.dumps(table, ensure_ascii=False, indent=0), encoding="utf-8")
 
     pol = label_map(to_img(political_map(color, h, prov, emp)), h, owner, True)
     pol.save(OUT / "yuruma_empires.png")
