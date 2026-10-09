@@ -42,21 +42,22 @@ PAL = {
     "sea": rgb("#1747a6"),
     "shallow": rgb("#2a9fd0"),
     "lagoon": rgb("#53d6e0"),
-    "shore": rgb("#cdb9e6"),
+    "shore": rgb("#b9dcec"),
     "meadow": rgb("#6fb3d9"),
     "forest": rgb("#1c5d8f"),
     "forest_dark": rgb("#113f6b"),
     "jungle": rgb("#167f9c"),
-    "bloom": rgb("#d0559f"),
-    "bloom_light": rgb("#f08cc4"),
+    "canopy": rgb("#2a8fc4"),
+    "canopy_light": rgb("#5cc3e0"),
     "rock": rgb("#46507e"),
     "rock_high": rgb("#7c74b4"),
-    "crystal": rgb("#f6d7f2"),
+    "crystal": rgb("#e6f3ff"),
     "ice": rgb("#dfeeff"),
-    "cloud": rgb("#fbeefe"),
-    "cloud_shade": rgb("#b9a6e6"),
-    "atmo_inner": rgb("#6fb8ff"),
-    "atmo_outer": rgb("#ff7fd0"),
+    "cloud": rgb("#ffd2ef"),
+    "cloud_shade": rgb("#a45cc0"),
+    "atmo_haze": rgb("#ff8fd6"),
+    "atmo_inner": rgb("#ff9ee0"),
+    "atmo_outer": rgb("#ff5fc4"),
     "ley": rgb("#ff6ad5"),
     "ley_cyan": rgb("#62f0ff"),
 }
@@ -257,9 +258,9 @@ def build_color(p: np.ndarray, lat: np.ndarray, h: np.ndarray, mnt: np.ndarray, 
     veg = lerp(PAL["forest"], PAL["forest_dark"], smooth(-0.1, 0.4, moist))
     veg = lerp(veg, PAL["jungle"], tropic)
     veg = lerp(veg, PAL["meadow"], smooth(0.05, -0.35, moist) * 0.8)
-    pink = smooth(0.12, 0.38, bloom) * (0.45 + 0.55 * tropic)
-    veg = lerp(veg, PAL["bloom"], pink * 0.85)
-    veg = lerp(veg, PAL["bloom_light"], smooth(0.32, 0.5, bloom) * tropic * 0.7)
+    # рисунок крон — только голубые оттенки: розовый у Юрумы в атмосфере, не на земле
+    veg = lerp(veg, PAL["canopy"], smooth(0.12, 0.38, bloom) * 0.6)
+    veg = lerp(veg, PAL["canopy_light"], smooth(0.32, 0.5, bloom) * tropic * 0.5)
     land = lerp(PAL["shore"], veg, smooth(0.0, 0.012, e))
     m = mnt / max(float(np.quantile(mnt[mnt > 0], 0.995)), 1e-6) if (mnt > 0).any() else mnt
     land = lerp(land, PAL["rock"], smooth(0.12, 0.35, m))
@@ -461,19 +462,23 @@ def render_globe(color, clouds, ley, h, size, yaw, tilt, sun, seed, cloud_spin=8
 
     # атмосфера: лимб к краю и рассеяние на освещённой стороне
     rim = (1.0 - w) ** 3
+    # мановая дымка: розовый слой над всей дневной стороной, гуще к краю
+    lit_side = smooth(-0.3, 0.6, lam)
+    haze = (0.1 + 0.55 * (1.0 - w) ** 1.5) * (0.35 + 0.65 * lit_side)
+    lit = lerp(lit, PAL["atmo_haze"] * (0.25 + 0.85 * lit_side[..., None]), haze)
     atmo_col = lerp(PAL["atmo_inner"], PAL["atmo_outer"], rim)
-    lit = lit + atmo_col * (rim * (0.25 + 0.9 * smooth(-0.3, 0.6, lam)))[..., None]
+    lit = lit + atmo_col * (rim * (0.3 + 0.9 * lit_side))[..., None]
 
     img = stars(size, seed + 999)
     img[inside] = lit[inside]
 
     # свечение за краем диска
     dist = np.sqrt(d2)
-    halo_t = np.clip((dist - 1.0) / 0.09, 0.0, 1.0)
-    outside = (dist > 1.0) & (dist < 1.09)
+    halo_t = np.clip((dist - 1.0) / 0.12, 0.0, 1.0)
+    outside = (dist > 1.0) & (dist < 1.12)
     edge_dir = np.stack([u, np.zeros_like(u), v], -1) / np.maximum(dist, 1e-6)[..., None]
     edge_lam = smooth(-0.5, 0.7, edge_dir @ sun)
-    halo = (1.0 - halo_t) ** 2.2 * (0.15 + 0.85 * edge_lam)
+    halo = (1.0 - halo_t) ** 1.8 * (0.25 + 0.95 * edge_lam)
     halo_col = lerp(PAL["atmo_inner"], PAL["atmo_outer"], halo_t)
     img[outside] += (halo_col * halo[..., None])[outside]
 
@@ -547,7 +552,7 @@ def main() -> None:
     pol = label_map(to_img(political_map(color, h, prov, emp)), h, owner, True)
     pol.save(OUT / "yuruma_empires.png")
     labelled = color.copy()
-    labelled = lerp(labelled, PAL["cloud"], clouds * 0.55)
+    labelled = lerp(labelled, PAL["cloud"], clouds * 0.7)
     map_view = label_map(to_img(labelled), h, owner, False)
     map_view.save(OUT / "yuruma_map.png")
 
