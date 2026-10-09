@@ -13,7 +13,7 @@
    "length": 3.467
   },
   "Draw": {
-   "length": 1.333
+   "length": 1.467
   },
   "Idle": {
    "length": 4.0
@@ -25,7 +25,7 @@
    "length": 0.633
   },
   "Sheathe": {
-   "length": 1.333
+   "length": 1.6
   },
   "Walk": {
    "length": 1.033
@@ -1082,12 +1082,12 @@
  },
  "sword_switch": {
   "Draw": {
-   "frame": 13,
-   "time": 0.433
+   "frame": 11,
+   "time": 0.367
   },
   "Sheathe": {
-   "frame": 27,
-   "time": 0.9
+   "frame": 36,
+   "time": 1.2
   }
  },
  "impact": {
