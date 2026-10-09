@@ -1,5 +1,5 @@
 {
-	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа. Словари по клипам ({\"Attack1\": …}) — своё значение для каждого удара: combo_cancel — с какой доли клипа начинается следующий удар, если нажат; combo_skip — сколько секунд замаха следующего удара пропустить; attack_end — где удар без продолжения кончается и уходит в стойку; combo_grace — сколько секунд после этого нажатие ещё продолжает комбо; sword_follow — как быстро волочащийся меч догоняет руку (меньше — тяжелее); impact_lead — звук удара о землю на столько секунд раньше касания. cape_* — ткань плаща (SoftBody3D: точность, масса, жёсткость, затухание, сопротивление воздуха, толщина капсул тела); trail_* — след взмаха (сколько живёт, с какой скорости острия рисуется, яркость, цвет); burst_radius — кольцо удара о землю; clip_speed — скорость разовых клипов (увороты Dodge / DodgeArmed — тяжелее, если меньше); cape_pin_strip — ширина полос, по которым ищется верхний край плаща для пришивания; air — прыжок удара: [с, по секунду клипа, во сколько раз медленнее].",
+	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа. Словари по клипам ({\"Attack1\": …}) — своё значение для каждого удара: combo_cancel — с какой доли клипа начинается следующий удар, если нажат; combo_skip — сколько секунд замаха следующего удара пропустить; attack_end — где удар без продолжения кончается и уходит в стойку; combo_grace — сколько секунд после этого нажатие ещё продолжает комбо; sword_follow — как быстро волочащийся меч догоняет руку (меньше — тяжелее); impact_lead — звук удара о землю на столько секунд раньше касания. cape_* — ткань плаща (SoftBody3D: точность, масса, жёсткость, затухание, сопротивление воздуха, толщина капсул тела); trail_* — след взмаха (сколько живёт, с какой скорости острия рисуется, яркость, цвет); burst_radius — кольцо удара о землю; clip_skip — сколько секунд начала разового клипа пропустить (у увороток — раскачку); clip_speed — скорость разовых клипов (увороты Dodge / DodgeArmed — тяжелее, если меньше); cape_pin_strip — ширина полос, по которым ищется верхний край плаща для пришивания; air — прыжок удара: [с, по секунду клипа, во сколько раз медленнее].",
 	"model": "models/knight.glb",
 	"anim_meta": "models/knight_anim.json",
 	"capsule_height": 1.9,
@@ -46,6 +46,10 @@
 	"swing_pitch_spread": 1.06,
 	"jump_skip": 0.3,
 	"combo_grace": 0.5,
+	"clip_skip": {
+		"Dodge": 0.3,
+		"DodgeArmed": 0.33
+	},
 	"clip_speed": {
 		"Dodge": 1.3,
 		"DodgeArmed": 1.15
@@ -89,13 +93,13 @@
 		"sounds/impact_3.wav"
 	],
 	"impact_volume_db": 0.0,
-	"cape_debug": true,
-	"cape_precision": 6,
-	"cape_mass": 1.2,
-	"cape_stiffness": 0.6,
-	"cape_damping": 0.04,
+	"cape_debug": false,
+	"cape_precision": 12,
+	"cape_mass": 0.7,
+	"cape_stiffness": 0.35,
+	"cape_damping": 0.012,
 	"cape_drag": 0.02,
-	"cape_body_scale": 1.0,
+	"cape_body_scale": 1.5,
 	"cape_pin_strip": 0.05,
 	"trail_life": 0.2,
 	"trail_speed": 4.0,

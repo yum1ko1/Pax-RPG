@@ -523,7 +523,7 @@ func dodge(on_floor: bool) -> bool:
 	var n := "DodgeArmed" if armed and has("DodgeArmed") else "Dodge"
 	if not has(n):
 		return false
-	_play_once(n)
+	_play_once(n, _per("clip_skip", n, 0.0))   # без раскачки перед кувырком — уворот срабатывает сразу
 	return true
 
 
