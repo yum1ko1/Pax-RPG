@@ -43,6 +43,8 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	add_child(_model)
 	_anim = _find(_model)
 	if _anim != null:
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+	if _anim != null:
 		var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 		for clip: String in ["walk", "idle"]:
 			var src := mod.model(DIR + clip + ".glb")

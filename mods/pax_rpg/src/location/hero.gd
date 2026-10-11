@@ -186,9 +186,14 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	for n: String in ONCE:
 		if anim.has_animation(n):
 			anim.get_animation(n).loop_mode = Animation.LOOP_NONE
+	# анимация, поворот головы и меч — в такте физики, как движение и камера: иначе при FPS выше 60 кадры
+	# с поправками и без чередуются — поза дёргается, а бег кажется быстрее
+	anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	anim.animation_finished.connect(_on_finished)
 	anim.play("Idle")
 	_skel = _find_skeleton(model)
+	if _skel != null:
+		_skel.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
 	_owner_body = owner_body
 	for id: Variant in cfg.get("equipped", []):
 		equip(str(id))

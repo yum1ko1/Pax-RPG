@@ -99,6 +99,8 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_model_y = _model.position.y
 	_anim = _find_anim(_model)
 	if _anim != null:
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+	if _anim != null:
 		_add_clips()
 	_mark = MeshInstance3D.new()
 	var sm := SphereMesh.new()
