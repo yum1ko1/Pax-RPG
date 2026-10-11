@@ -17,6 +17,8 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
+const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
+const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -65,6 +67,10 @@ var _toast: Dictionary = {}        # уведомление слева: {text, t
 var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
 var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
+var _pause: PauseMenu              # меню паузы (Esc)
+var _sfx: Sfx                      # шаги, снаряжение, гул города
+var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
+var _was_floor := true
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -89,6 +95,7 @@ func _f(key: String, fallback: float) -> float:
 func build_test() -> void:
 	build({"id": "test"})
 	test_mode = true
+	_pause.set_leave_text(mod.tr_key("pax_rpg_pause_menu"))
 	_city_name = mod.tr_key("pax_rpg_menu_test")
 	_update_hud()
 
@@ -139,6 +146,7 @@ func build(city: Dictionary) -> void:
 		goblins = int(layout.get("goblins", 0))
 		_spawn_npcs(layout)
 		_shots = layout.get("shots", [])
+		_make_portal()
 	_make_player()
 	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
@@ -148,6 +156,18 @@ func build(city: Dictionary) -> void:
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
+	_sfx = Sfx.new()
+	_sfx.setup(mod, not layout.is_empty())
+	add_child(_sfx)
+	_pause = PauseMenu.new()
+	_pause.setup(mod, mod.tr_key("pax_rpg_pause_leave"))
+	_pause.visible = false
+	_pause.resume.connect(_set_paused.bind(false))
+	_pause.leave_city.connect(func() -> void:
+		_set_paused(false)
+		exit_requested.emit())
+	add_child(_pause)
+	_zoom = 0.0
 	_yaw = 0.0
 	_near_gate = false
 	_flask = int(_hf("flask_charges", 3.0))
@@ -183,7 +203,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud]:
+	for n: Node in [_box, _hud, _pause, _sfx]:
 		if is_instance_valid(n):
 			n.queue_free()
 	_goblins.clear()
@@ -194,6 +214,8 @@ func clear() -> void:
 	_player = null
 	_cam = null
 	_hud = null
+	_pause = null
+	_sfx = null
 
 
 func _make_sky() -> void:
@@ -270,7 +292,7 @@ func _spawn_npcs(layout: Dictionary) -> void:
 		var pts := PackedVector3Array()
 		for pt: Variant in src:
 			var a: Array = pt
-			pts.append(Vector3(float(a[0]) + randf_range(-1.2, 1.2), 0.05, float(a[1]) + randf_range(-1.2, 1.2)))
+			pts.append(Vector3(float(a[0]) + randf_range(-1.2, 1.2), 0.1, float(a[1]) + randf_range(-1.2, 1.2)))
 		var npc := Npc.new()
 		npc.setup(mod, pts, randi() % pts.size(), n * 7919 + 13)
 		_view.add_child(npc)
@@ -326,6 +348,60 @@ func _make_gate() -> void:
 	_view.add_child(gate_label)
 
 
+## Выход из города: мерцающая завеса, тёплый свет, искры маны и надпись над ним (вход — E, см. подсказку HUD).
+func _make_portal() -> void:
+	var glow := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(7.0, 6.0)
+	glow.mesh = q
+	var sh: Shader = mod.shader("shaders/portal.gdshader")
+	if sh != null:
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		glow.material_override = m
+	glow.position = _gate_pos + Vector3(0.0, 3.0, 0.0)
+	_view.add_child(glow)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.55, 0.85)
+	l.light_energy = 2.2
+	l.omni_range = 9.0
+	l.position = _gate_pos + Vector3(0.0, 2.0, -1.5)
+	_view.add_child(l)
+	var p := CPUParticles3D.new()
+	p.amount = 60
+	p.lifetime = 3.0
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(3.2, 0.2, 0.6)
+	p.direction = Vector3.UP
+	p.spread = 12.0
+	p.gravity = Vector3(0.0, 0.25, 0.0)
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.9
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	var dot := SphereMesh.new()
+	dot.radius = 0.035
+	dot.height = 0.07
+	var dm := StandardMaterial3D.new()
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.albedo_color = Color(1.0, 0.7, 0.95)
+	dm.emission_enabled = true
+	dm.emission = Color(1.0, 0.5, 0.9)
+	dm.emission_energy_multiplier = 3.0
+	dot.material = dm
+	p.mesh = dot
+	p.position = _gate_pos + Vector3(0.0, 0.2, 0.0)
+	_view.add_child(p)
+	var label := Label3D.new()
+	label.text = mod.tr_key("pax_rpg_gate")
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.font_size = 72
+	label.outline_size = 14
+	label.modulate = Color(1.0, 0.85, 0.95)
+	label.position = _gate_pos + Vector3(0.0, 6.6, 0.0)
+	_view.add_child(label)
+
+
 func _make_player() -> void:
 	_player = CharacterBody3D.new()
 	_player.position = START
@@ -377,13 +453,29 @@ func _hf(key: String, fallback: float) -> float:
 
 # ---------- управление ----------
 
+## Пауза (Esc): мир локации замирает, мышь свободна, поверх — меню.
+func _set_paused(on: bool) -> void:
+	if not is_instance_valid(_pause):
+		return
+	_pause.visible = on
+	if is_instance_valid(_box):
+		_box.process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	_rmb = false
+	_lmb_queued = false
+
+
+func paused() -> bool:
+	return is_instance_valid(_pause) and _pause.visible
+
+
 func _typing() -> bool:
 	var focus := get_viewport().gui_get_focus_owner()
 	return focus is LineEdit or focus is TextEdit
 
 
 func _physics_process(delta: float) -> void:
-	if not active or not is_instance_valid(_player):
+	if not active or not is_instance_valid(_player) or paused():
 		return
 	var on_floor := _player.is_on_floor()
 	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
@@ -494,7 +586,16 @@ func _physics_process(delta: float) -> void:
 		if mag != null:
 			vel = _magnet_pull(vel, mag, delta)
 	_player.velocity = vel
+	var was := _player.global_position
 	_player.move_and_slide()
+	if is_instance_valid(_sfx):
+		var d := _player.global_position - was
+		d.y = 0.0
+		var fl := _player.is_on_floor()
+		if fl and not _was_floor:
+			_sfx.land()
+		_was_floor = fl
+		_sfx.walk(d.length(), running, _hero != null and _hero.armed, fl)
 	if _hero != null:
 		_hero.cape_wind(_player.velocity)
 	if _lock != null:
@@ -544,7 +645,11 @@ func _follow_camera(delta := 0.0) -> void:
 	_cam_lock = move_toward(_cam_lock, want, delta * _f("lock_camera_speed", 2.5)) if delta > 0.0 else want
 	var k := smoothstep(0.0, 1.0, _cam_lock)
 	var target := _player.position + Vector3(0.0, 0.9, 0.0)
-	var free_pos := target + Vector3(0.0, _f("camera_height", 3.5), _f("camera_distance", 7.0)).rotated(Vector3.UP, _yaw)
+	# колесо: от обычной дали до «боевой» — как за плечом в захвате (высота и даль lock_camera_*)
+	var z := smoothstep(0.0, 1.0, _zoom)
+	var ch := lerpf(_f("camera_height", 3.5), _f("lock_camera_height", 1.75) - 0.9, z)
+	var cd := lerpf(_f("camera_distance", 7.0), _f("lock_camera_distance", 3.2), z)
+	var free_pos := target + Vector3(0.0, ch, cd).rotated(Vector3.UP, _yaw)
 	var look := target
 	var pos := free_pos
 	if k > 0.0:
@@ -934,8 +1039,18 @@ const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_S
 func _input(event: InputEvent) -> void:
 	if not active:
 		return
+	if paused():
+		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+				and (event as InputEventKey).physical_keycode == KEY_ESCAPE:
+			_set_paused(false)
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event
+		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			_zoom = clampf(_zoom + (0.12 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -0.12), 0.0, 1.0)
+			get_viewport().set_input_as_handled()
+			return
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # вернуть мышь камере (Esc её отпускал)
@@ -962,7 +1077,8 @@ func _input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			_set_paused(true)
+			get_viewport().set_input_as_handled()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_R:
 			_drink()                                 # эликсир
 		if key.pressed and not key.echo and key.physical_keycode == KEY_H:

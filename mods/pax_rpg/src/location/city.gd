@@ -19,7 +19,11 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	root.name = "City"
 	parent.add_child(root)
 	var g: Array = data.get("ground", [190, 186, 0, 0])
-	_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
+	var gm: Dictionary = data.get("ground_mask", {})
+	if gm.is_empty():
+		_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
+	else:
+		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)
 	var groups := {}
 	for it: Variant in data.get("items", []):
 		var d: Dictionary = it
@@ -38,6 +42,104 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	for k: String in groups:
 		_place(k, groups[k])
 		_lights(k, groups[k])
+	_fix_textures()
+
+
+## Земля: плоскость с шейдером (глина, кладка дорог и тропы по маске — shaders/ground.gdshader) и коробка-коллизия.
+func _ground(size: Vector2, center: Vector2, gm: Dictionary) -> void:
+	var mi := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = size
+	pm.subdivide_width = 8
+	pm.subdivide_depth = 8
+	var sh: Shader = mod.shader("shaders/ground.gdshader")
+	if sh != null:
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		const T := "models/gharn/tex/"
+		for u: Array in [["g_col", "ground.jpg"], ["g_nrm", "ground_n.jpg"], ["g_rgh", "ground_r.jpg"],
+				["c_col", "cobble.jpg"], ["c_nrm", "cobble_n.jpg"], ["c_rgh", "cobble_r.jpg"], ["c_hgt", "cobble_h.jpg"]]:
+			m.set_shader_parameter(u[0], _tex(T + str(u[1]), str(u[0]).ends_with("nrm")))
+		m.set_shader_parameter("mask", mod.texture(str(gm.get("tex", ""))))
+		var r: Array = gm.get("rect", [0, 0, 1, 1])
+		m.set_shader_parameter("mask_rect", Vector4(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
+		pm.material = m
+	mi.mesh = pm
+	mi.position = Vector3(center.x, 0.0, center.y)
+	root.add_child(mi)
+	var body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(size.x, 1.0, size.y)
+	cs.shape = bs
+	body.add_child(cs)
+	body.position = Vector3(center.x, -0.5, center.y)
+	root.add_child(body)
+	rects.append([center, size, Color(0.11, 0.16, 0.35)])
+
+
+## Картинка мода с мипмапами (без них плитка вдали рябит при движении камеры).
+func _tex(path: String, normal := false) -> Texture2D:
+	var t := mod.texture(path)
+	if t == null:
+		return null
+	var img := t.get_image()
+	if img == null:
+		return t
+	if img.is_compressed():
+		return t
+	if not img.has_mipmaps():
+		img.generate_mipmaps(normal)
+	return ImageTexture.create_from_image(img)
+
+
+## Текстуры моделей: glb игра грузит без импорта — у картинок нет мипмапов (рябь вдали, «шум» на камнях).
+## Каждой — мипмапы и, если движок умеет на лету, сжатие в видеопамяти; картинки — параллельно на всех ядрах.
+const TEX_SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ROUGHNESS,
+	BaseMaterial3D.TEXTURE_METALLIC, BaseMaterial3D.TEXTURE_EMISSION, BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION]
+var _mats: Array = []              # материалы моделей города (BaseMaterial3D), собирает _place
+var _imgs: Array = []
+
+
+func _fix_textures() -> void:
+	var uses := {}                     # текстура → [[материал, слот], …]
+	for mat: BaseMaterial3D in _mats:
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		for slot: int in TEX_SLOTS:
+			var t := mat.get_texture(slot)
+			if t == null:
+				continue
+			if not uses.has(t):
+				uses[t] = []
+			(uses[t] as Array).append([mat, slot])
+	var keys: Array = uses.keys()
+	_imgs.clear()
+	for t: Texture2D in keys:
+		var img := t.get_image()
+		var normal := false
+		for u: Array in uses[t]:
+			normal = normal or int(u[1]) == BaseMaterial3D.TEXTURE_NORMAL
+		_imgs.append([img, normal])
+	var task := WorkerThreadPool.add_group_task(_prep_image, _imgs.size(), -1, true, "pax_rpg mipmaps")
+	WorkerThreadPool.wait_for_group_task_completion(task)
+	for i: int in keys.size():
+		var img: Image = _imgs[i][0]
+		if img == null or img.is_empty():
+			continue
+		var nt := ImageTexture.create_from_image(img)
+		for u: Array in uses[keys[i]]:
+			(u[0] as BaseMaterial3D).set_texture(int(u[1]), nt)
+	_imgs.clear()
+	_mats.clear()
+
+
+func _prep_image(i: int) -> void:
+	var img: Image = _imgs[i][0]
+	if img == null or img.is_empty() or img.is_compressed():
+		return
+	if not img.has_mipmaps():
+		img.generate_mipmaps(bool(_imgs[i][1]))
+	img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL if bool(_imgs[i][1]) else Image.COMPRESS_SOURCE_GENERIC)
 
 
 ## Тёплый свет у фонарей (без теней — их десятки).
@@ -80,6 +182,11 @@ func _place(path: String, list: Array) -> void:
 		aabb = a if first else aabb.merge(a)
 		first = false
 	for pr: Array in parts:
+		var mesh: Mesh = pr[0]
+		for si: int in mesh.get_surface_count():
+			var sm := mesh.surface_get_material(si)
+			if sm is BaseMaterial3D and not _mats.has(sm):
+				_mats.append(sm)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = pr[0]
@@ -92,6 +199,10 @@ func _place(path: String, list: Array) -> void:
 	for e: Array in list:
 		count += 1
 		var t: Transform3D = e[0]
+		var cl: Array = e[2]
+		if bool(e[1]) and not first and cl.size() > 0 and cl[0] is Array:
+			_boxes(t, cl)                                 # несколько коробок (ворота: две башни, проход свободен)
+			continue
 		if bool(e[1]) and not first:
 			var body := StaticBody3D.new()
 			var sh := CollisionShape3D.new()
@@ -111,6 +222,24 @@ func _place(path: String, list: Array) -> void:
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
 	src.free()
+
+
+## Коробки коллизии [sx, sy, sz, ox, oy, oz] в осях модели (с её масштабом).
+func _boxes(t: Transform3D, list: Array) -> void:
+	var body := StaticBody3D.new()
+	var sc := t.basis.get_scale().x
+	for c: Variant in list:
+		var b: Array = c
+		var sh := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(float(b[0]), float(b[1]), float(b[2])) * sc
+		sh.shape = bs
+		sh.position = Vector3(float(b[3]), float(b[4]), float(b[5])) * sc
+		body.add_child(sh)
+		var g := t.origin + t.basis.orthonormalized() * sh.position
+		rects.append([Vector2(g.x, g.z), Vector2(bs.size.x, bs.size.z), Color(0.22, 0.27, 0.5)])
+	body.transform = Transform3D(t.basis.orthonormalized(), t.origin)
+	root.add_child(body)
 
 
 func _collect(n: Node, xf: Transform3D, out: Array) -> void:

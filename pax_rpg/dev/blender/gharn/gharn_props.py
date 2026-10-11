@@ -520,6 +520,116 @@ def quest_board():
     return p
 
 
+
+# ---------------------------------------------------------------- быт и зелень (вторая волна: деталь столицы)
+
+
+def cart():
+    """Телега на двух колёсах с оглоблями, в кузове — мешки."""
+    p = [box((2.2, 1.3, 0.08), (0, 0, 0.78), WOOD_W(), bevel=0.01)]
+    for y in (-0.62, 0.62):
+        p.append(box((2.2, 0.06, 0.35), (0, y, 0.98), WOOD_W()))
+    for x in (-1.07, 1.07):
+        p.append(box((0.06, 1.3, 0.35), (x, 0, 0.98), WOOD_W()))
+    for y in (-0.78, 0.78):
+        p.append(cyl(0.55, 0.08, (0.15, y, 0.55), WOOD(), 18, rot=(math.pi / 2, 0, 0)))
+        p.append(cyl(0.12, 0.12, (0.15, y, 0.55), IRON(), 10, rot=(math.pi / 2, 0, 0)))
+    p.append(cyl(0.05, 1.8, (0.15, -0.9, 0.55), WOOD(), 8, rot=(-math.pi / 2, 0, 0)))
+    for y in (-0.4, 0.4):
+        p.append(box((1.9, 0.08, 0.08), (2.0, y, 0.62), WOOD(), rot=(0, 0.12, 0)))
+    for i in range(3):
+        p.append(box((0.55, 0.4, 0.32), (-0.5 + i * 0.5, random.uniform(-0.2, 0.2), 1.0), BURLAP(), bevel=0.08, jitter=0.03))
+    return p
+
+
+def fence_wood(length=4.0):
+    """Плетень: колья и переплетённые жерди."""
+    p = []
+    n = int(length / 0.5) + 1
+    for i in range(n):
+        x = -length / 2 + i * length / (n - 1)
+        p.append(cyl(0.045, random.uniform(1.15, 1.35), (x, 0, 0), WOOD(), 6))
+    for k, z in enumerate((0.35, 0.6, 0.85, 1.05)):
+        p.append(box((length, 0.05, 0.07), (0, 0.04 if k % 2 else -0.04, z), WICKER(), rot=(0.04 * (k - 1.5), 0, 0)))
+    return p
+
+
+def hay_bale():
+    return [box((1.2, 0.8, 0.6), (0, 0, 0.3), mat("hay", "#C8A54E", 1.0), bevel=0.12, jitter=0.03),
+            box((0.06, 0.82, 0.62), (-0.3, 0, 0.3), ROPE()), box((0.06, 0.82, 0.62), (0.3, 0, 0.3), ROPE())]
+
+
+def wood_pile():
+    p = []
+    for row in range(4):
+        for i in range(6 - row):
+            p.append(cyl(0.11, 1.4, (-0.62 + i * 0.24 + row * 0.12, -0.7, 0.11 + row * 0.2), WOOD_L(), 8,
+                         rot=(-math.pi / 2, 0, random.uniform(-0.05, 0.05))))
+    p.append(box((0.1, 0.1, 1.0), (-0.95, 0, 0.5), WOOD()))
+    p.append(box((0.1, 0.1, 1.0), (0.95, 0, 0.5), WOOD()))
+    return p
+
+
+def firepit():
+    p = []
+    for i in range(10):
+        a = 2 * math.pi * i / 10
+        p.append(rock((0.32, 0.26, 0.22), (math.cos(a) * 0.62, math.sin(a) * 0.62, 0.1), STONE_D()))
+    for i in range(5):
+        a = 2 * math.pi * i / 5
+        p.append(cyl(0.05, 0.75, (math.cos(a) * 0.12, math.sin(a) * 0.12, 0.05), WOOD(), 6, rot=(math.cos(a) * 1.0, math.sin(a) * -1.0, 0)))
+    p.append(lathe([(0.35, 0.02), (0.18, 0.25), (0.05, 0.55), (0.0, 0.7)], (0, 0, 0), FLAME(), 10))
+    p.append(cyl(0.5, 0.03, (0, 0, 0), mat("ash", "#2C2826", 1.0), 14))
+    return p
+
+
+def awning():
+    """Навес-тент над лавкой: четыре столба и провисшая ткань в полоску."""
+    p = [cyl(0.06, 2.6 if x > 0 else 2.2, (x, y, 0), WOOD(), 6) for x in (-1.4, 1.4) for y in (-1.1, 1.1)]
+    for k in range(5):
+        c = (RED(), FELT())[k % 2]
+        p.append(box((0.6, 2.4, 0.03), (-1.2 + k * 0.6, 0, 2.2 + 0.4 * (k * 0.6) / 2.8), c, rot=(0, -0.14, 0)))
+    return p
+
+
+def rock_small():
+    return [rock((0.6, 0.5, 0.35), (0, 0, 0.15), STONE()), rock((0.35, 0.3, 0.22), (0.35, 0.2, 0.08), STONE_D())]
+
+
+def bush_dry():
+    p = []
+    for i in range(14):
+        a = random.uniform(0, 2 * math.pi)
+        p.append(cyl(0.025, random.uniform(0.5, 0.9), (0, 0, 0), WOOD_W(), 5,
+                     rot=(math.cos(a) * random.uniform(0.3, 0.8), math.sin(a) * random.uniform(0.3, 0.8), 0)))
+    for i in range(6):
+        p.append(box([random.uniform(0.25, 0.4)] * 3, (random.uniform(-0.3, 0.3), random.uniform(-0.3, 0.3),
+                     random.uniform(0.35, 0.7)), mat("leaves_dry", "#7C7A3A", 0.9), bevel=0.1, jitter=0.06))
+    return p
+
+
+def grass_tuft():
+    """Пучок сухой степной травы: тонкие треугольные стебли веером."""
+    bm = bmesh.new()
+    for i in range(22):
+        a = random.uniform(0, 2 * math.pi)
+        lean = random.uniform(0.15, 0.6)
+        h = random.uniform(0.25, 0.55)
+        w = 0.025
+        bx, by = math.cos(a) * 0.06, math.sin(a) * 0.06
+        tx, ty = bx + math.cos(a) * lean * h, by + math.sin(a) * lean * h
+        px, py = -math.sin(a) * w, math.cos(a) * w
+        v = [bm.verts.new((bx - px, by - py, 0)), bm.verts.new((bx + px, by + py, 0)), bm.verts.new((tx, ty, h))]
+        bm.faces.new(v)
+    ob = new_obj("grass", bm, mat("grass_dry", "#A99A55", 0.95))
+    return [ob]
+
+
+def window_glass():
+    """Стекло окна 1×1.3 м (плоскость, смотрит на −Y Blender = +Z glTF) — материал glass: в игре отражает."""
+    return [box((1.0, 0.02, 1.3), (0, 0, 0.65), mat("glass", "#1E2A3A", 0.05, 0.6))]
+
+
 PROPS = {
     "barrel_kumis": lambda: barrel("kumis"), "barrel_water": lambda: barrel("water"),
     "crate": lambda: crate(False), "crate_saerith": lambda: crate(True),
@@ -534,6 +644,9 @@ PROPS = {
     "weapon_rack": weapon_rack, "training_dummy": training_dummy, "cauldron": cauldron,
     "ovoo_cairn": ovoo_cairn, "mana_crystal": mana_crystal, "mana_flags_line": mana_flags_line,
     "stall_frame": stall_frame, "quest_board": quest_board,
+    "cart": cart, "fence_wood": fence_wood, "hay_bale": hay_bale, "wood_pile": wood_pile, "firepit": firepit,
+    "awning": awning, "rock_small": rock_small, "bush_dry": bush_dry, "grass_tuft": grass_tuft,
+    "window_glass": window_glass,
 }
 
 # ---------------------------------------------------------------- сборка, экспорт, превью

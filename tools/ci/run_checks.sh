@@ -36,6 +36,7 @@ echo "== 2. компиляция (Godot $("$GODOT" --version 2>/dev/null | head 
 rm -rf "$PROJ/mods" "$PROJ/stubs" "$PROJ/.godot"
 mkdir -p "$PROJ/mods" "$PROJ/stubs"
 cp -r "$ROOT/mods/pax_rpg" "$PROJ/mods/pax_rpg"
+touch "$PROJ/mods/pax_rpg/models/.gdignore"   # модели и их текстуры заглушка грузит без импорта, как игра
 python3 "$CI/gen_stubs.py" "$CI/pax_api/api-reference.md" "$PROJ/stubs" "$CI/stub_overrides" > "$OUT/stubs.log"
 "$GODOT" --headless --path "$PROJ" --import > "$OUT/import.log" 2>&1
 "$GODOT" --headless --path "$PROJ" -s res://ci/check_scripts.gd > "$OUT/compile.log" 2>&1

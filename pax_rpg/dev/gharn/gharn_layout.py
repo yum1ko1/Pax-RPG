@@ -16,7 +16,9 @@ occupied = []          # (x, z, радиус) — чтобы мелочь не �
 
 
 NO_COLLIDE = {"road_cobble", "road_dirt", "boardwalk", "lantern_string", "mana_flags_line", "stairs_stone"}
-TRUNK = {"flame_tree": [0.9, 3.0, 0.9]}          # у деревьев — только ствол: крона не мешает ходить
+TRUNK = {"flame_tree": [0.9, 3.0, 0.9],
+         # Врата Клыка: две башни, проход x −2.3…2.1 (по сетке модели) свободен
+         "gate_fang": [[8.0, 14.0, 7.1, -6.3, 7.0, 0.0], [8.2, 14.0, 7.1, 6.2, 7.0, 0.0]]}          # у деревьев — только ствол: крона не мешает ходить
 
 
 def add(m, x, z, r=0.0, s=1.0, c=None, y=0.0, rad=0.0):
@@ -38,28 +40,15 @@ def free(x, z, rad):
     return all((x - a) ** 2 + (z - b) ** 2 > (rad + rr) ** 2 for a, b, rr in occupied)
 
 
-# --- дороги: Тракт (x −4…4, z 22…80), Аллея (z −6…6), площадь (r 22)
-def tile(x, z):
-    add("road_cobble", x, z, random.choice([0, 90, 180, 270]), y=0.02)
+# --- дороги: не плитки, а маска для шейдера земли (shaders/ground.gdshader): R — булыжник в грязи, G — утоптанные
+# тропы. Тракт (x −4.5…4.5) идёт от ворот до самого Круга, Аллея (z −6.5…6.5) — насквозь, площадь — круг r 21.5.
+GROUND = [190, 186, 0, -6]                     # ширина, глубина, центр X, центр Z
+MASK_PX = 4                                    # пикселей на метр
+ROADS = [("rect", -4.5, 4.5, 14, 90), ("rect", -78, 78, -6.5, 6.5), ("disc", 0, 0, 21.5), ("rect", -6.5, 6.5, -37, -14),
+         ("disc", 34, 0, 8.5), ("rect", 40, 50, -14, -5), ("rect", 40, 48, 5, 16)]
+TRAILS = [("rect", -72, -36, -4, 32)]          # базар — вытоптанная площадка
 
-
-for z in range(24, 84, 4):
-    for x in (-2, 2):
-        tile(x, z)
-for x in range(-74, 78, 4):
-    if abs(x) < 22:
-        continue
-    for z in (-4, 0, 4):
-        tile(x, z)
-for x in range(-22, 24, 4):
-    for z in range(-22, 24, 4):
-        if x * x + z * z < 21 ** 2:
-            tile(x, z)
-for z in range(-34, -21, 4):                                  # к лестнице Ставки
-    for x in (-4, 0, 4):
-        tile(x, z)
-
-# --- ворота и стена
+# --- ворота и стена# --- ворота и стена
 add("@gate_fang", 0, 82, 0, c=True, rad=11)
 W, N, S = 92, -96, 84
 x = -W
@@ -246,8 +235,36 @@ shots = [
     [[30, 4, 2], [54, 6, 24]],           # 5 таверна от фонтана
     [[-110, 70, 120], [0, 0, -10]],      # 6 весь город с высоты
 ]
+
+def draw_mask(path):
+    """Маска дорог и троп в PNG: R — кладка, G — тропы (по маршрутам жителей и TRAILS), чуть размыто."""
+    from PIL import Image, ImageDraw, ImageFilter
+    w, d = GROUND[0] * MASK_PX, GROUND[1] * MASK_PX
+    x0, z0 = GROUND[2] - GROUND[0] / 2, GROUND[3] - GROUND[1] / 2
+    px = lambda x, z: ((x - x0) * MASK_PX, (z - z0) * MASK_PX)
+    r = Image.new("L", (w, d), 0)
+    g = Image.new("L", (w, d), 0)
+    for layer, shapes in ((r, ROADS), (g, TRAILS)):
+        dr = ImageDraw.Draw(layer)
+        for sh in shapes:
+            if sh[0] == "rect":
+                dr.rectangle([px(sh[1], sh[3]), px(sh[2], sh[4])], fill=255)
+            else:
+                cx, cz = px(sh[1], sh[2])
+                rr = sh[3] * MASK_PX
+                dr.ellipse([cx - rr, cz - rr, cx + rr, cz + rr], fill=255)
+    dg = ImageDraw.Draw(g)
+    for pth in paths:
+        dg.line([px(x, z) for x, z in pth], fill=255, width=int(2.6 * MASK_PX), joint="curve")
+    r = r.filter(ImageFilter.GaussianBlur(MASK_PX * 0.6))
+    g = g.filter(ImageFilter.GaussianBlur(MASK_PX * 0.9))
+    Image.merge("RGB", (r, g, Image.new("L", (w, d), 0))).save(path)
+    return [x0, z0, GROUND[0], GROUND[1]]
+
+
+mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
-        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": [190, 186, 0, -6], "goblins": 0, "paths": paths, "npcs": npcs, "shots": shots,
+        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "paths": paths, "npcs": npcs, "shots": shots,
         "items": items}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))

@@ -14,6 +14,7 @@ var _i := 0
 var _dir := 1
 var _wait := 0.0
 var _speed := SPEED
+var _stuck := 0                    # сколько раз подряд упёрся — на третий разворачивается назад по маршруту
 
 
 func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> void:
@@ -25,6 +26,8 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	_speed = SPEED * rng.randf_range(0.8, 1.25)
 	_dir = 1 if rng.randf() < 0.5 else -1
 	position = path[_i]
+	floor_snap_length = 0.4
+	floor_max_angle = deg_to_rad(50.0)
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.3
@@ -74,15 +77,18 @@ func _play(c: String) -> void:
 func _physics_process(delta: float) -> void:
 	if _path.size() < 2:
 		return
+	var fall := velocity.y - 20.0 * delta if not is_on_floor() else -0.5      # по пандусам и ступеням — с землёй
 	if _wait > 0.0:
 		_wait -= delta
-		velocity = Vector3.ZERO
+		velocity = Vector3(0.0, fall, 0.0)
+		move_and_slide()
 		_play("idle")
 		return
 	var target := _path[_i]
 	var to := target - global_position
 	to.y = 0.0
-	if to.length() < 0.4:
+	if to.length() < 0.5:
+		_stuck = 0
 		var nxt := _i + _dir
 		if nxt < 0 or nxt >= _path.size():
 			_dir = -_dir
@@ -93,10 +99,19 @@ func _physics_process(delta: float) -> void:
 			_wait = randf_range(1.5, 4.0)
 		return
 	var d := to.normalized()
-	velocity = d * _speed
+	velocity = Vector3(d.x * _speed, fall, d.z * _speed)
 	move_and_slide()
-	if get_real_velocity().length() < _speed * 0.2:     # упёрся (в героя) — постоять
+	var hv := get_real_velocity()
+	hv.y = 0.0
+	if hv.length() < _speed * 0.2:                      # упёрся (в героя, в соседа) — постоять, потом назад
+		_stuck += 1
 		_wait = 0.8
+		if _stuck >= 3:
+			_stuck = 0
+			_dir = -_dir
+			_i = clampi(_i + _dir, 0, _path.size() - 1)
+	else:
+		_stuck = 0
 	_play("walk")
 	if _model != null:
 		_model.rotation.y = lerp_angle(_model.rotation.y, atan2(d.x, d.z), minf(1.0, delta * 6.0))

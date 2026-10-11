@@ -43,6 +43,7 @@ Write-Output '== 2. компиляция'
 foreach ($d in 'mods', 'stubs', '.godot') { Remove-Item -Recurse -Force (Join-Path $Proj $d) -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Force (Join-Path $Proj 'mods'), (Join-Path $Proj 'stubs') | Out-Null
 Copy-Item -Recurse $ModDir (Join-Path $Proj 'mods\pax_rpg')
+New-Item -ItemType File -Force (Join-Path $Proj 'mods\pax_rpg\models\.gdignore') | Out-Null   # модели — без импорта, как в игре
 & python (Join-Path $CI 'gen_stubs.py') (Join-Path $CI 'pax_api\api-reference.md') (Join-Path $Proj 'stubs') (Join-Path $CI 'stub_overrides') | Out-Null
 & $Godot --headless --path $Proj --import *> (Join-Path $Out 'import.log')
 $compile = & $Godot --headless --path $Proj -s res://ci/check_scripts.gd 2>&1 | Out-String
