@@ -1094,7 +1094,26 @@ func _hit(out: Dictionary) -> void:
 	_hit_done = true
 	var ground := imp.has(action)
 	out["hit"] = {"range": _per("hit_range", action, 2.6), "arc": -1.0 if ground else 0.2,
-		"damage": _per("hit_damage", action, 15.0)}
+		"damage": _per("hit_damage", action, 15.0), "knock": ground}
+
+
+## Сколько секунд до мига удара (у финального — до касания земли); -1 — удар уже прошёл или герой не бьёт.
+func hit_time_left() -> float:
+	if _hit_done or action not in ATTACKS:
+		return -1.0
+	var imp: Dictionary = meta.get("impact", {})
+	var at := float(imp[action]) if imp.has(action) else float((cfg.get("swing_peaks", {}) as Dictionary).get(action, 0.5))
+	return maxf(0.0, (at - _pos()) / maxf(anim.speed_scale, 0.05))
+
+
+## С какой секунды клипа удар тянет к врагу (финальный — с отрыва от земли, не скользит по полу).
+func pull_on() -> bool:
+	return _pos() >= _per("pull_from", action, 0.0)
+
+
+## До какой дистанции (м, центр — центр) удар подводит героя к врагу.
+func attack_reach() -> float:
+	return _per("reach", action, 1.5)
 
 
 func _sounds() -> void:

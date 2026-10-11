@@ -415,18 +415,10 @@ func _physics_process(delta: float) -> void:
 		if step != Vector3.ZERO and delta > 0.0:
 			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
 			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
-			if mag != null:
-				var to := mag.global_position - _player.global_position
-				to.y = 0.0
-				var dist := to.length()
-				if dist > 0.01:
-					var dir := to / dist
-					var along := w.dot(dir)
-					var stop := _hf("magnet_stop", 1.4)
-					if along > 0.0 and dist - along < stop:      # не влезать во врага
-						w -= dir * minf(along, along - (dist - stop))
 			vel.x = w.x / delta
 			vel.z = w.z / delta
+		if mag != null:
+			vel = _magnet_pull(vel, mag, delta)
 	_player.velocity = vel
 	_player.move_and_slide()
 	if _hero != null:
@@ -492,7 +484,7 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
-		gob.take_damage(float(hit.damage), _player.global_position)
+		gob.take_damage(float(hit.damage), _player.global_position, bool(hit.get("knock", false)))
 
 
 # ---------- бой как в Sekiro ----------
@@ -503,6 +495,32 @@ func _aim_yaw() -> float:
 		var d := _lock.global_position - _player.global_position
 		return atan2(-d.x, -d.z)
 	return _yaw
+
+
+## Подтяг удара к врагу: до мига удара герой доходит (у финального — долетает) до дистанции reach, чтобы клинок
+## попал по врагу, а не по воздуху; ближе reach шаг клипа не несёт — не влезает во врага.
+func _magnet_pull(vel: Vector3, mag: Goblin, delta: float) -> Vector3:
+	var to := mag.global_position - _player.global_position
+	to.y = 0.0
+	var dist := to.length()
+	if dist < 0.01 or delta <= 0.0:
+		return vel
+	var dir := to / dist
+	var reach := _hero.attack_reach()
+	var gap := dist - reach
+	var along := vel.x * dir.x + vel.z * dir.z
+	var tl := _hero.hit_time_left()
+	if tl >= 0.0 and _hero.pull_on() and gap > 0.0:
+		var need := minf(gap / maxf(tl, 0.06), _hf("magnet_pull_max", 8.0))
+		if need > along:
+			vel.x += dir.x * (need - along)
+			vel.z += dir.z * (need - along)
+			along = need
+	if along > 0.0 and along * delta > gap:                  # за кадр не проскочить ближе reach
+		var cut := along - maxf(gap, 0.0) / delta
+		vel.x -= dir.x * cut
+		vel.z -= dir.z * cut
+	return vel
 
 
 ## Цель удара: захваченный враг, иначе ближайший живой в magnet_range перед камерой (в пределах magnet_angle),

@@ -8,9 +8,10 @@ extends CharacterBody3D
 const DIR := "models/goblin/"
 const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb",
 	"combat_idle": "combat_idle.glb", "strafe_l": "strafe_l.glb", "strafe_r": "strafe_r.glb", "back": "back.glb",
-	"deflected": "deflected.glb"}
+	"deflected": "deflected.glb", "knockdown": "knockdown.glb", "getup": "getup.glb"}
 const LOOPED := ["idle", "walk", "run", "combat_idle", "strafe_l", "strafe_r", "back"]
-const FALLBACK := {"combat_idle": "idle", "strafe_l": "walk", "strafe_r": "walk", "back": "walk", "deflected": "hit"}
+const FALLBACK := {"combat_idle": "idle", "strafe_l": "walk", "strafe_r": "walk", "back": "walk", "deflected": "hit",
+	"knockdown": "hit", "getup": "combat_idle"}
 
 const MAX_HP := 60.0
 const MAX_POSTURE := 100.0
@@ -32,7 +33,12 @@ const DEFLECTED_TIME := 0.9
 const BROKEN_TIME := 3.2      # с без равновесия — окно добивания
 const RECOVER_TIME := 0.6
 const RESPAWN := 3.0
-const KNOCKBACK := 5.0
+const KNOCKBACK := 2.0        # м/с, отшатывается от удара комбо — следующий удар ещё достаёт
+const KNOCK_FLY := 7.5        # м/с, отлетает от финального удара комбо
+const KNOCK_UP := 4.0
+const DOWN_TIME := 0.7        # с, лежит после падения
+const GETUP_SKIP := 0.27      # с начала клипа вставания (Meshy начинает стоя) — с кадра, где лежит на боку
+const STUN_MAX := 1.3         # с, дольше под ударами не стоит — уходит
 const GRAVITY := 20.0
 const MANA := Color(0.75, 0.45, 1.0)
 
@@ -58,6 +64,8 @@ var _circle_dir := 1.0         # +1 — вправо от героя, −1 — �
 var _switch_t := 2.0
 var _since_hit := 99.0
 var _lethal := false
+var _stun_t := 0.0             # с под ударами подряд
+var _swing_seen := false      # замах героя уже замечен (уходить или нет — решает один раз за удар)
 var _feint := false            # этот подход — обманный: подойдёт и отскочит, не ударив
 
 
@@ -153,7 +161,7 @@ func in_combat() -> bool:
 # ---------- что с ним делают ----------
 
 ## Удар героя: кровь, отлёт, атака сорвана; растёт концентрация. Без равновесия — не принимает обычных ударов.
-func take_damage(amount: float, from: Vector3) -> void:
+func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	if dead or _state == "broken":
 		return
 	hp = maxf(0.0, hp - amount)
@@ -167,9 +175,20 @@ func take_damage(amount: float, from: Vector3) -> void:
 	if hp <= 0.0 or posture >= MAX_POSTURE:
 		_lethal = hp <= 0.0
 		_set_state("broken")
+		if knock:
+			velocity = away * KNOCK_FLY * 0.5 + Vector3(0.0, KNOCK_UP * 0.5, 0.0)
+	elif knock:
+		velocity = away * KNOCK_FLY + Vector3(0.0, KNOCK_UP, 0.0)   # финальный удар — отлетает и падает навзничь
+		_face(-away, 1.0)
+		_set_state("knockdown")
+	elif _state in ["knockdown", "down", "getup"]:
+		pass                                         # лежит или встаёт — только урон
 	else:
-		velocity = away * KNOCKBACK + Vector3(0.0, 2.0, 0.0)
+		velocity = away * KNOCKBACK + Vector3(0.0, 1.0, 0.0)
+		var chain := _state == "hurt"
+		var t := _stun_t if chain else 0.0
 		_set_state("hurt")
+		_stun_t = t
 	_update_bars()
 
 
@@ -294,7 +313,7 @@ func _set_state(s: String) -> void:
 	_struck = false
 	if _anim != null:
 		_anim.speed_scale = 1.0
-	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle", "evade"]:
+	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle", "evade", "knockdown", "down", "getup"]:
 		if s != "recover":
 			_release_token()
 	_mark.visible = s == "broken"
@@ -315,8 +334,20 @@ func _set_state(s: String) -> void:
 			_play("hit", true)
 		"deflected":
 			_play("deflected", true)
+		"knockdown":
+			_play("knockdown", true)
+		"getup":
+			_play("getup", true, 0.35)
+			if _anim != null and _clip("getup") == "getup":
+				_anim.seek(GETUP_SKIP, true)
 		"broken", "dead":
 			_play("hit", true)
+
+
+## Сменить состояние, не трогая клип (лежит — поза падения остаётся).
+func _set_state_keep(s: String) -> void:
+	_state = s
+	_state_t = 0.0
 
 
 func _clip(name_: String) -> String:
@@ -327,12 +358,12 @@ func _clip(name_: String) -> String:
 	return str(FALLBACK.get(name_, "idle"))
 
 
-func _play(clip: String, restart := false) -> void:
+func _play(clip: String, restart := false, blend := 0.2) -> void:
 	var c := _clip(clip)
 	if c == "" or not _anim.has_animation(c):
 		return
 	if restart or _anim.current_animation != c:
-		_anim.play(c, 0.2)
+		_anim.play(c, blend)
 
 
 func _physics_process(delta: float) -> void:
@@ -340,8 +371,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
-	else:
-		velocity.y = 0.0
+	elif velocity.y < 0.0:
+		velocity.y = 0.0                                 # на земле; подброс ударом (y > 0) не гасим
 	if position.y < -20.0:
 		_respawn()
 	_state_t += delta
@@ -355,6 +386,8 @@ func _physics_process(delta: float) -> void:
 	var dir := to / maxf(dist, 0.001)
 	var side := Vector3(-dir.z, 0.0, dir.x)          # вправо от гоблина, если он смотрит на героя
 	var flat := Vector3.ZERO
+	var swinging := _hero_attacking.is_valid() and bool(_hero_attacking.call())
+	var new_swing := swinging and not _swing_seen
 	match _state:
 		"idle":
 			if not dead and dist < DETECT:
@@ -376,8 +409,8 @@ func _physics_process(delta: float) -> void:
 				_set_state("idle")
 			elif dist > CIRCLE_DIST + 3.0:
 				_set_state("approach")
-			elif hero_swing and dist < 3.4:
-				_set_state("evade")                      # герой замахнулся рядом — уйти вбок-назад
+			elif hero_swing and dist < 3.4 and not _swing_seen and randf() < 0.45:
+				_set_state("evade")                      # герой замахнулся рядом — иногда успевает уйти вбок-назад
 			else:
 				_switch_t -= delta
 				if _switch_t <= 0.0:
@@ -408,7 +441,8 @@ func _physics_process(delta: float) -> void:
 			_face(dir, delta)
 			flat = dir * STALK_SPEED
 			_play("walk")
-			if _hero_attacking.is_valid() and bool(_hero_attacking.call()) and dist < 3.0:
+			if _hero_attacking.is_valid() and bool(_hero_attacking.call()) and dist < 3.0 and not _swing_seen \
+					and randf() < 0.45:
 				_set_state("evade")
 			elif dist <= STRIKE_DIST + (0.4 if _feint else 0.0):
 				if _feint:
@@ -451,8 +485,27 @@ func _physics_process(delta: float) -> void:
 					_set_state("circle")
 		"hurt":
 			_damp(delta)
-			if _state_t >= HURT_TIME:
-				_set_state("evade")                      # получил — отступить, а не лезть снова
+			_face(dir, delta)
+			_stun_t += delta
+			# пока герой бьёт комбо — стоит под ударами (не дольше STUN_MAX), потом отступает
+			if _state_t >= HURT_TIME and (not swinging or _stun_t >= STUN_MAX):
+				_set_state("evade")
+		"knockdown":
+			if is_on_floor() and _state_t > 0.25:
+				_damp(delta * 2.0)
+			if _state_t >= maxf(_clip_len("knockdown") * 0.9, 0.8) and is_on_floor():
+				if _anim != null:
+					_anim.pause()                        # лежит на спине
+				_set_state_keep("down")
+		"down":
+			_damp(delta * 2.0)
+			if _state_t >= DOWN_TIME:
+				_set_state("getup")
+		"getup":
+			_damp(delta * 2.0)
+			_face(dir, delta * 0.5)
+			if _state_t >= (_clip_len("getup") - GETUP_SKIP) * 0.92:
+				_set_state("evade")                      # встал — отходит и снова кружит
 		"deflected":
 			_damp(delta)
 			if _state_t >= DEFLECTED_TIME:
@@ -471,6 +524,10 @@ func _physics_process(delta: float) -> void:
 		"dead":
 			velocity.x = 0.0
 			velocity.z = 0.0
+	if new_swing:
+		_swing_seen = true
+	elif not swinging:
+		_swing_seen = false
 	if _state in ["approach", "circle", "stalk", "evade", "windup", "attack", "recover", "idle"]:
 		velocity.x = lerpf(velocity.x, flat.x, minf(1.0, delta * 10.0))
 		velocity.z = lerpf(velocity.z, flat.z, minf(1.0, delta * 10.0))
