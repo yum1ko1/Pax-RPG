@@ -1,7 +1,8 @@
 ﻿# Мост к Cascadeur: выполнить Python внутри открытого Cascadeur через его встроенный сервер скриптов
 # (http://127.0.0.1:8765, Cascadeur 2026.2+). Как blender_live.ps1, только для Cascadeur.
 #
-# Один раз за сессию Cascadeur: меню Commands → «MCP.Start script server» (или install_autostart.ps1 от админа).
+# Один раз: install.ps1 (без прав администратора) — сервер (порт 8766) стартует сам при запуске Cascadeur.
+# Порт 8765 встроенной команды «MCP.Start script server» на этом ПК занят мостом Pax.
 #
 #   .\cascadeur_live.ps1 -Health                  — сервер жив?
 #   .\cascadeur_live.ps1 -Launch                  — запустить Cascadeur
@@ -12,7 +13,7 @@
 # Ответ — JSON: ok, value, messages (журнал), error (traceback). Изменения сцены (scene.modify…) возвращают
 # False при ошибке, хотя ok: true — проверять возврат; журнал: %LOCALAPPDATA%\Nekki Limited\Cascadeur\logs.
 param([string]$Code = '', [string]$B64 = '', [string]$File = '', [switch]$Health, [switch]$Launch,
-      [int]$TimeoutSec = 120, [int]$Port = 8765)
+      [int]$TimeoutSec = 120, [int]$Port = 8766)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $base = "http://127.0.0.1:$Port"
@@ -20,7 +21,7 @@ $base = "http://127.0.0.1:$Port"
 if ($Launch) {
     $exe = 'C:\Program Files\Cascadeur\cascadeur.exe'
     if (Get-Process cascadeur -ErrorAction SilentlyContinue) { Write-Output 'Cascadeur уже запущен' }
-    else { Start-Process $exe; Write-Output 'Cascadeur запускается. Включи сервер: Commands → MCP.Start script server' }
+    else { Start-Process $exe; Write-Output 'Cascadeur запускается (сервер скриптов стартует сам, если стоит install.ps1)' }
     exit 0
 }
 try {
@@ -40,6 +41,6 @@ try {
 } catch {
     $running = [bool](Get-Process cascadeur -ErrorAction SilentlyContinue)
     Write-Output ('{"ok": false, "error": ' + (($_.Exception.Message) | ConvertTo-Json) + ', "cascadeur_running": ' +
-        $running.ToString().ToLower() + ', "hint": "Cascadeur открыт? Commands → MCP.Start script server"}')
+        $running.ToString().ToLower() + ', "hint": "Cascadeur открыт? Сервер: install.ps1 или Commands → Pax.Start script server (8766)"}')
     exit 1
 }
