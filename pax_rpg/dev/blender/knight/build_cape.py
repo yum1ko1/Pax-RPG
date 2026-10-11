@@ -139,6 +139,15 @@ bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True,
                           export_skins=False, export_yup=True, export_texcoords=False, export_tangents=False,
                           export_vertex_color="ACTIVE")
 log.append(f"cape_black.glb: {len(verts)} verts, {len(faces)} quads, {os.path.getsize(OUT)} bytes")
+# сетка для игры: в игре плащ строится по ней сам (своя ткань: грубая решётка точек, сетка — гладко по ней)
+# точки — в осях glTF модели (x, z, -y Блендера), по рядам сверху вниз, в ряду — слева направо по X
+grid_out = {"nx": NX, "nz": NZ, "color": list(COLOR),
+            "points": [[round(verts[grid[i, j]][0], 4), round(verts[grid[i, j]][2], 4), round(-verts[grid[i, j]][1], 4)]
+                       for j in range(NZ) for i in range(NX)],
+            "shade": [round(ca.data[grid[i, j]].color[0], 3) for j in range(NZ) for i in range(NX)]}
+import json  # noqa: E402
+json.dump(grid_out, open(OUT.replace(".glb", ".json"), "w", encoding="utf-8"))
+log.append("cape_black.json written")
 
 # кадры: плащ на рыцаре сзади и сбоку
 for n in ("Sword_Hand", "Sword_Drag"):

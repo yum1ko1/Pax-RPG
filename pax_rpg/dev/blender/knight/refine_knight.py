@@ -584,7 +584,8 @@ if img is not None:
     for a_, b_ in ev:
         nb[a_].append(b_)
         nb[b_].append(a_)
-    ok = (co[:, 2] < 1.55) & (co[:, 1] > chest_y - 0.12)
+    # спина ниже плеч и весь ворот капюшона вокруг шеи (он тоже ткань плаща, спереди тоже)
+    ok = (co[:, 2] < 1.85) & ((co[:, 1] > chest_y - 0.12) | (co[:, 2] > 1.35))
     region = np.zeros(len(co), dtype=bool)
     stack = [int(v) for v in np.flatnonzero(strict & ok)]
     region[stack] = True
@@ -621,7 +622,8 @@ CAPE_TARGET, PIN_BAND = 900, 0.08
 if len(cape_ids) > 200:
     face_in = np.zeros(len(me.polygons), dtype=bool)
     for poly in me.polygons:
-        face_in[poly.index] = float(np.mean(infl[list(poly.vertices)])) > 0.35
+        vs = list(poly.vertices)
+        face_in[poly.index] = float(np.mean(infl[vs])) > 0.35 or float(np.mean(region[vs])) > 0.5
     old_cape = bpy.data.objects.get("Knight_cape")
     if old_cape is not None:
         bpy.data.objects.remove(old_cape, do_unlink=True)
