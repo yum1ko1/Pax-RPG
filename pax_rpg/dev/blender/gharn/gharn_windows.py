@@ -140,20 +140,20 @@ def analyse(pid):
     if not pts:
         return []
     # окна по этажам: ровно на 1.3×1.7 м вокруг, не ниже 2.4 м от земли (двери, крыльцо), шаг ≥ 2.8 м
-    floors = [lo.z + 2.6 + k * 3.3 for k in range(6) if lo.z + 2.6 + k * 3.3 + 1.4 < lo.z + height * 0.72]
+    floors = [lo.z + 2.2 + k * 3.0 for k in range(6) if lo.z + 2.2 + k * 3.0 + 1.4 < lo.z + height * 0.72]
     wins, taken = [], []
     for p, n, lum in sorted(pts, key=lambda q: math.atan2(q[0].y - c.y, q[0].x - c.x)):
         fz = min(floors, key=lambda f: abs(p.z - (f + 0.65))) if floors else None
         if fz is None or abs(p.z - (fz + 0.65)) > STEP_Z * 0.6:
             continue
-        if any((p - q).length < 2.8 for q in taken):
+        if any((p - q).length < 2.4 for q in taken):
             continue
         t = Vector((-n.y, n.x, 0)).normalized()
         ok = True
-        for off in (t * 0.65, -t * 0.65, Vector((0, 0, 0.8)), Vector((0, 0, -0.8)), t * 0.65 + Vector((0, 0, 0.8)),
-                    -t * 0.65 - Vector((0, 0, 0.8))):
+        for off in (t * 0.55, -t * 0.55, Vector((0, 0, 0.7)), Vector((0, 0, -0.6)), t * 0.55 + Vector((0, 0, 0.7)),
+                    -t * 0.55 - Vector((0, 0, 0.6))):
             h2 = bvh.ray_cast(p + off + n * 1.2, -n)
-            if h2[0] is None or abs((h2[0] - (p + off)).dot(n)) > 0.08 or h2[1].dot(n) < 0.9:
+            if h2[0] is None or abs((h2[0] - (p + off)).dot(n)) > 0.16 or h2[1].dot(n) < 0.7:
                 ok = False
                 break
         if not ok:
