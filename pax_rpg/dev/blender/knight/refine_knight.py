@@ -512,7 +512,7 @@ down_edge = -w_axis if w_axis.dot(UP) > 0 else w_axis
 LW_BLK = O_BLK + D_BLK * 0.6 + down_edge * 0.19 - fw * 0.02
 ik_left(LW_BLK, (-side * 0.4 - UP * 0.8).normalized())
 la = rot_w(LHA)
-palm_up = Quaternion((la @ Vector((0, 0, 1))).normalized(), UP)   # грубо: ладонь кверху, под клинок
+palm_up = (la @ Vector((0, 0, 1))).normalized().rotation_difference(UP)   # грубо: ладонь кверху, под клинок
 set_rot_w(LHA, (palm_up.to_matrix() @ la).normalized())
 P_BLOCK = current()
 log.append(f"block: grip miss {round((head(HA) - Wt).length * 100, 1)} cm")
