@@ -20,6 +20,7 @@ FPS = 30
 # клип рыцаря: (файл fbx, зеркально, на месте)
 CLIPS = {
     "Walk": ("Swagger_Walk.fbx", False, True),
+    "Run": ("Fast_Run.fbx", False, True),
     "WalkArmed": ("Great_Sword_Walk.fbx", False, True),
     "GuardBack": ("Great_Sword_Walk_1.fbx", False, True),
     "GuardStrafeR": ("Great_Sword_Strafe.fbx", False, True),
@@ -93,6 +94,7 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
         rig.animation_data.action_slot = act.slots[0]
     n_out = int((f1 - f0) / 2) + 1
     first_h = None
+    last_h = None
     for k in range(n_out):
         fs = f0 + k * 2
         sc.frame_set(fs)
@@ -124,6 +126,7 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
                     dpos.x = -dpos.x
                 if first_h is None:
                     first_h = dpos.copy()
+                last_h = dpos.copy()
                 if inplace:
                     dpos.x, dpos.y = 0.0, 0.0              # уход вперёд/вбок — игра двигает сама
                 M.translation = hips_rest_t + dpos
@@ -138,7 +141,8 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
                 p.keyframe_insert("location", frame=k)
     act.use_fake_user = True
     made[clip] = (act, n_out)
-    print(f"{clip}: {fname} {f0}-{f1} → {n_out} frames", flush=True)
+    trav = (last_h - first_h).xy.length if first_h is not None else 0.0
+    print(f"{clip}: {fname} {f0}-{f1} → {n_out} frames, путь за цикл {trav:.2f} м ({trav / max((n_out - 1) / FPS, 1e-3):.2f} м/с)", flush=True)
     for o in new:
         bpy.data.objects.remove(o, do_unlink=True)
     bpy.data.actions.remove(sact)
