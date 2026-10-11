@@ -1,7 +1,8 @@
 """Сборка Чёрного рыцаря из выгрузок Meshy в один glb для мода.
 
 Через мост: exec(open(<файл>).read(), {"result": {}}). Берёт из <W>/meshy:
-    knight_rig/rigged_character_glb_url.glb             — модель со скелетом Meshy
+    knight2_rig/rigged_character_glb_url.glb            — модель со скелетом Meshy (рыцарь 2 — без плаща и капюшона;
+                                                          RIG = "knight_rig" — прежний, с плащом)
     knight_rig/basic_animations.{walking,running}_glb_url.glb — ходьба, бег
     anim_{Draw,Sheathe,Attack1,Attack2,Attack3}/animation_glb_url.glb — Text to Motion на этом скелете
     anim_Library/animation_glb_url.glb                  — Idle, Regular Jump, Walk Fight Forward (библиотека)
@@ -70,7 +71,8 @@ def drop_scene(s):
 # ---------- рыцарь ----------
 for a in [a for a in bpy.data.actions if a.name.startswith("K_")]:
     bpy.data.actions.remove(a)
-objs, acts = import_glb(os.path.join(W, "knight_rig", "rigged_character_glb_url.glb"), "Knight")
+RIG, LIB = "knight2_rig", "anim2_"    # рыцарь 2: свой риг и свои клипы библиотеки (удары и Draw — с прежнего рига)
+objs, acts = import_glb(os.path.join(W, RIG, "rigged_character_glb_url.glb"), "Knight")
 scn = win.scene
 for a in acts:
     bpy.data.actions.remove(a)
@@ -103,19 +105,19 @@ log.append(f"hips={HIPS} rhand={RHAND} lhand={LHAND} chest={CHEST}")
 
 # ---------- клипы ----------
 SOURCES = [
-    ("Walk", "knight_rig/basic_animations.walking_glb_url.glb", None),
-    ("Run", "knight_rig/basic_animations.running_glb_url.glb", None),
+    ("Walk", RIG + "/basic_animations.walking_glb_url.glb", None),
+    ("Run", RIG + "/basic_animations.running_glb_url.glb", None),
     ("Draw", "anim_Draw/animation_glb_url.glb", None),
     ("Sheathe", "anim_Sheathe/animation_glb_url.glb", None),
     ("Attack1", "anim_Attack1/animation_glb_url.glb", None),
     ("Attack2", "anim_Attack2/animation_glb_url.glb", None),
     ("Attack3", "anim_Attack3/animation_glb_url.glb", None),
-    ("Idle", "anim_Library/animation_glb_url.glb", "idle"),
-    ("Jump", "anim_Library/animation_glb_url.glb", "jump"),
-    ("WalkArmed", "anim_Library/animation_glb_url.glb", "walk"),
-    ("Dodge", "anim_Dodge/animation_glb_url.glb", "roll_dodge"),          # библиотека Meshy 158 (риг 2)
-    ("DodgeArmed", "anim_Dodge/animation_glb_url.glb", "roll_dodge_2"),   # 160; руки с мечом — refine_knight.py
-    ("Hurt", "anim_Hurt/animation_glb_url.glb", None),                    # 171 Hit Reaction to Waist — получил удар
+    ("Idle", LIB + "Library/animation_glb_url.glb", "idle"),
+    ("Jump", LIB + "Library/animation_glb_url.glb", "jump"),
+    ("WalkArmed", LIB + "Library/animation_glb_url.glb", "walk"),
+    ("Dodge", LIB + "Dodge/animation_glb_url.glb", "roll_dodge"),          # библиотека Meshy 158 (риг 2)
+    ("DodgeArmed", LIB + "Dodge/animation_glb_url.glb", "roll_dodge_2"),   # 160; руки с мечом — refine_knight.py
+    ("Hurt", LIB + "Hurt/animation_glb_url.glb", None),                    # 171 Hit Reaction to Waist — получил удар
 ]
 clips = {}
 cache = {}
