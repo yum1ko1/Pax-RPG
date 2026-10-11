@@ -42,15 +42,30 @@ def load(pid):
 
 
 def base_image(ob):
+    """Картинка цвета: вверх по связям от входа Base Color любого BSDF (между ними бывают узлы-смесители)."""
+    def up(node, seen):
+        if node in seen:
+            return None
+        seen.add(node)
+        if node.type == "TEX_IMAGE" and node.image:
+            return node.image
+        for inp in node.inputs:
+            for link in inp.links:
+                r = up(link.from_node, seen)
+                if r:
+                    return r
+        return None
     for slot in ob.material_slots:
-        nt = slot.material.node_tree if slot.material and slot.material.use_nodes else None
-        if not nt:
+        m = slot.material
+        if not m or not m.node_tree:
             continue
-        b = nt.nodes.get("Principled BSDF")
-        if b and b.inputs["Base Color"].is_linked:
-            n = b.inputs["Base Color"].links[0].from_node
-            if n.type == "TEX_IMAGE" and n.image:
-                return n.image
+        for n in m.node_tree.nodes:
+            if n.type == "BSDF_PRINCIPLED" and n.inputs["Base Color"].is_linked:
+                r = up(n.inputs["Base Color"].links[0].from_node, set())
+                if r:
+                    return r
+    print("no base color image:", ob.name, [n.type for s in ob.material_slots if s.material and s.material.node_tree
+                                            for n in s.material.node_tree.nodes], flush=True)
     return None
 
 
@@ -152,7 +167,7 @@ def analyse(pid):
         nx, nz = n.x, -n.y
         wins.append([round(cen.x, 3), round(cen.z, 3), round(-cen.y, 3), round(math.degrees(math.atan2(nx, nz)), 1),
                      round(min(w, 2.2), 2), round(min(h, 2.4), 2)])
-    print(f"{pid}: точек стены {len(pts)}, тёмных {len(dark)}, окон {len(wins)}", flush=True)
+    print(f"{pid}: wall {len(pts)}, dark {len(dark)}, windows {len(wins)}", flush=True)
     preview(pid, ob, wins)
     return wins
 

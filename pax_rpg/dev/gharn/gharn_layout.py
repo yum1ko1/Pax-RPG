@@ -21,8 +21,19 @@ TRUNK = {"flame_tree": [0.9, 3.0, 0.9],
          "gate_fang": [[8.0, 14.0, 7.1, -6.3, 7.0, 0.0], [8.2, 14.0, 7.1, 6.2, 7.0, 0.0]]}          # у деревьев — только ствол: крона не мешает ходить
 
 
+WIN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "windows.json")
+WINDOWS = json.load(open(WIN_FILE, encoding="utf-8")) if os.path.exists(WIN_FILE) else {}   # gharn_windows.py
+YURTS = []                                      # (x, z, радиус) — дворы, костры, дрова
+
+
 def add(m, x, z, r=0.0, s=1.0, c=None, y=0.0, rad=0.0):
     name = m.lstrip("@")
+    for wx, wy, wz, wyaw, ww, wh in WINDOWS.get(name, []):     # стёкла в нарисованные окна (в осях здания)
+        a = math.radians(r)
+        lx, lz = wx * s, wz * s
+        items.append({"m": P + "window_glass.glb", "p": [round(x + lx * math.cos(a) + lz * math.sin(a), 3),
+                      round(y + (wy - wh / 2) * s, 3), round(z - lx * math.sin(a) + lz * math.cos(a), 3)],
+                      "r": round(r + wyaw, 1), "s": 1.0, "sv": [round(ww * s, 2), round(wh * s / 1.3, 2), 1.0], "c": False})
     it = {"m": (P if not m.startswith("@") else B) + name + ".glb", "p": [round(x, 2), round(y, 2), round(z, 2)],
           "r": round(r, 1), "s": s, "c": (name not in NO_COLLIDE) if c is None else c}
     if name in TRUNK:
@@ -197,6 +208,7 @@ def quarter(x0, x1, z0, z1, n):
         if not free(x, z, rad):
             continue
         add("yurt_large" if big else "yurt_small", x, z, random.uniform(0, 360), c=True, rad=rad)
+        YURTS.append((x, z, rad))
         placed += 1
         for _ in range(random.randint(1, 3)):         # быт у юрты
             a = random.uniform(0, 2 * math.pi)
@@ -209,6 +221,75 @@ def quarter(x0, x1, z0, z1, n):
 quarter(-86, -20, 34, 80, 22)
 quarter(20, 86, 40, 80, 20)
 quarter(-86, -24, 14, 30, 5)
+
+# --- деталь столицы: дворы у юрт, быт, телеги, навесы у лавок, фонари Аллеи, зелень
+def on_road(x, z, m=1.5):
+    for sh in ROADS:
+        if sh[0] == "rect" and sh[1] - m < x < sh[2] + m and sh[3] - m < z < sh[4] + m:
+            return True
+        if sh[0] == "disc" and (x - sh[1]) ** 2 + (z - sh[2]) ** 2 < (sh[3] + m) ** 2:
+            return True
+    return False
+
+
+for i, (x, z, rad) in enumerate(YURTS):
+    a0 = random.uniform(0, 2 * math.pi)
+    if i % 3 == 0:                                   # двор: дуга плетня
+        for k in range(4):
+            a = a0 + k * 0.62
+            fx, fz = x + math.cos(a) * (rad + 3.2), z + math.sin(a) * (rad + 3.2)
+            if not on_road(fx, fz, 1.0):
+                add("fence_wood", fx, fz, math.degrees(-a) + 90, c=True)
+    a = a0 + math.pi
+    fx, fz = x + math.cos(a) * (rad + 2.4), z + math.sin(a) * (rad + 2.4)
+    if i % 2 == 0 and free(fx, fz, 1.0) and not on_road(fx, fz):
+        add("firepit", fx, fz, random.uniform(0, 360), c=False, rad=1.0)
+    a = a0 + math.pi / 2
+    fx, fz = x + math.cos(a) * (rad + 1.4), z + math.sin(a) * (rad + 1.4)
+    if i % 3 != 2 and free(fx, fz, 0.9) and not on_road(fx, fz):
+        add(random.choice(["wood_pile", "hay_bale", "hay_bale"]), fx, fz, math.degrees(-a), c=True, rad=0.9)
+
+for x, z, r in ((-8.5, 66, 0), (8.5, 44, 180), (-9, 22, 20), (9, 84, 160), (-58, 34, 90), (-40, 14, 0), (46, 30, 200),
+                (-30, -40, 90)):
+    add("cart", x, z, r, c=True, rad=2.0)
+for i, z in enumerate(range(30, 76, 11)):            # навесы перед лавками Тракта
+    if i % 2 == 0:
+        add("awning", -8.6, z, 90, c=False)
+    else:
+        add("awning", 8.6, z, -90, c=False)
+for x in range(-70, 74, 18):                         # каменные фонари вдоль Аллеи — свет вечером
+    if abs(x) > 24 and not 28 < x < 40:
+        add("stone_lantern", x + 9, -10.5, 0)
+        add("stone_lantern", x + 9, 10.5, 180)
+for x, z in ((60, 14), (62, 30), (44, -16), (-46, 30), (-26, 18)):
+    add("hay_bale", x, z, random.uniform(0, 360), c=True)
+for i in range(4):
+    add("crate", 64 + i * 0.85, -14, random.uniform(-8, 8))
+    add("barrel_water", 46 + i * 0.9, 33, 0)
+
+grass, rocks, bushes = 0, 0, 0
+tries = 0
+while (grass < 1800 or rocks < 140 or bushes < 90) and tries < 60000:
+    tries += 1
+    x, z = random.uniform(-91, 91), random.uniform(-94, 82)
+    if on_road(x, z, 0.6) or not free(x, z, 0.4) or (-70 < x < 70 and -96 < z < -40 and abs(x) < 28):
+        continue
+    edge = abs(x) > 80 or z > 74 or z < -84            # у частокола — гуще
+    k = random.random()
+    if grass < 1800 and k < (0.9 if edge else 0.8):
+        add("grass_tuft", x, z, random.uniform(0, 360), s=round(random.uniform(0.7, 1.4), 2), c=False)
+        grass += 1
+        if random.random() < 0.6:                    # пучки кучками
+            for _ in range(random.randint(1, 4)):
+                gx, gz = x + random.uniform(-0.8, 0.8), z + random.uniform(-0.8, 0.8)
+                add("grass_tuft", gx, gz, random.uniform(0, 360), s=round(random.uniform(0.6, 1.2), 2), c=False)
+                grass += 1
+    elif rocks < 140 and k < 0.92:
+        add("rock_small", x, z, random.uniform(0, 360), s=round(random.uniform(0.6, 1.6), 2), c=False)
+        rocks += 1
+    elif bushes < 90:
+        add("bush_dry", x, z, random.uniform(0, 360), s=round(random.uniform(0.8, 1.5), 2), c=False)
+        bushes += 1
 
 # маршруты мирных жителей (ломаные по улицам), сколько их
 paths = [

@@ -147,6 +147,13 @@ func build(city: Dictionary) -> void:
 		_spawn_npcs(layout)
 		_shots = layout.get("shots", [])
 		_make_portal()
+		var probe := ReflectionProbe.new()             # отражения неба и улиц в стёклах (снимок — один раз)
+		probe.size = Vector3(200.0, 50.0, 200.0)
+		probe.position = Vector3(0.0, 12.0, 0.0)
+		probe.update_mode = ReflectionProbe.UPDATE_ONCE
+		probe.box_projection = false
+		probe.intensity = 1.0
+		_view.add_child(probe)
 	_make_player()
 	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
@@ -243,6 +250,8 @@ func _make_sky() -> void:
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
 	env.fog_density = 0.0035
 	env.fog_sky_affect = 0.3
+	env.ssr_enabled = true                           # стёкла окон и лужи отражают город
+	env.ssr_max_steps = 48
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
 	var we := WorldEnvironment.new()

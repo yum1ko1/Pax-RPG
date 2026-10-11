@@ -37,7 +37,10 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var k := str(d.get("m", ""))
 		if not groups.has(k):
 			groups[k] = []
-		var basis := Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))).scaled(Vector3.ONE * float(d.get("s", 1.0)))
+		var basis := Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))) * Basis.from_scale(Vector3.ONE * float(d.get("s", 1.0)))
+		if d.has("sv"):                                   # своя форма (стекло окна — по размеру окна)
+			var sv: Array = d.sv
+			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
 		_place(k, groups[k])
@@ -142,12 +145,28 @@ func _prep_image(i: int) -> void:
 	img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL if bool(_imgs[i][1]) else Image.COMPRESS_SOURCE_GENERIC)
 
 
+## Стекло окон: тёмное, почти зеркальное (небо, солнце и фонари в нём — через отражения окружения и SSR),
+## изнутри — слабый тёплый свет очага.
+func _glass(m: BaseMaterial3D) -> void:
+	m.albedo_color = Color(0.1, 0.13, 0.18)
+	m.metallic = 0.9
+	m.metallic_specular = 0.9
+	m.roughness = 0.05
+	m.emission_enabled = true
+	m.emission = Color(1.0, 0.62, 0.3)
+	m.emission_energy_multiplier = 0.35
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+
 ## Тёплый свет у фонарей (без теней — их десятки).
 func _lights(path: String, list: Array) -> void:
 	var off := Vector3.ZERO
 	var col := Color(1.0, 0.62, 0.35)
 	if path.ends_with("lantern_post.glb"):
 		off = Vector3(0.82, 2.35, 0)
+	elif path.ends_with("firepit.glb"):
+		off = Vector3(0, 0.6, 0)
+		col = Color(1.0, 0.5, 0.2)
 	elif path.ends_with("stone_lantern.glb"):
 		off = Vector3(0, 1.35, 0)
 	elif path.ends_with("mana_crystal.glb"):
@@ -185,7 +204,9 @@ func _place(path: String, list: Array) -> void:
 		var mesh: Mesh = pr[0]
 		for si: int in mesh.get_surface_count():
 			var sm := mesh.surface_get_material(si)
-			if sm is BaseMaterial3D and not _mats.has(sm):
+			if sm is BaseMaterial3D and sm.resource_name.begins_with("glass"):
+				_glass(sm)
+			elif sm is BaseMaterial3D and not _mats.has(sm):
 				_mats.append(sm)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
