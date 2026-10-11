@@ -18,6 +18,9 @@ STYLE = ("East Asian fantasy orc horde capital architecture, heavy rough orc-bui
          "rubble-stone plinths, curved upturned East Asian roofs with dark tiles, red lacquered pillars with peeling "
          "paint, black iron bands and rivets, bone and tusk ornaments, red cloth banners with a single curved black "
          "fang emblem (original, not any existing logo). Stylized realism game asset. ")
+# не здания (деревья, фонтаны, статуи): без архитектурного блока — иначе генератор пририсует дом
+STYLE_PROP = ("East Asian fantasy, orc horde capital city prop, stylized realism game asset, weathered and heavy. ")
+PROPS = {"flame_tree", "fountain_dragon"}
 ISO = (" Single isolated object, full object visible, three-quarter view from slightly above, plain white background, "
        "soft even studio light, no people, no surrounding buildings, no ground clutter, no text.")
 ASSETS = {
@@ -29,7 +32,7 @@ ASSETS = {
     "tavern_hall": ("Huge round timber tavern shaped like a giant yurt grown into a stone base, two-tier conical wooden "
                     "roof with a smoke lantern on top, red lacquered door frame with a beast skull above it, wide stone "
                     "stairs, an open terrace with a canopy and long wooden tables, stacked barrels by the wall.", 35000),
-    "fountain_dragon": ("Octagonal rough stone fountain basin with copper plaques, in the center a stone pedestal holding "
+    "fountain_dragon": ("Only a fountain, no buildings, no walls, no roofs behind it: an octagonal rough stone fountain basin with copper plaques, in the center a stone pedestal holding "
                         "a looted gilded golden dragon head from an enemy temple, mouth open, elegant scales, contrasting "
                         "the crude stonework; the basin holds pink glowing water.", 25000),
     "gate_fang": ("City gate: two square timber watch towers on stone bases with curved roofs, joined by a gatehouse "
@@ -38,7 +41,7 @@ ASSETS = {
     "khan_palace": ("Palace of the Great Khan: an enormous ceremonial yurt with three tiered roofs of white felt, red "
                     "lacquer and gold plates, a nine-tail horsetail standard on top, on a low stone platform with "
                     "wide stairs, red pillared porch.", 40000),
-    "flame_tree": ("Flame tree (royal poinciana): an umbrella-shaped tree with a broad flat crown of scarlet red blossoms "
+    "flame_tree": ("Only a single tree, no buildings, no walls: a flame tree (royal poinciana): an umbrella-shaped tree with a broad flat crown of scarlet red blossoms "
                    "and fine green leaves, a twisted dark trunk, standing in a small square stone planter.", 12000),
     "house_shop_a": ("Two-storey orc shop house: rough stone ground floor with an open wooden shopfront and awning, upper "
                      "floor of dark timber with a red balcony, curved tiled roof, hanging paper lanterns, barrels and "
@@ -83,7 +86,7 @@ def main():
             d = os.path.join(OUT, k)
             os.makedirs(d, exist_ok=True)
             if s["stage"] == "new":
-                tid = try_post("text-to-image", {"ai_model": "nano-banana-pro", "prompt": STYLE + desc + ISO,
+                tid = try_post("text-to-image", {"ai_model": "nano-banana-pro", "prompt": (STYLE_PROP if k in PROPS else STYLE) + desc + ISO,
                                                  "aspect_ratio": "1:1"})
                 if tid:
                     s.update(stage="image", image_task=tid)
