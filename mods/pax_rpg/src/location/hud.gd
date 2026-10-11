@@ -185,7 +185,8 @@ func _draw_compass() -> void:
 			draw_arc(Vector2(x, line_y), 6.0, 0.0, TAU, 20, col, 2.0, true)
 		else:
 			draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
-		_center(Vector2(x, line_y + 22), "%d м" % int(td.dist), sans, 13, col, 3)
+		var ly := line_y + (38.0 if bool(td.get("ring", false)) else 22.0)   # ворота — ниже, не налезают на врага
+		_center(Vector2(x, ly), "%d м" % int(td.dist), sans, 13, col, 3)
 	draw_rect(Rect2(cx - 1, 40, 2, 24), TEXT)
 
 
