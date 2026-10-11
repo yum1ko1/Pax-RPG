@@ -501,12 +501,19 @@ fw = facing()
 side = fw.cross(UP)
 c = head(CHEST)
 O_BLK = c + fw * 0.42 + UP * 0.30 + side * 0.22
-D_BLK = (-side + UP * 0.12).normalized()
+D_BLK = (-side - UP * 0.28 + fw * 0.12).normalized()   # тяжёлый: остриё ниже рукояти, чуть вперёд
 R_BLK = frame3(D_BLK, fw)
 Rh, Wt = hand_for(R_BLK, O_BLK)
 ik_arm(Wt, (side * 0.6 - UP * 0.6).normalized())
 set_rot_w(HA, Rh)
-ik_left(O_BLK + D_BLK * 0.62 - UP * 0.05, (-side * 0.5 - UP * 0.7).normalized())
+# левая рука — под клинком: у нижней кромки на середине, ладонью снизу (локоть вниз-наружу)
+w_axis = R_BLK.col[0].normalized()
+down_edge = -w_axis if w_axis.dot(UP) > 0 else w_axis
+LW_BLK = O_BLK + D_BLK * 0.6 + down_edge * 0.19 - fw * 0.02
+ik_left(LW_BLK, (-side * 0.4 - UP * 0.8).normalized())
+la = rot_w(LHA)
+palm_up = Quaternion((la @ Vector((0, 0, 1))).normalized(), UP)   # грубо: ладонь кверху, под клинок
+set_rot_w(LHA, (palm_up.to_matrix() @ la).normalized())
 P_BLOCK = current()
 log.append(f"block: grip miss {round((head(HA) - Wt).length * 100, 1)} cm")
 act = new_action("Block")
