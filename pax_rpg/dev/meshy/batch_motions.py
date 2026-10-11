@@ -52,6 +52,10 @@ JOBS = {
                  "him the whole time. Seamless loop.", 2.0),
     "gob_Deflected": (RIG_GOBLIN, GOBLIN + " swings his blade, it is violently knocked away by a parry: his arm is "
                       "thrown back, he staggers two steps backward off balance and recovers into a crouch.", 2.0),
+    "gob_Knockdown": (RIG_GOBLIN, GOBLIN + " is hit in the chest by a huge heavy blow: he is thrown backward off his feet, "
+                      "flies back, falls hard flat on his back and lies on the ground stunned.", 2.0),
+    "gob_GetUp": (RIG_GOBLIN, GOBLIN + " lies flat on his back on the ground, then quickly rolls over, pushes up with his "
+                  "free hand and gets back on his feet into a low crouched fighting stance, blade ready.", 2.0),
 }
 
 
