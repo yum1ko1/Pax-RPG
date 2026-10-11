@@ -315,14 +315,6 @@ func _draw_stage() -> void:
 		var f := _frame()
 		var src := Rect2(float((f % cols) * int(cell[0])), float((f / cols) * int(cell[1])), float(cell[0]), float(cell[1]))
 		_stage.draw_texture_rect_region(_sheet, Rect2(wr.position + _shiver(), wr.size), src)
-	for s: Dictionary in _stuck:                            # искры удара — поверх
-		var age := _t - float(s.t)
-		if age > 0.16 and age < 0.5:
-			var target: Vector2 = _hit_pose(int(s.i))[0]
-			var a := 1.0 - (age - 0.16) / 0.34
-			for j: int in 9:
-				var d := Vector2.from_angle(j * 0.7 + float(s.i)) * h * 0.05 * (1.0 - a + 0.2)
-				_stage.draw_line(target + d * 0.5, target + d, Color(1.0, 0.55, 0.8, a), 2.0, true)
 	if _die > 0.62:                                         # пыль от удара о землю — мягкое облако
 		var b := (_die - 0.62) / 0.38
 		var ground := _bone("Spine01")
