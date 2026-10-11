@@ -12,6 +12,9 @@
   "Attack3": {
    "length": 3.467
   },
+  "Deathblow": {
+   "length": 2.967
+  },
   "Dodge": {
    "length": 1.8
   },
@@ -20,6 +23,15 @@
   },
   "Draw": {
    "length": 1.8
+  },
+  "GuardBack": {
+   "length": 2.467
+  },
+  "GuardStrafeL": {
+   "length": 2.467
+  },
+  "GuardStrafeR": {
+   "length": 2.467
   },
   "Hurt": {
    "length": 1.633
@@ -30,17 +42,29 @@
   "Jump": {
    "length": 1.833
   },
+  "Parry": {
+   "length": 1.333
+  },
   "Run": {
    "length": 0.633
   },
   "Sheathe": {
    "length": 1.9
   },
+  "StrafeL": {
+   "length": 1.967
+  },
+  "StrafeR": {
+   "length": 1.967
+  },
   "Walk": {
    "length": 1.033
   },
   "WalkArmed": {
    "length": 1.667
+  },
+  "WalkBack": {
+   "length": 0.867
   },
   "IdleArmed": {
    "length": 2.0
