@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/location.gd
-lines: 886
+lines: 1099
 weight: 2
 tags: [мод/rpg, функция/location]
 ---
 
 # location
 
-`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 886 строк · подключают: **2**
+`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1099 строк · подключают: **2**
 
 > Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет, мир игры его не видит): платформа, несколько блоков, ворота выхода и герой (config/hero.json: модель, скорости, комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
@@ -16,6 +16,10 @@ tags: [мод/rpg, функция/location]
 - [[hero]]
 - [[goblin]]
 - [[hud]]
+- [[city]]
+- [[npc]]
+- [[pause_menu]]
+- [[sfx]]
 
 ## Кто подключает
 - [[main]]
@@ -30,13 +34,19 @@ tags: [мод/rpg, функция/location]
 - `func clear() -> void`
 - `func _make_sky() -> void`
 - `func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D`
+- `func _spawn_npcs(layout: Dictionary) -> void` — Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
+- `func _city_layout(id: String) -> Dictionary` — Планировка города (config/<id>.json); нет файла — {} (локация-прототип).
 - `func _make_ground() -> void`
 - `func _make_gate() -> void`
+- `func _make_portal() -> void` — Выход из города: мерцающая завеса, тёплый свет, искры маны и надпись над ним (вход — E, см. подсказку HUD).
 - `func _make_player() -> void`
 - `func _hf(key: String, fallback: float) -> float`
+- `func _set_paused(on: bool) -> void` — Пауза (Esc): мир локации замирает, мышь свободна, поверх — меню.
+- `func paused() -> bool`
 - `func _typing() -> bool`
 - `func _physics_process(delta: float) -> void`
-- `func _follow_camera(delta := 0.0) -> void` — Камера: свободная — сзади и сверху; при захвате врага плавно подлетает к герою и встаёт за правым плечом, глядя на середину между героем и врагом — обоих видно, удобно читать замахи.
+- `func cine(n: int) -> String`
+- `func _follow_camera(delta := 0.0) -> void`
 - `func _strike(hit: Dictionary) -> void` — Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
 - `func _aim_yaw() -> float` — Куда целиться: в захваченного врага, иначе — туда, куда смотрит камера.
 - `func _magnet_pull(vel: Vector3, mag: Goblin, delta: float) -> Vector3` — Подтяг удара к врагу: до мига удара герой доходит (у финального — долетает) до дистанции reach, чтобы клинок попал по врагу, а не по воздуху; ближе reach шаг клипа не несёт — не влезает во врага.
