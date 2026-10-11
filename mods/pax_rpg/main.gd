@@ -107,6 +107,34 @@ func _perf_command(args: PackedStringArray) -> String:
 			cnt.mesh += 1
 		if cat == "landscape" and (hide or show) and n.name == "Landscape":
 			(n as Node3D).visible = show
+	if args.size() >= 1 and args[0] == "top":           # самые тяжёлые меши: треугольники × копии
+		var heavy := {}
+		stack = [location]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			var mesh: Mesh = null
+			var k := 1
+			if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh != null:
+				mesh = (n as MultiMeshInstance3D).multimesh.mesh
+				k = (n as MultiMeshInstance3D).multimesh.instance_count
+			elif n is MeshInstance3D:
+				mesh = (n as MeshInstance3D).mesh
+			if mesh == null:
+				continue
+			var tris := 0
+			for si: int in mesh.get_surface_count():
+				var arr := mesh.surface_get_arrays(si)
+				var idx: Variant = arr[Mesh.ARRAY_INDEX]
+				tris += (idx as PackedInt32Array).size() / 3 if idx != null else (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+			var key := "%s/%s" % [n.get_parent().name, n.name]
+			heavy[key] = int(heavy.get(key, 0)) + tris * k
+		var keys := heavy.keys()
+		keys.sort_custom(func(a: Variant, b: Variant) -> bool: return int(heavy[a]) > int(heavy[b]))
+		var out := []
+		for i: int in mini(15, keys.size()):
+			out.append("%s %dk" % [keys[i], int(heavy[keys[i]]) / 1000])
+		return " | ".join(out)
 	var rs := RenderingServer
 	return "fps %d · draw %d · obj %d · prim %dk · vram %d МБ · %s" % [Engine.get_frames_per_second(),
 		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
