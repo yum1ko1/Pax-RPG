@@ -159,7 +159,10 @@ if PREV:
     cam.data.type = "ORTHO"
     cam.data.ortho_scale = max(L, H) * 1.25
     for an, n in (("Idle", 120), ("Graze", 150)):
-        rig.animation_data.action = bpy.data.actions[an]
+        act = bpy.data.actions[an]
+        rig.animation_data.action = act
+        if hasattr(rig.animation_data, "action_slot") and len(getattr(act, "slots", [])):
+            rig.animation_data.action_slot = act.slots[0]       # Blender 5: без слота действие не играет
         for i in range(5):
             sc.frame_set(round(n * i / 4))
             for vi, (cx, cy, rz) in enumerate(((6.0, -1.5, 75), (1.5, -6.0, 15))):
