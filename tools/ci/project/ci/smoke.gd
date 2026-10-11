@@ -16,6 +16,7 @@ const SCRIPT := [
 	[530, "lmb"], [546, "lmb"],
 ]
 const END := 600
+const CITY_END := 1100              # потом — город Гхарн: прогулка по Тракту, скриншоты
 
 var frame := 0
 var mod: Node
@@ -67,8 +68,35 @@ func _tick() -> void:
 			if img != null:
 				img.save_png(out_dir.path_join("arena.png"))
 				print("smoke: скриншот ", out_dir.path_join("arena.png"))
+		loc.call("build", {"id": "gharn"})
+		print("smoke: город Гхарн построен")
+	if frame == END + 40:
+		_do([0, "key", KEY_W, true])
+		_do([0, "key", KEY_SHIFT, true])
+	if frame == END + 200:
+		_shot("city_trakt.png")
+	if frame == END + 420:
+		_shot("city_square.png")
+		_do([0, "key", KEY_SHIFT, false])
+	if frame == END + 430:
+		var loc2: Node = mod.get("location")
+		loc2.set("_yaw", 1.5)
+	if frame == END + 470:
+		_shot("city_alley.png")
+		_do([0, "key", KEY_W, false])
+	if frame == CITY_END:
+		var loc3: Node = mod.get("location")
+		print("smoke: город — герой в ", (loc3.get("_player") as Node3D).global_position)
 		print("smoke: ok")
 		quit(0)
+
+
+func _shot(name: String) -> void:
+	if out_dir != "" and DisplayServer.get_name() != "headless":
+		var img := root.get_texture().get_image()
+		if img != null:
+			img.save_png(out_dir.path_join(name))
+			print("smoke: скриншот ", name)
 
 
 func _do(step: Array) -> void:

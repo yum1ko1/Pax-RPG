@@ -9,10 +9,13 @@ signal exit_requested
 
 const GATE_RADIUS := 2.6           # м, насколько близко к воротам E работает
 const FALL_Y := -20.0              # упал с платформы — обратно на старт
-const START := Vector3(0.0, 1.2, 8.0)
+const ARENA_START := Vector3(0.0, 1.2, 8.0)
+var START := ARENA_START           # точка появления (у города — из его планировки)
+var _gate_radius := GATE_RADIUS
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -116,10 +119,25 @@ func build(city: Dictionary) -> void:
 	_box.add_child(_view)
 	_map_rects.clear()
 	_make_sky()
-	_make_ground()
-	_make_gate()
+	var layout := _city_layout(str(city.get("id", "")))
+	START = ARENA_START
+	_gate_radius = GATE_RADIUS
+	var goblins := int(cfg.get("goblins", 1))
+	if layout.is_empty():
+		_make_ground()
+		_make_gate()
+	else:                                            # настоящий город: планировка config/<id>.json
+		var c := City.new()
+		c.build(mod, _view, layout)
+		_map_rects.append_array(c.rects)
+		var st: Array = layout.get("start", [0, 1.2, 0])
+		START = Vector3(float(st[0]), float(st[1]), float(st[2]))
+		var ex: Array = layout.get("exit", [0, 0])
+		_gate_pos = Vector3(float(ex[0]), 0.0, float(ex[1]))
+		_gate_radius = float(layout.get("exit_radius", GATE_RADIUS))
+		goblins = int(layout.get("goblins", 0))
 	_make_player()
-	_spawn_goblins(int(cfg.get("goblins", 1)))
+	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
 	_cam.fov = 65.0
 	_view.add_child(_cam)
@@ -220,6 +238,17 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 	_map_rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z),
 		Color(0.11, 0.16, 0.35) if big else Color(0.2, 0.27, 0.55)])
 	return body
+
+
+## Планировка города (config/<id>.json); нет файла — {} (локация-прототип).
+func _city_layout(id: String) -> Dictionary:
+	if id == "" or id == "test":
+		return {}
+	var txt := mod.read_text("config/%s.json" % id)
+	if txt == "":
+		return {}
+	var parsed: Variant = JSON.parse_string(txt)
+	return parsed if parsed is Dictionary else {}
 
 
 func _make_ground() -> void:
@@ -441,7 +470,7 @@ func _physics_process(delta: float) -> void:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_follow_camera(delta)
-	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < GATE_RADIUS
+	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
