@@ -7,7 +7,7 @@ var out_dir := "/tmp"
 var frame := 0
 var loading: Node
 var title: Node
-const SHOTS := {30: "loading_a", 130: "loading_b", 230: "loading_c", 300: "loading_d", 345: "loading_e", 372: "loading_f"}
+const SHOTS := {230: "loading_a", 262: "loading_b", 300: "loading_c", 330: "loading_d", 352: "loading_e", 372: "loading_f", 392: "loading_g", 430: "loading_h"}
 
 
 func _initialize() -> void:
@@ -35,20 +35,20 @@ func _tick() -> void:
 	frame += 1
 	if SHOTS.has(frame):
 		_shot(SHOTS[frame])
-	if frame == 400:
+	if frame == 480:
 		title = (load("res://mods/pax_rpg/src/location/city_title.gd") as GDScript).new()
 		title.call("setup", mod, "Гхарн")
 		var layer := CanvasLayer.new()
 		root.add_child(layer)
 		layer.add_child(title)
 		title.call("play", 0.0)
-	if frame == 412:
+	if frame == 492:
 		_shot("title_a")
-	if frame == 470:
+	if frame == 550:
 		_shot("title_b")
-	if frame == 760:
+	if frame == 840:
 		_shot("title_c")
-	if frame >= 800:
+	if frame >= 880:
 		quit(0)
 
 

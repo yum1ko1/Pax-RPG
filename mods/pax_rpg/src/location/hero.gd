@@ -357,6 +357,23 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	for p: Variant in pts:
 		var a: Array = p
 		rest.append(Vector3(float(a[0]), float(a[1]), float(a[2])))
+	# «за шиворот»: середина верхнего края — к основанию шеи сзади (сетка лежала на плечах впереди шеи),
+	# три ряда ниже плавно тянутся следом; края у плеч остаются на месте
+	var half0 := 0.1
+	for i: int in nx:
+		half0 = maxf(half0, absf(rest[i].x))
+	var neck_b := _skel.find_bone(str(it.get("neck_bone", "neck")))
+	var cl: Array = it.get("collar", [0.075, 0.035, 0.11])       # назад от шеи, вниз, полуширина у шеи (м)
+	var nk := Vector3.ZERO
+	if neck_b >= 0:
+		nk = model.global_transform.affine_inverse() * _bone_world(neck_b, true).origin
+		for i: int in nx:
+			var u := rest[i].x / half0
+			var wgt := 1.0 - smoothstep(0.35, 0.9, absf(u))
+			var want := Vector3(nk.x + u * float(cl[2]), nk.y - float(cl[1]), nk.z - float(cl[0]))
+			var dd := (want - rest[i]) * wgt
+			for j: int in 4:
+				rest[j * nx + i] += dd * (1.0 - j / 4.0)
 	var shade := PackedFloat32Array()
 	for v: Variant in g.get("shade", []):
 		shade.append(float(v))
@@ -376,8 +393,28 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	var col: Array = g.get("color", [0.2, 0.16, 0.24])
 	mat.albedo_color = Color(float(col[0]), float(col[1]), float(col[2]))
 	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	mat.roughness = 0.92
+	var tex_a := _tex_mip(str(it.get("texture", "")), false)
+	if tex_a != null:                                  # ткань: шерсть, вышитая кайма, рельеф
+		mat.albedo_color = Color.WHITE
+		mat.albedo_texture = tex_a
+		var tn := _tex_mip(str(it.get("normal", "")), true)
+		if tn != null:
+			mat.normal_enabled = true
+			mat.normal_texture = tn
+			mat.normal_scale = 1.4
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var lining := StandardMaterial3D.new()               # изнанка — тёмно-алая подкладка
+	var lc: Array = it.get("lining", [0.32, 0.05, 0.1])
+	lining.albedo_color = Color(float(lc[0]), float(lc[1]), float(lc[2]))
+	lining.vertex_color_use_as_albedo = true
+	lining.roughness = 0.6
+	lining.cull_mode = BaseMaterial3D.CULL_FRONT
+	if mat.normal_texture != null:
+		lining.normal_enabled = true
+		lining.normal_texture = mat.normal_texture
+		lining.normal_scale = 0.6
 	model.add_child(mi)
 	(w.nodes as Array).append(mi)
 	var half := 0.0
@@ -385,7 +422,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 		half = maxf(half, absf(rest[i].x))
 	w.cape = {"nx": nx, "nz": nz, "rest": rest, "shade": shade, "cx": cx, "cz": cz, "c_idx": c_idx,
 		"top_b": top_b, "low_b": low_b, "left_b": left_b, "right_b": right_b, "half": maxf(half, 0.1),
-		"mesh": mesh, "mat": mat,
+		"mesh": mesh, "mat": mat, "lining": lining,
 		"x": PackedVector3Array(), "prev": PackedVector3Array(), "len_h": 0.0, "len_v": 0.0}
 	var c: Dictionary = w.cape
 	var tg := _cape_targets(c, c_idx)
@@ -393,9 +430,127 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	c.prev = tg.duplicate()
 	c.len_h = (rest[c_idx[1]] - rest[c_idx[0]]).length()
 	c.len_v = (rest[c_idx[cx]] - rest[c_idx[0]]).length()
+	if neck_b >= 0 and bool(it.get("collar_mesh", true)):
+		_make_collar(c, w, nk, cl, mat)
 	if _colliders.is_empty():
 		_make_body_colliders()
 	return true
+
+
+func _tex_mip(path: String, normal: bool) -> Texture2D:
+	if path == "":
+		return null
+	var t := _mod.texture(path)
+	if t == null:
+		return null
+	var img := t.get_image()
+	if img == null or img.is_compressed() or img.has_mipmaps():
+		return t
+	img.generate_mipmaps(normal)
+	return ImageTexture.create_from_image(img)
+
+
+## Воротник: свёрнутая валиком ткань плаща вокруг шеи сзади и по плечам, спереди — две золотые фибулы
+## и цепочка между ними. Едет с костью грудной клетки (top_bone), как верх плаща.
+func _make_collar(c: Dictionary, w: Dictionary, nk: Vector3, cl: Array, mat: Material) -> void:
+	var hw := float(cl[2])
+	var path := [Vector3(hw + 0.02, -0.12, 0.085), Vector3(hw + 0.05, -0.045, 0.01), Vector3(hw * 0.55, -0.02, -0.06),
+		Vector3(0.0, -0.015, -float(cl[0]) - 0.005), Vector3(-hw * 0.55, -0.02, -0.06), Vector3(-hw - 0.05, -0.045, 0.01),
+		Vector3(-hw - 0.02, -0.12, 0.085)]
+	var pts := PackedVector3Array()
+	var n := 36
+	for k: int in n + 1:                                   # Catmull-Rom по опорным точкам
+		var f := float(k) / n * (path.size() - 1)
+		var i := mini(int(f), path.size() - 2)
+		var t := f - i
+		var p0: Vector3 = path[maxi(i - 1, 0)]
+		var p1: Vector3 = path[i]
+		var p2: Vector3 = path[i + 1]
+		var p3: Vector3 = path[mini(i + 2, path.size() - 1)]
+		pts.append(nk + 0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+			+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ring := 12
+	for k: int in pts.size():
+		var tng := (pts[mini(k + 1, pts.size() - 1)] - pts[maxi(k - 1, 0)]).normalized()
+		var side := tng.cross(Vector3.UP).normalized()
+		var upv := side.cross(tng).normalized()
+		var mid := 1.0 - absf(float(k) / n * 2.0 - 1.0)            # толще сзади, тоньше к застёжкам
+		var rad := lerpf(0.022, 0.045, smoothstep(0.0, 0.7, mid))
+		for r: int in ring + 1:
+			var a := TAU * r / ring
+			var off := (side * cos(a) * 1.15 + upv * sin(a) * 0.8) * rad      # валик чуть приплюснут
+			off += upv * 0.004 * sin(a * 3.0 + k * 0.9)                      # складки ткани
+			st.set_uv(Vector2(float(k) / n * 3.0, float(r) / ring * 0.25))
+			st.set_normal(off.normalized())
+			st.add_vertex(pts[k] + off)
+	for k: int in pts.size() - 1:
+		for r: int in ring:
+			var a := k * (ring + 1) + r
+			var b := a + ring + 1
+			st.add_index(a)
+			st.add_index(b)
+			st.add_index(a + 1)
+			st.add_index(a + 1)
+			st.add_index(b)
+			st.add_index(b + 1)
+	st.generate_tangents()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	mi.top_level = true
+	model.add_child(mi)
+	(w.nodes as Array).append(mi)
+	# фибулы и цепочка
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.85, 0.64, 0.28)
+	gold.metallic = 1.0
+	gold.roughness = 0.3
+	var parts: Array = []
+	for sgn: float in [1.0, -1.0]:
+		var disc := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.028
+		cm.bottom_radius = 0.03
+		cm.height = 0.012
+		cm.radial_segments = 20
+		cm.material = gold
+		disc.mesh = cm
+		var at := nk + Vector3(sgn * (hw + 0.02), -0.12, 0.1)
+		disc.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5), at)
+		parts.append(disc)
+		var gem := MeshInstance3D.new()                   # розовый камень в центре фибулы
+		var sm := SphereMesh.new()
+		sm.radius = 0.011
+		sm.height = 0.016
+		var gm := StandardMaterial3D.new()
+		gm.albedo_color = Color(1.0, 0.4, 0.7)
+		gm.emission_enabled = true
+		gm.emission = Color(1.0, 0.3, 0.6)
+		gm.emission_energy_multiplier = 0.6
+		gm.roughness = 0.1
+		sm.material = gm
+		gem.mesh = sm
+		gem.position = at + Vector3(0, 0, 0.008)
+		parts.append(gem)
+	for k: int in 9:                                       # цепочка с провисом
+		var f := float(k) / 8.0
+		var link := MeshInstance3D.new()
+		var lm := SphereMesh.new()
+		lm.radius = 0.006
+		lm.height = 0.012
+		lm.material = gold
+		link.mesh = lm
+		link.position = nk + Vector3(lerpf(hw + 0.02, -hw - 0.02, f), -0.12 - 0.035 * sin(f * PI), 0.105)
+		parts.append(link)
+	var holder := Node3D.new()
+	holder.top_level = true
+	model.add_child(holder)
+	(w.nodes as Array).append(holder)
+	for pt: MeshInstance3D in parts:
+		holder.add_child(pt)
+	c.collar = [mi, holder]
 
 
 ## Где точки плаща сейчас «на теле»: верх посередине едет с грудью, углы верха — с плечами, низ — с тазом.
@@ -503,6 +658,11 @@ func _push_out(p: Vector3) -> Vector3:
 
 ## Сетка плаща: смещение каждой её точки от «места на теле» — билинейно по грубой решётке.
 func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
+	if c.has("collar"):
+		var t_top := _bone_world(int(c.top_b)) * _bone_world(int(c.top_b), true).affine_inverse()
+		for nd: Node3D in c.collar:
+			if is_instance_valid(nd):
+				nd.global_transform = t_top * model.global_transform
 	var nx: int = c.nx
 	var nz: int = c.nz
 	var cx: int = c.cx
@@ -530,28 +690,64 @@ func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
 			var o11 := x[k00 + cx + 1] - tg[k00 + cx + 1]
 			var off := o00.lerp(o10, tu).lerp(o01.lerp(o11, tu), tv)
 			pos[j * nx + i] = base[j * nx + i] + off
+	# вдвое гуще и гладко (Catmull-Rom по сетке): без углов на складках
+	var sub := int(c.get("sub", 2))
+	var mx := (nx - 1) * sub + 1
+	var mz := (nz - 1) * sub + 1
+	var rows := PackedVector3Array()
+	rows.resize(nx * mz)
+	for i: int in nx:
+		for j2: int in mz:
+			rows[j2 * nx + i] = _cr_at(pos, i, nx, nz, float(j2) / sub, true)
+	var sp := PackedVector3Array()
+	sp.resize(mx * mz)
+	for j2: int in mz:
+		for i2: int in mx:
+			sp[j2 * mx + i2] = _cr_at(rows, j2, nx, mz, float(i2) / sub, false)
 	var nrm := PackedVector3Array()
-	nrm.resize(nx * nz)
-	for j: int in nz:
-		for i: int in nx:
-			var l := pos[j * nx + maxi(i - 1, 0)]
-			var r := pos[j * nx + mini(i + 1, nx - 1)]
-			var u := pos[maxi(j - 1, 0) * nx + i]
-			var d := pos[mini(j + 1, nz - 1) * nx + i]
-			nrm[j * nx + i] = (r - l).cross(d - u).normalized()
+	nrm.resize(mx * mz)
+	for j: int in mz:
+		for i: int in mx:
+			var l := sp[j * mx + maxi(i - 1, 0)]
+			var r := sp[j * mx + mini(i + 1, mx - 1)]
+			var u := sp[maxi(j - 1, 0) * mx + i]
+			var d := sp[mini(j + 1, mz - 1) * mx + i]
+			nrm[j * mx + i] = (r - l).cross(d - u).normalized()
 	var shade: PackedFloat32Array = c.shade
 	var mesh: ImmediateMesh = c.mesh
 	mesh.clear_surfaces()
-	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, c.mat)
-	for j: int in nz - 1:
-		for i: int in nx - 1:
-			var a := j * nx + i
-			for k: int in [a, a + nx, a + 1, a + 1, a + nx, a + nx + 1]:
-				var s := shade[k] if k < shade.size() else 1.0
-				mesh.surface_set_color(Color(s, s, s))
-				mesh.surface_set_normal(nrm[k])
-				mesh.surface_add_vertex(pos[k])
-	mesh.surface_end()
+	for side: int in 2:                                   # лицевая сторона — ткань, изнанка — подкладка
+		mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, c.mat if side == 0 else c.lining)
+		for j: int in mz - 1:
+			for i: int in mx - 1:
+				var a := j * mx + i
+				for k: int in [a, a + mx, a + 1, a + 1, a + mx, a + mx + 1]:
+					var ii := k % mx
+					var jj := k / mx
+					var si := mini(roundi(float(ii) / sub), nx - 1)
+					var sj := mini(roundi(float(jj) / sub), nz - 1)
+					var s := shade[sj * nx + si] if sj * nx + si < shade.size() else 1.0
+					mesh.surface_set_color(Color(s, s, s))
+					mesh.surface_set_normal(nrm[k])
+					mesh.surface_set_uv(Vector2(float(ii) / (mx - 1), float(jj) / (mz - 1)))
+					mesh.surface_add_vertex(sp[k])
+		mesh.surface_end()
+
+
+## Catmull-Rom по сетке: along_j — вдоль колонки i (параметр t в рядах), иначе вдоль ряда (строка = i).
+static func _cr_at(g: PackedVector3Array, i: int, nx: int, nz: int, t: float, along_j: bool) -> Vector3:
+	var n := nz if along_j else nx
+	var k := mini(int(t), n - 2)
+	var f := t - k
+	var idx := func(m: int) -> int:
+		m = clampi(m, 0, n - 1)
+		return m * nx + i if along_j else i * nx + m
+	var p0: Vector3 = g[idx.call(k - 1)]
+	var p1: Vector3 = g[idx.call(k)]
+	var p2: Vector3 = g[idx.call(k + 1)]
+	var p3: Vector3 = g[idx.call(k + 2)]
+	return 0.5 * ((2.0 * p1) + (-p0 + p2) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f * f
+		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * f * f * f)
 
 
 func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:

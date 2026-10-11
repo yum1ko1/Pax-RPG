@@ -12,6 +12,8 @@ const ARTS := 4
 # катаны: точка попадания на воине (доли картинки), откуда летит (угол от точки), сколько клинка в теле
 const HITS := [[0.52, 0.3, -2.25], [0.6, 0.4, -0.85], [0.45, 0.45, -2.75], [0.56, 0.24, -1.45], [0.5, 0.55, -0.45]]
 const PIVOT := Vector2(0.24, 0.97)        # колено/ступня впереди — вокруг неё он падает (доли картинки)
+const HIP := Vector2(0.55, 0.6)           # поясница: вокруг неё оседает корпус
+const WAIST := 0.6                        # выше — корпус (оседает), ниже — ноги
 
 var mod: PaxMod
 var _stage: Control
@@ -23,7 +25,8 @@ var _title := ""
 var _t := 0.0                      # с от начала показа
 var _p := 0.0                      # прогресс 0..1
 var _stuck: Array = []             # {i, t} — вонзённые катаны, t — когда
-var _fall := 0.0                   # 0..1 — воин падает
+var _fall := 0.0                   # 0..1 — воин заваливается (из _die)
+var _die := 0.0                    # 0..1 — вся смерть: дрожь → корпус оседает → падает → отскок, пыль
 var _shake := 0.0
 var _fly: AudioStreamPlayer
 var _hit: AudioStreamPlayer
@@ -101,6 +104,7 @@ func run(title: String, text: String, seconds: float, middle: Callable, done: Ca
 	_t = 0.0
 	_p = 0.0
 	_fall = 0.0
+	_die = 0.0
 	_shake = 0.0
 	_stuck.clear()
 	_flash = 0.0
@@ -118,10 +122,10 @@ func run(title: String, text: String, seconds: float, middle: Callable, done: Ca
 	tw.tween_interval(0.05)
 	tw.tween_callback(middle)                         # строим за закрытым экраном (кадры на миг замрут)
 	tw.tween_property(self, "_p", 1.0, maxf(seconds, 2.5)).set_trans(Tween.TRANS_SINE)
-	tw.tween_interval(0.4)
-	tw.tween_callback(_sfx.bind(_thud))
-	tw.tween_property(self, "_fall", 1.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_interval(0.25)
+	tw.tween_interval(0.3)
+	tw.tween_property(self, "_die", 1.0, 1.7)
+	tw.parallel().tween_callback(_sfx.bind(_thud)).set_delay(1.3)
+	tw.tween_interval(0.2)
 	tw.tween_method(_set_reveal, 0.0, 2.2, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_finish.bind(done))
 
@@ -197,13 +201,38 @@ func _warrior_rect() -> Rect2:
 	return Rect2(Vector2(vs.x * 0.5 - w * 0.5, vs.y * 0.955 - h), Vector2(w, h))
 
 
-## Точка картинки воина (доли) → экран, с учётом падения (поворот вокруг колена) и дрожи.
+## Смерть по фазам (_die 0..1): дрожь, корпус оседает вперёд вокруг поясницы, тело заваливается вокруг колена,
+## отскок о землю.
+func _slump() -> float:
+	var f := clampf((_die - 0.42) / 0.36, 0.0, 1.0)
+	return -0.45 * smoothstep(0.12, 0.42, _die) - 0.75 * f * f       # корпус оседает, потом лицом в землю
+
+
+func _fall_angle() -> float:
+	var f := clampf((_die - 0.42) / 0.36, 0.0, 1.0)
+	_fall = f * f
+	var bounce := 0.0
+	if _die > 0.78:
+		var b := (_die - 0.78) / 0.22
+		bounce = 0.09 * sin(b * PI) * (1.0 - b)
+	var shiver := sin(_t * 55.0) * 0.025 * (1.0 - smoothstep(0.0, 0.2, _die)) * float(_die > 0.0)
+	return -0.5 * _fall + bounce + shiver + sin(_t * 60.0) * 0.02 * _shake
+
+
+## Поворот куска тела в точке uv (корпус — ещё и оседание).
+func _rot_at(uv: Vector2) -> float:
+	return _fall_angle() + (_slump() if uv.y < WAIST else 0.0)
+
+
+## Точка картинки воина (доли) → экран, с оседанием корпуса, падением, отскоком и дрожью.
 func _body_point(uv: Vector2) -> Vector2:
 	var r := _warrior_rect()
+	var p := r.position + uv * r.size
+	if uv.y < WAIST:
+		var hip := r.position + HIP * r.size
+		p = hip + (p - hip).rotated(_slump())
 	var pivot := r.position + PIVOT * r.size
-	var p := r.position + uv * r.size - pivot
-	var ang := -1.42 * _fall + sin(_t * 60.0) * 0.02 * _shake
-	return pivot + p.rotated(ang)
+	return pivot + (p - pivot).rotated(_fall_angle())
 
 
 func _draw_stage() -> void:
@@ -254,33 +283,58 @@ func _draw_stage() -> void:
 	_text.size = Vector2(vs.x * 0.6, h * 0.08)
 	_draw_ring(h)
 	# подсветка за воином (чёрный силуэт на тёмном арте иначе не читается)
-	var glow_c := _body_point(Vector2(0.5, 0.55))
+	var glow_c := _warrior_rect().position + Vector2(0.5, 0.55) * _warrior_rect().size
 	for g: int in 10:
 		var rr := h * (0.16 - g * 0.013)
 		_stage.draw_circle(glow_c, rr, Color(1.0, 0.45, 0.72, 0.035 * (1.0 - _fall * 0.7)))
-	# воин и катаны (катаны — поверх, вместе с ним падают)
-	if _warrior != null:
-		var r := _warrior_rect()
-		var pivot := r.position + PIVOT * r.size
-		var ang := -1.42 * _fall + sin(_t * 60.0) * 0.02 * _shake
-		_stage.draw_set_transform(pivot, ang, Vector2.ONE)
-		_stage.draw_texture_rect(_warrior, Rect2(r.position - pivot, r.size), false)
-		_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# катаны — ПОЗАДИ воина: часть клинка в теле скрыта силуэтом, острие выходит с другой стороны
 	for s: Dictionary in _stuck:
 		var hit: Array = HITS[int(s.i)]
+		var uv := Vector2(float(hit[0]), float(hit[1]))
 		var age := _t - float(s.t)
-		var target := _body_point(Vector2(float(hit[0]), float(hit[1])))
-		var from_ang := float(hit[2]) - 1.42 * _fall
-		var length := h * 0.13
+		var entry := _body_point(uv)
+		var from_ang := float(hit[2]) + _rot_at(uv)
+		var dir := Vector2.from_angle(from_ang)              # от острия к рукояти
 		var k := clampf(age / 0.16, 0.0, 1.0)
 		k = 1.0 - pow(1.0 - k, 3.0)
-		var tip := target + Vector2.from_angle(from_ang) * h * 0.55 * (1.0 - k)
-		Katana.draw(_stage, tip, from_ang, length, 1.0, 0.22 * k, "", null, 0, 1.0, false, true)
-		if age > 0.16 and age < 0.5:                      # искры удара
+		var tip := entry - dir * h * 0.075 + dir * h * 0.6 * (1.0 - k)   # насквозь на 7.5 % высоты экрана
+		Katana.draw(_stage, tip, from_ang, h * 0.17, 1.0, 0.0, "", null, 0, 1.0, false, true)
+	# воин: ноги и корпус отдельно (корпус оседает вокруг поясницы), куски чуть перекрываются — шва не видно
+	if _warrior != null:
+		var r := _warrior_rect()
+		var ts := _warrior.get_size()
+		var pivot := r.position + PIVOT * r.size
+		var hip := r.position + HIP * r.size
+		var fa := _fall_angle()
+		var lo := WAIST - 0.03
+		_stage.draw_set_transform(pivot, fa, Vector2.ONE)
+		_stage.draw_texture_rect_region(_warrior, Rect2(r.position + Vector2(0, lo * r.size.y) - pivot,
+			Vector2(r.size.x, (1.0 - lo) * r.size.y)), Rect2(0, lo * ts.y, ts.x, (1.0 - lo) * ts.y))
+		var hp := pivot + (hip - pivot).rotated(fa)
+		_stage.draw_set_transform(hp, fa + _slump(), Vector2.ONE)
+		var hi := WAIST + 0.03
+		_stage.draw_texture_rect_region(_warrior, Rect2(r.position - hip, Vector2(r.size.x, hi * r.size.y)),
+			Rect2(0, 0, ts.x, hi * ts.y))
+		_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for s: Dictionary in _stuck:                            # искры удара — поверх
+		var hit: Array = HITS[int(s.i)]
+		var age := _t - float(s.t)
+		if age > 0.16 and age < 0.5:
+			var target := _body_point(Vector2(float(hit[0]), float(hit[1])))
 			var a := 1.0 - (age - 0.16) / 0.34
 			for j: int in 9:
 				var d := Vector2.from_angle(j * 0.7 + float(s.i)) * h * 0.05 * (1.0 - a + 0.2)
 				_stage.draw_line(target + d * 0.5, target + d, Color(1.0, 0.55, 0.8, a), 2.0, true)
+	if _die > 0.74:                                         # пыль от удара о землю — мягкое облако
+		var b := (_die - 0.74) / 0.26
+		var ground := _body_point(Vector2(0.3, 0.3))
+		ground.y = _warrior_rect().end.y
+		for j: int in 22:
+			var hsh := fmod(sin(j * 12.9898) * 43758.5453, 1.0)
+			var dx := (float(j) / 21.0 - 0.5) * h * 0.26 * (0.5 + b * 0.8)
+			var rr := h * (0.02 + 0.02 * absf(hsh)) * (0.6 + b * 1.4)
+			var up := h * 0.03 * b * absf(hsh)
+			_stage.draw_circle(ground + Vector2(dx, -rr * 0.4 - up), rr, Color(0.62, 0.56, 0.6, 0.09 * (1.0 - b)))
 	_draw_flash(vs)
 
 
@@ -290,7 +344,8 @@ func _draw_flash(vs: Vector2) -> void:
 
 
 func _draw_ring(h: float) -> void:
-	var c := _body_point(Vector2(0.5, 0.55))
+	var wr := _warrior_rect()
+	var c := wr.position + Vector2(0.5, 0.55) * wr.size
 	var r := h * 0.135
 	var fade := 1.0 - _fall
 	if fade <= 0.0:

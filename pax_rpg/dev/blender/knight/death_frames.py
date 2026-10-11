@@ -38,7 +38,7 @@ def bounds(f):
     for m in meshes:
         ev = m.evaluated_get(dg)
         me = ev.to_mesh()
-        for v in me.vertices[::7]:
+        for v in list(me.vertices)[::7]:
             p = ev.matrix_world @ v.co
             lo = Vector(map(min, lo, p))
             hi = Vector(map(max, hi, p))
