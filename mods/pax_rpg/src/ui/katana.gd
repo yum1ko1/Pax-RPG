@@ -1,0 +1,89 @@
+extends RefCounted
+## Катана, нарисованная вектором (без картинок): изогнутый клинок с линией закалки (хамон), золотая муфта,
+## гарда-цуба, рукоять в ромбах оплётки с розовыми просветами. Нужна экрану загрузки (катаны пронзают воина)
+## и заставке входа в город (катана с названием места).
+## Оси: начало — острие, ось X — от острия к рукояти; изгиб — вверх (спинка клинка на −Y).
+
+const STEEL := Color(0.86, 0.88, 0.94)
+const STEEL_D := Color(0.46, 0.5, 0.6)
+const HAMON := Color(1.0, 1.0, 1.0, 0.85)
+const GOLD := Color(0.86, 0.66, 0.3)
+const IRON := Color(0.09, 0.09, 0.12)
+const WRAP := Color(0.12, 0.08, 0.12)
+const SAKURA := Color(1.0, 0.55, 0.78)
+
+
+## Нарисовать в ci: tip — острие на экране, angle — направление от острия к рукояти, length — вся длина (px).
+## hide — какая доля клинка от острия скрыта (вошла в тело), text — надпись по клинку.
+static func draw(ci: CanvasItem, tip: Vector2, angle: float, length: float, alpha := 1.0, hide := 0.0,
+		text := "", font: Font = null, font_size := 0, text_alpha := 1.0, flip := false, black := false) -> void:
+	var fy := -1.0 if flip else 1.0          # flip — зеркально по изгибу (катана острием вправо: кромка вниз)
+	ci.draw_set_transform(tip, angle, Vector2(1.0, fy))
+	var lb := length * 0.7                  # клинок
+	var w := length * 0.034                 # ширина клинка
+	var sori := length * 0.035              # изгиб
+	var top := PackedVector2Array()
+	var bot := PackedVector2Array()
+	var ham := PackedVector2Array()
+	var n := 28
+	for i: int in n + 1:
+		var t := lerpf(hide, 1.0, float(i) / n)
+		var x := t * lb
+		var cy := -sori * sin(t * PI * 0.5)
+		var ww := w * (0.25 + 0.75 * smoothstep(0.0, 0.07, t))
+		top.append(Vector2(x, cy - ww * 0.5))
+		bot.append(Vector2(x, cy + ww * 0.5))
+		ham.append(Vector2(x, cy + ww * (0.08 + 0.12 * sin(t * 46.0))))
+	var blade := PackedVector2Array(top)
+	for i: int in range(bot.size() - 1, -1, -1):
+		blade.append(bot[i])
+	if black:                                # силуэт (экран загрузки): чёрная катана с тонкой розовой кромкой
+		var tsil := PackedVector2Array()
+		var base_b := Vector2(lb, -sori)
+		ci.draw_colored_polygon(blade, Color(0, 0, 0, alpha))
+		ci.draw_polyline(bot, Color(1.0, 0.55, 0.78, alpha * 0.55), 1.0, true)
+		for i: int in 16:
+			var a := TAU * i / 16.0
+			tsil.append(base_b + Vector2(cos(a) * w * 0.32, sin(a) * w * 1.35))
+		ci.draw_colored_polygon(tsil, Color(0, 0, 0, alpha))
+		ci.draw_rect(Rect2(base_b + Vector2(w * 0.3, -w * 0.55), Vector2(length - lb, w * 1.1)), Color(0, 0, 0, alpha))
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
+	ci.draw_colored_polygon(blade, Color(STEEL_D, alpha))
+	var edge := PackedVector2Array(ham)                # светлая режущая кромка (ниже хамона)
+	for i: int in range(bot.size() - 1, -1, -1):
+		edge.append(bot[i])
+	ci.draw_colored_polygon(edge, Color(STEEL, alpha))
+	ci.draw_polyline(ham, Color(HAMON, alpha * 0.8), maxf(1.0, w * 0.06), true)
+	ci.draw_polyline(top, Color(1, 1, 1, alpha * 0.35), maxf(1.0, w * 0.05), true)
+	var base := Vector2(lb, -sori)
+	# муфта, гарда, рукоять, навершие
+	ci.draw_rect(Rect2(base + Vector2(-w * 0.9, -w * 0.62), Vector2(w * 0.9, w * 1.24)), Color(GOLD, alpha))
+	var tsuba := PackedVector2Array()
+	for i: int in 20:
+		var a := TAU * i / 20.0
+		tsuba.append(base + Vector2(cos(a) * w * 0.32, sin(a) * w * 1.35))
+	ci.draw_colored_polygon(tsuba, Color(IRON, alpha))
+	ci.draw_polyline(tsuba + PackedVector2Array([tsuba[0]]), Color(GOLD, alpha * 0.8), maxf(1.0, w * 0.08), true)
+	var hl := length - lb - w * 0.4
+	var h0 := base + Vector2(w * 0.35, 0)
+	ci.draw_rect(Rect2(h0 + Vector2(0, -w * 0.55), Vector2(hl, w * 1.1)), Color(WRAP, alpha))
+	var k := int(hl / (w * 0.9))
+	for i: int in k:                                    # ромбы оплётки
+		var c := h0 + Vector2((i + 0.5) * hl / k, 0)
+		var d := PackedVector2Array([c + Vector2(-w * 0.3, 0), c + Vector2(0, -w * 0.32), c + Vector2(w * 0.3, 0),
+			c + Vector2(0, w * 0.32)])
+		ci.draw_colored_polygon(d, Color(SAKURA, alpha * 0.75))
+	ci.draw_rect(Rect2(h0 + Vector2(hl, -w * 0.6), Vector2(w * 0.4, w * 1.2)), Color(GOLD, alpha))
+	if text != "" and font != null and text_alpha > 0.01:
+		# надпись — всегда читаемо: центр на клинке, поворот без «вверх ногами»
+		var fs := font_size if font_size > 0 else int(w * 0.8)
+		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var mid := tip + Vector2(lb * 0.5, -sori * sin(0.5 * PI * 0.5) * fy).rotated(angle)
+		var up := angle if cos(angle) >= 0.0 else angle + PI
+		ci.draw_set_transform(mid, up, Vector2.ONE)
+		var at := Vector2(-tw * 0.5, fs * 0.34)
+		ci.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(2, fs / 7),
+			Color(1, 1, 1, alpha * text_alpha * 0.55))
+		ci.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.14, 0.05, 0.16, alpha * text_alpha))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

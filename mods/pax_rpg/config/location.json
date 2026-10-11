@@ -8,7 +8,7 @@
 	"turn_speed": 0.006,
 	"camera_distance": 7.0,
 	"camera_height": 3.5,
-	"loading_seconds": 1.6,
+	"loading_seconds": 4.0,
 	"pause_world": true,
 	"goblins": 1
 }

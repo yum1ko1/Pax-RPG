@@ -23,7 +23,7 @@ func _mod_loaded() -> void:
 	location.setup(self)
 	add_child(location)
 	loading = Loading.new()
-	loading.setup()
+	loading.setup(self)
 	add_child(loading)
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)

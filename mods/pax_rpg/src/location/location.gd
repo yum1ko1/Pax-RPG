@@ -19,6 +19,7 @@ const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
+const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -175,6 +176,11 @@ func build(city: Dictionary) -> void:
 		_set_paused(false)
 		exit_requested.emit())
 	add_child(_pause)
+	if not layout.is_empty():                          # заставка: катана с названием места
+		var ct := CityTitle.new()
+		ct.setup(mod, _city_name)
+		add_child(ct)
+		ct.play(float(cfg.get("loading_seconds", 4.0)) + 2.6)   # после экрана загрузки
 	_zoom = 0.0
 	_zoom_want = 0.0
 	_yaw = 0.0
