@@ -385,11 +385,14 @@ func _physics_process(delta: float) -> void:
 			game.set_speed(0)
 	var moving := move.length() > 0.01 and on_floor
 	# куда стоит лицом: в захваченного врага; на бегу — по ходу; шагом — туда же, куда камера
+	# без оружия и без захвата — идёт лицом по ходу (как Sekiro вне захвата); боком и спиной — только с мечом, в блоке, в захвате
+	var free_walk := moving and _hero != null and not _hero.armed and not _hero.blocking and _lock == null \
+		and not bool(cfg.get("strafe_unarmed", false))
 	if not locked:
 		var face := INF
 		if _lock != null and not running:
 			face = _aim_yaw()
-		elif moving and running:
+		elif moving and (running or free_walk):
 			face = atan2(-move.x, -move.z)
 		elif moving or (_hero != null and _hero.blocking):
 			face = _yaw
@@ -403,7 +406,7 @@ func _physics_process(delta: float) -> void:
 		var by := _body_mesh.rotation.y
 		var bf := Vector3(-sin(by), 0.0, -cos(by))
 		var br := Vector3(cos(by), 0.0, -sin(by))
-		_hero.move_dir = Vector2(move.dot(br), move.dot(bf))
+		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
 	if _hero != null:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		var step: Vector3 = r.root
