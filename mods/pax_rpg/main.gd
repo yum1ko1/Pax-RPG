@@ -81,6 +81,9 @@ func _time_command(args: PackedStringArray) -> String:
 ## Замер производительности локации: FPS, draw calls, примитивы и сколько тяжёлых узлов; off/on — выключить
 ## категорию, чтобы сравнить FPS (что именно ест кадр).
 func _perf_command(args: PackedStringArray) -> String:
+	if args.size() >= 1 and args[0] == "auto":
+		_perf_auto()
+		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
 	var cnt := {"particles": 0, "omni": 0, "omni_shadow": 0, "mesh": 0, "multimesh_inst": 0}
 	var stack: Array = [location]
 	var hide := args.size() >= 2 and args[0] == "off"
@@ -162,3 +165,68 @@ func _open_test_arena() -> void:
 		_autostart_city = ""
 		return
 	location.build_test()
+
+
+## Автозамер: по очереди выключает подсистему на 6 с и пишет в лог FPS и время кадра (что съедает кадр).
+func _perf_auto() -> void:
+	var env: Environment = location.get("_env")
+	var sun: DirectionalLight3D = location.get("_sun")
+	var vp: SubViewport = location.get("_view")
+	var hud: CanvasItem = location.get("_hud")
+	var steps: Array = [
+		["база", func(_on: bool) -> void: pass],
+		["частицы", func(on: bool) -> void:
+			for n: Node3D in _kids("GPUParticles3D") + _kids("CPUParticles3D"):
+				n.visible = on],
+		["огни omni", func(on: bool) -> void:
+			for n: Node3D in _kids("OmniLight3D"):
+				n.visible = on],
+		["тени солнца", func(on: bool) -> void:
+			if sun: sun.shadow_enabled = on],
+		["ssao+ssr+glow", func(on: bool) -> void:
+			if env:
+				env.ssao_enabled = on
+				env.ssr_enabled = on
+				env.glow_enabled = on],
+		["туман", func(on: bool) -> void:
+			if env: env.fog_enabled = on],
+		["msaa", func(on: bool) -> void:
+			if vp: vp.msaa_3d = Viewport.MSAA_2X if on else Viewport.MSAA_DISABLED],
+		["анимации", func(on: bool) -> void:
+			for n: Node in _kids("AnimationPlayer"):
+				n.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED],
+		["HUD", func(on: bool) -> void:
+			if hud: hud.visible = on],
+		["ландшафт", func(on: bool) -> void:
+			for n: Node in location.find_children("Landscape", "", true, false):
+				(n as Node3D).visible = on],
+		["город (меши)", func(on: bool) -> void:
+			for n: Node3D in _kids("MultiMeshInstance3D"):
+				n.visible = on],
+	]
+	var rid := vp.get_viewport_rid() if vp else RID()
+	if vp:
+		RenderingServer.viewport_set_measure_render_time(rid, true)
+	for st: Array in steps:
+		(st[1] as Callable).call(false)
+		await get_tree().create_timer(2.0).timeout
+		var f := 0
+		var gpu := 0.0
+		var t0 := Time.get_ticks_msec()
+		var proc := 0.0
+		while Time.get_ticks_msec() - t0 < 4000:
+			await get_tree().process_frame
+			f += 1
+			if vp:
+				gpu += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+			proc += Performance.get_monitor(Performance.TIME_PROCESS)
+		var secs := (Time.get_ticks_msec() - t0) / 1000.0
+		log_info("Pax RPG perf: без «%s» — fps %.1f · gpu 3D %.1f мс · скрипты %.1f мс · draw %d" % [st[0], f / secs,
+			gpu / maxf(f, 1), proc / maxf(f, 1) * 1000.0,
+			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
+		(st[1] as Callable).call(true)
+	log_info("Pax RPG perf: готово")
+
+
+func _kids(cls: String) -> Array:
+	return location.find_children("*", cls, true, false)
