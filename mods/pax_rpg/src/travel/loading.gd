@@ -129,7 +129,6 @@ func run(title: String, text: String, seconds: float, middle: Callable, done: Ca
 	tw.tween_property(self, "_p", 1.0, maxf(seconds, 2.5)).set_trans(Tween.TRANS_SINE)
 	tw.tween_interval(0.3)
 	tw.tween_property(self, "_die", 1.0, 2.2)
-	tw.parallel().tween_callback(_sfx.bind(_thud)).set_delay(1.25)
 	tw.tween_interval(0.2)
 	tw.tween_method(_set_reveal, 0.0, 2.2, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_finish.bind(done))
@@ -167,9 +166,7 @@ func _process(delta: float) -> void:
 		_stuck.append({"i": _stuck.size(), "t": _t})
 		_sfx(_fly)
 		get_tree().create_timer(0.16).timeout.connect(func() -> void:
-			_sfx(_hit)
-			_shake = 1.0
-			_flash = 1.0)
+			_sfx(_hit))                                  # без вспышки и тряски — только звук входа клинка
 	_flash = maxf(0.0, _flash - delta * 4.0)
 	for f: Dictionary in _fx:                          # угольки поднимаются, лепестки летят вниз наискось
 		var pp: Vector2 = f.p

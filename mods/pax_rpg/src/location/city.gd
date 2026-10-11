@@ -137,6 +137,9 @@ const TEX_SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL
 var _mats: Array = []              # материалы моделей города (BaseMaterial3D), собирает _place
 
 
+const TEX_MAX := 2048
+
+
 func _fix_textures() -> void:
 	var done := {}                     # исходная текстура → с мипмапами
 	for mat: BaseMaterial3D in _mats:
@@ -147,9 +150,20 @@ func _fix_textures() -> void:
 				continue
 			if not done.has(t):
 				var img := t.get_image()
-				if img == null or img.is_empty() or img.is_compressed() or img.has_mipmaps():
+				if img == null or img.is_empty() or img.is_compressed():
 					done[t] = t
 				else:
+					# несжатая 4K с мипмапами — 85 МБ видеопамяти; город из десятков таких съедал 8 ГБ и
+					# кадр упирался в память. Дальше TEX_MAX пикселей на глаз не видно с высоты камеры.
+					if maxi(img.get_width(), img.get_height()) > TEX_MAX:
+						if img.has_mipmaps():
+							img.clear_mipmaps()
+						var k := float(TEX_MAX) / maxi(img.get_width(), img.get_height())
+						img.resize(int(img.get_width() * k), int(img.get_height() * k), Image.INTERPOLATE_LANCZOS)
+					elif img.has_mipmaps():
+						done[t] = t
+						mat.set_texture(slot, t)
+						continue
 					img.generate_mipmaps(slot == BaseMaterial3D.TEXTURE_NORMAL)
 					done[t] = ImageTexture.create_from_image(img)
 			mat.set_texture(slot, done[t])
