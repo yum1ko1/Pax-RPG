@@ -639,8 +639,8 @@ if len(cape_ids) > 200:
     bpy.ops.object.mode_set(mode="OBJECT")
     cape = [o for o in vl.objects if o.select_get() and o != ob][0]
     cape.name = "Knight_cape"
-    scn.collection.objects.unlink(cape)          # плащ с модели снят: плащ — отдельный предмет (build_cape.py)
     log.append(f"cape removed from the body: {len(cape.data.vertices)} verts")
+    bpy.data.objects.remove(cape, do_unlink=True)   # плащ с модели снят: плащ — отдельный предмет (build_cape.py)
 meta.pop("cape", None)
 # прыжок финального удара: высота таза по кадрам (для настройки полёта в игре)
 a3 = clips["Attack3"]

@@ -1576,9 +1576,5 @@
  },
  "impact": {
   "Attack3": 1.1
- },
- "cape": {
-  "cloth": "models/knight_cape.glb",
-  "pin_band": 0.08
  }
 }

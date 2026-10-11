@@ -1,6 +1,6 @@
 extends RefCounted
 ## Герой локации: модель (config/hero.json → models/*.glb) и её состояние — меч на спине, в руке или волочится
-## по земле в беге, доставание и убирание, комбо из трёх тяжёлых ударов, прыжок, плащ на пружинных костях.
+## по земле в беге, доставание и убирание, комбо из трёх тяжёлых ударов, прыжок, увороты; надетые вещи (плащ-ткань).
 ## Удары ведёт root motion (смещение таза вынуто при сборке — pax_rpg/dev/blender/knight/*.py → *_anim.json):
 ## инерция меча тянет персонажа. Удар без продолжения кончается сразу после взмаха и плавно уходит в стойку.
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
@@ -37,13 +37,11 @@ var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wa
 var _swing_done := false
 var _impact_done := false
 var _skel: Skeleton3D
-var _cloth: SoftBody3D              # плащ — ткань (models/*_cape.glb), пришита к груди, бьётся о тело
-var _cloth_anchors: Array = []      # [Node3D, кость] — грудь и плечи в мире, к ним пришит верх плаща
-var _cloth_xform := Transform3D.IDENTITY   # где ткань создана: её сетка — в этих осях
-var _cloth_pin_left := 0
-var _dbg_frames := 0
-var _dbg_point := 0               # самая нижняя точка плаща — для cape_debug            # кадров до пришивания (тело ткани создаёт сервер физики не сразу)
-var _colliders: Array = []          # [AnimatableBody3D, кость от, кость до] — капсулы тела для ткани
+var _owner_body: PhysicsBody3D       # капсула персонажа — с ней ткань не сталкивается
+var _items: Dictionary = {}          # config/items.json → items: что вообще можно надеть
+var _worn: Dictionary = {}           # слот → надетый предмет (см. equip)
+var _last_in_slot: Dictionary = {}   # слот → что в нём было — «C» надевает обратно
+var _colliders: Array = []           # [AnimatableBody3D, кость от, кость до] — капсулы тела для тканей
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
 var _trail_mat: StandardMaterial3D
 var _trail: Array = []              # [время, у гарды, остриё]
@@ -61,6 +59,10 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	if mp != "":
 		var parsed: Variant = JSON.parse_string(mod.read_text(mp))
 		meta = parsed if parsed is Dictionary else {}
+	var old_cape := model.find_child("Knight_cape", true, false)   # плащ модели снят — плащ теперь вещь (items.json)
+	if old_cape != null:
+		old_cape.get_parent().remove_child(old_cape)
+		old_cape.free()
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
 	_sword_drag = model.find_child("Sword_Drag", true, false) as Node3D
@@ -70,6 +72,9 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	if _sword_drag != null:
 		_drag_rest = _sword_drag.transform
 		_sword_drag.visible = false
+	var ip: Variant = JSON.parse_string(mod.read_text(str(cfg.get("items", "config/items.json"))))
+	if ip is Dictionary:
+		_items = (ip as Dictionary).get("items", {})
 	_swing = _player(cfg.get("swing_files", []), _f("swing_pitch_spread", 1.06), _f("swing_volume_db", -4.0))
 	_impact = _player(cfg.get("impact_files", []), 1.04, _f("impact_volume_db", 0.0))
 	return model
@@ -138,7 +143,10 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 			anim.get_animation(n).loop_mode = Animation.LOOP_NONE
 	anim.animation_finished.connect(_on_finished)
 	anim.play("Idle")
-	_make_cloth(owner_body)
+	_skel = _find_skeleton(model)
+	_owner_body = owner_body
+	for id: Variant in cfg.get("equipped", []):
+		equip(str(id))
 	_make_trail()
 	_show_sword(0.0)
 
@@ -188,7 +196,11 @@ func walk_only() -> bool:
 	return action in ON_THE_GO
 
 
-# ---------- плащ: пружинные кости ----------
+# ---------- предметы: надеть / снять ----------
+# Предмет (config/items.json) сделан в позе покоя модели героя, в её осях. Виды:
+#   cloth — ткань SoftBody3D (плащ): верх пришит к костям pin_bones, ниже — свободна, бьётся о капсулы тела и землю;
+#   rigid — жёсткая вещь (шлем, наплечник): едет за костью bone.
+# В слоте — одна вещь: надеть новую — старая снимается.
 
 func _bone_world(idx: int, rest := false) -> Transform3D:
 	var t := _skel.get_bone_global_rest(idx) if rest else _skel.get_bone_global_pose(idx)
@@ -196,24 +208,67 @@ func _bone_world(idx: int, rest := false) -> Transform3D:
 	return Transform3D(g.basis.orthonormalized(), g.origin)
 
 
-## Плащ — ткань SoftBody3D из отдельной сетки (поза покоя модели): верхняя полоса пришита к груди, ниже — свободна
-## и сталкивается с капсулами тела (таз, бёдра, голени, спина) и с землёй, но не с капсулой персонажа.
-func _make_cloth(owner_body: PhysicsBody3D) -> void:
-	var cape: Dictionary = meta.get("cape", {})
-	var path := str(cape.get("cloth", ""))
-	_skel = _find_skeleton(model)
-	if path == "" or _skel == null:
+func worn(slot: String) -> String:
+	return str((_worn.get(slot, {}) as Dictionary).get("id", ""))
+
+
+func equip(id: String) -> bool:
+	var it: Dictionary = _items.get(id, {})
+	if it.is_empty() or _skel == null or not model.is_inside_tree():
+		return false
+	var slot := str(it.get("slot", id))
+	unequip(slot)
+	var w := {"id": id, "item": it, "nodes": [], "anchors": [], "cloth": null, "pin_left": 0}
+	var ok := false
+	match str(it.get("kind", "rigid")):
+		"cloth":
+			ok = _wear_cloth(it, w)
+		_:
+			ok = _wear_rigid(it, w)
+	if not ok:
+		for n: Node in w.nodes:
+			n.queue_free()
+		_mod.log_warning("Pax RPG: item %s did not load" % id)
+		return false
+	_worn[slot] = w
+	_last_in_slot[slot] = id
+	return true
+
+
+func unequip(slot: String) -> void:
+	var w: Dictionary = _worn.get(slot, {})
+	for n: Node in w.get("nodes", []):
+		if is_instance_valid(n):
+			n.queue_free()
+	_worn.erase(slot)
+
+
+## «C»: снять вещь со слота или надеть ту, что в нём была (или первую из надетых при старте).
+func toggle_slot(slot: String) -> void:
+	if _worn.has(slot):
+		unequip(slot)
 		return
+	var id := str(_last_in_slot.get(slot, ""))
+	if id == "":
+		for e: Variant in cfg.get("equipped", []):
+			if str((_items.get(str(e), {}) as Dictionary).get("slot", "")) == slot:
+				id = str(e)
+	if id != "":
+		equip(id)
+
+
+## Сетка предмета из glb и её положение в осях сцены glb.
+func _load_mesh(path: String) -> Array:
 	var src := _mod.model(path)
 	if src == null:
-		return
+		return []
 	var mi: MeshInstance3D = null
 	for c: Node in src.find_children("*", "MeshInstance3D", true, false):
 		mi = c as MeshInstance3D
 		break
 	if mi == null or mi.mesh == null:
 		src.free()
-		return
+		return []
 	var local := Transform3D.IDENTITY
 	var n: Node = mi
 	while n != src and n is Node3D:
@@ -221,24 +276,36 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 		n = n.get_parent()
 	var mesh := mi.mesh
 	src.free()
+	return [mesh, local]
+
+
+func _iv(it: Dictionary, k: String, d: float) -> float:
+	return float(it.get(k, d))
+
+
+func _wear_cloth(it: Dictionary, w: Dictionary) -> bool:
+	var ml := _load_mesh(str(it.get("model", "")))
+	if ml.is_empty():
+		return false
 	var sb := SoftBody3D.new()
-	sb.mesh = mesh
+	sb.mesh = ml[0]
 	sb.top_level = true
-	sb.transform = model.global_transform * local
-	_cloth_xform = sb.transform
+	sb.transform = model.global_transform * (ml[1] as Transform3D)
+	w.xform = sb.transform
 	sb.collision_layer = 0
 	sb.collision_mask = 1 | CLOTH_LAYER
-	sb.simulation_precision = int(_f("cape_precision", 6))
-	sb.total_mass = _f("cape_mass", 1.2)
-	sb.linear_stiffness = _f("cape_stiffness", 0.6)
-	sb.damping_coefficient = _f("cape_damping", 0.04)
-	sb.drag_coefficient = _f("cape_drag", 0.02)
+	sb.simulation_precision = int(_iv(it, "precision", 12))
+	sb.total_mass = _iv(it, "mass", 0.7)
+	sb.linear_stiffness = _iv(it, "stiffness", 0.35)
+	sb.damping_coefficient = _iv(it, "damping", 0.012)
+	sb.drag_coefficient = _iv(it, "drag", 0.02)
 	sb.pressure_coefficient = 0.0
 	model.add_child(sb)
-	if owner_body != null:
-		sb.add_collision_exception_with(owner_body)
-	_cloth = sb
-	for bn: Variant in cape.get("pin_bones", ["Spine02", "LeftShoulder", "RightShoulder", "neck"]):
+	if _owner_body != null:
+		sb.add_collision_exception_with(_owner_body)
+	w.cloth = sb
+	(w.nodes as Array).append(sb)
+	for bn: Variant in it.get("pin_bones", ["Spine02", "LeftShoulder", "RightShoulder", "neck"]):
 		var bi := _skel.find_bone(str(bn))
 		if bi < 0:
 			continue
@@ -246,10 +313,37 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 		an.top_level = true
 		model.add_child(an)
 		an.global_transform = _bone_world(bi, true)    # пришиваем в позе покоя — как сетка
-		_cloth_anchors.append([an, bi])
-	if _cloth_anchors.is_empty():
-		return
-	_cloth_pin_left = 1
+		(w.anchors as Array).append([an, bi])
+		(w.nodes as Array).append(an)
+	if (w.anchors as Array).is_empty():
+		return false
+	w.pin_left = 1
+	if _colliders.is_empty():
+		_make_body_colliders()
+	return true
+
+
+func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
+	var bi := _skel.find_bone(str(it.get("bone", "Head")))
+	var src := _mod.model(str(it.get("model", "")))
+	if src == null or bi < 0:
+		if src != null:
+			src.free()
+		return false
+	var follow := Node3D.new()
+	follow.top_level = true
+	model.add_child(follow)
+	follow.add_child(src)
+	w.bone = bi
+	w.rel = _bone_world(bi, true).affine_inverse() * model.global_transform   # вещь сделана в позе покоя модели
+	follow.global_transform = _bone_world(bi) * (w.rel as Transform3D)
+	w.follow = follow
+	(w.nodes as Array).append(follow)
+	return true
+
+
+## Капсулы тела (таз, спина, бёдра, голени) — о них бьётся ткань; персонажа и мир они не трогают.
+func _make_body_colliders() -> void:
 	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.15],
 			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
 			["LeftLeg", "LeftFoot", 0.08], ["RightLeg", "RightFoot", 0.08]]:
@@ -265,7 +359,7 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 		var sh := CollisionShape3D.new()
 		var cap := CapsuleShape3D.new()
 		var len_ := (_bone_world(ib, true).origin - _bone_world(ia, true).origin).length()
-		cap.radius = float(d[2]) * _f("cape_body_scale", 1.0)
+		cap.radius = float(d[2]) * _f("cloth_body_scale", 1.5)
 		cap.height = len_ + cap.radius * 2.0
 		sh.shape = cap
 		body.add_child(sh)
@@ -274,26 +368,28 @@ func _make_cloth(owner_body: PhysicsBody3D) -> void:
 	_move_colliders()
 
 
-## Верх плаща пришивается по всей ширине: точки делятся на полосы по X, в каждой пришиваются те, что у её верхнего
-## края (у плеч верх ниже, чем у шеи), — каждая к ближней из костей груди, плеч и шеи. Позиции берутся у самих точек
-## мягкого тела (не по номерам вершин сетки — сервер физики мог сварить их по-своему). false — точки ещё не готовы.
-func _pin_cloth() -> bool:
-	var cape: Dictionary = meta.get("cape", {})
-	var n := (_cloth.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+## Верх ткани пришивается по всей ширине: точки делятся на полосы по X, в каждой пришиваются те, что у её верхнего
+## края, — каждая к ближней из костей pin_bones. Позиции берутся у самих точек мягкого тела (не по номерам вершин —
+## сервер физики мог сварить их по-своему). false — точки ещё не готовы.
+func _pin_cloth(w: Dictionary) -> bool:
+	var sb: SoftBody3D = w.cloth
+	var it: Dictionary = w.item
+	var xf: Transform3D = w.xform
+	var n := (sb.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 	var raw := PackedVector3Array()
 	var c := Vector3.ZERO
 	for i: int in n:
-		var p: Vector3 = _cloth.get_point_transform(i)
+		var p: Vector3 = sb.get_point_transform(i)
 		raw.append(p)
 		c += p
 	if n == 0 or c == Vector3.ZERO:
 		return false
 	c /= float(n)
 	# точки — в мире или в осях узла: что ближе к телу, то и верно
-	var to_local := _cloth_xform.affine_inverse()
-	var global := c.distance_to(model.global_position) < (_cloth_xform * c).distance_to(model.global_position)
-	var strip := _f("cape_pin_strip", 0.05)
-	var band := float(cape.get("pin_band", 0.08))
+	var global := c.distance_to(model.global_position) < (xf * c).distance_to(model.global_position)
+	var to_local := xf.affine_inverse()
+	var strip := _iv(it, "pin_strip", 0.05)
+	var band := _iv(it, "pin_band", 0.08)
 	var loc := PackedVector3Array()
 	var tops := {}
 	for p: Vector3 in raw:
@@ -306,23 +402,18 @@ func _pin_cloth() -> bool:
 		var l := loc[i]
 		if l.y < float(tops[int(floor(l.x / strip))]) - band:
 			continue
-		var w := _cloth_xform * l
+		var wp := xf * l
 		var best: Node3D = null
 		var bd := INF
-		for an: Array in _cloth_anchors:
+		for an: Array in w.anchors:
 			var node: Node3D = an[0]
-			var d := node.global_position.distance_to(w)
+			var d := node.global_position.distance_to(wp)
 			if d < bd:
 				bd = d
 				best = node
-		_cloth.set_point_pinned(i, true, _cloth.get_path_to(best))
+		sb.set_point_pinned(i, true, sb.get_path_to(best))
 		pinned += 1
-	var low := INF
-	for i: int in n:
-		if loc[i].y < low:
-			low = loc[i].y
-			_dbg_point = i
-	_mod.log_info("Pax RPG: cape pinned %d of %d points (%s)" % [pinned, n, "global" if global else "local"])
+	_mod.log_info("Pax RPG: %s pinned %d of %d points" % [w.id, pinned, n])
 	return true
 
 
@@ -337,26 +428,27 @@ func _move_colliders() -> void:
 		body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
 
 
-func _cloth_tick() -> void:
-	if _cloth == null or not _cloth.is_inside_tree():
+func _items_tick() -> void:
+	if _skel == null or not model.is_inside_tree():
 		return
-	if _cloth_pin_left > 0:
-		_cloth_pin_left -= 1
-		if _cloth_pin_left == 0 and not _pin_cloth():
-			_cloth_pin_left = 1                  # точки мягкого тела ещё не созданы — через кадр
-		return
-	for an: Array in _cloth_anchors:
-		(an[0] as Node3D).global_transform = _bone_world(int(an[1]))
-	_move_colliders()
-	if bool(cfg.get("cape_debug", false)):
-		_dbg_frames += 1
-		if _dbg_frames % 60 == 0:
-			var hem: Vector3 = _cloth.get_point_transform(_dbg_point)
-			var top: Vector3 = (_cloth_anchors[0][0] as Node3D).global_position
-			_mod.log_info("cape dbg: hem %s top %s model %s" % [hem, top, model.global_position])
+	var any_cloth := false
+	for w: Dictionary in _worn.values():
+		if w.cloth != null:
+			any_cloth = true
+			if int(w.pin_left) > 0:
+				w.pin_left = int(w.pin_left) - 1
+				if int(w.pin_left) == 0 and not _pin_cloth(w):
+					w.pin_left = 1              # точки мягкого тела ещё не созданы — через кадр
+				continue
+			for an: Array in w.anchors:
+				(an[0] as Node3D).global_transform = _bone_world(int(an[1]))
+		elif w.has("follow"):
+			(w.follow as Node3D).global_transform = _bone_world(int(w.bone)) * (w.rel as Transform3D)
+	if any_cloth:
+		_move_colliders()
 
 
-## Ткань сама тянется за телом — ветер больше не нужен (оставлено для location.gd).
+## Ткань сама тянется за телом — ветер не нужен (оставлено для location.gd).
 func cape_wind(_velocity: Vector3) -> void:
 	pass
 
@@ -620,7 +712,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_on_floor = on_floor
 	_show_sword(delta)
 	_trail_tick(delta)
-	_cloth_tick()
+	_items_tick()
 	return out
 
 

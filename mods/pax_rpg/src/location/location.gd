@@ -342,7 +342,7 @@ func _update_hud() -> void:
 	_hud.text = "\n".join(lines)
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C]
 
 
 func _input(event: InputEvent) -> void:
@@ -366,5 +366,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
+		if key.pressed and not key.echo and key.physical_keycode == KEY_C and _hero != null:
+			_hero.toggle_slot("back")                # снять / надеть плащ
 		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):
 			_f_queued = true
