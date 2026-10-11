@@ -69,6 +69,7 @@ var _dead_seen: Dictionary = {}    # id гоблина → уже засчита
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
 var _pause: PauseMenu              # меню паузы (Esc)
 var _sfx: Sfx                      # шаги, снаряжение, гул города
+var _zoom_want := 0.0              # куда крутят колесом; _zoom догоняет плавно, с лёгкой задержкой
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
@@ -175,6 +176,7 @@ func build(city: Dictionary) -> void:
 		exit_requested.emit())
 	add_child(_pause)
 	_zoom = 0.0
+	_zoom_want = 0.0
 	_yaw = 0.0
 	_near_gate = false
 	_flask = int(_hf("flask_charges", 3.0))
@@ -656,6 +658,8 @@ func _follow_camera(delta := 0.0) -> void:
 	var k := smoothstep(0.0, 1.0, _cam_lock)
 	var target := _player.position + Vector3(0.0, 0.9, 0.0)
 	# колесо: от обычной дали до «боевой» — как за плечом в захвате (высота и даль lock_camera_*)
+	if delta > 0.0:
+		_zoom = lerpf(_zoom, _zoom_want, 1.0 - exp(-delta * _f("zoom_smooth", 3.0)))
 	var z := smoothstep(0.0, 1.0, _zoom)
 	var ch := lerpf(_f("camera_height", 3.5), _f("lock_camera_height", 1.75) - 0.9, z)
 	var cd := lerpf(_f("camera_distance", 7.0), _f("lock_camera_distance", 3.2), z)
@@ -1058,7 +1062,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event
 		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			_zoom = clampf(_zoom + (0.12 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -0.12), 0.0, 1.0)
+			_zoom_want = clampf(_zoom_want + (0.1 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else -0.1), 0.0, 1.0)
 			get_viewport().set_input_as_handled()
 			return
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
