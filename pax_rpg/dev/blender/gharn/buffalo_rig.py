@@ -79,7 +79,30 @@ bpy.ops.object.select_all(action="DESELECT")
 body.select_set(True)
 rig.select_set(True)
 bpy.context.view_layer.objects.active = rig
-bpy.ops.object.parent_set(type="ARMATURE_AUTO")
+bpy.ops.object.parent_set(type="ARMATURE_NAME")     # группы по именам костей; веса — ниже, свои
+# веса по расстоянию до отрезков костей (автовеса Blender на сетке Meshy молча не считаются): 3 ближайшие кости,
+# вес ~ 1/d^4, ноги не берут вершины корпуса выше бедра, хвост — только позади таза
+import numpy as np  # noqa: E402
+segs = [(name, np.array(h), np.array(t)) for name, h, t, _ in BONES]
+co = np.array([v.co[:] for v in body.data.vertices])
+D = np.zeros((len(co), len(segs)))
+for j, (name, h, t) in enumerate(segs):
+    ab = t - h
+    u = np.clip(((co - h) @ ab) / max(ab @ ab, 1e-9), 0.0, 1.0)
+    d = np.linalg.norm(co - (h + u[:, None] * ab), axis=1)
+    if "Up" in name or "Low" in name:
+        d = d + np.where(co[:, 2] > h[2] + 0.05, 9.0, 0.0)          # нога — не выше своего начала
+    if name.startswith("Tail"):
+        d = d + np.where(co[:, 1] < segs[0][1][1], 9.0, 0.0)        # хвост — только сзади
+    D[:, j] = d
+W = 1.0 / np.maximum(D, 0.02) ** 4
+top = np.argsort(-W, axis=1)[:, :3]
+for j, (name, _, _) in enumerate(segs):
+    vg = body.vertex_groups.get(name) or body.vertex_groups.new(name=name)
+    rows = np.where((top == j).any(axis=1))[0]
+    tot = np.take_along_axis(W, top, axis=1).sum(axis=1)
+    for i in rows:
+        vg.add([int(i)], float(W[i, j] / tot[i]), "REPLACE")
 print("weights:", len(body.vertex_groups), "groups", flush=True)
 pb = rig.pose.bones
 for p in pb:
