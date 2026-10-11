@@ -77,6 +77,21 @@
   },
   "SheatheWalk": {
    "length": 1.9
+  },
+  "Block": {
+   "length": 1.0
+  },
+  "BlockWalkF": {
+   "length": 1.667
+  },
+  "BlockWalkB": {
+   "length": 2.467
+  },
+  "BlockWalkL": {
+   "length": 2.467
+  },
+  "BlockWalkR": {
+   "length": 2.467
   }
  },
  "root_motion": {
