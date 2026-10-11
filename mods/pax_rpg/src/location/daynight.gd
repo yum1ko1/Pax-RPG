@@ -25,9 +25,20 @@ func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dicti
 	apply()
 
 
+var _since := 0.0
+
+
+## Солнце, небо, туман и огни — не каждый кадр: смена неба заставляет Godot пересчитывать освещение от неба
+## (radiance), сдвиг солнца — тени. Раз в STEP секунд глаз разницы не видит (за 2 с солнце сдвигается на 0.6°).
+const STEP := 2.0
+
+
 func _process(delta: float) -> void:
 	hour = fmod(hour + delta * 24.0 / (day_minutes * 60.0), 24.0)
-	apply()
+	_since += delta
+	if _since >= STEP:
+		_since = 0.0
+		apply()
 
 
 func apply() -> void:

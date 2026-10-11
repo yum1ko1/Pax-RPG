@@ -136,7 +136,15 @@ func _perf_command(args: PackedStringArray) -> String:
 			out.append("%s %dk" % [keys[i], int(heavy[keys[i]]) / 1000])
 		return " | ".join(out)
 	var rs := RenderingServer
-	return "fps %d · draw %d · obj %d · prim %dk · vram %d МБ · %s" % [Engine.get_frames_per_second(),
+	var vp: Viewport = location.get("_view")
+	var gpu := ""
+	if vp != null:
+		rs.viewport_set_measure_render_time(vp.get_viewport_rid(), true)
+		gpu = " · 3D: gpu %.1f мс cpu %.1f мс" % [rs.viewport_get_measured_render_time_gpu(vp.get_viewport_rid()),
+			rs.viewport_get_measured_render_time_cpu(vp.get_viewport_rid())]
+	gpu += " · скрипты %.1f мс · физика %.1f мс · узлов %d" % [Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+		Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, Performance.get_monitor(Performance.OBJECT_NODE_COUNT)]
+	return gpu + " · fps %d · draw %d · obj %d · prim %dk · vram %d МБ · %s" % [Engine.get_frames_per_second(),
 		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
 		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
 		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME) / 1000,

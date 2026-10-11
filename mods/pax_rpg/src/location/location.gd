@@ -640,9 +640,8 @@ func _physics_process(delta: float) -> void:
 	elif _lock != null and not running:
 		speed *= _hf("lock_speed_factor", 0.75)          # в поединке — осторожный шаг
 	var vel := _player.velocity
-	var acc := _hf("accel", 9.0) * delta                  # разгон и торможение плавно, не рывком
-	vel.x = move_toward(vel.x, move.x * speed, acc)
-	vel.z = move_toward(vel.z, move.z * speed, acc)
+	vel.x = move.x * speed
+	vel.z = move.z * speed
 	var space := Input.is_physical_key_pressed(KEY_SPACE) and not _typing()
 	if on_floor:
 		if space and not _space_down and not locked:
@@ -699,7 +698,7 @@ func _physics_process(delta: float) -> void:
 		var br := Vector3(cos(by), 0.0, -sin(by))
 		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
 	if _hero != null:
-		var r: Dictionary = _hero.tick(delta, moving, Vector2(_player.velocity.x, _player.velocity.z).length(), running, on_floor)
+		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)

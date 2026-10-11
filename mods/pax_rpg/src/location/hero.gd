@@ -828,7 +828,43 @@ func _make_body_colliders() -> void:
 		body.add_child(sh)
 		model.add_child(body)
 		_colliders.append([body, ia, ib])
+	_sword_collider()
 	_move_colliders()
+
+
+## Меч за спиной — тоже капсула для ткани: плащ ложится поверх клинка, а не проходит сквозь.
+var _sword_cap: Array = []           # [AnimatableBody3D, центр клинка в осях меча, ось клинка в осях меча]
+
+
+func _sword_collider() -> void:
+	if _sword_back == null:
+		return
+	var box := AABB()
+	var first := true
+	for mi: Node in _sword_back.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var a := _sword_back.global_transform.affine_inverse() * m.global_transform * m.get_aabb()
+		box = a if first else box.merge(a)
+		first = false
+	if first:
+		return
+	var axis := Vector3.ZERO
+	axis[box.get_longest_axis_index()] = 1.0
+	var length := box.get_longest_axis_size()
+	var body := AnimatableBody3D.new()
+	body.top_level = true
+	body.sync_to_physics = false
+	body.collision_layer = CLOTH_LAYER
+	body.collision_mask = 0
+	var sh := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = _f("cloth_sword_radius", 0.07)
+	cap.height = length + cap.radius * 2.0
+	sh.shape = cap
+	body.add_child(sh)
+	model.add_child(body)
+	_sword_cap = [body, box.get_center(), axis]
+	_colliders.append([body, -1, -1])
 
 
 ## Верх ткани пришивается по всей ширине: точки делятся на полосы по X, в каждой пришиваются те, что у её верхнего
@@ -883,6 +919,14 @@ func _pin_cloth(w: Dictionary) -> bool:
 func _move_colliders() -> void:
 	for c: Array in _colliders:
 		var body: AnimatableBody3D = c[0]
+		if int(c[1]) < 0:                              # меч за спиной: по его узлу; в руке — капсула убрана
+			if _sword_cap.is_empty() or not _sword_back.is_visible_in_tree():
+				body.global_position = Vector3(0, -1000, 0)
+				continue
+			var sx := _sword_back.global_transform
+			var ax := (sx.basis * (_sword_cap[2] as Vector3)).normalized()
+			body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, ax)), sx * (_sword_cap[1] as Vector3))
+			continue
 		var a := _bone_world(int(c[1])).origin
 		var b := _bone_world(int(c[2])).origin
 		var dir := b - a
@@ -1260,8 +1304,7 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
 			bl = _f("blend_stance", 0.45)        # приседает в стойку и выпрямляется плавно
 		anim.play(want, bl)
-	var sc := clampf(speed / stride, 0.5, 2.0) if moving else 1.0
-	anim.speed_scale = lerpf(anim.speed_scale, sc, 0.12)   # темп шага меняется плавно
+	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
 
 
 ## Направление шага по move_dir: ближайшее из вперёд / вправо / назад / влево, но меняется, только когда новое
