@@ -25,13 +25,13 @@
    "length": 1.8
   },
   "GuardBack": {
-   "length": 2.467
+   "length": 1.267
   },
   "GuardStrafeL": {
-   "length": 2.467
+   "length": 1.133
   },
   "GuardStrafeR": {
-   "length": 2.467
+   "length": 1.133
   },
   "Hurt": {
    "length": 1.633
@@ -58,13 +58,13 @@
    "length": 1.967
   },
   "Walk": {
-   "length": 1.033
+   "length": 2.767
   },
   "WalkArmed": {
-   "length": 1.667
+   "length": 1.333
   },
   "WalkBack": {
-   "length": 0.867
+   "length": 1.2
   },
   "IdleArmed": {
    "length": 2.0
@@ -95,6 +95,12 @@
   },
   "CombatIdle": {
    "length": 1.333
+  },
+  "HeavySlash": {
+   "length": 1.867
+  },
+  "Turn180Armed": {
+   "length": 0.767
   }
  },
  "root_motion": {
@@ -1621,5 +1627,6 @@
  },
  "impact": {
   "Attack3": 1.1
- }
+ },
+ "_mixamo": "Walk, WalkArmed, GuardBack, GuardStrafeL/R, WalkBack, HeavySlash, Turn180Armed — анимации Mixamo автора, перенесены на риг (pax_rpg/dev/blender/knight/mixamo_retarget.py)."
 }
