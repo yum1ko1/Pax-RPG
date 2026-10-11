@@ -34,6 +34,7 @@ def load(pid):
     for o in obs:
         o.select_set(True)
     bpy.context.view_layer.objects.active = obs[0]
+    bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")   # масштаб Meshy — у родителя-узла glTF
     if len(obs) > 1:
         bpy.ops.object.join()
     ob = bpy.context.view_layer.objects.active
