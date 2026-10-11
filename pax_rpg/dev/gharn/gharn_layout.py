@@ -32,8 +32,8 @@ def add(m, x, z, r=0.0, s=1.0, c=None, y=0.0, rad=0.0):
         a = math.radians(r)
         lx, lz = wx * s, wz * s
         items.append({"m": P + "window_glass.glb", "p": [round(x + lx * math.cos(a) + lz * math.sin(a), 3),
-                      round(y + (wy - wh / 2) * s, 3), round(z - lx * math.sin(a) + lz * math.cos(a), 3)],
-                      "r": round(r + wyaw, 1), "s": 1.0, "sv": [round(ww * s, 2), round(wh * s / 1.3, 2), 1.0], "c": False})
+                      round(y + wy * s, 3), round(z - lx * math.sin(a) + lz * math.cos(a), 3)],
+                      "r": round(r + wyaw, 1), "s": s, "c": False})
     it = {"m": (P if not m.startswith("@") else B) + name + ".glb", "p": [round(x, 2), round(y, 2), round(z, 2)],
           "r": round(r, 1), "s": s, "c": (name not in NO_COLLIDE) if c is None else c}
     if name in TRUNK:

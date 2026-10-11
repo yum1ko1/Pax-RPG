@@ -1,5 +1,5 @@
-"""Окна зданий Гхарна: где на фасадах нарисованы окна (тёмные пятна в текстуре Meshy на ровной вертикальной стене),
-туда в игре ставится стекло (props/window_glass.glb — материал glass отражает небо и свет).
+"""Окна зданий Гхарна: на ровных участках стен (по этажам, с шагом) ставятся оконные блоки props/window_glass.glb
+(рама, решётка, стекло — материал glass в игре отражает небо и свет).
 Лучи снаружи к оси здания на разных высотах → точка стены, нормаль, цвет текстуры в точке; тёмные точки
 собираются в окна (центр, размер, поворот). Итог — W\\gharn\\windows.json (координаты glTF: Y вверх, метры,
 в осях модели) и превью W\\gharn\\windows\\<id>.png (здание + найденные стёкла, для проверки глазами).
@@ -139,40 +139,30 @@ def analyse(pid):
     print(f"{pid}: bounds {tuple(round(v, 1) for v in lo)} {tuple(round(v, 1) for v in hi)}, stats {stats}", flush=True)
     if not pts:
         return []
-    ls = sorted(q[2] for q in pts)
-    med = ls[len(ls) // 2]
-    dark = [q for q in pts if q[2] < med * 0.5]
-    # кластеры тёмных точек рядом (0.5 м) с близкими нормалями
-    wins = []
-    used = [False] * len(dark)
-    for i in range(len(dark)):
-        if used[i]:
+    # окна по этажам: ровно на 1.3×1.7 м вокруг, не ниже 2.4 м от земли (двери, крыльцо), шаг ≥ 2.8 м
+    floors = [lo.z + 2.6 + k * 3.3 for k in range(6) if lo.z + 2.6 + k * 3.3 + 1.4 < lo.z + height * 0.72]
+    wins, taken = [], []
+    for p, n, lum in sorted(pts, key=lambda q: math.atan2(q[0].y - c.y, q[0].x - c.x)):
+        fz = min(floors, key=lambda f: abs(p.z - (f + 0.65))) if floors else None
+        if fz is None or abs(p.z - (fz + 0.65)) > STEP_Z * 0.6:
             continue
-        group, stack = [], [i]
-        used[i] = True
-        while stack:
-            j = stack.pop()
-            group.append(dark[j])
-            for k in range(len(dark)):
-                if not used[k] and (dark[k][0] - dark[j][0]).length < 0.5 and dark[k][1].dot(dark[j][1]) > 0.9:
-                    used[k] = True
-                    stack.append(k)
-        if len(group) < 6:
+        if any((p - q).length < 2.8 for q in taken):
             continue
-        n = sum((g[1] for g in group), Vector()).normalized()
         t = Vector((-n.y, n.x, 0)).normalized()
-        cen = sum((g[0] for g in group), Vector()) / len(group)
-        hs = [(g[0] - cen).dot(t) for g in group]
-        vs = [g[0].z for g in group]
-        w, h = max(hs) - min(hs) + 0.3, max(vs) - min(vs) + STEP_Z
-        if w < 0.45 or h < 0.6 or w > 3.0 or h > 3.5:
+        ok = True
+        for off in (t * 0.65, -t * 0.65, Vector((0, 0, 0.8)), Vector((0, 0, -0.8)), t * 0.65 + Vector((0, 0, 0.8)),
+                    -t * 0.65 - Vector((0, 0, 0.8))):
+            h2 = bvh.ray_cast(p + off + n * 1.2, -n)
+            if h2[0] is None or abs((h2[0] - (p + off)).dot(n)) > 0.08 or h2[1].dot(n) < 0.9:
+                ok = False
+                break
+        if not ok:
             continue
-        cen = cen + t * ((max(hs) + min(hs)) / 2) + n * 0.03
-        cen.z = (max(vs) + min(vs)) / 2
-        # Blender (x, y, z) → glTF (x, z, −y); поворот вокруг Y glTF: +Z стекла → нормаль стены
-        nx, nz = n.x, -n.y
-        wins.append([round(cen.x, 3), round(cen.z, 3), round(-cen.y, 3), round(math.degrees(math.atan2(nx, nz)), 1),
-                     round(min(w, 2.2), 2), round(min(h, 2.4), 2)])
+        taken.append(p)
+        cen = p + n * 0.02
+        nx, nz = n.x, -n.y                             # Blender (x, y, z) → glTF (x, z, −y)
+        wins.append([round(cen.x, 3), round(fz, 3), round(-cen.y, 3), round(math.degrees(math.atan2(nx, nz)), 1), 1.0, 1.3])
+    dark = []
     print(f"{pid}: wall {len(pts)}, dark {len(dark)}, windows {len(wins)}", flush=True)
     preview(pid, ob, wins)
     return wins
@@ -185,6 +175,7 @@ def preview(pid, ob, wins):
         bpy.ops.mesh.primitive_plane_add(size=1)
         pl = bpy.context.active_object
         pl.scale = (w, h, 1)
+        y = y + h / 2
         # плоскость XY → вертикальная, лицом по нормали (glTF yaw → Blender)
         pl.rotation_euler = (math.pi / 2, 0, math.radians(yaw))
         pl.location = (x, -z, y)
