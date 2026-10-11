@@ -436,6 +436,35 @@ var _lantern_mesh: SphereMesh
 var _rim_mesh: CylinderMesh
 
 
+## Текстура бумажного фонаря-тётин: оранжевая бумага с волокнами, бамбуковые рёбра поперёк, тёмные
+## полосы у горловин, с двух сторон — чёрный герб (круг с тремя каплями-томоэ).
+func _lantern_tex() -> ImageTexture:
+	var w := 256
+	var h := 128
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var n := FastNoiseLite.new()
+	n.frequency = 0.08
+	for y: int in h:
+		var v := float(y) / h
+		var rib := pow(absf(sin(v * PI * 11.0)), 18.0)
+		var band := 1.0 - smoothstep(0.06, 0.12, v) * smoothstep(0.94, 0.88, v)
+		for x: int in w:
+			var f := n.get_noise_2d(x * 3.0, y * 0.6) * 0.06
+			var c := Color(0.97 + f, 0.5 + f, 0.16 + f * 0.5)
+			c = c.lerp(Color(0.55, 0.16, 0.05), rib * 0.6)
+			c = c.lerp(Color(0.1, 0.05, 0.04), band)
+			for cx: float in [0.25, 0.75]:              # герб с двух сторон
+				var d := Vector2((float(x) / w - cx) * 2.0, v - 0.5)
+				var r := d.length()
+				var ring := smoothstep(0.012, 0.0, absf(r - 0.17))
+				var ang := atan2(d.y, d.x)
+				var tomoe := smoothstep(0.02, 0.0, absf(r - 0.085 - 0.04 * sin(ang * 3.0))) * float(r < 0.15)
+				c = c.lerp(Color(0.08, 0.03, 0.02), maxf(ring, tomoe) * 0.9)
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
 func _lantern_line(l: Array, seed_v: int) -> void:
 	var a := Vector3(float(l[0]), 0, float(l[1]))
 	var b := Vector3(float(l[2]), 0, float(l[3]))
@@ -444,10 +473,12 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	rng.seed = seed_v
 	if _lantern_mesh == null:
 		var paper := StandardMaterial3D.new()
-		paper.albedo_color = Color(0.95, 0.32, 0.08)
+		var ptex := _lantern_tex()
+		paper.albedo_texture = ptex
 		paper.emission_enabled = true
-		paper.emission = Color(1.0, 0.3, 0.05)
-		paper.emission_energy_multiplier = 0.12
+		paper.emission = Color(1.0, 0.42, 0.12)
+		paper.emission_texture = ptex
+		paper.emission_energy_multiplier = 0.4
 		paper_mats.append(paper)                          # мягко разгорается к ночи (daynight.gd)
 		paper.roughness = 0.8
 		_lantern_mesh = SphereMesh.new()
@@ -515,7 +546,7 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	light.omni_range = 7.0
 	light.position = a.lerp(b, 0.5) + Vector3(0, hgt - 0.8, 0)
 	root.add_child(light)
-	lights.append([light, 1.3])
+	lights.append([light, 2.2])
 	count += 1
 
 

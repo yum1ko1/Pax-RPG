@@ -62,7 +62,7 @@ func apply() -> void:
 	for pm: Variant in paper:
 		var m2 := pm as BaseMaterial3D
 		if m2 != null:
-			m2.emission_energy_multiplier = lerpf(0.1, 0.55, night)
+			m2.emission_energy_multiplier = lerpf(0.35, 1.6, night)
 	for g: Variant in glass:
 		var m := g as BaseMaterial3D
 		if m != null:
