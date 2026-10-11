@@ -65,11 +65,17 @@ func build_test() -> void:
 	build({"id": "test"})
 	test_mode = true
 	_city_name = mod.tr_key("pax_rpg_menu_test")
-	var g := Goblin.new()
-	g.setup(mod, _player, _on_hero_hit, START + Vector3(0.0, -1.0, -9.0))
-	_view.add_child(g)
-	_goblins.append(g)
 	_update_hud()
+
+
+## Гоблины локации (config/location.json → goblins): полукругом перед героем, между ним и воротами.
+func _spawn_goblins(n: int) -> void:
+	for i: int in n:
+		var g := Goblin.new()
+		var a := (float(i) - (n - 1) * 0.5) * 0.6
+		g.setup(mod, _player, _on_hero_hit, START + Vector3(sin(a) * 9.0, -1.0, -cos(a) * 9.0))
+		_view.add_child(g)
+		_goblins.append(g)
 
 
 func build(city: Dictionary) -> void:
@@ -90,6 +96,7 @@ func build(city: Dictionary) -> void:
 	_make_ground()
 	_make_gate()
 	_make_player()
+	_spawn_goblins(int(cfg.get("goblins", 1)))
 	_cam = Camera3D.new()
 	_cam.fov = 65.0
 	_view.add_child(_cam)
@@ -393,7 +400,7 @@ func _update_hud() -> void:
 	if not is_instance_valid(_hud):
 		return
 	var lines := PackedStringArray([_city_name, mod.tr_key("pax_rpg_controls")])
-	if test_mode:
+	if not _goblins.is_empty():
 		lines.append("%s %d / %d" % [mod.tr_key("pax_rpg_hero_hp"), ceili(_hp), int(HERO_HP)])
 	if _near_gate:
 		lines.append(mod.tr_key("pax_rpg_gate_hint"))
