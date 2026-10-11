@@ -154,4 +154,7 @@ for n in ("Sword_Hand", "Sword_Drag"):
     if n in bpy.data.objects:
         bpy.data.objects[n].hide_set(True)
 files = U.shot("cape_on", (0, 0.1, 0.95), 2.4, ("BACK", "RIGHT", "FRONT34"), res=450)
+ob.hide_set(True)
+files += U.shot("cape_off", (0, 0.0, 1.35), 1.2, ("BACK", "FRONT34", "RIGHT"), res=450)   # шея и плечи без плаща
+ob.hide_set(False)
 result["files"] = [p.split("\\")[-1] for p in files]
