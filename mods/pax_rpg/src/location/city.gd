@@ -559,6 +559,9 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	light.light_color = Color(1.0, 0.55, 0.25)
 	light.light_energy = 0.8
 	light.omni_range = 7.0
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 45.0
+	light.distance_fade_length = 10.0
 	light.position = a.lerp(b, 0.5) + Vector3(0, hgt - 0.8, 0)
 	root.add_child(light)
 	lights.append([light, 2.2])
@@ -786,9 +789,24 @@ func _lights(path: String, list: Array) -> void:
 		l.light_color = col
 		l.light_energy = 1.6
 		l.omni_range = 9.0
+		l.distance_fade_enabled = true                    # дальние огни не считаем
+		l.distance_fade_begin = 45.0
+		l.distance_fade_length = 10.0
 		l.position = t * off
 		root.add_child(l)
 		lights.append([l, 2.8])
+
+
+const CELL := 24.0
+
+
+## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
+func _small_prop(path: String) -> float:
+	for k: Array in [["grass_tuft", 40.0], ["rock_small", 60.0], ["bush_dry", 70.0], ["fence_wood", 80.0],
+			["barrel", 60.0], ["crate", 60.0], ["sack", 50.0], ["pot", 45.0], ["bucket", 45.0], ["wall_rubble", 70.0]]:
+		if path.get_file().begins_with(str(k[0])):
+			return float(k[1])
+	return 0.0
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
@@ -813,15 +831,32 @@ func _place(path: String, list: Array) -> void:
 				_glass(sm)
 			elif sm is BaseMaterial3D and not _mats.has(sm):
 				_mats.append(sm)
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = pr[0]
-		mm.instance_count = list.size()
+		# по ячейкам CELL м: у MultiMesh на весь город рамка на весь город — камера не отсекает ничего,
+		# и каждый каскад тени рисует всё заново. Ячейками — рисуется только то, что в кадре.
+		var cells := {}
 		for i: int in list.size():
-			mm.set_instance_transform(i, (list[i][0] as Transform3D) * (pr[1] as Transform3D))
-		var mi := MultiMeshInstance3D.new()
-		mi.multimesh = mm
-		root.add_child(mi)
+			var o: Vector3 = (list[i][0] as Transform3D).origin
+			var key := Vector2i(floori(o.x / CELL), floori(o.z / CELL))
+			if not cells.has(key):
+				cells[key] = []
+			(cells[key] as Array).append(i)
+		var small := _small_prop(path)
+		for key: Vector2i in cells:
+			var ids: Array = cells[key]
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = pr[0]
+			mm.instance_count = ids.size()
+			for j: int in ids.size():
+				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
+			var mi := MultiMeshInstance3D.new()
+			mi.multimesh = mm
+			if small > 0.0:                               # мелочь: без тени и не рисуется вдали
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mi.visibility_range_end = small
+				mi.visibility_range_end_margin = 6.0
+				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+			root.add_child(mi)
 	for e: Array in list:
 		count += 1
 		var t: Transform3D = e[0]

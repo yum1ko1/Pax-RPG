@@ -339,7 +339,7 @@ func _make_sky() -> void:
 	sun.light_energy = 1.35
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.5
-	sun.directional_shadow_max_distance = 140.0
+	sun.directional_shadow_max_distance = 90.0       # дальше тени не видны за дымкой, а каждый метр — лишняя отрисовка
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	_view.add_child(sun)
 	_sun = sun
