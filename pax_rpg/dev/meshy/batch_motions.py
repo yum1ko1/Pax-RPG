@@ -37,9 +37,9 @@ JOBS = {
                       "side steps, facing forward the whole time. Seamless loop.", 2.0),
     "anim2_StrafeR": (RIG_KNIGHT, "A heavily armored knight with empty hands walks sideways to HIS RIGHT with calm heavy "
                       "side steps, facing forward the whole time. Seamless loop.", 2.0),
-    "anim2_Deathblow": (RIG_KNIGHT, KNIGHT + ". Finishing blow: he raises the greatsword high with both hands, then "
-                        "drives it straight down with full weight into a fallen enemy on the ground right in front of "
-                        "him, holds it there for a moment, pulls it out and returns to guard.", 3.0),
+    "anim2_Deathblow": (RIG_KNIGHT, "An armored knight with a huge two-handed greatsword delivers a finishing blow: "
+                        "raises the sword high with both hands, drives it straight down with full weight into a "
+                        "fallen enemy on the ground in front of him, holds, pulls it out and returns to guard.", 3.0),
     "anim2_WalkBack": (RIG_KNIGHT, 544, 0),                  # библиотека: Walk Backward
     "anim2_Parry": (RIG_KNIGHT, 149, 0),                     # библиотека: Two-handed Parry
     "gob_CombatIdle": (RIG_GOBLIN, GOBLIN + " crouches in a wary fighting stance, swaying slightly, blade ready, "
