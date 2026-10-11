@@ -17,9 +17,11 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
+const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
+const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const HERO_HP := 100.0
@@ -70,13 +72,21 @@ var _toast: Dictionary = {}        # уведомление слева: {text, t
 var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
 var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
+var _help: HelpPanel               # кнопка и окно «Управление» (H)
 var _pause: PauseMenu              # меню паузы (Esc)
 var _sfx: Sfx                      # шаги, снаряжение, гул города
 var _zoom_want := 0.0              # куда крутят колесом; _zoom догоняет плавно, с лёгкой задержкой
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
 var _body_turn := false
-var _city_leaves: Array = []            # тело доворачивается к цели (голова уже не достаёт)
+var _city_leaves: Array = []
+var _city_lights: Array = []
+var _city_smoke: Array = []
+var _city_glass: Array = []
+var _env: Environment
+var _sun: DirectionalLight3D
+var _sky_mat: ShaderMaterial
+var _daynight: DayNight            # тело доворачивается к цели (голова уже не достаёт)
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -145,6 +155,8 @@ func build(city: Dictionary) -> void:
 	_box.add_child(_view)
 	_map_rects.clear()
 	_make_sky()
+	_city_lights = []
+	_city_glass = []
 	var layout := _city_layout(str(city.get("id", "")))
 	START = ARENA_START
 	_gate_radius = GATE_RADIUS
@@ -157,6 +169,9 @@ func build(city: Dictionary) -> void:
 		c.build(mod, _view, layout)
 		_map_rects.append_array(c.rects)
 		_city_leaves = c.leaves
+		_city_smoke = c.smoke
+		_city_lights = c.lights
+		_city_glass = c.glass
 		var st: Array = layout.get("start", [0, 1.2, 0])
 		START = Vector3(float(st[0]), float(st[1]), float(st[2]))
 		var ex: Array = layout.get("exit", [0, 0])
@@ -173,11 +188,17 @@ func build(city: Dictionary) -> void:
 		probe.box_projection = false
 		probe.intensity = 1.0
 		_view.add_child(probe)
+	_daynight = DayNight.new()
+	_daynight.lights = _city_lights
+	_daynight.glass = _city_glass
+	_daynight.setup(_env, _sun, _sky_mat, cfg)
+	_view.add_child(_daynight)
 	_make_player()
 	if not layout.is_empty():                          # ветер с порывами и листопад — в городе
 		var wind := Wind.new()
 		wind.setup(mod, _player)
 		wind.leaves = _city_leaves
+		wind.smoke = _city_smoke
 		_view.add_child(wind)
 	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
@@ -187,6 +208,12 @@ func build(city: Dictionary) -> void:
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
+	_help = HelpPanel.new()
+	_help.setup(mod)
+	_help.toggled.connect(func(on: bool) -> void:
+		if not paused():
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED)
+	add_child(_help)
 	_sfx = Sfx.new()
 	_sfx.setup(mod, not layout.is_empty())
 	add_child(_sfx)
@@ -194,6 +221,9 @@ func build(city: Dictionary) -> void:
 	_pause.setup(mod, mod.tr_key("pax_rpg_pause_leave"))
 	_pause.visible = false
 	_pause.resume.connect(_set_paused.bind(false))
+	_pause.show_help.connect(func() -> void:
+		_set_paused(false)
+		_help.set_open(true))
 	_pause.leave_city.connect(func() -> void:
 		_set_paused(false)
 		exit_requested.emit())
@@ -211,7 +241,7 @@ func build(city: Dictionary) -> void:
 	_hp_ghost = 1.0
 	_numbers.clear()
 	_toast = {}
-	_hint_t = 25.0
+	_hint_t = 0.0                                    # подсказка — не на экране, а в окне «Управление» (H)
 	_dead_seen.clear()
 	_lock_mark = MeshInstance3D.new()
 	var lm := SphereMesh.new()
@@ -240,7 +270,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help]:
 		if is_instance_valid(n):
 			n.queue_free()
 	_goblins.clear()
@@ -256,13 +286,22 @@ func clear() -> void:
 
 
 func _make_sky() -> void:
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.22, 0.42, 0.85)
-	sky_mat.sky_horizon_color = Color(1.0, 0.62, 0.86)     # розовая мановая атмосфера Юрумы
-	sky_mat.ground_horizon_color = Color(0.85, 0.55, 0.8)
-	sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.3)
 	var sky := Sky.new()
-	sky.sky_material = sky_mat
+	var ssh: Shader = mod.shader("shaders/sky.gdshader")
+	_sky_mat = null
+	if ssh != null:                                  # небо со сменой суток и облаками (daynight.gd)
+		_sky_mat = ShaderMaterial.new()
+		_sky_mat.shader = ssh
+		sky.sky_material = _sky_mat
+		sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
+		sky.radiance_size = Sky.RADIANCE_SIZE_64
+	else:
+		var sky_mat := ProceduralSkyMaterial.new()
+		sky_mat.sky_top_color = Color(0.22, 0.42, 0.85)
+		sky_mat.sky_horizon_color = Color(1.0, 0.62, 0.86)     # розовая мановая атмосфера Юрумы
+		sky_mat.ground_horizon_color = Color(0.85, 0.55, 0.8)
+		sky_mat.ground_bottom_color = Color(0.1, 0.12, 0.3)
+		sky.sky_material = sky_mat
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
@@ -279,12 +318,14 @@ func _make_sky() -> void:
 	env.glow_bloom = 0.08
 	env.fog_enabled = true                           # розовая дымка маны вдали
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
-	env.fog_density = 0.0035
+	env.fog_density = 0.0016                         # реже: за стеной видны холмы и горы в дымке
+	env.fog_aerial_perspective = 0.6
 	env.fog_sky_affect = 0.3
 	env.ssr_enabled = fplus                          # стёкла окон и лужи отражают город
 	env.ssr_max_steps = 48
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
+	_env = env
 	var we := WorldEnvironment.new()
 	we.environment = env
 	_view.add_child(we)
@@ -297,6 +338,16 @@ func _make_sky() -> void:
 	sun.directional_shadow_max_distance = 140.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	_view.add_child(sun)
+	_sun = sun
+
+
+## Консоль F8: rpg_time <час> — поставить время суток (для скриншотов).
+func set_hour(h: float) -> String:
+	if _daynight == null or not is_instance_valid(_daynight):
+		return "no location"
+	_daynight.hour = fmod(h, 24.0)
+	_daynight.apply()
+	return "time: %.1f" % _daynight.hour
 
 
 func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
@@ -1159,6 +1210,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			if is_instance_valid(_help) and (_help.is_open() or _help.over(mb.position)):
+				return                                   # клик — по кнопке / окну «Управление»
 			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED   # вернуть мышь камере (Esc её отпускал)
 			get_viewport().set_input_as_handled()
@@ -1189,7 +1242,8 @@ func _input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.physical_keycode == KEY_R:
 			_drink()                                 # эликсир
 		if key.pressed and not key.echo and key.physical_keycode == KEY_H:
-			_hint_t = 0.0 if _hint_t > 0.0 else 25.0  # подсказка управления
+			if is_instance_valid(_help):
+				_help.set_open(not _help.is_open())   # окно «Управление»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_C and _hero != null:
 			_hero.toggle_slot("back")                # снять / надеть плащ
 		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):

@@ -4,6 +4,7 @@ extends Control
 
 signal resume
 signal leave_city
+signal show_help
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 
@@ -59,6 +60,7 @@ func setup(mod: PaxMod, leave_text: String) -> void:
 	sep.add_theme_stylebox_override("separator", _line())
 	_box.add_child(sep)
 	_button(mod.tr_key("pax_rpg_pause_resume"), serif).pressed.connect(func() -> void: resume.emit())
+	_button(mod.tr_key("pax_rpg_help"), serif).pressed.connect(func() -> void: show_help.emit())
 	_leave = _button(leave_text, serif)
 	_leave.pressed.connect(func() -> void: leave_city.emit())
 	var hint := Label.new()

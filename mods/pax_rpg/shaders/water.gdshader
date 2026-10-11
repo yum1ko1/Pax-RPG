@@ -1,0 +1,35 @@
+// Вода фонтана: бегущая рябь (две волны нормалей из шума), прозрачная бирюза, блики, по краю — пена,
+// от центра (куда падает струя) — круги. Чаша — диск, UV (0.5, 0.5) — центр.
+shader_type spatial;
+render_mode blend_mix, cull_back, depth_draw_always;
+
+uniform vec4 deep : source_color = vec4(0.05, 0.28, 0.36, 0.82);
+uniform vec4 shallow : source_color = vec4(0.32, 0.72, 0.78, 0.6);
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+}
+float h(vec2 p) {
+	float r = length(p - 0.5);
+	float rings = sin(r * 70.0 - TIME * 5.0) * 0.5 * exp(-r * 5.0);          // круги от струи
+	return noise(p * 18.0 + TIME * vec2(0.4, 0.2)) * 0.6 + noise(p * 31.0 - TIME * vec2(0.3, 0.5)) * 0.4 + rings;
+}
+
+void fragment() {
+	vec2 e = vec2(0.004, 0.0);
+	float hc = h(UV);
+	vec3 n = normalize(vec3(h(UV - e.xy) - h(UV + e.xy), 0.06, h(UV - e.yx) - h(UV + e.yx)));
+	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
+	float r = length(UV - 0.5) * 2.0;
+	vec4 c = mix(shallow, deep, smoothstep(0.2, 0.9, hc));
+	float foam = smoothstep(0.86, 0.98, r) * (0.5 + 0.5 * noise(UV * 40.0 + TIME));
+	ALBEDO = mix(c.rgb, vec3(0.95), foam);
+	ALPHA = mix(c.a, 0.95, foam);
+	ROUGHNESS = 0.04;
+	METALLIC = 0.0;
+	SPECULAR = 0.8;
+	EMISSION = vec3(0.05, 0.15, 0.18) * (1.0 - r);
+}

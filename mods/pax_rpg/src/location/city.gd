@@ -1,4 +1,5 @@
 extends RefCounted
+const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 ## Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py):
 ## земля, модели (glb мода) и простые блоки (терраса, пандус, холм). Одинаковые модели ставятся пачкой —
 ## по MultiMeshInstance3D на каждую сетку модели (сотни бочек и тайлов дороги — пара вызовов отрисовки).
@@ -11,7 +12,9 @@ var mod: PaxMod
 var root: Node3D
 var rects: Array = []          # [центр XZ, размер XZ, цвет] — для миникарты
 var count := 0
-var leaves: Array = []         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
+var leaves: Array = []
+var lights: Array = []         # [OmniLight3D, энергия ночью] — ими управляет daynight.gd
+var glass: Array = []          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
 
 func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
@@ -25,6 +28,10 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
 	else:
 		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)
+	if bool(data.get("landscape", true)):              # степь, горы и кочевья за стеной
+		var land := Landscape.new()
+		var gw := Vector2(float(g[0]), float(g[1]))
+		land.build(mod, root, Rect2(Vector2(float(g[2]), float(g[3])) - gw * 0.5, gw))
 	var groups := {}
 	for it: Variant in data.get("items", []):
 		var d: Dictionary = it
@@ -34,6 +41,12 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			var b: Array = d.box
 			_block(Vector3(float(b[0]), float(b[1]), float(b[2])), pos, str(d.get("mat", "stone")), float(d.get("r", 0.0)),
 				float(d.get("rx", 0.0)), bool(d.get("c", true)))
+			continue
+		if d.has("sign"):
+			_sign(d.sign, pos, float(d.get("r", 0.0)))
+			continue
+		if d.has("laundry"):
+			_laundry(d.laundry, int(d.get("seed", 0)))
 			continue
 		var k := str(d.get("m", ""))
 		if d.has("anim"):                                 # живое существо: своя модель с анимациями
@@ -47,6 +60,10 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
+		_smoke_for(k, groups[k])
+		if k.ends_with("fountain_dragon.glb"):
+			for e: Array in groups[k]:
+				_fountain_water(e[0])
 		if k.ends_with("flame_tree.glb"):
 			_leaves(groups[k])
 		if k.ends_with("banner_clan.glb"):
@@ -130,6 +147,280 @@ func _fix_textures() -> void:
 					done[t] = ImageTexture.create_from_image(img)
 			mat.set_texture(slot, done[t])
 	_mats.clear()
+
+
+## Дым и пар: из дымоходов юрт (не всех), над кострами — гуще, над котлами — белый пар. Мягкие круглые клубы
+## растут, светлеют и тают, их сносит вдоль ветра. Через smoke_drift их подталкивает ветер (wind.gd).
+var smoke: Array = []
+var _puff: QuadMesh
+
+
+func _smoke_for(path: String, list: Array) -> void:
+	var spec := {}
+	if path.ends_with("yurt_small.glb"):
+		spec = {"y": 3.0, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 9, "size": 1.8, "share": 0.65}
+	elif path.ends_with("yurt_large.glb"):
+		spec = {"y": 4.25, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 11, "size": 2.2, "share": 0.7}
+	elif path.ends_with("firepit.glb"):
+		spec = {"y": 0.7, "col": Color(0.38, 0.36, 0.38, 0.38), "amount": 14, "size": 1.8, "share": 1.0}
+	elif path.ends_with("cauldron.glb"):
+		spec = {"y": 1.3, "col": Color(0.95, 0.95, 1.0, 0.25), "amount": 10, "size": 1.1, "share": 1.0}
+	else:
+		return
+	if _puff == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		var gt := GradientTexture2D.new()
+		gt.gradient = g
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(0.5, 0.0)
+		gt.width = 64
+		gt.height = 64
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.vertex_color_use_as_albedo = true
+		m.albedo_texture = gt
+		m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_puff = QuadMesh.new()
+		_puff.material = m
+	var rng := RandomNumberGenerator.new()
+	rng.seed = path.hash()
+	var col: Color = spec.col
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(col, 0.0))
+	ramp.add_point(0.15, col)
+	ramp.set_color(1, Color(col.lightened(0.25), 0.0))
+	var grow := Curve.new()
+	grow.add_point(Vector2(0, 0.4))
+	grow.add_point(Vector2(1, 1.0))
+	for e: Array in list:
+		if rng.randf() > float(spec.share):
+			continue
+		var t: Transform3D = e[0]
+		var sc := t.basis.get_scale().x
+		var p := CPUParticles3D.new()
+		p.mesh = _puff
+		p.amount = int(spec.amount)
+		p.lifetime = 6.0
+		p.preprocess = 6.0
+		p.local_coords = false
+		p.direction = Vector3.UP
+		p.spread = 12.0
+		p.initial_velocity_min = 0.5
+		p.initial_velocity_max = 0.9
+		p.gravity = Vector3(0.25, 0.12, 0.08)
+		p.damping_min = 0.05
+		p.damping_max = 0.15
+		p.scale_amount_min = float(spec.size)
+		p.scale_amount_max = float(spec.size) * 1.6
+		p.scale_amount_curve = grow
+		p.color_ramp = ramp
+		p.angle_min = 0.0
+		p.angle_max = 360.0
+		p.position = t.origin + Vector3(0, float(spec.y) * sc, 0)
+		root.add_child(p)
+		smoke.append(p)
+
+
+## Живая вода фонтана: рябь в чаше (shaders/water.gdshader), струя из пасти дракона веером вниз, брызги и
+## пар над водой. Размеры — по модели (чаша r ≈ 2.15, вода на 1.45, верх дракона 4.0 — в единицах модели).
+func _fountain_water(t: Transform3D) -> void:
+	var sc := t.basis.get_scale().x
+	var wsh: Shader = mod.shader("shaders/water.gdshader")
+	var disc := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(4.3, 4.3) * sc
+	disc.mesh = pm
+	if wsh != null:
+		var wm := ShaderMaterial.new()
+		wm.shader = wsh
+		disc.material_override = wm
+	disc.position = t.origin + Vector3(0, 1.45 * sc, 0)
+	root.add_child(disc)
+	var drop := SphereMesh.new()
+	drop.radius = 0.035
+	drop.height = 0.12
+	drop.radial_segments = 6
+	drop.rings = 3
+	var dm := StandardMaterial3D.new()
+	dm.albedo_color = Color(0.75, 0.92, 1.0, 0.75)
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.emission_enabled = true
+	dm.emission = Color(0.4, 0.75, 0.9)
+	dm.emission_energy_multiplier = 0.5
+	drop.material = dm
+	var jet := CPUParticles3D.new()                       # струи веером из пасти вниз в чашу
+	jet.mesh = drop
+	jet.amount = 260
+	jet.lifetime = 1.3
+	jet.local_coords = false
+	jet.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	jet.emission_sphere_radius = 0.15 * sc
+	jet.direction = Vector3.UP
+	jet.spread = 70.0
+	jet.initial_velocity_min = 1.6 * sc
+	jet.initial_velocity_max = 2.4 * sc
+	jet.gravity = Vector3(0, -9.8, 0)
+	jet.scale_amount_min = 0.8
+	jet.scale_amount_max = 1.6
+	jet.position = t.origin + Vector3(0, 4.0 * sc, 0)
+	root.add_child(jet)
+	var splash := CPUParticles3D.new()                    # брызги по воде
+	splash.mesh = drop
+	splash.amount = 80
+	splash.lifetime = 0.5
+	splash.local_coords = false
+	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	splash.emission_ring_axis = Vector3.UP
+	splash.emission_ring_radius = 1.5 * sc
+	splash.emission_ring_inner_radius = 0.6 * sc
+	splash.emission_ring_height = 0.05
+	splash.direction = Vector3.UP
+	splash.spread = 35.0
+	splash.initial_velocity_min = 0.6
+	splash.initial_velocity_max = 1.4
+	splash.gravity = Vector3(0, -9.8, 0)
+	splash.scale_amount_min = 0.4
+	splash.scale_amount_max = 0.9
+	splash.position = t.origin + Vector3(0, 1.48 * sc, 0)
+	root.add_child(splash)
+
+
+## Вывеска лавки: доска тёмного лака в золотой рамке на двух стойках, крупный иероглиф и подпись — с обеих
+## сторон. sign: [иероглиф, подпись].
+var _sign_font: SystemFont
+
+
+func _sign(sg: Array, pos: Vector3, ry: float) -> void:
+	if _sign_font == null:
+		_sign_font = SystemFont.new()
+		_sign_font.font_names = PackedStringArray(["Yu Mincho", "MS Mincho", "Noto Serif CJK JP", "Noto Serif JP",
+			"SimSun", "Georgia"])
+		_sign_font.font_weight = 700
+	var n := Node3D.new()
+	n.position = pos
+	n.rotation.y = deg_to_rad(ry)
+	root.add_child(n)
+	var lac := StandardMaterial3D.new()
+	lac.albedo_color = Color(0.12, 0.05, 0.06)
+	lac.roughness = 0.35
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.82, 0.62, 0.28)
+	gold.metallic = 1.0
+	gold.roughness = 0.35
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.2, 0.13, 0.09)
+	for part: Array in [[Vector3(0.08, 2.6, 0.08), Vector3(-0.42, 1.3, 0), wood], [Vector3(0.08, 2.6, 0.08), Vector3(0.42, 1.3, 0), wood],
+			[Vector3(0.78, 1.62, 0.05), Vector3(0, 1.62, 0), gold], [Vector3(0.7, 1.54, 0.08), Vector3(0, 1.62, 0), lac],
+			[Vector3(1.0, 0.07, 0.1), Vector3(0, 2.55, 0), wood]]:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = part[0]
+		bm.material = part[2]
+		mi.mesh = bm
+		mi.position = part[1]
+		n.add_child(mi)
+	for side: float in [1.0, -1.0]:
+		var k := Label3D.new()
+		k.text = str(sg[0])
+		k.font = _sign_font
+		k.font_size = 220
+		k.pixel_size = 0.0028
+		k.modulate = Color(1.0, 0.82, 0.45)
+		k.outline_size = 0
+		k.position = Vector3(0, 1.85, 0.045 * side)
+		k.rotation.y = 0.0 if side > 0 else PI
+		n.add_child(k)
+		var t := Label3D.new()
+		t.text = str(sg[1])
+		t.font_size = 40
+		t.pixel_size = 0.0025
+		t.modulate = Color(1.0, 0.9, 0.85)
+		t.outline_size = 0
+		t.position = Vector3(0, 1.08, 0.045 * side)
+		t.rotation.y = 0.0 if side > 0 else PI
+		n.add_child(t)
+	var body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(1.0, 2.6, 0.2)
+	cs.shape = bs
+	cs.position = Vector3(0, 1.3, 0)
+	body.add_child(cs)
+	n.add_child(body)
+	count += 1
+
+
+## Бельё и шкуры между столбами у юрт: верёвка, полотнища колышутся (shaders/flag.gdshader, сплошной цвет).
+## laundry: [x1, z1, x2, z2].
+func _laundry(l: Array, seed_v: int) -> void:
+	var a := Vector3(float(l[0]), 0, float(l[1]))
+	var b := Vector3(float(l[2]), 0, float(l[3]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.25, 0.17, 0.11)
+	var top := 2.3
+	for p: Vector3 in [a, b]:
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.04
+		cm.bottom_radius = 0.055
+		cm.height = top + 0.15
+		cm.material = wood
+		mi.mesh = cm
+		mi.position = p + Vector3(0, (top + 0.15) * 0.5, 0)
+		root.add_child(mi)
+	var dir := (b - a)
+	var length := dir.length()
+	var rope := MeshInstance3D.new()
+	var rm := CylinderMesh.new()
+	rm.top_radius = 0.012
+	rm.bottom_radius = 0.012
+	rm.height = length
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color(0.55, 0.45, 0.32)
+	rm.material = rmat
+	rope.mesh = rm
+	var basis := Basis.looking_at(dir.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
+	rope.transform = Transform3D(basis, a.lerp(b, 0.5) + Vector3(0, top, 0))
+	root.add_child(rope)
+	var colors := [Color(0.72, 0.12, 0.14), Color(0.92, 0.86, 0.72), Color(0.18, 0.22, 0.45), Color(0.82, 0.6, 0.25),
+		Color(0.45, 0.3, 0.2), Color(0.55, 0.38, 0.26)]
+	var sh: Shader = mod.shader("shaders/flag.gdshader")
+	var x := 0.35
+	var yaw := atan2(dir.x, dir.z) - PI * 0.5
+	while x < length - 0.4:
+		var w := rng.randf_range(0.45, 0.9)
+		var hide := rng.randf() < 0.3
+		var h := rng.randf_range(0.9, 1.3) if hide else rng.randf_range(0.55, 1.0)
+		var c: Color = colors[4 + rng.randi() % 2] if hide else colors[rng.randi() % 4]
+		var q := QuadMesh.new()
+		q.size = Vector2(w, h)
+		q.subdivide_width = 3
+		q.subdivide_depth = 5
+		var mi := MeshInstance3D.new()
+		mi.mesh = q
+		if sh != null:
+			var g := Gradient.new()
+			g.set_color(0, c)
+			g.set_color(1, c.darkened(0.15))
+			var gt := GradientTexture2D.new()
+			gt.gradient = g
+			gt.width = 8
+			gt.height = 8
+			var m := ShaderMaterial.new()
+			m.shader = sh
+			m.set_shader_parameter("tex", gt)
+			m.set_shader_parameter("amp", 0.05)
+			mi.material_override = m
+		mi.transform = Transform3D(Basis(Vector3.UP, yaw), a + dir.normalized() * (x + w * 0.5) + Vector3(0, top - h * 0.5 - 0.02, 0))
+		root.add_child(mi)
+		x += w + rng.randf_range(0.08, 0.3)
 
 
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
@@ -287,6 +578,7 @@ func _flags(list: Array) -> void:
 ## Стекло окон: тёмное, почти зеркальное (небо, солнце и фонари в нём — через отражения окружения и SSR),
 ## изнутри — слабый тёплый свет очага.
 func _glass(m: BaseMaterial3D) -> void:
+	glass.append(m)
 	m.albedo_color = Color(0.1, 0.13, 0.18)
 	m.metallic = 0.9
 	m.metallic_specular = 0.9
@@ -320,9 +612,10 @@ func _lights(path: String, list: Array) -> void:
 		var l := OmniLight3D.new()
 		l.light_color = col
 		l.light_energy = 1.6
-		l.omni_range = 7.0
+		l.omni_range = 9.0
 		l.position = t * off
 		root.add_child(l)
+		lights.append([l, 2.8])
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.

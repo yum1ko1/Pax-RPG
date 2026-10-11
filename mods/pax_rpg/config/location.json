@@ -10,5 +10,7 @@
 	"camera_height": 3.5,
 	"loading_seconds": 4.0,
 	"pause_world": true,
-	"goblins": 1
+	"goblins": 1,
+	"start_hour": 17.0,
+	"day_minutes": 24.0
 }

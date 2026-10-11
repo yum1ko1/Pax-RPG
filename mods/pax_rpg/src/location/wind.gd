@@ -6,6 +6,7 @@ extends Node3D
 var mod: PaxMod
 var target: Node3D                 # вокруг кого порывы (герой)
 var leaves: Array = []             # CPUParticles3D листьев (city.gd)
+var smoke: Array = []              # дым и пар (city.gd) — ветер клонит их в свою сторону
 var dir := Vector3(1, 0, 0.3).normalized()
 var _next := 2.5
 var _gust := 0.0                   # 0..1 — сила текущего порыва
@@ -36,6 +37,9 @@ func _process(delta: float) -> void:
 	for l: Variant in leaves:
 		if is_instance_valid(l):
 			(l as CPUParticles3D).gravity = Vector3(0.0, -0.55, 0.0) + dir * (0.35 + 1.6 * _gust)
+	for p: Variant in smoke:
+		if is_instance_valid(p):
+			(p as CPUParticles3D).gravity = Vector3(0.0, 0.12, 0.0) + dir * (0.25 + 0.9 * _gust)
 	var keep: Array = []
 	for s: Dictionary in _streaks:
 		s.t = float(s.t) + delta

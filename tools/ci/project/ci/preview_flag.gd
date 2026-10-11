@@ -20,17 +20,21 @@ func _initialize() -> void:
 	process_frame.connect(_tick)
 
 
+const SH := {30: [13.0, 0], 45: [13.0, 1], 60: [17.6, 2], 75: [14.0, 3], 90: [22.0, 4], 105: [22.0, 5]}
+
+
 func _tick() -> void:
 	frame += 1
-	if frame < 60:
-		loc.set("_cine", [[16.0, 7.0, 50.0], [32.0, 1.0, 33.0]])
-	else:
-		loc.set("_cine", [[27.0, 2.2, 47.5], [32.0, 1.2, 33.0]])
-	if frame == 50:
-		_shot("yard_a")
-	if frame == 75:
-		_shot("yard_b")
-	if frame >= 80:
+	var cams := [[[-3.0, 2.4, 44.0], [-8.0, 1.6, 47.0]], [[26.0, 5.0, 9.0], [34.0, 2.6, 0.0]],
+		[[-28.0, 14.0, 70.0], [-55.0, 2.0, 50.0]], [[0.0, 9.0, 78.0], [0.0, 14.0, 320.0]],
+		[[0.0, 2.2, 66.0], [0.0, 3.0, 20.0]], [[60.0, 10.0, -2.0], [54.0, 5.0, -22.0]]]
+	for f: int in SH:
+		if frame >= f - 10 and frame <= f:
+			loc.call("set_hour", float(SH[f][0]))
+			loc.set("_cine", cams[int(SH[f][1])])
+		if frame == f:
+			_shot("dn_%d" % f)
+	if frame >= 110:
 		quit(0)
 
 

@@ -282,6 +282,22 @@ for i, (x, z, rad) in enumerate(YURTS):
     if i % 3 != 2 and free(fx, fz, 0.9) and not on_road(fx, fz):
         add(random.choice(["wood_pile", "hay_bale", "hay_bale"]), fx, fz, math.degrees(-a), c=True, rad=0.9)
 
+SIGNS = [("酒", "Кумыс и брага"), ("武", "Оружие"), ("薬", "Зелья и травы"), ("肉", "Мясо"), ("布", "Ткани"),
+         ("鉄", "Кузня"), ("革", "Кожа и сёдла"), ("茶", "Чайная"), ("宝", "Добыча"), ("骨", "Обереги")]
+for i, z in enumerate(range(30, 76, 11)):                # вывески лавок Тракта — лицом к дороге
+    items.append({"sign": list(SIGNS[i * 2]), "p": [-7.9, 0.0, z + 2.8], "r": 90.0, "c": True})
+    items.append({"sign": list(SIGNS[i * 2 + 1]), "p": [7.9, 0.0, z + 2.8], "r": -90.0, "c": True})
+for i, (x, z, rad) in enumerate(YURTS):                 # верёвки с бельём и шкурами у юрт
+    if i % 3 != 1:
+        continue
+    a = random.uniform(0, 2 * math.pi)
+    sx, sz = x + math.cos(a) * (rad + 1.3), z + math.sin(a) * (rad + 1.3)
+    ex, ez = sx - math.sin(a) * 4.6, sz + math.cos(a) * 4.6
+    if all(free(px, pz, 0.6) and not on_road(px, pz) for px, pz in ((sx, sz), (ex, ez), ((sx + ex) / 2, (sz + ez) / 2))):
+        items.append({"laundry": [round(sx, 2), round(sz, 2), round(ex, 2), round(ez, 2)], "seed": i, "p": [sx, 0, sz],
+                      "c": False})
+        occupied.append(((sx + ex) / 2, (sz + ez) / 2, 2.6))
+
 for x, z, r in ((-8.5, 66, 0), (8.5, 44, 180), (-9, 22, 20), (9, 84, 160), (-58, 34, 90), (-40, 14, 0), (46, 30, 200),
                 (-30, -40, 90)):
     add("cart", x, z, r, c=True, rad=2.0)
