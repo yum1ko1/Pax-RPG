@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Мирный житель (гоблин): ходит по маршрутам улиц из планировки города («paths»: ломаные XZ), иногда
 ## останавливается поглазеть; на героя не нападает, обходить его не умеет — просто ждёт, если упёрся.
 ## Модель и клипы — как у гоблина-врага (models/goblin/), без боя.
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const DIR := "models/goblin/"
 const SPEED := 1.3
@@ -75,6 +76,12 @@ func _play(c: String) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_phys(delta)
+	Prof.add("NPC", t0)
+
+
+func _phys(delta: float) -> void:
 	if _path.size() < 2:
 		return
 	var fall := velocity.y - 20.0 * delta if not is_on_floor() else -0.5      # по пандусам и ступеням — с землёй

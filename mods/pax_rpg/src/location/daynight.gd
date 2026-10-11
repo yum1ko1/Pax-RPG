@@ -3,6 +3,7 @@ extends Node
 ## солнце ходит по дуге (восход 6:00, закат 18:00), ночью тот же свет — луна, голубая и слабая; небо
 ## (shaders/sky.gdshader: day, dusk), окружение и туман следуют; ночью фонари, костры и кристаллы разгораются,
 ## окна светятся тёплым. Консоль F8: rpg_time <час>.
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 var hour := 17.0
 var day_minutes := 20.0
@@ -34,6 +35,12 @@ const STEP := 2.0
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_proc(delta)
+	Prof.add("день/ночь", t0)
+
+
+func _proc(delta: float) -> void:
 	hour = fmod(hour + delta * 24.0 / (day_minutes * 60.0), 24.0)
 	_since += delta
 	if _since >= STEP:

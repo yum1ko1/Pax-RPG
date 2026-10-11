@@ -4,6 +4,7 @@ extends RefCounted
 ## Удары ведёт root motion (смещение таза вынуто при сборке — pax_rpg/dev/blender/knight/*.py → *_anim.json):
 ## инерция меча тянет персонажа. Удар без продолжения кончается сразу после взмаха и плавно уходит в стойку.
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
@@ -1255,7 +1256,9 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_show_sword(delta)
 	_trail_tick(delta)
 	if not cloth_paused:
+		var t0 := Time.get_ticks_usec()
 		_items_tick(delta)
+		Prof.add("плащ", t0)
 	return out
 
 

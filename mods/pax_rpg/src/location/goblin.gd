@@ -4,6 +4,7 @@ extends CharacterBody3D
 ## отход. Концентрация (posture): копится от парирований и ударов героя, переполнилась (или кончилось здоровье) —
 ## гоблин теряет равновесие, его можно добить (deathblow). Гибель — тело рассыпается маной.
 ## Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const DIR := "models/goblin/"
 const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb",
@@ -375,6 +376,12 @@ func _play(clip: String, restart := false, blend := 0.2) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_phys(delta)
+	Prof.add("гоблины", t0)
+
+
+func _phys(delta: float) -> void:
 	if not is_instance_valid(_target):
 		return
 	if not is_on_floor():

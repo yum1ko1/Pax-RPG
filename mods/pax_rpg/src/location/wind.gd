@@ -2,6 +2,7 @@ extends Node3D
 ## Ветер как в аниме: время от времени у героя проносится порыв — несколько тонких белых изогнутых штрихов
 ## (shaders/wind_streak.gdshader) летят по ветру, вспыхивают и тают. В порыв листья с деревьев сносит сильнее
 ## (city.gd → leaves, gravity по ветру). Направление ветра медленно гуляет.
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 var mod: PaxMod
 var target: Node3D                 # вокруг кого порывы (герой)
@@ -26,6 +27,12 @@ func setup(m: PaxMod, who: Node3D) -> void:
 
 
 func _process(delta: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_proc(delta)
+	Prof.add("ветер", t0)
+
+
+func _proc(delta: float) -> void:
 	if not is_instance_valid(target):
 		return
 	dir = dir.rotated(Vector3.UP, sin(Time.get_ticks_msec() * 0.00007) * delta * 0.05).normalized()

@@ -4,6 +4,7 @@ extends CanvasLayer
 ## комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел —
 ## прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот
 ## камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 signal exit_requested
 
@@ -585,6 +586,12 @@ func _typing() -> bool:
 func _physics_process(delta: float) -> void:
 	if not active or not is_instance_valid(_player) or paused():
 		return
+	var t0 := Time.get_ticks_usec()
+	_physics_body(delta)
+	Prof.add("локация физика", t0)
+
+
+func _physics_body(delta: float) -> void:
 	var on_floor := _player.is_on_floor()
 	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
 	var f := (Input.is_physical_key_pressed(KEY_F) or Input.is_key_pressed(KEY_F)) and not _typing()
@@ -1059,7 +1066,9 @@ func _drink() -> void:
 
 func _process(delta: float) -> void:
 	if active and is_instance_valid(_hud):
+		var t0 := Time.get_ticks_usec()
 		_hud_tick(delta)
+		Prof.add("HUD", t0)
 
 
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.

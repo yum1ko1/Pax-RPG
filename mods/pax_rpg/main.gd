@@ -7,6 +7,7 @@ const Planet := preload("res://mods/pax_rpg/src/planet/planet.gd")
 const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
+const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 var planet: Planet
 var location: Location
@@ -81,6 +82,9 @@ func _time_command(args: PackedStringArray) -> String:
 ## Замер производительности локации: FPS, draw calls, примитивы и сколько тяжёлых узлов; off/on — выключить
 ## категорию, чтобы сравнить FPS (что именно ест кадр).
 func _perf_command(args: PackedStringArray) -> String:
+	if args.size() >= 1 and args[0] == "prof":
+		_perf_prof()
+		return "rpg_perf prof: 5 с замера, итог в логе"
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
@@ -241,3 +245,14 @@ func _perf_auto() -> void:
 
 func _kids(cls: String) -> Array:
 	return location.find_children("*", cls, true, false)
+
+
+## Сколько мс на кадр тратит каждая часть мода (5 с).
+func _perf_prof() -> void:
+	ProfS.report(1)
+	var f := 0
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 5000:
+		await get_tree().process_frame
+		f += 1
+	log_info("Pax RPG perf prof: fps %.1f · %s" % [f / 5.0, ProfS.report(f)])
