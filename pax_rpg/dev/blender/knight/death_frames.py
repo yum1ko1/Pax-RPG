@@ -8,7 +8,10 @@ import math
 import os
 import sys
 
+import json
+
 import bpy
+from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 ARGS = sys.argv[sys.argv.index("--") + 1:]
@@ -80,9 +83,21 @@ sc.render.resolution_x = sc.render.resolution_y = 512
 sc.render.image_settings.file_format = "PNG"
 sc.render.image_settings.color_mode = "RGBA"
 sc.view_settings.view_transform = "Standard"
+BONES = ["Hips", "Spine", "Spine01", "Spine02", "neck", "Head", "LeftUpLeg", "RightUpLeg"]
+track = []
 for i in range(N):
     f = round(start + (f1 - start) * i / (N - 1))
     sc.frame_set(f)
     sc.render.filepath = os.path.join(OUT, f"f_{i:03d}.png")
     bpy.ops.render.render(write_still=True)
+    fr = {}
+    for b in BONES:                                   # кости в кадре: доли картинки (x вправо, y вниз)
+        pb = arm.pose.bones.get(b)
+        if pb is None:
+            continue
+        h = world_to_camera_view(sc, cam, arm.matrix_world @ pb.head)
+        t = world_to_camera_view(sc, cam, arm.matrix_world @ pb.tail)
+        fr[b] = [round(h.x, 4), round(1 - h.y, 4), round(t.x, 4), round(1 - t.y, 4)]
+    track.append(fr)
+json.dump({"frames": N, "bones": track}, open(os.path.join(OUT, "bones.json"), "w"))
 print("done", N, "frames, size", round(size, 2), flush=True)
