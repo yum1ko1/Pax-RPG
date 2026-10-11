@@ -21,11 +21,17 @@ for src, dst in SLIM:  # noqa: F821 — задаётся вызывающим
     for o in list(tmp.objects):
         if o.type == "MESH":
             bpy.data.objects.remove(o, do_unlink=True)
+    new_acts = [a for a in bpy.data.actions if a not in before]
     for o in tmp.objects:
         o.select_set(True)
+        if o.type == "ARMATURE" and new_acts:
+            o.animation_data_create()
+            o.animation_data.action = new_acts[0]
+            if len(new_acts[0].slots):
+                o.animation_data.action_slot = new_acts[0].slots[0]
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=dst, export_format="GLB", use_active_scene=True, export_animations=True,
-                              export_skins=True, export_yup=True)
+                              export_animation_mode="ACTIVE_ACTIONS", export_skins=True, export_yup=True)
     for o in list(tmp.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for a in set(bpy.data.actions) - before:
