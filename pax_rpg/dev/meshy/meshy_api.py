@@ -90,7 +90,7 @@ def main():
         open(os.path.join(W, "animation_library.json"), "w", encoding="utf-8").write(json.dumps(lib, ensure_ascii=False, indent=1))
         print("saved", len(lib) if isinstance(lib, list) else type(lib).__name__)
     elif a[0] == "create":
-        body = expand(json.load(open(a[2], encoding="utf-8")))
+        body = expand(json.load(open(a[2], encoding="utf-8-sig")))   # PowerShell пишет UTF-8 с BOM
         print(call("POST", ep(a[1]), body).get("result"))
     elif a[0] == "status":
         print(json.dumps(short(call("GET", f"{ep(a[1])}/{a[2]}")), ensure_ascii=False))
