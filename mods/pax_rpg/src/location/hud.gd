@@ -92,8 +92,8 @@ func _draw() -> void:
 	_draw_toast()
 	_draw_flask()
 	_draw_skills()
-	_draw_xp()
 	_draw_hint()
+	_draw_orbs()
 
 
 func _text(pos: Vector2, s: String, font: Font, fs: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT,
@@ -153,6 +153,51 @@ func _draw_player() -> void:
 	if p > 0.005:
 		draw_rect(Rect2(398 - 220 * p, 132, 440 * p, 8), AMBER.lerp(RED, p))
 	draw_rect(Rect2(397, 128, 2, 16), TEXT)
+	# опыт: сюда перетекает мана повергнутых врагов
+	var xp := float(_g("xp", 0.0))
+	draw_rect(Rect2(XP_BAR.position, XP_BAR.size), INK)
+	if xp > 0.002:
+		var f := XP_BAR.size.x * xp
+		draw_polygon(PackedVector2Array([XP_BAR.position, XP_BAR.position + Vector2(f, 0), XP_BAR.position + Vector2(f, XP_BAR.size.y),
+			XP_BAR.position + Vector2(0, XP_BAR.size.y)]), PackedColorArray([BLUE, PINK, PINK, BLUE]))
+		draw_circle(XP_BAR.position + Vector2(f, XP_BAR.size.y * 0.5), 4.0, Color(1, 0.9, 0.97, 0.9))
+	draw_rect(Rect2(XP_BAR.position, XP_BAR.size), Color(TEXT, 0.22), false, 1.0)
+	_text(XP_BAR.position + Vector2(0, 22), "%s %d · %d / %d" % [_tr("pax_rpg_hud_level"), int(_g("level", 1)),
+		int(_g("xp_abs", 0)), int(_g("xp_need", 100))], sans, 13, MUTED, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+	var sp := int(_g("skill_points", 0))
+	if sp > 0:
+		var at := XP_BAR.position + Vector2(XP_BAR.size.x - 150, 22)
+		_text(at, "◆ %s: %d" % [_tr("pax_rpg_hud_skill_points"), sp], sans, 13, AMBER, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+	var fl := float(_g("lvl_flash", 0.0))
+	if fl > 0.0:                                         # новый уровень: свет вокруг ромба уровня
+		var a := clampf(fl / 1.6, 0.0, 1.0)
+		for k: int in 4:
+			draw_circle(Vector2(140, 136), 22.0 + (1.0 - a) * 60.0 + k * 6.0, Color(PINK, 0.12 * a))
+		draw_rect(Rect2(XP_BAR.position - Vector2(4, 4), XP_BAR.size + Vector2(8, 8)), Color(PINK, 0.35 * a), false, 2.0)
+
+
+const XP_BAR := Rect2(178, 152, 440, 6)              # px макета
+
+
+## Куда летит мана (экранные px): конец заполненной части полоски опыта.
+func xp_target(frac: float) -> Vector2:
+	return (XP_BAR.position + Vector2(XP_BAR.size.x * clampf(frac, 0.0, 1.0), XP_BAR.size.y * 0.5)) * _s
+
+
+func _draw_orbs() -> void:
+	for o: Variant in _g("orbs", []):
+		var trail: Array = (o as Array)[2]
+		var k := float((o as Array)[1])
+		for j: int in trail.size():                       # шлейф
+			var tp: Vector2 = trail[j] / _s
+			var ta := float(j + 1) / (trail.size() + 1)
+			draw_circle(tp, lerpf(3.0, 9.0, ta) * (1.2 - k * 0.5), Color(1.0, 0.35, 0.72, 0.25 * ta))
+		var pos: Vector2 = (o as Array)[0] / _s
+		var r := lerpf(13.0, 6.0, k)
+		draw_circle(pos, r * 2.4, Color(1.0, 0.3, 0.7, 0.16))
+		draw_circle(pos, r * 1.15, Color(0.25, 0.04, 0.2, 0.55))
+		draw_circle(pos, r, Color(1.0, 0.36, 0.74))
+		draw_circle(pos, r * 0.45, Color(1, 0.95, 0.98))
 
 
 func _draw_compass() -> void:

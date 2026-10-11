@@ -52,5 +52,7 @@
 	"pax_rpg_pause_resume": "Продолжить",
 	"pax_rpg_pause_leave": "Выйти на карту мира",
 	"pax_rpg_pause_menu": "В главное меню",
-	"pax_rpg_pause_hint": "Esc — вернуться · колесо мыши — ближе / дальше"
+	"pax_rpg_pause_hint": "Esc — вернуться · колесо мыши — ближе / дальше",
+	"pax_rpg_hud_skill_points": "очки умений",
+	"pax_rpg_hud_skill_point": "Уровень %d — получено очко умений!"
 }

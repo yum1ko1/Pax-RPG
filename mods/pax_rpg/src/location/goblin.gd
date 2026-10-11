@@ -32,7 +32,8 @@ const HURT_TIME := 0.45
 const DEFLECTED_TIME := 0.9
 const BROKEN_TIME := 3.2      # с без равновесия — окно добивания
 const RECOVER_TIME := 0.6
-const RESPAWN := 3.0
+const RESPAWN := 9.0           # с до нового гоблина (тело лежит BODY_STAY, потом уходит в землю)
+const BODY_STAY := 4.0
 const KNOCKBACK := 2.0        # м/с, отшатывается от удара комбо — следующий удар ещё достаёт
 const KNOCK_FLY := 7.5        # м/с, отлетает от финального удара комбо
 const KNOCK_UP := 4.0
@@ -54,6 +55,7 @@ var _hero_blocking: Callable   # () -> bool — герой в блоке (пов
 var _on_hit: Callable          # on_hit.call(damage, self) — удар по герою (там решают: блок, парирование, урон)
 var _spawn := Vector3.ZERO
 var _model: Node3D
+var _model_y := 0.0
 var _anim: AnimationPlayer
 var _mark: MeshInstance3D       # красная метка добивания
 var _state := "idle"
@@ -93,6 +95,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 		(_model as MeshInstance3D).mesh = BoxMesh.new()
 		(_model as MeshInstance3D).position = Vector3(0.0, 0.55, 0.0)
 	add_child(_model)
+	_model_y = _model.position.y
 	_anim = _find_anim(_model)
 	if _anim != null:
 		_add_clips()
@@ -222,10 +225,12 @@ func _die() -> void:
 	_release_token()
 	_mark.visible = false
 	_set_state("dead")
-	_burst(global_position + Vector3(0.0, 0.6, 0.0), Vector3.UP, MANA, 90, 1.5, -1.5, 1.4, 0.07, true)
+	# тело не исчезает: лежит, потом медленно уходит в землю; мана улетает в шкалу опыта (location.gd)
+	_burst(global_position + Vector3(0.0, 0.5, 0.0), Vector3.UP, MANA, 24, 0.8, -0.6, 0.9, 0.05, true)
 	if _model != null:
 		var t := create_tween()
-		t.tween_property(_model, "scale", Vector3(1.15, 0.05, 1.15), 0.6).set_ease(Tween.EASE_IN)
+		t.tween_interval(BODY_STAY)
+		t.tween_property(_model, "position:y", _model.position.y - 0.9, 1.6).set_ease(Tween.EASE_IN)
 		t.tween_callback(func() -> void: _model.visible = false)
 	get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 
@@ -237,6 +242,7 @@ func _respawn() -> void:
 	_lethal = false
 	if _model != null:
 		_model.scale = Vector3.ONE
+		_model.position.y = _model_y
 		_model.visible = true
 	position = _spawn
 	velocity = Vector3.ZERO
@@ -340,8 +346,10 @@ func _set_state(s: String) -> void:
 			_play("getup", true, 0.35)
 			if _anim != null and _clip("getup") == "getup":
 				_anim.seek(GETUP_SKIP, true)
-		"broken", "dead":
+		"broken":
 			_play("hit", true)
+		"dead":
+			_play("knockdown", true)                  # падает и остаётся лежать (клип не зациклен)
 
 
 ## Сменить состояние, не трогая клип (лежит — поза падения остаётся).

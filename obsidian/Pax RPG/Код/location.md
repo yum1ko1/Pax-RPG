@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/location.gd
-lines: 1099
+lines: 1189
 weight: 2
 tags: [мод/rpg, функция/location]
 ---
 
 # location
 
-`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1099 строк · подключают: **2**
+`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1189 строк · подключают: **2**
 
 > Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет, мир игры его не видит): платформа, несколько блоков, ворота выхода и герой (config/hero.json: модель, скорости, комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
@@ -20,6 +20,8 @@ tags: [мод/rpg, функция/location]
 - [[npc]]
 - [[pause_menu]]
 - [[sfx]]
+- [[city_title]]
+- [[progress]]
 
 ## Кто подключает
 - [[main]]
@@ -30,6 +32,8 @@ tags: [мод/rpg, функция/location]
 - `func _f(key: String, fallback: float) -> float`
 - `func build_test() -> void` — Кнопка «Тест» главного меню: арена — та же площадка, герой и гоблин; ворота возвращают в меню.
 - `func _spawn_goblins(n: int) -> void` — Гоблины локации (config/location.json → goblins): полукругом перед героем, между ним и воротами.
+- `func _hp_max() -> float`
+- `func _pos_max() -> float`
 - `func build(city: Dictionary) -> void`
 - `func clear() -> void`
 - `func _make_sky() -> void`
@@ -65,5 +69,8 @@ tags: [мод/rpg, функция/location]
 - `func _update_hud() -> void`
 - `func _drink() -> void` — Эликсир (R): лечит, зарядов мало — пополняются, когда герой пал и вернулся на старт.
 - `func _process(delta: float) -> void`
-- `func _hud_tick(delta: float) -> void` — Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
+- `func _tick_orbs(delta: float) -> void` — Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых. Шарики маны: по кривой от павшего врага к концу полоски опыта; долетел — +опыт (полоска растёт на глазах).
+- `func _orb_points() -> Array`
+- `static func _bez(p0: Vector2, c: Vector2, p1: Vector2, k: float) -> Vector2`
+- `func _hud_tick(delta: float) -> void`
 - `func _input(event: InputEvent) -> void`

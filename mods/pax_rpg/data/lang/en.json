@@ -52,5 +52,7 @@
 	"pax_rpg_pause_resume": "Resume",
 	"pax_rpg_pause_leave": "Leave to the world map",
 	"pax_rpg_pause_menu": "Main menu",
-	"pax_rpg_pause_hint": "Esc — back · mouse wheel — zoom"
+	"pax_rpg_pause_hint": "Esc — back · mouse wheel — zoom",
+	"pax_rpg_hud_skill_points": "skill points",
+	"pax_rpg_hud_skill_point": "Level %d — skill point earned!"
 }

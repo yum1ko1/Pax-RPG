@@ -23,7 +23,11 @@
 		"DodgeArmed": 0.9
 	},
 	"air": {
-		"Attack3": [0.25, 1.0, 0.7]
+		"Attack3": [
+			0.25,
+			1.0,
+			0.7
+		]
 	},
 	"root_motion_lateral": 0.5,
 	"reach": {
@@ -126,11 +130,27 @@
 	],
 	"impact_volume_db": 0.0,
 	"items": "config/items.json",
-	"equipped": ["cape_black"],
+	"equipped": [
+		"cape_black"
+	],
 	"cloth_body_scale": 1.5,
 	"trail_life": 0.2,
 	"trail_speed": 4.0,
 	"trail_alpha": 0.6,
-	"trail_color": [0.8, 0.45, 1.0],
-	"burst_radius": 3.0
+	"trail_color": [
+		0.8,
+		0.45,
+		1.0
+	],
+	"burst_radius": 3.0,
+	"progress": {
+		"_note": "Уровень героя (src/location/progress.gd): опыт до уровня = xp_base · xp_growth^(уровень−1); за уровень +hp/damage/posture_per_level к статам; каждый skill_every-й уровень — очко умений; xp_per_kill — мана с врага.",
+		"xp_base": 100,
+		"xp_growth": 1.15,
+		"hp_per_level": 0.04,
+		"damage_per_level": 0.03,
+		"posture_per_level": 0.02,
+		"skill_every": 10,
+		"xp_per_kill": 35
+	}
 }

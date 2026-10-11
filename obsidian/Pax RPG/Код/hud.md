@@ -1,20 +1,22 @@
 ---
 mod: pax_rpg
 file: src/location/hud.gd
-lines: 432
-weight: 2
+lines: 477
+weight: 4
 tags: [мод/rpg, функция/location]
 ---
 
 # hud
 
-`src/location/hud.gd` · [[Код Pax RPG]] · `extends Control` · 432 строк · подключают: **2**
+`src/location/hud.gd` · [[Код Pax RPG]] · `extends Control` · 477 строк · подключают: **4**
 
 > HUD локации «Сакура и сталь» (концепт A): ночная лазурь и сакура, иероглифы вместо иконок. Слева вверху — герой (портрет, уровень, здоровье, концентрация), сверху — компас, справа — миникарта, задание и враг в бою; внизу — эликсир, боевые приёмы, кольцо добивания, опыт и мана. Всё рисуется здесь (_draw) по словарю st, который location.gd заполняет каждый кадр. Макет — 1920×1080, на другом экране масштаб по высоте.
 
 ## Кто подключает
+- [[city_title]]
 - [[location]]
 - [[pause_menu]]
+- [[loading]]
 
 ## Функции
 - `func setup(m: PaxMod, enemy_portrait: Texture2D) -> void`
@@ -29,6 +31,8 @@ tags: [мод/rpg, функция/location]
 - `func _outline(pts: PackedVector2Array, color: Color, width: float) -> void`
 - `func _skew_bar(x: float, y: float, w: float, h: float, frac: float, color: Color) -> void` — Полоса-параллелограмм (наклон как у мазка кисти).
 - `func _draw_player() -> void`
+- `func xp_target(frac: float) -> Vector2` — Куда летит мана (экранные px): конец заполненной части полоски опыта.
+- `func _draw_orbs() -> void`
 - `func _draw_compass() -> void`
 - `func _draw_map_frame() -> void`
 - `func _draw_mask() -> void`

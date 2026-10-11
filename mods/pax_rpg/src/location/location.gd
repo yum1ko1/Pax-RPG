@@ -20,6 +20,7 @@ const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
+const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -58,9 +59,9 @@ var _rmb := false
 var _cam_lock := 0.0               # 0 — свободная камера, 1 — за плечом при захвате (плавно между)
 var _lock_point := Vector3.ZERO
 var _kills := 0
-var _mana := 0                     # мана из повергнутых врагов (распыляются в ману)
-var _xp := 0.0                     # доля до следующего уровня
-var _level := 1
+var _prog: Progress                # уровень, опыт, очки умений (сохраняются)
+var _orbs: Array = []              # мана повергнутых врагов летит в шкалу опыта: {p0: Vector2, t, delay, v}
+var _lvl_flash := 0.0              # с, вспышка нового уровня в HUD
 var _flask := 3                    # заряды эликсира (R)
 var _hp_ghost := 1.0               # розовый «след» недавней потери здоровья на полосе
 var _numbers: Array = []           # цифры урона: {pos: Vector3, v, crit, t}
@@ -73,6 +74,7 @@ var _sfx: Sfx                      # шаги, снаряжение, гул го
 var _zoom_want := 0.0              # куда крутят колесом; _zoom догоняет плавно, с лёгкой задержкой
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
+var _body_turn := false            # тело доворачивается к цели (голова уже не достаёт)
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -113,10 +115,22 @@ func _spawn_goblins(n: int) -> void:
 		_goblins.append(g)
 
 
+func _hp_max() -> float:
+	return HERO_HP * (_prog.hp_mult() if _prog != null else 1.0)
+
+
+func _pos_max() -> float:
+	return HERO_POSTURE * (_prog.posture_mult() if _prog != null else 1.0)
+
+
 func build(city: Dictionary) -> void:
 	clear()
+	if _prog == null:
+		_prog = Progress.new()
+		_prog.setup(mod, hero_cfg.get("progress", {}))
+	_orbs.clear()
 	test_mode = false
-	_hp = HERO_HP
+	_hp = _hp_max()
 	_city_name = mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
 	_box = SubViewportContainer.new()
 	_box.stretch = true
@@ -575,13 +589,29 @@ func _physics_process(delta: float) -> void:
 	if not locked:
 		var face := INF
 		if _lock != null and not running:
-			face = _aim_yaw()
+			# в захвате на месте: к врагу поворачивается голова; тело — только когда угол для головы велик
+			var want := _aim_yaw()
+			if moving or (_hero != null and (_hero.blocking or _hero_attacking())):
+				face = want
+			else:
+				var diff := absf(angle_difference(_body_mesh.rotation.y, want))
+				if diff > deg_to_rad(_hf("head_limit", 70.0) * 0.9):
+					_body_turn = true
+				elif diff < deg_to_rad(15.0):
+					_body_turn = false
+				if _body_turn:
+					face = want
 		elif moving and (running or free_walk):
 			face = atan2(-move.x, -move.z)
 		elif moving or (_hero != null and _hero.blocking):
 			face = _yaw
 		if face != INF:
 			_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, face, minf(1.0, delta * 12.0))
+	if _hero != null:
+		var look: Variant = null
+		if _lock != null and is_instance_valid(_lock):
+			look = _lock.global_position + Vector3(0.0, _hf("look_height", 0.95), 0.0)
+		_hero.look_at_point(look, delta)
 	# магнит ударов: каждый удар комбо доворачивает к врагу, шаг удара не проносит сквозь него
 	var mag: Goblin = _attack_target() if _hero_attacking() else null
 	if mag != null:
@@ -703,7 +733,7 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
-		gob.take_damage(float(hit.damage), _player.global_position, bool(hit.get("knock", false)))
+		gob.take_damage(float(hit.damage) * _prog.damage_mult(), _player.global_position, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
 
@@ -848,31 +878,31 @@ func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
 	var spark_at := _player.global_position + fwd * 0.7 + Vector3(0.0, 1.2, 0.0)
 	if _hero != null and facing and _hero.parry_window():
 		_hero.deflect()
-		_posture = minf(HERO_POSTURE, _posture + 4.0)
+		_posture = minf(_pos_max(), _posture + 4.0)
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
 		if attacker is Goblin:
 			(attacker as Goblin).deflected(_player.global_position)
 		return
 	if _hero != null and facing and _hero.blocking:
-		_posture = minf(HERO_POSTURE, _posture + damage * 2.2)
+		_posture = minf(_pos_max(), _posture + damage * 2.2)
 		_since_hit = 0.0
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
 		_player.velocity -= fwd * 3.0
 		if attacker is Goblin:
 			(attacker as Goblin).blocked()
-		if _posture >= HERO_POSTURE:
-			_posture = HERO_POSTURE * 0.35
+		if _posture >= _pos_max():
+			_posture = _pos_max() * 0.35
 			_stagger = _hf("guard_break_time", 1.2)
 			_hero.set_block(false)
 			_hero.hurt()
 		return
 	_hp = maxf(0.0, _hp - damage)
-	_posture = minf(HERO_POSTURE, _posture + damage * 0.8)
+	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
 		_hero.hurt()
 	if _hp <= 0.0 and is_instance_valid(_player):
-		_hp = HERO_HP
+		_hp = _hp_max()
 		_hp_ghost = 1.0
 		_posture = 0.0
 		_flask = int(_hf("flask_charges", 3.0))
@@ -944,10 +974,10 @@ func _update_hud() -> void:
 
 ## Эликсир (R): лечит, зарядов мало — пополняются, когда герой пал и вернулся на старт.
 func _drink() -> void:
-	if _flask <= 0 or _hp >= HERO_HP or _stagger > 0.0 or not is_instance_valid(_player):
+	if _flask <= 0 or _hp >= _hp_max() or _stagger > 0.0 or not is_instance_valid(_player):
 		return
 	_flask -= 1
-	_hp = minf(HERO_HP, _hp + _hf("flask_heal", 45.0))
+	_hp = minf(_hp_max(), _hp + _hf("flask_heal", 45.0))
 	_sparks(_player.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.55, 0.78), 30, 2.5)
 
 
@@ -957,6 +987,53 @@ func _process(delta: float) -> void:
 
 
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
+## Шарики маны: по кривой от павшего врага к концу полоски опыта; долетел — +опыт (полоска растёт на глазах).
+func _tick_orbs(delta: float) -> void:
+	_lvl_flash = maxf(0.0, _lvl_flash - delta)
+	if _orbs.is_empty() or not is_instance_valid(_hud):
+		return
+	var keep: Array = []
+	for o: Dictionary in _orbs:
+		o.t = float(o.t) + delta
+		if float(o.t) - float(o.delay) >= ORB_TIME:
+			var ups := _prog.add_xp(float(o.v))
+			if ups > 0:
+				_lvl_flash = 1.6
+				_hp = _hp_max()                              # новый уровень — силы вернулись
+				_toast = {"text": mod.tr_key("pax_rpg_hud_level_up") % _prog.level, "t": 0.0}
+				if _prog.level % int((hero_cfg.get("progress", {}) as Dictionary).get("skill_every", 10)) == 0:
+					_toast = {"text": mod.tr_key("pax_rpg_hud_skill_point") % _prog.level, "t": 0.0}
+		else:
+			keep.append(o)
+	_orbs = keep
+
+
+const ORB_TIME := 0.95
+
+
+func _orb_points() -> Array:
+	var out: Array = []
+	if not is_instance_valid(_hud):
+		return out
+	var target := _hud.xp_target(_prog.frac())
+	for o: Dictionary in _orbs:
+		var k := clampf((float(o.t) - float(o.delay)) / ORB_TIME, 0.0, 1.0)
+		if k <= 0.0:
+			continue
+		var p0: Vector2 = o.p0
+		var ctrl := p0.lerp(target, 0.4) + Vector2(-160.0, -220.0) * (0.6 + 0.4 * float(o.bend))
+		var trail: Array = []
+		for j: int in range(5, 0, -1):                     # шлейф: где шарик был чуть раньше
+			trail.append(_bez(p0, ctrl, target, maxf(0.0, k - j * 0.035)))
+		out.append([_bez(p0, ctrl, target, k), k, trail])
+	return out
+
+
+static func _bez(p0: Vector2, c: Vector2, p1: Vector2, k: float) -> Vector2:
+	var e := k * k * (3.0 - 2.0 * k)
+	return p0.lerp(c, e).lerp(c.lerp(p1, e), e)
+
+
 func _hud_tick(delta: float) -> void:
 	if not is_inside_tree() or not is_instance_valid(_player) or not is_instance_valid(_cam) \
 			or not _player.is_inside_tree():
@@ -969,24 +1046,26 @@ func _hud_tick(delta: float) -> void:
 		if not gob.is_alive() and not bool(_dead_seen.get(id, false)):
 			_dead_seen[id] = true
 			_kills += 1
-			var gain := int(_hf("mana_per_kill", 25.0))
-			_mana += gain
-			_xp += _hf("xp_per_kill", 0.34)
-			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), gain], "t": 0.0}
-			if _xp >= 1.0:
-				_xp -= 1.0
-				_level += 1
-				_toast = {"text": mod.tr_key("pax_rpg_hud_level_up") % _level, "t": 0.0}
+			# мана не растворяется: шарики перелетают в шкалу опыта (левый верхний угол), опыт — по прилёту
+			var gain := float((hero_cfg.get("progress", {}) as Dictionary).get("xp_per_kill", 35.0))
+			var from := _cam.unproject_position(gob.global_position + Vector3(0.0, 0.8, 0.0))
+			var n := 10
+			for k: int in n:
+				_orbs.append({"p0": from + Vector2(randf_range(-30, 30), randf_range(-30, 30)), "t": 0.0,
+					"delay": k * 0.06, "v": gain / n, "bend": randf_range(-1.0, 1.0)})
+			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), int(gain)], "t": 0.0}
 		elif gob.is_alive():
 			_dead_seen[id] = false
-	var hp := _hp / HERO_HP
+	_tick_orbs(delta)
+	var hp := _hp / _hp_max()
 	if hp >= _hp_ghost:
 		_hp_ghost = hp
 	elif _since_hit > 0.6:
 		_hp_ghost = move_toward(_hp_ghost, hp, delta * 0.6)
 	_hint_t = maxf(0.0, _hint_t - delta)
-	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": HERO_HP, "posture": _posture / HERO_POSTURE,
-		"level": _level, "xp": _xp, "mana": _mana, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(),
+		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
+		"skill_points": _prog.skill_points, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,

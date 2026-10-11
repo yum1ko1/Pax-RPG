@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/hero.gd
-lines: 1223
+lines: 1454
 weight: 1
 tags: [мод/rpg, функция/location]
 ---
 
 # hero
 
-`src/location/hero.gd` · [[Код Pax RPG]] · `extends RefCounted` · 1223 строк · подключают: **1**
+`src/location/hero.gd` · [[Код Pax RPG]] · `extends RefCounted` · 1454 строк · подключают: **1**
 
 > Герой локации: модель (config/hero.json → models/*.glb) и её состояние — меч на спине, в руке или волочится по земле в беге, доставание и убирание, комбо из трёх тяжёлых ударов, прыжок, увороты; надетые вещи (плащ-ткань). Удары ведёт root motion (смещение таза вынуто при сборке — pax_rpg/dev/blender/knight/*.py → *_anim.json): инерция меча тянет персонажа. Удар без продолжения кончается сразу после взмаха и плавно уходит в стойку. location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
 
@@ -19,7 +19,8 @@ tags: [мод/rpg, функция/location]
 - `func load_model(mod: PaxMod, c: Dictionary) -> Node3D`
 - `static func _tip_of(n: Node3D) -> Vector3` — Остриё: дальняя от хвата точка габаритов сетки меча (в осях узла меча).
 - `func _player(files: Variant, pitch: float, volume: float) -> AudioStreamPlayer` — Плеер со случайным из вариантов звука (без повторов подряд) и разбросом высоты.
-- `func start(owner_body: PhysicsBody3D = null) -> void` — После того как модель в дереве (вне дерева AnimationPlayer не играет).
+- `func look_at_point(p: Variant, delta: float) -> void` — Голова смотрит на точку p (null — отпустить, голова плавно возвращается к анимации). Поворот головы — в пределах head_limit градусов (дальше доворачивается всё тело — это решает location.gd).
+- `func start(owner_body: PhysicsBody3D = null) -> void`
 - `static func _find_anim(n: Node) -> AnimationPlayer`
 - `static func _find_skeleton(n: Node) -> Skeleton3D`
 - `func _f(k: String, d: float) -> float`
@@ -36,11 +37,14 @@ tags: [мод/rpg, функция/location]
 - `func _iv(it: Dictionary, k: String, d: float) -> float`
 - `func _wear_cloth(it: Dictionary, w: Dictionary) -> bool`
 - `func _wear_cape(it: Dictionary, w: Dictionary) -> bool`
+- `func _tex_mip(path: String, normal: bool) -> Texture2D`
+- `func _make_collar(c: Dictionary, w: Dictionary, nk: Vector3, cl: Array, mat: Material) -> void` — Воротник: свёрнутая валиком ткань плаща вокруг шеи сзади и по плечам, спереди — две золотые фибулы и цепочка между ними. Едет с костью грудной клетки (top_bone), как верх плаща.
 - `func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array` — Где точки плаща сейчас «на теле»: верх посередине едет с грудью, углы верха — с плечами, низ — с тазом.
 - `func _cape_tick(w: Dictionary, delta: float) -> void`
 - `static func _cape_link(x: PackedVector3Array, a: int, b: int, rest_len: float, a_pinned: bool) -> void` — Связь двух соседних точек решётки: длина как в покое (верхний ряд не двигается).
 - `func _push_out(p: Vector3) -> Vector3`
 - `func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void` — Сетка плаща: смещение каждой её точки от «места на теле» — билинейно по грубой решётке.
+- `static func _cr_at(g: PackedVector3Array, i: int, nx: int, nz: int, t: float, along_j: bool) -> Vector3` — Catmull-Rom по сетке: along_j — вдоль колонки i (параметр t в рядах), иначе вдоль ряда (строка = i).
 - `func _wear_rigid(it: Dictionary, w: Dictionary) -> bool`
 - `func _make_body_colliders() -> void` — Капсулы тела (таз, спина, бёдра, голени) — о них бьётся ткань; персонажа и мир они не трогают.
 - `func _pin_cloth(w: Dictionary) -> bool` — Верх ткани пришивается по всей ширине: точки делятся на полосы по X, в каждой пришиваются те, что у её верхнего края, — каждая к ближней из костей pin_bones. Позиции берутся у самих точек мягкого тела (не по номерам вершин — сервер физики мог сварить их по-своему). false — точки ещё не готовы.

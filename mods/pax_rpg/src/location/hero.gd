@@ -138,6 +138,41 @@ func _player(files: Variant, pitch: float, volume: float) -> AudioStreamPlayer:
 
 
 ## После того как модель в дереве (вне дерева AnimationPlayer не играет).
+var _look: SkeletonModifier3D        # голова следит за целью (LookAtModifier3D на кости головы)
+var _look_target: Node3D
+
+
+## Голова смотрит на точку p (null — отпустить, голова плавно возвращается к анимации). Поворот головы —
+## в пределах head_limit градусов (дальше доворачивается всё тело — это решает location.gd).
+func look_at_point(p: Variant, delta: float) -> void:
+	if _skel == null:
+		return
+	if _look == null:
+		var bone := str(cfg.get("head_bone", "Head"))
+		if _skel.find_bone(bone) < 0:
+			return
+		_look_target = Node3D.new()
+		_look_target.top_level = true
+		model.add_child(_look_target)
+		var la := LookAtModifier3D.new()
+		la.bone_name = bone
+		la.set("forward_axis", int(cfg.get("head_forward_axis", 4)))     # 4 — +Z кости
+		la.use_angle_limitation = true
+		la.symmetry_limitation = true
+		la.primary_limit_angle = deg_to_rad(float(cfg.get("head_limit", 70.0)) * 2.0)
+		la.primary_damp_threshold = 0.8
+		la.secondary_limit_angle = deg_to_rad(float(cfg.get("head_limit_pitch", 40.0)) * 2.0)
+		la.duration = 0.2
+		la.influence = 0.0
+		_skel.add_child(la)
+		la.target_node = la.get_path_to(_look_target)
+		_look = la
+	var want := 1.0 if p != null else 0.0
+	_look.influence = move_toward(_look.influence, want, delta * 3.0)
+	if p != null:
+		_look_target.global_position = p
+
+
 func start(owner_body: PhysicsBody3D = null) -> void:
 	anim = _find_anim(model)
 	if anim == null:
