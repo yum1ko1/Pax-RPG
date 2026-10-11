@@ -1,0 +1,47 @@
+name: Задача
+description: Новая механика, анимация, интерфейс, контент
+title: "[Задача] "
+labels: ["задача"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что сделать
+      description: Своими словами, как игрок это увидит.
+      placeholder: Финальный удар комбо — герой влетает к врагу и отбрасывает его; враг падает и встаёт.
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Как должно быть — референс
+      description: Ссылка на видео с таймкодом (Sekiro 12:30), картинки, или описание по кадрам.
+  - type: textarea
+    id: done
+    attributes:
+      label: Готово, когда
+      description: Конкретные признаки, по которым проверим. По одному в строке.
+      placeholder: |
+        - второй и третий удар визуально попадают по гоблину с 2 м
+        - на третьем ударе герой пролетает до 5 м к врагу
+        - гоблин отлетает, лежит ~1 с, встаёт
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Числа и баланс
+      description: Урон, скорость, длительность, дистанция — если важно. Иначе выберу сам и вынесу в config/*.json.
+  - type: textarea
+    id: keep
+    attributes:
+      label: Чего не трогать
+      description: Что должно остаться как есть.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Срочность
+      options:
+        - Сейчас
+        - В ближайшее время
+        - Когда-нибудь

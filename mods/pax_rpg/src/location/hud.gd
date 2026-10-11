@@ -401,13 +401,31 @@ func _draw_xp() -> void:
 			PackedColorArray([BLUE, PINK, PINK, BLUE]))
 
 
+## Разбить строку по словам (разделитель « · » — по пунктам), чтобы каждая часть влезала в width.
+func _wrap(line: String, width: float, fs: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var cur := ""
+	for word: String in line.split(" "):
+		var next := word if cur == "" else cur + " " + word
+		if cur != "" and sans.get_string_size(next, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > width:
+			out.append(cur)
+			cur = word
+		else:
+			cur = next
+	if cur != "":
+		out.append(cur)
+	return out
+
+
 func _draw_hint() -> void:
 	var a := float(_g("hint_a", 0.0))
 	if a > 0.01:
 		var y := 250.0
+		var width := minf(1100.0, _w - 40.0 - 480.0)          # не залезать под миникарту и задание справа
 		for line: String in str(_g("hint", "")).split("\n"):
-			_text(Vector2(40, y), line, sans, 14, Color(MUTED, a), HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
-			y += 22.0
+			for part: String in _wrap(line, width, 14):
+				_text(Vector2(40, y), part, sans, 14, Color(MUTED, a), HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+				y += 22.0
 	var g := str(_g("gate_hint", ""))
 	if g != "":
 		_center(Vector2(_w * 0.5, 1080 - 90), g, sans, 18, PINK, 5)

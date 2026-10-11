@@ -1,0 +1,46 @@
+name: Проверка мода
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot из кэша
+        uses: actions/cache@v4
+        with:
+          path: .cache/godot
+          key: godot-4.5.1-stable-linux
+
+      - name: Экран и шрифты для скриншота
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri libxcursor1 libxinerama1 libxrandr2 libxi6 fonts-noto-cjk
+
+      - name: Статика, компиляция, прогон арены
+        run: tools/ci/run_checks.sh
+
+      - name: Итог в отчёт
+        if: always()
+        run: |
+          {
+            echo '### Проверка мода'
+            echo '```'
+            cat tools/ci/out/static.log 2>/dev/null
+            grep -E "SCRIPT ERROR|Parse Error|at: GDScript|check:|smoke:" tools/ci/out/compile.log tools/ci/out/smoke.log 2>/dev/null | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Логи и скриншот арены
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pax-rpg-check
+          path: tools/ci/out/
+          retention-days: 14

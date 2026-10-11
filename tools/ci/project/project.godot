@@ -1,0 +1,15 @@
+; Проект только для проверки мода вне игры (tools/ci/run_checks.sh). Мод копируется в mods/, заглушки API — в stubs/.
+config_version=5
+
+[application]
+
+config/name="pax_rpg_ci"
+
+[autoload]
+
+Pax="*res://stubs/pax.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080

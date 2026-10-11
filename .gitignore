@@ -4,3 +4,8 @@
 __pycache__/
 *.blend1
 pax_rpg/dev/godot_test/.godot/
+.cache/
+tools/ci/out/
+tools/ci/project/mods/
+tools/ci/project/stubs/
+tools/ci/project/.godot/

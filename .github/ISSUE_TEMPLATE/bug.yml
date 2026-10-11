@@ -1,0 +1,65 @@
+name: Баг
+description: Что-то работает не так, как должно
+title: "[Баг] "
+labels: ["баг"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что не так
+      description: Что делал → что ожидал → что получилось.
+      placeholder: |
+        Достал меч, ударил комбо по гоблину в захвате.
+        Ожидал: второй удар попадает по гоблину.
+        Получилось: меч проходит мимо, слева от него.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Где
+      multiple: true
+      options:
+        - Тестовая арена
+        - Город (локация)
+        - Карта мира / планета
+        - Экран загрузки
+        - Главное меню / лаунчер
+    validations:
+      required: true
+  - type: checkboxes
+    id: state
+    attributes:
+      label: Состояние героя
+      options:
+        - label: С мечом в руках
+        - label: В захвате (Q)
+        - label: В блоке (ПКМ)
+        - label: Бежит (Shift)
+        - label: В прыжке / в воздухе
+  - type: textarea
+    id: repeat
+    attributes:
+      label: Как повторить
+      description: Шаги по порядку. Повторяется всегда, иногда, один раз?
+      placeholder: |
+        1. Тест: арена
+        2. F, подойти к гоблину, Q
+        3. ЛКМ ×3
+        Повторяется: всегда
+  - type: textarea
+    id: media
+    attributes:
+      label: Скриншот или видео
+      description: Видео 5–10 с (Win+Alt+R или OBS) — перетащить сюда. Можно указать секунду, где ломается.
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Числа, если есть
+      description: «рывок примерно на 0.3 с», «отлетает метров на 5», «FPS падает до 20».
+  - type: textarea
+    id: log
+    attributes:
+      label: Ошибки из лога
+      description: F8 → problems, или %APPDATA%\Pax Universe\logs\godot.log (строки SCRIPT ERROR / ERROR).
+      render: text
