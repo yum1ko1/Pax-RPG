@@ -92,6 +92,9 @@
   },
   "BlockWalkR": {
    "length": 2.467
+  },
+  "CombatIdle": {
+   "length": 1.333
   }
  },
  "root_motion": {

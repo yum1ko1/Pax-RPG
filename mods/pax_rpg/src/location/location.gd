@@ -323,6 +323,8 @@ func _physics_process(delta: float) -> void:
 	_stagger = maxf(0.0, _stagger - delta)
 	_since_hit += delta
 	_regen_posture(delta)
+	if _hero != null:
+		_hero.combat = _hud_enemy() != null
 	if _lock != null and (not is_instance_valid(_lock) or not (_lock as Goblin).is_alive()
 			or _lock.global_position.distance_to(_player.global_position) > 22.0):
 		_set_lock(null)

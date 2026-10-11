@@ -7,7 +7,7 @@ extends RefCounted
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
-	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR"]
+	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
 	"DodgeArmed", "Hurt", "Parry", "Deathblow"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
@@ -18,6 +18,7 @@ var model: Node3D
 var anim: AnimationPlayer
 var armed := false
 var move_dir := Vector2.ZERO        # куда идём в осях героя (x — вправо, y — вперёд): location.gd ставит перед tick
+var combat := false                 # рядом враг в бою или захват цели: боевая стойка (колени согнуты)
 var blocking := false               # держит блок (ПКМ)
 var _block_t := 0.0                 # с, сколько держит блок: в начале — окно парирования
 var _dir_sector := "F"              # направление шага (F/B/L/R) — с запасом, чтобы клипы не дёргались на диагонали
@@ -982,6 +983,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 
 func _loop(moving: bool, speed: float, running: bool) -> void:
 	var want := "IdleArmed" if armed and has("IdleArmed") else "Idle"
+	if armed and combat and has("CombatIdle"):
+		want = "CombatIdle"
 	var stride := 1.0
 	if blocking and has("Block"):
 		# блок: меч двумя руками поперёк перед собой; на ходу — ноги шагают, руки держат блок
@@ -1022,6 +1025,8 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		var bl := _f("blend_loop", 0.3)
 		if want == "RunArmed" or anim.current_animation == "RunArmed":
 			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
+		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
+			bl = _f("blend_stance", 0.45)        # приседает в стойку и выпрямляется плавно
 		anim.play(want, bl)
 	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
 
