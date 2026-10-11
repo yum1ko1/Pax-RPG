@@ -16,12 +16,14 @@ const MAX_HP := 60.0
 const MAX_POSTURE := 100.0
 const DETECT := 14.0          # м, замечает героя
 const LOSE := 24.0            # м, теряет
-const CIRCLE_DIST := 3.6      # м, дистанция поединка — на ней кружит
+const CIRCLE_DIST := 4.0      # м, дистанция поединка — на ней кружит
+const STRIKE_DIST := 2.3      # м, отсюда начинает замах (подходит крадучись, не бросается издалека)
 const ATTACK_RANGE := 1.7     # м, с такой бьёт
 const WALK_SPEED := 2.0
 const RUN_SPEED := 4.2
 const STRAFE_SPEED := 1.35
-const LUNGE_SPEED := 4.6      # выпад
+const LUNGE_SPEED := 1.6      # шаг в замахе
+const STALK_SPEED := 1.4      # подкрадывается
 const ATTACK_HIT_AT := 0.5    # доля клипа атаки — миг удара
 const ATTACK_SPEED := 1.5
 const DAMAGE := 12.0
@@ -42,12 +44,11 @@ var posture := 0.0
 var dead := false
 var _target: Node3D
 var _hero_attacking: Callable  # () -> bool — герой сейчас бьёт (повод отскочить)
+var _hero_blocking: Callable   # () -> bool — герой в блоке (повод подождать или обмануть)
 var _on_hit: Callable          # on_hit.call(damage, self) — удар по герою (там решают: блок, парирование, урон)
 var _spawn := Vector3.ZERO
 var _model: Node3D
 var _anim: AnimationPlayer
-var _hp_bar: Label3D
-var _posture_bar: Label3D
 var _mark: MeshInstance3D       # красная метка добивания
 var _state := "idle"
 var _state_t := 0.0
@@ -57,10 +58,13 @@ var _circle_dir := 1.0         # +1 — вправо от героя, −1 — �
 var _switch_t := 2.0
 var _since_hit := 99.0
 var _lethal := false
+var _feint := false            # этот подход — обманный: подойдёт и отскочит, не ударив
 
 
-func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attacking := Callable()) -> void:
+func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attacking := Callable(),
+		hero_blocking := Callable()) -> void:
 	mod = m
+	_hero_blocking = hero_blocking
 	_target = target
 	_on_hit = on_hit
 	_hero_attacking = hero_attacking
@@ -84,8 +88,6 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_anim = _find_anim(_model)
 	if _anim != null:
 		_add_clips()
-	_hp_bar = _bar_label(1.55, Color(0.85, 0.15, 0.15))
-	_posture_bar = _bar_label(1.43, Color(1.0, 0.75, 0.2))
 	_mark = MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.07
@@ -101,19 +103,6 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	add_child(_mark)
 	_update_bars()
 	_set_state("idle")
-
-
-func _bar_label(y: float, color: Color) -> Label3D:
-	var l := Label3D.new()
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.font_size = 40
-	l.outline_size = 8
-	l.pixel_size = 0.004
-	l.position = Vector3(0.0, y, 0.0)
-	l.modulate = color
-	l.no_depth_test = true
-	add_child(l)
-	return l
 
 
 ## Клипы Meshy — отдельными glb. Берём их анимацию и кладём в плеер гоблина под своим именем; нет файла — запасной.
@@ -151,14 +140,14 @@ func can_deathblow() -> bool:
 	return _state == "broken"
 
 
+## Полосы здоровья и концентрации — в HUD справа (location.gd читает hp / posture), над головой ничего.
 func _update_bars() -> void:
-	var n := 12
-	var h := int(round(hp / MAX_HP * n))
-	_hp_bar.text = "%s  %s" % [mod.tr_key("pax_rpg_goblin"), "█".repeat(h) + "░".repeat(n - h)]
-	var p := int(round(posture / MAX_POSTURE * n))
-	_posture_bar.text = "█".repeat(p) + "░".repeat(n - p)
-	_posture_bar.visible = posture > 1.0 and not dead
-	_posture_bar.modulate = Color(1.0, 0.75 - 0.6 * posture / MAX_POSTURE, 0.2)
+	pass
+
+
+## В бою с героем (для HUD): заметил его и не мёртв.
+func in_combat() -> bool:
+	return not dead and _state != "idle"
 
 
 # ---------- что с ним делают ----------
@@ -219,8 +208,6 @@ func _die() -> void:
 		var t := create_tween()
 		t.tween_property(_model, "scale", Vector3(1.15, 0.05, 1.15), 0.6).set_ease(Tween.EASE_IN)
 		t.tween_callback(func() -> void: _model.visible = false)
-	_hp_bar.visible = false
-	_posture_bar.visible = false
 	get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 
 
@@ -232,7 +219,6 @@ func _respawn() -> void:
 	if _model != null:
 		_model.scale = Vector3.ONE
 		_model.visible = true
-	_hp_bar.visible = true
 	position = _spawn
 	velocity = Vector3.ZERO
 	_update_bars()
@@ -308,7 +294,7 @@ func _set_state(s: String) -> void:
 	_struck = false
 	if _anim != null:
 		_anim.speed_scale = 1.0
-	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle"]:
+	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle", "evade"]:
 		if s != "recover":
 			_release_token()
 	_mark.visible = s == "broken"
@@ -376,54 +362,79 @@ func _physics_process(delta: float) -> void:
 		"approach":
 			if dist > LOSE:
 				_set_state("idle")
-			elif dist <= CIRCLE_DIST + 0.3:
+			elif dist <= CIRCLE_DIST + 0.8:
 				_set_state("circle")
 			else:
-				var fast := dist > 6.0
+				var fast := dist > 9.0                   # издалека бежит, ближе — идёт, не врываясь
 				flat = dir * (RUN_SPEED if fast else WALK_SPEED)
 				_play("run" if fast else "walk")
 				_face(dir, delta)
 		"circle":
 			_face(dir, delta)
+			var hero_swing := _hero_attacking.is_valid() and bool(_hero_attacking.call())
 			if dist > LOSE:
 				_set_state("idle")
-			elif dist > CIRCLE_DIST + 2.5:
+			elif dist > CIRCLE_DIST + 3.0:
 				_set_state("approach")
+			elif hero_swing and dist < 3.4:
+				_set_state("evade")                      # герой замахнулся рядом — уйти вбок-назад
 			else:
 				_switch_t -= delta
 				if _switch_t <= 0.0:
-					_switch_t = randf_range(1.5, 3.0)
+					_switch_t = randf_range(1.2, 2.8)
 					_circle_dir = -_circle_dir
 				var radial := 0.0
-				if dist < CIRCLE_DIST - 0.6:
+				if dist < CIRCLE_DIST - 0.7:
 					radial = -1.0
-				elif dist > CIRCLE_DIST + 0.6:
+				elif dist > CIRCLE_DIST + 0.7:
 					radial = 1.0
-				flat = side * _circle_dir * STRAFE_SPEED + dir * radial * WALK_SPEED * 0.6
+				flat = side * _circle_dir * STRAFE_SPEED + dir * radial * WALK_SPEED * 0.5
 				if radial < 0.0:
 					_play("back")
 				elif radial > 0.0:
 					_play("walk")
 				else:
 					_play("strafe_r" if _circle_dir > 0.0 else "strafe_l")
-				# герой замахнулся рядом — иногда отскок назад
-				if dist < 2.6 and _hero_attacking.is_valid() and bool(_hero_attacking.call()) and randf() < delta * 2.0:
-					velocity = -dir * 4.0
 				_wait -= delta
-				if _wait <= 0.0 and _take_token():
+				if _wait <= 0.0:
+					if _hero_blocking.is_valid() and bool(_hero_blocking.call()) and randf() < 0.4:
+						_wait = randf_range(0.8, 1.6)    # герой в блоке — подождать, пусть раскроется
+					elif _take_token():
+						_feint = randf() < 0.25
+						_set_state("stalk")
+					else:
+						_wait = randf_range(0.5, 1.2)
+		"stalk":
+			_face(dir, delta)
+			flat = dir * STALK_SPEED
+			_play("walk")
+			if _hero_attacking.is_valid() and bool(_hero_attacking.call()) and dist < 3.0:
+				_set_state("evade")
+			elif dist <= STRIKE_DIST + (0.4 if _feint else 0.0):
+				if _feint:
+					velocity = -dir * 4.0 + side * _circle_dir * 1.5   # финт: дёрнулся вперёд — и отскок
+					_set_state("evade")
+				else:
 					_set_state("windup")
+			elif _state_t > 3.0:
+				_set_state("circle")
+		"evade":
+			_face(dir, delta)
+			flat = -dir * WALK_SPEED * 1.2 + side * _circle_dir * STRAFE_SPEED
+			_play("back")
+			if _state_t > 0.7:
+				_set_state("circle")
 		"windup":
 			_face(dir, delta)
-			if _state_t > 0.25:
-				flat = dir * LUNGE_SPEED
-				_play("run")
-			if dist <= ATTACK_RANGE or _state_t > 1.1:
+			flat = dir * LUNGE_SPEED
+			_play("combat_idle")
+			if _state_t >= _f_windup():
 				_set_state("attack")
 		"attack":
 			_face(dir, delta * 0.4)
 			var hit_at := _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT
-			if _state_t < hit_at * 0.7:
-				flat = dir * 1.2                         # инерция выпада
+			if _state_t < hit_at * 0.7 and dist > 1.2:
+				flat = dir * 2.0                         # шаг с ударом
 			if not _struck and _state_t >= hit_at:
 				_struck = true
 				if dist <= ATTACK_RANGE + 0.5 and _on_hit.is_valid():
@@ -441,7 +452,7 @@ func _physics_process(delta: float) -> void:
 		"hurt":
 			_damp(delta)
 			if _state_t >= HURT_TIME:
-				_set_state("circle")
+				_set_state("evade")                      # получил — отступить, а не лезть снова
 		"deflected":
 			_damp(delta)
 			if _state_t >= DEFLECTED_TIME:
@@ -460,10 +471,15 @@ func _physics_process(delta: float) -> void:
 		"dead":
 			velocity.x = 0.0
 			velocity.z = 0.0
-	if _state in ["approach", "circle", "windup", "attack", "recover", "idle"]:
+	if _state in ["approach", "circle", "stalk", "evade", "windup", "attack", "recover", "idle"]:
 		velocity.x = lerpf(velocity.x, flat.x, minf(1.0, delta * 10.0))
 		velocity.z = lerpf(velocity.z, flat.z, minf(1.0, delta * 10.0))
 	move_and_slide()
+
+
+## Замах — короткая пауза с предупреждением (у слабых врагов короче).
+func _f_windup() -> float:
+	return 0.45
 
 
 func _damp(delta: float) -> void:

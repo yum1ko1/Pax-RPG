@@ -7,7 +7,7 @@ extends RefCounted
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
-	"GuardBack", "StrafeL", "StrafeR", "WalkBack"]
+	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
 	"DodgeArmed", "Hurt", "Parry", "Deathblow"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
@@ -983,8 +983,19 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 func _loop(moving: bool, speed: float, running: bool) -> void:
 	var want := "IdleArmed" if armed and has("IdleArmed") else "Idle"
 	var stride := 1.0
-	if blocking and not moving and has("Parry"):
-		_hold_block()
+	if blocking and has("Block"):
+		# блок: меч двумя руками поперёк перед собой; на ходу — ноги шагают, руки держат блок
+		want = "Block"
+		if moving:
+			_update_sector()
+			want = "BlockWalk" + _dir_sector
+			stride = _f("stride_back", 1.0) if _dir_sector == "B" else (_f("stride_strafe", 1.0)
+				if _dir_sector in ["L", "R"] else _f("stride_walk_armed", 1.3))
+			if not has(want):
+				want = "Block"
+		if anim.current_animation != want or not anim.is_playing():
+			anim.play(want, _f("block_blend", 0.1))
+		anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving and want != "Block" else 1.0
 		return
 	if moving:
 		if running:
@@ -1030,15 +1041,6 @@ func _update_sector() -> void:
 	_dir_sector = best
 
 
-## Блок стоя: поза парирования, задержанная в точке защиты.
-func _hold_block() -> void:
-	if anim.current_animation != "Parry":
-		anim.play("Parry", 0.1)
-		anim.seek(_f("block_hold", 0.35), true)
-	if anim.current_animation_position >= _f("block_hold", 0.35):
-		anim.speed_scale = 0.0
-
-
 ## ПКМ: нажал — блок (и первые parry_window с — парирование, как в Sekiro), отпустил — снял.
 func set_block(on: bool) -> void:
 	if on and not blocking:
@@ -1047,9 +1049,9 @@ func set_block(on: bool) -> void:
 			return
 		blocking = true
 		_block_t = 0.0
-		if has("Parry"):
-			anim.play("Parry", 0.06)
-			anim.speed_scale = _f("parry_speed", 1.6)
+		if has("Block"):
+			anim.play("Block", _f("block_blend", 0.1))   # меч поднимается в блок быстро — иначе не успеть
+			anim.speed_scale = 1.0
 	elif not on:
 		blocking = false
 
@@ -1058,12 +1060,11 @@ func parry_window() -> bool:
 	return blocking and _block_t <= _f("parry_window", 0.25)
 
 
-## Парировал: короткий рывок клипа парирования с начала — меч отбивает удар.
+## Парировал: меч вздрагивает в блоке (как от удара о сталь). Окно парирования не продлевается — следующий удар
+## надо ловить новым нажатием, как в Sekiro.
 func deflect() -> void:
-	if has("Parry") and action == "":
-		anim.play("Parry", 0.03)
-		anim.speed_scale = _f("parry_speed", 1.6)
-		_block_t = 0.0
+	if anim != null and anim.current_animation == "Block":
+		anim.seek(0.0, true)
 
 
 ## Добивание (враг без равновесия): свой клип, двигаться нельзя. true — началось.

@@ -47,9 +47,15 @@ var _stagger := 0.0                # с, сломанная стойка — у�
 var _lock: Node3D                  # захваченный враг (Q): камера держит его, герой стоит к нему лицом
 var _lock_mark: MeshInstance3D
 var _rmb := false
+var _cam_lock := 0.0               # 0 — свободная камера, 1 — за плечом при захвате (плавно между)
+var _lock_point := Vector3.ZERO
 var _bars: Control
 var _hp_fill: ColorRect
 var _posture_fill: ColorRect
+var _enemy_panel: Control          # справа: портрет врага, имя, здоровье, концентрация
+var _enemy_hp: ColorRect
+var _enemy_posture: ColorRect
+var _enemy_name: Label
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -83,7 +89,8 @@ func _spawn_goblins(n: int) -> void:
 	for i: int in n:
 		var g := Goblin.new()
 		var a := (float(i) - (n - 1) * 0.5) * 0.6
-		g.setup(mod, _player, _on_hero_hit, START + Vector3(sin(a) * 9.0, -1.0, -cos(a) * 9.0), _hero_attacking)
+		g.setup(mod, _player, _on_hero_hit, START + Vector3(sin(a) * 9.0, -1.0, -cos(a) * 9.0), _hero_attacking,
+			_hero_blocking)
 		_view.add_child(g)
 		_goblins.append(g)
 
@@ -415,20 +422,38 @@ func _physics_process(delta: float) -> void:
 	if _player.position.y < FALL_Y:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
-	_follow_camera()
+	_follow_camera(delta)
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < GATE_RADIUS
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
 
 
-func _follow_camera() -> void:
+## Камера: свободная — сзади и сверху; при захвате врага плавно подлетает к герою и встаёт за правым плечом,
+## глядя на середину между героем и врагом — обоих видно, удобно читать замахи.
+func _follow_camera(delta := 0.0) -> void:
 	if not is_instance_valid(_cam):
 		return
+	var want := 1.0 if (_lock != null and is_instance_valid(_lock)) else 0.0
+	_cam_lock = move_toward(_cam_lock, want, delta * _f("lock_camera_speed", 2.5)) if delta > 0.0 else want
+	var k := smoothstep(0.0, 1.0, _cam_lock)
 	var target := _player.position + Vector3(0.0, 0.9, 0.0)
-	var offset := Vector3(0.0, _f("camera_height", 3.5), _f("camera_distance", 7.0)).rotated(Vector3.UP, _yaw)
-	_cam.position = target + offset
-	_cam.look_at(target, Vector3.UP)
+	var free_pos := target + Vector3(0.0, _f("camera_height", 3.5), _f("camera_distance", 7.0)).rotated(Vector3.UP, _yaw)
+	var look := target
+	var pos := free_pos
+	if k > 0.0:
+		var back := Vector3(0.0, 0.0, 1.0).rotated(Vector3.UP, _yaw)
+		var right := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw)
+		var shoulder := _player.position + Vector3(0.0, _f("lock_camera_height", 1.75), 0.0) \
+			+ right * _f("lock_camera_side", 0.9) + back * _f("lock_camera_distance", 3.2)
+		var enemy := _lock_point if want == 0.0 else _lock.global_position + Vector3(0.0, 0.9, 0.0)
+		if want > 0.0:
+			_lock_point = enemy
+		var lock_look := (_player.position + Vector3(0.0, 1.4, 0.0)).lerp(enemy, 0.55)
+		pos = free_pos.lerp(shoulder, k)
+		look = target.lerp(lock_look, k)
+	_cam.position = pos
+	_cam.look_at(look, Vector3.UP)
 
 
 ## Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
@@ -466,6 +491,10 @@ func _face_now(yaw: float) -> void:
 
 func _hero_attacking() -> bool:
 	return _hero != null and _hero.action in Hero.ATTACKS
+
+
+func _hero_blocking() -> bool:
+	return _hero != null and _hero.blocking
 
 
 ## Q: захватить ближнего врага перед камерой (до 16 м) / отпустить.
@@ -632,7 +661,85 @@ func _make_bars() -> void:
 	_posture_fill.anchor_bottom = 0.912
 	_posture_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bars.add_child(_posture_fill)
+	_make_enemy_panel()
 	_update_bars()
+
+
+## Справа — тот, с кем бьёмся (захваченный, иначе ближний в бою): портрет, имя, здоровье, концентрация.
+func _make_enemy_panel() -> void:
+	_enemy_panel = Control.new()
+	_enemy_panel.anchor_left = 0.80
+	_enemy_panel.anchor_right = 0.97
+	_enemy_panel.anchor_top = 0.30
+	_enemy_panel.anchor_bottom = 0.56
+	_enemy_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bars.add_child(_enemy_panel)
+	var bg := ColorRect.new()
+	bg.color = Color(0.04, 0.03, 0.08, 0.6)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_panel.add_child(bg)
+	var pic := TextureRect.new()
+	pic.texture = mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png")))
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.anchor_left = 0.05
+	pic.anchor_right = 0.95
+	pic.anchor_top = 0.04
+	pic.anchor_bottom = 0.66
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_panel.add_child(pic)
+	_enemy_name = Label.new()
+	_enemy_name.anchor_left = 0.05
+	_enemy_name.anchor_right = 0.95
+	_enemy_name.anchor_top = 0.67
+	_enemy_name.anchor_bottom = 0.77
+	_enemy_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_enemy_name.add_theme_font_size_override("font_size", 18)
+	_enemy_name.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.12))
+	_enemy_name.add_theme_constant_override("outline_size", 6)
+	_enemy_panel.add_child(_enemy_name)
+	_enemy_hp = _panel_bar(0.80, Color(0.8, 0.1, 0.12))
+	_enemy_posture = _panel_bar(0.90, Color(1.0, 0.7, 0.15))
+	_enemy_panel.visible = false
+
+
+func _panel_bar(top: float, color: Color) -> ColorRect:
+	var back := ColorRect.new()
+	back.color = Color(0.1, 0.08, 0.1, 0.9)
+	back.anchor_left = 0.06
+	back.anchor_right = 0.94
+	back.anchor_top = top
+	back.anchor_bottom = top + 0.05
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_panel.add_child(back)
+	var fill := ColorRect.new()
+	fill.color = color
+	fill.anchor_left = 0.06
+	fill.anchor_right = 0.94
+	fill.anchor_top = top
+	fill.anchor_bottom = top + 0.05
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_enemy_panel.add_child(fill)
+	return fill
+
+
+func _hud_enemy() -> Goblin:
+	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
+		return _lock as Goblin
+	var best: Goblin = null
+	var bd := 15.0
+	for g: Variant in _goblins:
+		if not is_instance_valid(g):
+			continue
+		var gob: Goblin = g
+		if not gob.in_combat():
+			continue
+		var d := gob.global_position.distance_to(_player.global_position)
+		if d < bd:
+			bd = d
+			best = gob
+	return best
 
 
 func _update_bars() -> void:
@@ -647,6 +754,19 @@ func _update_bars() -> void:
 	for c: ColorRect in [_hp_fill, _posture_fill]:
 		c.offset_left = 0.0
 		c.offset_right = 0.0
+	if not is_instance_valid(_enemy_panel):
+		return
+	var e := _hud_enemy()
+	_enemy_panel.visible = e != null
+	if e == null:
+		return
+	_enemy_name.text = mod.tr_key("pax_rpg_goblin")
+	_enemy_hp.anchor_right = 0.06 + 0.88 * e.hp / Goblin.MAX_HP
+	var pk := e.posture / Goblin.MAX_POSTURE
+	_enemy_posture.anchor_left = 0.5 - 0.44 * pk                # концентрация — от середины, как у героя
+	_enemy_posture.anchor_right = 0.5 + 0.44 * pk
+	_enemy_posture.visible = pk > 0.01
+	_enemy_posture.color = Color(1.0, 0.7 - 0.55 * pk, 0.15)
 
 
 func _update_hud() -> void:
