@@ -147,6 +147,16 @@ for f in range(0, N2 + 1, 3):
     key(f, "Tail2", rot=(0, 0, 0.4 * math.sin(t * 2 - 0.8)))
     key(f, "Tail3", rot=(0, 0, 0.5 * math.sin(t * 2 - 1.6)))
 
+act = bpy.data.actions["Graze"]
+rig.animation_data.action = act
+if hasattr(rig.animation_data, "action_slot") and len(getattr(act, "slots", [])):
+    rig.animation_data.action_slot = act.slots[0]
+for fr in (0, 60):
+    sc.frame_set(fr)
+    print("debug f", fr, "head", tuple(round(x, 3) for x in (rig.matrix_world @ pb["Head"].head)),
+          "mods", [m.type for m in body.modifiers], "fcurves",
+          len(getattr(act, "fcurves", [])) or sum(len(cb.fcurves) for l in getattr(act, "layers", [])
+                                                 for st in l.strips for cb in st.channelbags), flush=True)
 if PREV:
     os.makedirs(PREV, exist_ok=True)
     sc.render.engine = "BLENDER_WORKBENCH"
