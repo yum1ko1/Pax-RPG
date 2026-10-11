@@ -1,22 +1,23 @@
 {
-	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь). kind: cape — плащ своей тканью: grid — сетка (json из build_cape.py), coarse — грубая решётка, которая движется (остальная сетка гладко повторяет её), max_dist — насколько низ может отойти от места на теле (у плеч 0), follow — пружина к месту на теле (больше — плотнее, тяжелее), damping — сколько скорости остаётся за шаг (меньше — вязче), top_bone / low_bone — кости, с которыми едут верх и низ; cloth — ткань SoftBody3D (pin_bones, pin_band, mass, stiffness…); rigid — жёсткая вещь на кости bone. name — ключ строки в data/lang.",
+	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь). kind: cape — плащ своей тканью: grid — сетка (json из build_cape.py), coarse — грубая решётка, которая движется (остальная сетка гладко повторяет её), max_dist — насколько низ может отойти от места на теле (у плеч 0), follow / follow_hem — пружина к месту на теле у верха и у подола (меньше у подола — больше инерции, плащ отлетает), damping — сколько скорости остаётся за шаг (меньше — вязче), top_bone / low_bone — кости, с которыми едут верх и низ; cloth — ткань SoftBody3D (pin_bones, pin_band, mass, stiffness…); rigid — жёсткая вещь на кости bone. name — ключ строки в data/lang.",
 	"items": {
 		"cape_black": {
 			"name": "pax_rpg_item_cape_black",
 			"slot": "back",
 			"kind": "cape",
 			"grid": "models/items/cape_black.json",
-			"top_bone": "Spine02",
+			"top_bone": "Spine",
 			"low_bone": "Hips",
 			"coarse": [
 				5,
 				7
 			],
-			"max_dist": 0.5,
-			"follow": 0.12,
-			"damping": 0.9,
+			"max_dist": 0.85,
+			"follow": 0.2,
+			"damping": 0.975,
 			"gravity": 9.8,
-			"iterations": 4
+			"iterations": 5,
+			"follow_hem": 0.08
 		}
 	}
 }

@@ -25,7 +25,7 @@ rig.animation_data.action = None
 for p in rig.pose.bones:
     p.rotation_quaternion = (1, 0, 0, 0)
     p.location = (0, 0, 0)
-hidden = [o for o in scn.objects if o.type == "MESH" and not o.name.startswith("Knight_body")]
+hidden = [o for o in scn.objects if o.type == "MESH" and not o.name.startswith("Knight_")]
 for o in hidden:
     o.hide_set(True)
 bpy.context.view_layer.update()

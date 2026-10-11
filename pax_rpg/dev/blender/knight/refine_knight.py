@@ -644,6 +644,56 @@ if len(cape_ids) > 200:
     log.append(f"cape removed from the body: {len(cape.data.vertices)} verts")
     bpy.data.objects.remove(cape, do_unlink=True)   # плащ с модели снят: плащ — отдельный предмет (build_cape.py)
 meta.pop("cape", None)
+
+# Горжет — латный ворот от плеч до шлема: под срезанным плащом и воротом капюшона у модели Meshy пусто (одна оболочка),
+# горжет закрывает шею и рваный край на плечах. Кольца эллипсов (z, полуоси x / y, сдвиг по y), низ едет с грудью
+# (Spine), верх — с шеей (neck).
+GORGET = [(1.39, 0.29, 0.20, -0.05), (1.44, 0.24, 0.17, -0.06), (1.50, 0.17, 0.14, -0.07),
+          (1.56, 0.125, 0.12, -0.08), (1.635, 0.112, 0.112, -0.08)]
+use(None)
+for p_ in pb:
+    p_.rotation_quaternion = (1, 0, 0, 0)
+    p_.location = (0, 0, 0)
+vl.update()
+old = bpy.data.objects.get("Knight_gorget")
+if old is not None:
+    bpy.data.objects.remove(old, do_unlink=True)
+SEGS = 36
+gv, gf = [], []
+nx0 = head("neck").x
+for z, rx, ry, dy in GORGET:
+    for k in range(SEGS):
+        a_ = 2 * math.pi * k / SEGS
+        gv.append((nx0 + rx * math.cos(a_), head("neck").y + dy + 0.0 + ry * math.sin(a_), z))
+for r in range(len(GORGET) - 1):
+    for k in range(SEGS):
+        k2 = (k + 1) % SEGS
+        gf.append((r * SEGS + k, r * SEGS + k2, (r + 1) * SEGS + k2, (r + 1) * SEGS + k))
+gme = bpy.data.meshes.new("Knight_gorget")
+gme.from_pydata(gv, [], gf)
+gme.update()
+gme.shade_smooth()
+gob = bpy.data.objects.new("Knight_gorget", gme)
+scn.collection.objects.link(gob)
+gmat = bpy.data.materials.get("Gorget") or bpy.data.materials.new("Gorget")
+gmat.use_nodes = True
+gmat.use_backface_culling = False
+gb = next(n for n in gmat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+gb.inputs["Base Color"].default_value = (0.018, 0.018, 0.022, 1.0)
+gb.inputs["Metallic"].default_value = 0.85
+gb.inputs["Roughness"].default_value = 0.42
+gme.materials.append(gmat)
+g_lo, g_hi = gob.vertex_groups.new(name="Spine"), gob.vertex_groups.new(name="neck")
+for r, (z, *_x) in enumerate(GORGET):
+    t = r / (len(GORGET) - 1)
+    ids = list(range(r * SEGS, (r + 1) * SEGS))
+    g_lo.add(ids, 1 - t, "REPLACE")
+    g_hi.add(ids, t, "REPLACE")
+gob.parent = rig
+gob.matrix_parent_inverse = rig.matrix_world.inverted()
+mod_ = gob.modifiers.new("Armature", "ARMATURE")
+mod_.object = rig
+log.append(f"gorget: {len(gv)} verts")
 # прыжок финального удара: высота таза по кадрам (для настройки полёта в игре)
 a3 = clips["Attack3"]
 hz = []

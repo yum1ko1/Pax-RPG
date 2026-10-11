@@ -426,7 +426,7 @@ func _cape_tick(w: Dictionary, delta: float) -> void:
 		var v := (x[k] - prev[k]) * damp
 		prev[k] = x[k]
 		x[k] += v + grav
-		x[k] += (tg[k] - x[k]) * follow * (1.0 - 0.6 * row)   # держит форму: верх — крепче, низ — свободнее
+		x[k] += (tg[k] - x[k]) * follow * lerpf(1.0, _iv(it, "follow_hem", 0.12), row)   # верх держит форму, низ — инерция
 	for _it: int in int(_iv(it, "iterations", 4)):
 		for j: int in cz:
 			for i: int in cx:
@@ -437,7 +437,7 @@ func _cape_tick(w: Dictionary, delta: float) -> void:
 					_cape_link(x, k, k + cx, float(c.len_v), j == 0)
 		for k: int in range(cx, x.size()):
 			var row := floorf(float(k) / cx) / float(cz - 1)
-			var lim := max_d * pow(row, 1.3)
+			var lim := max_d * pow(row, 1.15)
 			var d := x[k] - tg[k]
 			if d.length() > lim:
 				x[k] = tg[k] + d.normalized() * lim
