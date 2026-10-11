@@ -36,6 +36,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 				float(d.get("rx", 0.0)), bool(d.get("c", true)))
 			continue
 		var k := str(d.get("m", ""))
+		if d.has("anim"):                                 # живое существо: своя модель с анимациями
+			_animal(k, pos, float(d.get("r", 0.0)), float(d.get("s", 1.0)), d.get("anim", []), d.get("col", []))
+			continue
 		if not groups.has(k):
 			groups[k] = []
 		var basis := Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))) * Basis.from_scale(Vector3.ONE * float(d.get("s", 1.0)))
@@ -171,6 +174,53 @@ func _leaves(list: Array) -> void:
 		p.position = t.origin + Vector3(0, 5.6 * sc, 0)
 		root.add_child(p)
 		leaves.append(p)
+
+
+## Животное (буйвол): своя копия модели, клипы anim по очереди со случайной паузой — пасётся, оглядывается.
+func _animal(path: String, pos: Vector3, ry: float, sc: float, clips: Array, col: Array) -> void:
+	var m := mod.model(path)
+	if m == null:
+		return
+	m.position = pos
+	m.rotation.y = deg_to_rad(ry)
+	m.scale = Vector3.ONE * sc
+	root.add_child(m)
+	count += 1
+	var ap := _find_player(m)
+	if ap != null and not clips.is_empty():
+		for c: Variant in clips:
+			if ap.has_animation(str(c)):
+				ap.get_animation(str(c)).loop_mode = Animation.LOOP_LINEAR
+		ap.play(str(clips[0]))
+		ap.seek(randf() * 3.0, true)
+		ap.speed_scale = randf_range(0.85, 1.1)
+		var t := Timer.new()
+		t.wait_time = randf_range(6.0, 12.0)
+		t.autostart = true
+		t.timeout.connect(func() -> void:
+			ap.play(str(clips[randi() % clips.size()]), 0.6)
+			t.wait_time = randf_range(6.0, 14.0))
+		m.add_child(t)
+	if col.size() == 3:
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(float(col[0]), float(col[1]), float(col[2])) * sc
+		cs.shape = bs
+		cs.position = Vector3(0, bs.size.y * 0.5, 0)
+		body.add_child(cs)
+		m.add_child(body)
+		rects.append([Vector2(pos.x, pos.z), Vector2(bs.size.x, bs.size.z), Color(0.5, 0.2, 0.25)])
+
+
+static func _find_player(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var f := _find_player(c)
+		if f != null:
+			return f
+	return null
 
 
 ## Знамёна Гхарна: древко с перекладиной и полотнище (textures/gharn_flag.png — герб: огненный зверь),

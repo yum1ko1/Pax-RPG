@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/location.gd
-lines: 1189
+lines: 1197
 weight: 2
 tags: [мод/rpg, функция/location]
 ---
 
 # location
 
-`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1189 строк · подключают: **2**
+`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1197 строк · подключают: **2**
 
 > Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет, мир игры его не видит): платформа, несколько блоков, ворота выхода и герой (config/hero.json: модель, скорости, комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
@@ -21,6 +21,7 @@ tags: [мод/rpg, функция/location]
 - [[pause_menu]]
 - [[sfx]]
 - [[city_title]]
+- [[wind]]
 - [[progress]]
 
 ## Кто подключает

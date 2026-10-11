@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/city.gd
-lines: 285
+lines: 446
 weight: 1
 tags: [мод/rpg, функция/location]
 ---
 
 # city
 
-`src/location/city.gd` · [[Код Pax RPG]] · `extends RefCounted` · 285 строк · подключают: **1**
+`src/location/city.gd` · [[Код Pax RPG]] · `extends RefCounted` · 446 строк · подключают: **1**
 
 > Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py): земля, модели (glb мода) и простые блоки (терраса, пандус, холм). Одинаковые модели ставятся пачкой — по MultiMeshInstance3D на каждую сетку модели (сотни бочек и тайлов дороги — пара вызовов отрисовки). Коллизия «c»: коробка по габаритам модели (здания, стены, юрты) — мелочь и деревья не мешают ходить.
 
@@ -20,6 +20,10 @@ tags: [мод/rpg, функция/location]
 - `func _ground(size: Vector2, center: Vector2, gm: Dictionary) -> void` — Земля: плоскость с шейдером (глина, кладка дорог и тропы по маске — shaders/ground.gdshader) и коробка-коллизия.
 - `func _tex(path: String, normal := false) -> Texture2D` — Картинка мода с мипмапами (без них плитка вдали рябит при движении камеры).
 - `func _fix_textures() -> void`
+- `func _leaves(list: Array) -> void` — Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
+- `func _animal(path: String, pos: Vector3, ry: float, sc: float, clips: Array, col: Array) -> void` — Животное (буйвол): своя копия модели, клипы anim по очереди со случайной паузой — пасётся, оглядывается.
+- `static func _find_player(n: Node) -> AnimationPlayer`
+- `func _flags(list: Array) -> void` — Знамёна Гхарна: древко с перекладиной и полотнище (textures/gharn_flag.png — герб: огненный зверь), полотнище колышется (shaders/flag.gdshader). Каждое — свой узел: фаза ветра от места, флаги не машут в такт.
 - `func _glass(m: BaseMaterial3D) -> void` — Стекло окон: тёмное, почти зеркальное (небо, солнце и фонари в нём — через отражения окружения и SSR), изнутри — слабый тёплый свет очага.
 - `func _lights(path: String, list: Array) -> void` — Тёплый свет у фонарей (без теней — их десятки).
 - `func _place(path: String, list: Array) -> void` — Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.

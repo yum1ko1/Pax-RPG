@@ -196,6 +196,39 @@ for i in range(3):
     add("mana_flags_line", 60 + i * 5, -62 - i * 3, 20 * i, y=4.0)
 occupied.append((66, -66, 14))
 
+# --- Буйволиный двор (юго-восток от Круга, по концепту улицы): загон из плетня, демонические буйволы (модель Meshy,
+# свой скелет и анимации — pax_rpg/dev/blender/gharn/buffalo_rig.py), корыта и сено; снаружи вдоль каменной стены —
+# стол и скамьи, где пастухи пьют кумыс
+X0, X1, Z0, Z1 = 23.0, 41.0, 27.0, 40.0
+x = X0
+while x < X1 - 0.1:                                      # плетень: север и юг
+    add("fence_wood", x + 2, Z0, 0, c=True)
+    add("fence_wood", x + 2, Z1, 0, c=True)
+    x += 4
+z = Z0
+while z < Z1 - 0.1:                                      # восток глухой, на западе — ворота (проход 4 м посередине)
+    add("fence_wood", X1, z + 2, 90, c=True)
+    if abs(z + 2 - (Z0 + Z1) / 2) > 2.5:
+        add("fence_wood", X0, z + 2, 90, c=True)
+    z += 4
+for i in range(5):                                       # каменная стена за двором
+    add("wall_rubble", X0 + 2 + i * 4.1, Z1 + 2.2, 0, c=True)
+for bx, bz, br, clip in ((29, 31, 150, ["Idle", "Graze"]), (35, 35.5, 220, ["Graze", "Idle"]), (36.5, 30, 300, ["Idle"])):
+    items.append({"m": B + "buffalo.glb", "p": [bx, 0.0, bz], "r": br, "s": 0.85, "anim": clip, "c": True,
+                  "col": [1.4, 1.8, 3.0]})
+add("trough", 39.5, 33.5, 90, c=True)
+add("trough", 26, 38.6, 0, c=True)
+for hx, hz in ((24.6, 28.6), (25.4, 30.2), (39.2, 38.4)):
+    add("hay_bale", hx, hz, random.uniform(0, 360), c=True)
+add("barrel_water", 24.4, 38.3)
+add("table_long", 31, 44.4, 0, c=True)
+add("bench_long", 31, 43.5, 0)
+add("bench_long", 31, 45.3, 0)
+add("barrel_kumis", 34.2, 44.2, 0)
+add("lantern_post", 22.2, 33.5, 0)
+occupied.append(((X0 + X1) / 2, (Z0 + Z1) / 2 + 2, 12.5))
+TRAILS.append(("rect", X0, X1, Z0, Z1))                  # в загоне — вытоптанная земля
+
 # --- Юрточные кварталы (юг)
 def quarter(x0, x1, z0, z1, n):
     placed = 0
