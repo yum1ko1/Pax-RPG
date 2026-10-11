@@ -24,8 +24,8 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("Block", 0, "FRONT34"), ("Block", 0, "RIGHT"), ("Block", 0, "FRONT"), ("BlockWalkL", 0.3, "FRONT34"),
-         ("BlockWalkB", 0.3, "RIGHT")]
+SHOTS = [("Block", 0, "FRONT34"), ("Block", 0, "FRONT"), ("Block", 0, "RIGHT"), ("Block", 0, "LEFT")]
+CLOSE = True                               # блок — крупно: руки и клинок
 files = []
 
 
@@ -57,7 +57,8 @@ for clip, t, view in SHOTS:
     else:
         show("Sword_Hand")
     scn.frame_set(f)
-    files += U.shot(f"k2_{clip.lower()}_{f:03d}", (0, -0.2, 1.0), 3.0, (view,), res=450)
+    files += U.shot(f"k2_{clip.lower()}_{f:03d}", (0, -0.35, 1.35) if CLOSE else (0, -0.2, 1.0), 1.5 if CLOSE else 3.0,
+                    (view,), res=450)
 # плащ: откинуть цепочки назад
 rig.animation_data.action = None
 pb = rig.pose.bones
