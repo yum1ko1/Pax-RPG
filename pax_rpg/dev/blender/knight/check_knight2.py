@@ -24,8 +24,8 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("Block", 0, "FRONT34"), ("Block", 0, "FRONT"), ("Block", 0, "RIGHT"), ("Block", 0, "LEFT")]
-CLOSE = True                               # блок — крупно: руки и клинок
+SHOTS = [("CombatIdle", 0, "FRONT34"), ("CombatIdle", 0, "RIGHT"), ("IdleArmed", 0, "RIGHT"), ("Block", 0, "FRONT34")]
+CLOSE = False                              # блок — крупно: руки и клинок
 files = []
 
 

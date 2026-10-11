@@ -535,6 +535,48 @@ for name, legs_from in (("BlockWalkF", "WalkArmed"), ("BlockWalkB", "GuardBack")
         apply(pose)
         key(act, f - l0)
 
+# ---------- 3г. боевая стойка (как у Волка в Sekiro при захвате): присел, колени согнуты, ступни шире, корпус
+# подан вперёд, меч в стойке перед собой; лёгкое дыхание и покачивание. Ноги — IK (ступни стоят на земле).
+def ik2(a, b, c, Wt, pole):
+    S = head(a)
+    l1 = (head(b) - S).length
+    l2 = (head(c) - head(b)).length
+    v = Wt - S
+    d = min(v.length, l1 + l2 - 0.002)
+    u = v.normalized()
+    aa = (l1 * l1 - l2 * l2 + d * d) / (2 * d)
+    h = math.sqrt(max(0.0, l1 * l1 - aa * aa))
+    pv = (pole - u * pole.dot(u)).normalized()
+    E = S + u * aa + pv * h
+    turn_bone(a, (head(b) - S).rotation_difference(E - S))
+    turn_bone(b, (head(c) - head(b)).rotation_difference(S + u * d - head(b)))
+
+
+def combat_pose(bob):
+    apply(P_GUARD)
+    fw_ = facing()
+    side_ = fw_.cross(UP)
+    feet = {s_: (head(s_ + "Foot"), rot_w(s_ + "Foot")) for s_ in ("Left", "Right")}
+    drop = _CB_DROP + bob
+    pb[HIPS].matrix = MWi @ Matrix.Translation(-UP * drop + fw_ * 0.02) @ MW @ pb[HIPS].matrix
+    vl.update()
+    turn_bone("Spine02", Quaternion(side_, math.radians(-7)))        # корпус вперёд
+    for s_, sgn in (("Left", -1.0), ("Right", 1.0)):
+        ft, fr = feet[s_]
+        tgt = ft + side_ * (sgn * 0.05)                                 # ступни чуть шире
+        ik2(s_ + "UpLeg", s_ + "Leg", s_ + "Foot", tgt, (fw_ + side_ * sgn * 0.3).normalized())
+        set_rot_w(s_ + "Foot", fr)
+    return current()
+
+
+_CB_DROP = 0.11
+act = new_action("CombatIdle")
+for f in range(0, 41, 4):
+    s_ = math.sin(2 * math.pi * f / 40)
+    apply(combat_pose(0.012 * s_))
+    turn_bone(CHEST, Quaternion(rot_w(CHEST) @ Vector((1, 0, 0)), math.radians(1.5 * s_)))
+    key(act, f)
+
 # ---------- 4. меч не уходит в землю; удар о землю ----------
 def tip_and_grip(ob):
     o, R = sword_frame(ob)
