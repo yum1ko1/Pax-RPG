@@ -21,6 +21,9 @@
   "Draw": {
    "length": 1.8
   },
+  "Hurt": {
+   "length": 1.633
+  },
   "Idle": {
    "length": 4.0
   },
