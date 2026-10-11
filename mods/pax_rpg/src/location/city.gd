@@ -97,52 +97,30 @@ func _tex(path: String, normal := false) -> Texture2D:
 
 
 ## Текстуры моделей: glb игра грузит без импорта — у картинок нет мипмапов (рябь вдали, «шум» на камнях).
-## Каждой — мипмапы и, если движок умеет на лету, сжатие в видеопамяти; картинки — параллельно на всех ядрах.
+## Каждой — мипмапы, по одной (вместе все картинки не помещаются в память). Сжатия на лету в игре нет —
+## размер картинок задан заранее по габариту модели (pax_rpg/dev/gharn/tex_budget.py).
 const TEX_SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ROUGHNESS,
 	BaseMaterial3D.TEXTURE_METALLIC, BaseMaterial3D.TEXTURE_EMISSION, BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION]
 var _mats: Array = []              # материалы моделей города (BaseMaterial3D), собирает _place
-var _imgs: Array = []
 
 
 func _fix_textures() -> void:
-	var uses := {}                     # текстура → [[материал, слот], …]
+	var done := {}                     # исходная текстура → с мипмапами
 	for mat: BaseMaterial3D in _mats:
 		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		for slot: int in TEX_SLOTS:
 			var t := mat.get_texture(slot)
 			if t == null:
 				continue
-			if not uses.has(t):
-				uses[t] = []
-			(uses[t] as Array).append([mat, slot])
-	var keys: Array = uses.keys()
-	_imgs.clear()
-	for t: Texture2D in keys:
-		var img := t.get_image()
-		var normal := false
-		for u: Array in uses[t]:
-			normal = normal or int(u[1]) == BaseMaterial3D.TEXTURE_NORMAL
-		_imgs.append([img, normal])
-	var task := WorkerThreadPool.add_group_task(_prep_image, _imgs.size(), -1, true, "pax_rpg mipmaps")
-	WorkerThreadPool.wait_for_group_task_completion(task)
-	for i: int in keys.size():
-		var img: Image = _imgs[i][0]
-		if img == null or img.is_empty():
-			continue
-		var nt := ImageTexture.create_from_image(img)
-		for u: Array in uses[keys[i]]:
-			(u[0] as BaseMaterial3D).set_texture(int(u[1]), nt)
-	_imgs.clear()
+			if not done.has(t):
+				var img := t.get_image()
+				if img == null or img.is_empty() or img.is_compressed() or img.has_mipmaps():
+					done[t] = t
+				else:
+					img.generate_mipmaps(slot == BaseMaterial3D.TEXTURE_NORMAL)
+					done[t] = ImageTexture.create_from_image(img)
+			mat.set_texture(slot, done[t])
 	_mats.clear()
-
-
-func _prep_image(i: int) -> void:
-	var img: Image = _imgs[i][0]
-	if img == null or img.is_empty() or img.is_compressed():
-		return
-	if not img.has_mipmaps():
-		img.generate_mipmaps(bool(_imgs[i][1]))
-	img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL if bool(_imgs[i][1]) else Image.COMPRESS_SOURCE_GENERIC)
 
 
 ## Стекло окон: тёмное, почти зеркальное (небо, солнце и фонари в нём — через отражения окружения и SSR),

@@ -240,7 +240,8 @@ func _make_sky() -> void:
 	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.05
-	env.ssao_enabled = true                          # тени в углах и под крышами
+	var fplus := RenderingServer.get_current_rendering_method() == "forward_plus"   # SSAO и SSR — только в Forward+
+	env.ssao_enabled = fplus                         # тени в углах и под крышами
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.2
 	env.glow_enabled = true                          # фонари, мана, вода фонтана светятся
@@ -250,7 +251,7 @@ func _make_sky() -> void:
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
 	env.fog_density = 0.0035
 	env.fog_sky_affect = 0.3
-	env.ssr_enabled = true                           # стёкла окон и лужи отражают город
+	env.ssr_enabled = fplus                          # стёкла окон и лужи отражают город
 	env.ssr_max_steps = 48
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
