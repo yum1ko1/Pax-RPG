@@ -165,26 +165,17 @@ var _puff: QuadMesh
 func _smoke_for(path: String, list: Array) -> void:
 	var spec := {}
 	if path.ends_with("yurt_small.glb"):
-		spec = {"y": 3.0, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 9, "size": 1.8, "share": 0.65}
+		spec = {"y": 3.0, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 16, "size": 0.55, "share": 0.65}
 	elif path.ends_with("yurt_large.glb"):
-		spec = {"y": 4.25, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 11, "size": 2.2, "share": 0.7}
+		spec = {"y": 4.25, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 18, "size": 0.65, "share": 0.7}
 	elif path.ends_with("firepit.glb"):
-		spec = {"y": 0.7, "col": Color(0.38, 0.36, 0.38, 0.38), "amount": 14, "size": 1.8, "share": 1.0}
+		spec = {"y": 0.7, "col": Color(0.38, 0.36, 0.38, 0.38), "amount": 20, "size": 0.5, "share": 1.0}
 	elif path.ends_with("cauldron.glb"):
-		spec = {"y": 1.3, "col": Color(0.95, 0.95, 1.0, 0.25), "amount": 10, "size": 1.1, "share": 1.0}
+		spec = {"y": 1.3, "col": Color(0.95, 0.95, 1.0, 0.25), "amount": 14, "size": 0.35, "share": 1.0}
 	else:
 		return
 	if _puff == null:
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
-		g.set_color(1, Color(1, 1, 1, 0))
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(0.5, 0.0)
-		gt.width = 64
-		gt.height = 64
+		var gt := _puff_tex()
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
@@ -192,6 +183,8 @@ func _smoke_for(path: String, list: Array) -> void:
 		m.vertex_color_use_as_albedo = true
 		m.albedo_texture = gt
 		m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		m.proximity_fade_enabled = true                  # мягко у стен и земли
+		m.proximity_fade_distance = 0.6
 		_puff = QuadMesh.new()
 		_puff.material = m
 	var rng := RandomNumberGenerator.new()
@@ -212,18 +205,23 @@ func _smoke_for(path: String, list: Array) -> void:
 		var p := CPUParticles3D.new()
 		p.mesh = _puff
 		p.amount = int(spec.amount)
-		p.lifetime = 6.0
-		p.preprocess = 6.0
+		p.lifetime = 5.0
+		p.preprocess = 5.0
+		p.visibility_range_end = 90.0                    # далёкий дым не считаем
 		p.local_coords = false
 		p.direction = Vector3.UP
 		p.spread = 12.0
-		p.initial_velocity_min = 0.5
-		p.initial_velocity_max = 0.9
+		p.initial_velocity_min = 0.35
+		p.initial_velocity_max = 0.7
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		p.emission_sphere_radius = 0.15 * sc
 		p.gravity = Vector3(0.25, 0.12, 0.08)
 		p.damping_min = 0.05
 		p.damping_max = 0.15
 		p.scale_amount_min = float(spec.size)
-		p.scale_amount_max = float(spec.size) * 1.6
+		p.scale_amount_max = float(spec.size) * 1.8
+		p.angular_velocity_min = -25.0
+		p.angular_velocity_max = 25.0
 		p.scale_amount_curve = grow
 		p.color_ramp = ramp
 		p.angle_min = 0.0
@@ -231,6 +229,23 @@ func _smoke_for(path: String, list: Array) -> void:
 		p.position = t.origin + Vector3(0, float(spec.y) * sc, 0)
 		root.add_child(p)
 		smoke.append(p)
+
+
+## Клуб дыма: мягкий круг, изрезанный шумом в клочья — вблизи видно волокна, а не гладкий шар.
+func _puff_tex() -> ImageTexture:
+	var n := FastNoiseLite.new()
+	n.frequency = 0.045
+	n.fractal_octaves = 4
+	var sz := 128
+	var img := Image.create(sz, sz, false, Image.FORMAT_RGBA8)
+	for y: int in sz:
+		for x: int in sz:
+			var d := Vector2(x - sz * 0.5, y - sz * 0.5).length() / (sz * 0.5)
+			var k := n.get_noise_2d(x, y) * 0.5 + 0.5
+			var a := clampf((1.0 - smoothstep(0.25, 1.0, d)) * (0.35 + 1.1 * k) - 0.15, 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.85 + 0.15 * k, 0.85 + 0.15 * k, 0.85 + 0.15 * k, a))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## Живая вода фонтана: рябь в чаше (shaders/water.gdshader), струя из пасти дракона веером вниз, брызги и
@@ -583,24 +598,25 @@ func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
 func _leaves(list: Array) -> void:
 	var leaf := QuadMesh.new()
-	leaf.size = Vector2(0.16, 0.1)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	leaf.size = Vector2(0.11, 0.07)
+	var m := StandardMaterial3D.new()                 # освещённые — ночью и в тени темнеют вместе с городом
+	m.roughness = 1.0
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	m.vertex_color_use_as_albedo = true
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	leaf.material = m
 	var ramp := Gradient.new()
-	ramp.set_color(0, Color(0.95, 0.25, 0.3))
-	ramp.set_color(1, Color(1.0, 0.62, 0.45))
-	ramp.add_point(0.5, Color(0.85, 0.12, 0.22))
+	ramp.set_color(0, Color(0.55, 0.22, 0.2))         # приглушённые: пыльно-красный, ржавый, бурый
+	ramp.set_color(1, Color(0.6, 0.42, 0.28))
+	ramp.add_point(0.5, Color(0.48, 0.18, 0.16))
 	for e: Array in list:
 		var t: Transform3D = e[0]
 		var sc := t.basis.get_scale().x
 		var p := CPUParticles3D.new()
 		p.mesh = leaf
-		p.amount = 14
+		p.amount = 7
 		p.lifetime = 7.0
+		p.visibility_range_end = 45.0
 		p.preprocess = 7.0
 		p.local_coords = false
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX

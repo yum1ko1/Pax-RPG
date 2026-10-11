@@ -1259,7 +1259,8 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
 			bl = _f("blend_stance", 0.45)        # приседает в стойку и выпрямляется плавно
 		anim.play(want, bl)
-	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
+	var sc := clampf(speed / stride, 0.5, 2.0) if moving else 1.0
+	anim.speed_scale = lerpf(anim.speed_scale, sc, 0.12)   # темп шага меняется плавно
 
 
 ## Направление шага по move_dir: ближайшее из вперёд / вправо / назад / влево, но меняется, только когда новое

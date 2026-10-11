@@ -32,6 +32,7 @@ func _mod_loaded() -> void:
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_city", _city_command, "rpg_city <id> — открыть город (напр. gharn)")
 	Pax.register_command("rpg_cam", _cam_command, "rpg_cam N — ракурс превью города (0 — обычная камера)")
+	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
 	Pax.register_command("rpg_time", _time_command, "rpg_time H — время суток в локации (0–24)")
 	# Для разработки: pax_rpg/dev/arena.ps1 ставит настройку autostart_arena — арена откроется сразу после запуска.
 	# Флаг одноразовый: следующий обычный запуск идёт как всегда.
@@ -75,6 +76,43 @@ func _city_command(args: PackedStringArray) -> String:
 
 func _time_command(args: PackedStringArray) -> String:
 	return location.set_hour(float(args[0]) if args.size() > 0 else 12.0)
+
+
+## Замер производительности локации: FPS, draw calls, примитивы и сколько тяжёлых узлов; off/on — выключить
+## категорию, чтобы сравнить FPS (что именно ест кадр).
+func _perf_command(args: PackedStringArray) -> String:
+	var cnt := {"particles": 0, "omni": 0, "omni_shadow": 0, "mesh": 0, "multimesh_inst": 0}
+	var stack: Array = [location]
+	var hide := args.size() >= 2 and args[0] == "off"
+	var show := args.size() >= 2 and args[0] == "on"
+	var cat := args[1] if args.size() >= 2 else ""
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is CPUParticles3D or n is GPUParticles3D:
+			cnt.particles += 1
+			if cat == "particles" and (hide or show):
+				(n as Node3D).visible = show
+		elif n is OmniLight3D:
+			cnt.omni += 1
+			if (n as OmniLight3D).shadow_enabled:
+				cnt.omni_shadow += 1
+			if cat == "omni" and (hide or show):
+				(n as Node3D).visible = show
+		elif n is DirectionalLight3D and cat == "shadows" and (hide or show):
+			(n as DirectionalLight3D).shadow_enabled = show
+		elif n is MultiMeshInstance3D:
+			cnt.multimesh_inst += (n as MultiMeshInstance3D).multimesh.instance_count if (n as MultiMeshInstance3D).multimesh else 0
+		elif n is MeshInstance3D:
+			cnt.mesh += 1
+		if cat == "landscape" and (hide or show) and n.name == "Landscape":
+			(n as Node3D).visible = show
+	var rs := RenderingServer
+	return "fps %d · draw %d · obj %d · prim %dk · vram %d МБ · %s" % [Engine.get_frames_per_second(),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME) / 1000,
+		rs.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED) / 1048576, str(cnt)]
 
 
 func _cam_command(args: PackedStringArray) -> String:
