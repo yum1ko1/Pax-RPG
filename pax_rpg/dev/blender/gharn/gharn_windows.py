@@ -107,6 +107,7 @@ def analyse(pid):
         return 0.2126 * r + 0.7152 * g + 0.0722 * bb, (r, g, bb)
 
     pts = []                                          # (точка, нормаль, яркость, ровно ли вокруг)
+    stats = {"hit": 0, "wall": 0, "flat": 0}
     z = lo.z + 1.3
     while z < lo.z + height * 0.82:
         for k in range(int(360 / STEP_DEG)):
@@ -116,8 +117,10 @@ def analyse(pid):
             if hit[0] is None:
                 continue
             p, n, fi, _ = hit
+            stats["hit"] += 1
             if abs(n.z) > 0.15 or n.dot(d) < 0.55:
                 continue
+            stats["wall"] += 1
             # ровная стена вокруг (под окно 1×1.3 м): соседние лучи упираются в ту же плоскость
             t = Vector((-n.y, n.x, 0)).normalized()
             flat = True
@@ -128,9 +131,11 @@ def analyse(pid):
                     break
             if not flat:
                 continue
+            stats["flat"] += 1
             lum, _ = lum_at(bm.faces[fi], p)
             pts.append((p, n, lum))
         z += STEP_Z
+    print(f"{pid}: bounds {tuple(round(v, 1) for v in lo)} {tuple(round(v, 1) for v in hi)}, stats {stats}", flush=True)
     if not pts:
         return []
     ls = sorted(q[2] for q in pts)
