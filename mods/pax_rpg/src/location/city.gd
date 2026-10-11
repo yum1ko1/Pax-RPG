@@ -131,6 +131,12 @@ func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, coll
 	var sm := StandardMaterial3D.new()
 	sm.albedo_color = MATS.get(mat, MATS.stone)
 	sm.roughness = 0.95
+	if mat == "earth":
+		sm.albedo_color = Color.WHITE
+		sm.albedo_texture = mod.texture("models/gharn/tex/ground.jpg")
+		sm.uv1_triplanar = true
+		sm.uv1_world_triplanar = true
+		sm.uv1_scale = Vector3.ONE * 0.25
 	bm.material = sm
 	mi.mesh = bm
 	mi.transform = Transform3D(basis, pos)
