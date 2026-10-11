@@ -505,7 +505,8 @@ func _aim_yaw() -> float:
 	return _yaw
 
 
-## Цель удара: захваченный враг, иначе ближайший живой в magnet_range перед камерой (в пределах magnet_angle).
+## Цель удара: захваченный враг, иначе ближайший живой в magnet_range перед камерой (в пределах magnet_angle),
+## а вплотную (magnet_close) — с любой стороны.
 func _attack_target() -> Goblin:
 	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
 		return _lock as Goblin
@@ -520,7 +521,7 @@ func _attack_target() -> Goblin:
 		if not gob.is_alive():
 			continue
 		var d := gob.global_position.distance_to(_player.global_position)
-		if d < bd and absf(angle_difference(ref, _yaw_to(gob))) < cone:
+		if d < bd and (d < _hf("magnet_close", 3.0) or absf(angle_difference(ref, _yaw_to(gob))) < cone):
 			bd = d
 			best = gob
 	return best
