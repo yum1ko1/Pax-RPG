@@ -331,7 +331,8 @@ func _physics_process(delta: float) -> void:
 	if _lmb_queued and _hero != null and _stagger <= 0.0:
 		if not _try_deathblow():
 			if _hero.action == "":
-				_face_now(_aim_yaw())                 # удар — туда, куда смотрит камера (или в захваченного врага)
+				var tg := _attack_target()
+				_face_now(_yaw_to(tg) if tg != null else _aim_yaw())   # удар — во врага рядом, иначе куда камера
 			_hero.attack(on_floor)
 	_lmb_queued = false
 	if _hero != null:
@@ -394,6 +395,10 @@ func _physics_process(delta: float) -> void:
 			face = _yaw
 		if face != INF:
 			_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, face, minf(1.0, delta * 12.0))
+	# магнит ударов: каждый удар комбо доворачивает к врагу, шаг удара не проносит сквозь него
+	var mag: Goblin = _attack_target() if _hero_attacking() else null
+	if mag != null:
+		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, _yaw_to(mag), minf(1.0, delta * _hf("magnet_turn", 14.0)))
 	if _hero != null:
 		var by := _body_mesh.rotation.y
 		var bf := Vector3(-sin(by), 0.0, -cos(by))
@@ -407,6 +412,16 @@ func _physics_process(delta: float) -> void:
 		if step != Vector3.ZERO and delta > 0.0:
 			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
 			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
+			if mag != null:
+				var to := mag.global_position - _player.global_position
+				to.y = 0.0
+				var dist := to.length()
+				if dist > 0.01:
+					var dir := to / dist
+					var along := w.dot(dir)
+					var stop := _hf("magnet_stop", 1.4)
+					if along > 0.0 and dist - along < stop:      # не влезать во врага
+						w -= dir * minf(along, along - (dist - stop))
 			vel.x = w.x / delta
 			vel.z = w.z / delta
 	_player.velocity = vel
@@ -485,6 +500,32 @@ func _aim_yaw() -> float:
 		var d := _lock.global_position - _player.global_position
 		return atan2(-d.x, -d.z)
 	return _yaw
+
+
+## Цель удара: захваченный враг, иначе ближайший живой в magnet_range перед камерой (в пределах magnet_angle).
+func _attack_target() -> Goblin:
+	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
+		return _lock as Goblin
+	var best: Goblin = null
+	var bd := _hf("magnet_range", 5.0)
+	var cone := deg_to_rad(_hf("magnet_angle", 75.0))
+	var ref := _body_mesh.rotation.y if _hero != null and _hero.action in Hero.ATTACKS else _yaw
+	for g: Variant in _goblins:
+		if not is_instance_valid(g):
+			continue
+		var gob: Goblin = g
+		if not gob.is_alive():
+			continue
+		var d := gob.global_position.distance_to(_player.global_position)
+		if d < bd and absf(angle_difference(ref, _yaw_to(gob))) < cone:
+			bd = d
+			best = gob
+	return best
+
+
+func _yaw_to(n: Node3D) -> float:
+	var d := n.global_position - _player.global_position
+	return atan2(-d.x, -d.z)
 
 
 func _face_now(yaw: float) -> void:
