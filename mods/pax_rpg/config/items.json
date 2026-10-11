@@ -1,26 +1,22 @@
 {
-	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь); kind: cloth — ткань SoftBody3D: верх (полоса pin_band у верхнего края, поиск по полосам шириной pin_strip) пришит к ближней из костей pin_bones, ниже свободна; mass, stiffness (0..1), damping, drag, precision — свойства ткани; rigid — жёсткая вещь, едет за костью bone. name — ключ строки в data/lang.",
+	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь). kind: cape — плащ своей тканью: grid — сетка (json из build_cape.py), coarse — грубая решётка, которая движется (остальная сетка гладко повторяет её), max_dist — насколько низ может отойти от места на теле (у плеч 0), follow — пружина к месту на теле (больше — плотнее, тяжелее), damping — сколько скорости остаётся за шаг (меньше — вязче), top_bone / low_bone — кости, с которыми едут верх и низ; cloth — ткань SoftBody3D (pin_bones, pin_band, mass, stiffness…); rigid — жёсткая вещь на кости bone. name — ключ строки в data/lang.",
 	"items": {
 		"cape_black": {
 			"name": "pax_rpg_item_cape_black",
 			"slot": "back",
-			"kind": "cloth",
-			"model": "models/items/cape_black.glb",
-			"pin_bones": [
-				"Spine02",
-				"LeftShoulder",
-				"RightShoulder",
-				"neck",
-				"LeftArm",
-				"RightArm"
+			"kind": "cape",
+			"grid": "models/items/cape_black.json",
+			"top_bone": "Spine02",
+			"low_bone": "Hips",
+			"coarse": [
+				5,
+				7
 			],
-			"pin_band": 0.08,
-			"pin_strip": 0.05,
-			"mass": 0.7,
-			"stiffness": 0.4,
-			"damping": 0.012,
-			"drag": 0.03,
-			"precision": 12
+			"max_dist": 0.5,
+			"follow": 0.12,
+			"damping": 0.9,
+			"gravity": 9.8,
+			"iterations": 4
 		}
 	}
 }

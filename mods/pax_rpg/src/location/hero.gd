@@ -201,6 +201,10 @@ func walk_only() -> bool:
 # Предмет (config/items.json) сделан в позе покоя модели героя, в её осях. Виды:
 #   cloth — ткань SoftBody3D (плащ): верх пришит к костям pin_bones, ниже — свободна, бьётся о капсулы тела и землю;
 #   rigid — жёсткая вещь (шлем, наплечник): едет за костью bone.
+#   cape — плащ со своей тканью (как Max Distance в Unreal / Skinned Cloth в Unity): у каждой точки есть место на
+#          анимированном теле, к нему её тянет пружина, и дальше max_dist от него она не уходит — у плеч 0, к подолу
+#          больше. Движется только грубая решётка coarse (5 × 7 точек), сетка плаща гладко повторяет её — ткань
+#          тяжёлая, отдельные «пиксели» не болтаются. Бьётся о капсулы тела и землю.
 # В слоте — одна вещь: надеть новую — старая снимается.
 
 func _bone_world(idx: int, rest := false) -> Transform3D:
@@ -222,6 +226,8 @@ func equip(id: String) -> bool:
 	var w := {"id": id, "item": it, "nodes": [], "anchors": [], "cloth": null, "pin_left": 0}
 	var ok := false
 	match str(it.get("kind", "rigid")):
+		"cape":
+			ok = _wear_cape(it, w)
 		"cloth":
 			ok = _wear_cloth(it, w)
 		_:
@@ -322,6 +328,208 @@ func _wear_cloth(it: Dictionary, w: Dictionary) -> bool:
 	if _colliders.is_empty():
 		_make_body_colliders()
 	return true
+
+
+func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
+	var parsed: Variant = JSON.parse_string(_mod.read_text(str(it.get("grid", ""))))
+	if not (parsed is Dictionary):
+		return false
+	var g: Dictionary = parsed
+	var nx := int(g.get("nx", 0))
+	var nz := int(g.get("nz", 0))
+	var pts: Array = g.get("points", [])
+	if nx < 2 or nz < 2 or pts.size() != nx * nz:
+		return false
+	var top_b := _skel.find_bone(str(it.get("top_bone", "Spine02")))
+	var low_b := _skel.find_bone(str(it.get("low_bone", "Hips")))
+	if top_b < 0 or low_b < 0:
+		return false
+	var rest := PackedVector3Array()
+	for p: Variant in pts:
+		var a: Array = p
+		rest.append(Vector3(float(a[0]), float(a[1]), float(a[2])))
+	var shade := PackedFloat32Array()
+	for v: Variant in g.get("shade", []):
+		shade.append(float(v))
+	var cs: Array = it.get("coarse", [5, 7])
+	var cx := int(cs[0])
+	var cz := int(cs[1])
+	# грубая решётка: точки сетки на равных шагах
+	var c_idx := PackedInt32Array()
+	for j: int in cz:
+		for i: int in cx:
+			c_idx.append(roundi(float(j) / (cz - 1) * (nz - 1)) * nx + roundi(float(i) / (cx - 1) * (nx - 1)))
+	var mesh := ImmediateMesh.new()
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.top_level = true
+	var mat := StandardMaterial3D.new()
+	var col: Array = g.get("color", [0.2, 0.16, 0.24])
+	mat.albedo_color = Color(float(col[0]), float(col[1]), float(col[2]))
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.roughness = 0.92
+	model.add_child(mi)
+	(w.nodes as Array).append(mi)
+	w.cape = {"nx": nx, "nz": nz, "rest": rest, "shade": shade, "cx": cx, "cz": cz, "c_idx": c_idx,
+		"top_b": top_b, "low_b": low_b, "mesh": mesh, "mat": mat,
+		"x": PackedVector3Array(), "prev": PackedVector3Array(), "len_h": 0.0, "len_v": 0.0}
+	var c: Dictionary = w.cape
+	var tg := _cape_targets(c, c_idx)
+	c.x = tg.duplicate()
+	c.prev = tg.duplicate()
+	c.len_h = (rest[c_idx[1]] - rest[c_idx[0]]).length()
+	c.len_v = (rest[c_idx[cx]] - rest[c_idx[0]]).length()
+	if _colliders.is_empty():
+		_make_body_colliders()
+	return true
+
+
+## Где точки плаща сейчас «на теле»: верх едет с грудью, низ — с тазом, между — плавно.
+func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
+	var rest: PackedVector3Array = c.rest
+	var nz: int = c.nz
+	var nx: int = c.nx
+	var mg := model.global_transform
+	var t_top := _bone_world(int(c.top_b)) * _bone_world(int(c.top_b), true).affine_inverse()
+	var t_low := _bone_world(int(c.low_b)) * _bone_world(int(c.low_b), true).affine_inverse()
+	var out := PackedVector3Array()
+	out.resize(idx.size())
+	for k: int in idx.size():
+		var p := mg * rest[idx[k]]
+		var row := floorf(float(idx[k]) / nx) / float(nz - 1)
+		var wl := smoothstep(0.15, 0.9, row)
+		out[k] = (t_top * p).lerp(t_low * p, wl)
+	return out
+
+
+func _cape_tick(w: Dictionary, delta: float) -> void:
+	var c: Dictionary = w.cape
+	var it: Dictionary = w.item
+	var cx: int = c.cx
+	var cz: int = c.cz
+	var tg := _cape_targets(c, c.c_idx)
+	var x: PackedVector3Array = c.x
+	var prev: PackedVector3Array = c.prev
+	var dt := clampf(delta, 0.001, 0.05)
+	var damp := _iv(it, "damping", 0.9)
+	var grav := Vector3(0.0, -_iv(it, "gravity", 9.8), 0.0) * dt * dt
+	var follow := _iv(it, "follow", 0.12)
+	var max_d := _iv(it, "max_dist", 0.5)
+	var floor_y := model.global_position.y + 0.03
+	for k: int in x.size():
+		var row := floorf(float(k) / cx) / float(cz - 1)
+		if k < cx:                                   # верхний ряд пришит
+			x[k] = tg[k]
+			prev[k] = tg[k]
+			continue
+		var v := (x[k] - prev[k]) * damp
+		prev[k] = x[k]
+		x[k] += v + grav
+		x[k] += (tg[k] - x[k]) * follow * (1.0 - 0.6 * row)   # держит форму: верх — крепче, низ — свободнее
+	for _it: int in int(_iv(it, "iterations", 4)):
+		for j: int in cz:
+			for i: int in cx:
+				var k := j * cx + i
+				if i + 1 < cx and j > 0:
+					_cape_link(x, k, k + 1, float(c.len_h), false)
+				if j + 1 < cz:
+					_cape_link(x, k, k + cx, float(c.len_v), j == 0)
+		for k: int in range(cx, x.size()):
+			var row := floorf(float(k) / cx) / float(cz - 1)
+			var lim := max_d * pow(row, 1.3)
+			var d := x[k] - tg[k]
+			if d.length() > lim:
+				x[k] = tg[k] + d.normalized() * lim
+			x[k] = _push_out(x[k])
+			x[k].y = maxf(x[k].y, floor_y)
+	c.x = x
+	c.prev = prev
+	_cape_draw(c, tg)
+
+
+## Связь двух соседних точек решётки: длина как в покое (верхний ряд не двигается).
+static func _cape_link(x: PackedVector3Array, a: int, b: int, rest_len: float, a_pinned: bool) -> void:
+	var d := x[b] - x[a]
+	var n := d.length()
+	if n < 0.0001:
+		return
+	var corr := d * ((n - rest_len) / n)
+	if a_pinned:
+		x[b] -= corr
+	else:
+		x[a] += corr * 0.5
+		x[b] -= corr * 0.5
+
+
+func _push_out(p: Vector3) -> Vector3:
+	for cl: Array in _colliders:
+		var body: AnimatableBody3D = cl[0]
+		var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
+		var axis := body.global_transform.basis.y
+		var half := cap.height * 0.5 - cap.radius
+		var rel := p - body.global_position
+		var along := clampf(rel.dot(axis), -half, half)
+		var nearest := body.global_position + axis * along
+		var off := p - nearest
+		var dist := off.length()
+		var r := cap.radius + 0.03
+		if dist < r and dist > 0.0001:
+			p = nearest + off / dist * r
+	return p
+
+
+## Сетка плаща: смещение каждой её точки от «места на теле» — билинейно по грубой решётке.
+func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
+	var nx: int = c.nx
+	var nz: int = c.nz
+	var cx: int = c.cx
+	var cz: int = c.cz
+	var x: PackedVector3Array = c.x
+	var all_idx := PackedInt32Array()
+	all_idx.resize(nx * nz)
+	for k: int in nx * nz:
+		all_idx[k] = k
+	var base := _cape_targets(c, all_idx)
+	var pos := PackedVector3Array()
+	pos.resize(nx * nz)
+	for j: int in nz:
+		var fv := float(j) / (nz - 1) * (cz - 1)
+		var j0 := mini(int(fv), cz - 2)
+		var tv := fv - j0
+		for i: int in nx:
+			var fu := float(i) / (nx - 1) * (cx - 1)
+			var i0 := mini(int(fu), cx - 2)
+			var tu := fu - i0
+			var k00 := j0 * cx + i0
+			var o00 := x[k00] - tg[k00]
+			var o10 := x[k00 + 1] - tg[k00 + 1]
+			var o01 := x[k00 + cx] - tg[k00 + cx]
+			var o11 := x[k00 + cx + 1] - tg[k00 + cx + 1]
+			var off := o00.lerp(o10, tu).lerp(o01.lerp(o11, tu), tv)
+			pos[j * nx + i] = base[j * nx + i] + off
+	var nrm := PackedVector3Array()
+	nrm.resize(nx * nz)
+	for j: int in nz:
+		for i: int in nx:
+			var l := pos[j * nx + maxi(i - 1, 0)]
+			var r := pos[j * nx + mini(i + 1, nx - 1)]
+			var u := pos[maxi(j - 1, 0) * nx + i]
+			var d := pos[mini(j + 1, nz - 1) * nx + i]
+			nrm[j * nx + i] = (r - l).cross(d - u).normalized()
+	var shade: PackedFloat32Array = c.shade
+	var mesh: ImmediateMesh = c.mesh
+	mesh.clear_surfaces()
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, c.mat)
+	for j: int in nz - 1:
+		for i: int in nx - 1:
+			var a := j * nx + i
+			for k: int in [a, a + nx, a + 1, a + 1, a + nx, a + nx + 1]:
+				var s := shade[k] if k < shade.size() else 1.0
+				mesh.surface_set_color(Color(s, s, s))
+				mesh.surface_set_normal(nrm[k])
+				mesh.surface_add_vertex(pos[k])
+	mesh.surface_end()
 
 
 func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
@@ -429,12 +637,14 @@ func _move_colliders() -> void:
 		body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
 
 
-func _items_tick() -> void:
+func _items_tick(delta: float) -> void:
 	if _skel == null or not model.is_inside_tree():
 		return
 	var any_cloth := false
 	for w: Dictionary in _worn.values():
-		if w.cloth != null:
+		if w.has("cape"):
+			any_cloth = true
+		elif w.cloth != null:
 			any_cloth = true
 			if int(w.pin_left) > 0:
 				w.pin_left = int(w.pin_left) - 1
@@ -447,6 +657,9 @@ func _items_tick() -> void:
 			(w.follow as Node3D).global_transform = _bone_world(int(w.bone)) * (w.rel as Transform3D)
 	if any_cloth:
 		_move_colliders()
+	for w: Dictionary in _worn.values():
+		if w.has("cape"):
+			_cape_tick(w, delta)
 
 
 ## Ткань сама тянется за телом — ветер не нужен (оставлено для location.gd).
@@ -715,7 +928,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_on_floor = on_floor
 	_show_sword(delta)
 	_trail_tick(delta)
-	_items_tick()
+	_items_tick(delta)
 	return out
 
 
