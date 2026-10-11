@@ -107,7 +107,14 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
             ds = spose[sn].to_3x3().normalized() @ S_REST[sn].to_3x3().normalized().inverted()
             if mirror:
                 ds = MX @ ds @ MX
-            rot = ds @ T_REST[tn].to_3x3().normalized()
+            # покой рыцаря (A-поза) ≠ покой Mixamo (T-поза): сначала кость рыцаря — в направление кости-источника
+            # в покое (минимальный поворот), потом — тот же поворот от покоя, что у источника
+            sdir = (S_REST[sn].to_3x3().normalized() @ Vector((0, 1, 0)))
+            if mirror:
+                sdir = MX @ sdir
+            tdir = T_REST[tn].to_3x3().normalized() @ Vector((0, 1, 0))
+            corr = tdir.rotation_difference(sdir).to_matrix()
+            rot = ds @ corr @ T_REST[tn].to_3x3().normalized()
             pbt = rig.pose.bones[tn]
             cur = (MW @ pbt.matrix)
             M = (rot @ Matrix.Diagonal(T_REST[tn].to_scale())).to_4x4()   # масштаб кости (риг Meshy — в см)
