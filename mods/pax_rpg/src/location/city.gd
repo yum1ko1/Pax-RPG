@@ -34,9 +34,35 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if not groups.has(k):
 			groups[k] = []
 		var basis := Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))).scaled(Vector3.ONE * float(d.get("s", 1.0)))
-		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false))])
+		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
 		_place(k, groups[k])
+		_lights(k, groups[k])
+
+
+## Тёплый свет у фонарей (без теней — их десятки).
+func _lights(path: String, list: Array) -> void:
+	var off := Vector3.ZERO
+	var col := Color(1.0, 0.62, 0.35)
+	if path.ends_with("lantern_post.glb"):
+		off = Vector3(0.82, 2.35, 0)
+	elif path.ends_with("stone_lantern.glb"):
+		off = Vector3(0, 1.35, 0)
+	elif path.ends_with("mana_crystal.glb"):
+		off = Vector3(0, 0.6, 0)
+		col = Color(1.0, 0.4, 0.8)
+	elif path.ends_with("cauldron.glb"):
+		off = Vector3(0, 0.3, 0)
+	else:
+		return
+	for e: Array in list:
+		var t: Transform3D = e[0]
+		var l := OmniLight3D.new()
+		l.light_color = col
+		l.light_energy = 1.6
+		l.omni_range = 7.0
+		l.position = t * off
+		root.add_child(l)
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
@@ -70,9 +96,15 @@ func _place(path: String, list: Array) -> void:
 			var body := StaticBody3D.new()
 			var sh := CollisionShape3D.new()
 			var bs := BoxShape3D.new()
-			bs.size = aabb.size * t.basis.get_scale().x * 0.92
+			var col: Array = e[2]
+			var sc := t.basis.get_scale().x
+			if col.size() == 3:                          # своя коробка (ствол дерева): от земли вверх
+				bs.size = Vector3(float(col[0]), float(col[1]), float(col[2])) * sc
+				sh.position = Vector3(0, bs.size.y / 2, 0)
+			else:
+				bs.size = aabb.size * sc * 0.92
+				sh.position = aabb.get_center() * sc
 			sh.shape = bs
-			sh.position = aabb.get_center() * t.basis.get_scale().x
 			body.add_child(sh)
 			body.transform = Transform3D(t.basis.orthonormalized(), t.origin)
 			root.add_child(body)

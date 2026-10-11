@@ -92,7 +92,7 @@ def main(root):
                         errors.append(f"{rel(p)}:{n}: ключа «{k}» нет в data/lang/{code}.json")
     # 5. файлы, на которые ссылаются код и конфиги, существуют
     def check_path(s, where):
-        if PATH_RE.match(s) and not os.path.exists(os.path.join(mod, s)):
+        if "%" not in s and PATH_RE.match(s) and not os.path.exists(os.path.join(mod, s)):
             errors.append(f"{where}: нет файла мода «{s}»")
 
     def walk(v, where):

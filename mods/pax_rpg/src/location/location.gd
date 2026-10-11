@@ -16,6 +16,7 @@ const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
+const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -136,6 +137,8 @@ func build(city: Dictionary) -> void:
 		_gate_pos = Vector3(float(ex[0]), 0.0, float(ex[1]))
 		_gate_radius = float(layout.get("exit_radius", GATE_RADIUS))
 		goblins = int(layout.get("goblins", 0))
+		_spawn_npcs(layout)
+		_shots = layout.get("shots", [])
 	_make_player()
 	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
@@ -205,15 +208,32 @@ func _make_sky() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.8
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_energy = 0.55
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.05
+	env.ssao_enabled = true                          # тени в углах и под крышами
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 2.2
+	env.glow_enabled = true                          # фонари, мана, вода фонтана светятся
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.08
+	env.fog_enabled = true                           # розовая дымка маны вдали
+	env.fog_light_color = Color(0.95, 0.62, 0.8)
+	env.fog_density = 0.0035
+	env.fog_sky_affect = 0.3
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.12
 	var we := WorldEnvironment.new()
 	we.environment = env
 	_view.add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
-	sun.light_color = Color(1.0, 0.94, 0.97)
+	sun.rotation_degrees = Vector3(-30.0, 145.0, 0.0)   # низкое тёплое солнце — длинные тени по улицам
+	sun.light_color = Color(1.0, 0.86, 0.72)
+	sun.light_energy = 1.35
 	sun.shadow_enabled = true
+	sun.shadow_blur = 1.5
+	sun.directional_shadow_max_distance = 140.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	_view.add_child(sun)
 
 
@@ -238,6 +258,22 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 	_map_rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z),
 		Color(0.11, 0.16, 0.35) if big else Color(0.2, 0.27, 0.55)])
 	return body
+
+
+## Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
+func _spawn_npcs(layout: Dictionary) -> void:
+	var paths: Array = layout.get("paths", [])
+	if paths.is_empty():
+		return
+	for n: int in int(layout.get("npcs", 0)):
+		var src: Array = paths[n % paths.size()]
+		var pts := PackedVector3Array()
+		for pt: Variant in src:
+			var a: Array = pt
+			pts.append(Vector3(float(a[0]) + randf_range(-1.2, 1.2), 0.05, float(a[1]) + randf_range(-1.2, 1.2)))
+		var npc := Npc.new()
+		npc.setup(mod, pts, randi() % pts.size(), n * 7919 + 13)
+		_view.add_child(npc)
 
 
 ## Планировка города (config/<id>.json); нет файла — {} (локация-прототип).
@@ -478,7 +514,30 @@ func _physics_process(delta: float) -> void:
 
 ## Камера: свободная — сзади и сверху; при захвате врага плавно подлетает к герою и встаёт за правым плечом,
 ## глядя на середину между героем и врагом — обоих видно, удобно читать замахи.
+## Кинокамера для превью (консоль F8: rpg_cam N, 0 — обычная): ракурсы «shots» из планировки города.
+var _cine: Array = []
+var _shots: Array = []
+
+
+func cine(n: int) -> String:
+	if n <= 0 or n > _shots.size():
+		_cine = []
+		if is_instance_valid(_hud):
+			_hud.visible = true
+		return "camera: player"
+	_cine = _shots[n - 1]
+	if is_instance_valid(_hud):
+		_hud.visible = false
+	return "camera: shot %d/%d" % [n, _shots.size()]
+
+
 func _follow_camera(delta := 0.0) -> void:
+	if not _cine.is_empty() and is_instance_valid(_cam):
+		var a: Array = _cine[0]
+		var b: Array = _cine[1]
+		_cam.global_position = Vector3(float(a[0]), float(a[1]), float(a[2]))
+		_cam.look_at(Vector3(float(b[0]), float(b[1]), float(b[2])))
+		return
 	if not is_instance_valid(_cam):
 		return
 	var want := 1.0 if (_lock != null and is_instance_valid(_lock)) else 0.0

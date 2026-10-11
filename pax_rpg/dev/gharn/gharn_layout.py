@@ -15,9 +15,17 @@ items = []
 occupied = []          # (x, z, радиус) — чтобы мелочь не вставала в здания
 
 
-def add(m, x, z, r=0.0, s=1.0, c=False, y=0.0, rad=0.0):
-    items.append({"m": (P if not m.startswith("@") else B) + m.lstrip("@") + ".glb", "p": [round(x, 2), round(y, 2), round(z, 2)],
-                  "r": round(r, 1), "s": s, "c": c})
+NO_COLLIDE = {"road_cobble", "road_dirt", "boardwalk", "lantern_string", "mana_flags_line", "stairs_stone"}
+TRUNK = {"flame_tree": [0.9, 3.0, 0.9]}          # у деревьев — только ствол: крона не мешает ходить
+
+
+def add(m, x, z, r=0.0, s=1.0, c=None, y=0.0, rad=0.0):
+    name = m.lstrip("@")
+    it = {"m": (P if not m.startswith("@") else B) + name + ".glb", "p": [round(x, 2), round(y, 2), round(z, 2)],
+          "r": round(r, 1), "s": s, "c": (name not in NO_COLLIDE) if c is None else c}
+    if name in TRUNK:
+        it["col"] = TRUNK[name]
+    items.append(it)
     if rad:
         occupied.append((x, z, rad))
 
@@ -83,12 +91,21 @@ for x in (-22, -14, 14, 22):
 for a in range(0, 360, 30):
     ra = math.radians(a)
     add("stone_lantern", math.sin(ra) * 20.5, math.cos(ra) * 20.5) if a % 60 else None
-for a in range(0, 360, 20):
+# Круг поединков: каменное кольцо-трибуна (две ступени-скамьи), проходы на север и юг
+for a in range(0, 360, 12):
+    if a % 180 in (0, 12, 168) or a in (348, 192):
+        continue
     ra = math.radians(a)
-    add("bench_stone" if False else "bench_long", math.sin(ra) * 9.5, math.cos(ra) * 9.5, a + 90)
+    for rr, h in ((9.0, 0.5), (10.2, 1.0)):
+        box([1.25, h, 2.0 * math.pi * rr / 30 + 0.1], round(math.sin(ra) * rr, 2), h / 2, round(math.cos(ra) * rr, 2),
+            "stone_cut", r=a + 90)
+for a in (0, 180):                                     # столбы у проходов
+    ra = math.radians(a)
+    for side in (-1, 1):
+        add("tug_banner", math.sin(ra) * 10 + side * 1.6 * math.cos(ra), math.cos(ra) * 10 + side * 1.6 * math.sin(ra))
 box([2, 1, 2], 0, 0.5, -16, "stone_dark")                     # тумба глашатая
 add("@flame_tree", 14, -14, 30, s=1.8, rad=4)                  # Древо Клятв (заглушка)
-add("ovoo_cairn", 11, -11)
+add("ovoo_cairn", 12, -10)
 add("well_square" if False else "trough", -14, 12, 45, c=True)
 occupied.append((0, 0, 21))
 
@@ -204,8 +221,33 @@ quarter(-86, -20, 34, 80, 22)
 quarter(20, 86, 40, 80, 20)
 quarter(-86, -24, 14, 30, 5)
 
+# маршруты мирных жителей (ломаные по улицам), сколько их
+paths = [
+    [[0, 80], [0, 50], [0, 24]],                                        # Тракт
+    [[-1.5, 78], [-1.5, 30], [-8, 18], [-20, 2]],                       # Тракт → базар
+    [[-74, 2], [-40, 2], [-22, 2]],                                     # Аллея, запад
+    [[22, -2], [34, -6], [50, -2], [74, -2]],                           # Аллея, восток мимо фонтана
+    [[44, 8], [36, 6], [26, 12], [14, 18], [2, 22]],                    # таверна → площадь
+    [[-15, 15], [15, 15], [15, -15], [-15, -15], [-15, 15]],            # вокруг Круга
+    [[0, -20], [0, -32]],                                               # к лестнице Ставки
+    [[-60, 2], [-60, 26], [-42, 26], [-42, 2]],                         # по базару
+    [[-30, 30], [-50, 44], [-70, 60], [-50, 74]],                       # западный квартал
+    [[30, 30], [50, 46], [70, 62], [44, 74]],                           # восточный квартал
+    [[-24, -10], [-34, -28], [-40, -54]],                               # к Счётному двору
+    [[24, -10], [44, -12], [54, -8]],                                   # к гильдии
+]
+npcs = 32
+# ракурсы для превью: [камера xyz, куда смотрит xyz] — консоль rpg_cam N
+shots = [
+    [[0, 9, 96], [0, 6, 20]],            # 1 через Врата Клыка на Тракт и Ставку
+    [[-3, 2.2, 60], [4, 4, 20]],         # 2 по Тракту на уровне глаз
+    [[22, 14, 22], [0, 2, -8]],          # 3 площадь Круга сверху
+    [[22, 3, 8], [40, 3, -10]],          # 4 Аллея, фонтан и гильдия
+    [[30, 4, 2], [54, 6, 24]],           # 5 таверна от фонтана
+    [[-110, 70, 120], [0, 0, -10]],      # 6 весь город с высоты
+]
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
-        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": [190, 186, 0, -6], "goblins": 0,
+        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": [190, 186, 0, -6], "goblins": 0, "paths": paths, "npcs": npcs, "shots": shots,
         "items": items}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
