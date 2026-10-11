@@ -1,9 +1,9 @@
 """Плащ Чёрного рыцаря — отдельный предмет (в игре — ткань SoftBody3D, надевается через config/items.json).
 
 Через мост, после refine_knight.py (сцена Knight, тело без плаща): exec(open(<файл>).read(), {"result": {}}).
-Строит ровную сетку ткани NX × NZ по спине рыцаря в позе покоя: верхний ряд — по линии плеч (его в игре пришивают
-к груди и плечам), дальше полотно спускается до икр и висит отвесно ниже самой выпуклой точки спины (как настоящая
-ткань); подол рваный — зубцы разной длины. Без развёртки и швов (номер точки ткани = номер вершины), гладкие
+Строит сетку ткани NX × NZ по спине рыцаря в позе покоя: верхний край лежит на плечах и наплечниках (самая высокая
+точка тела в каждой колонке; в игре он едет с грудью и плечами), полотно спускается до икр и висит отвесно ниже самой
+выпуклой точки спины, края загибаются вокруг тела, по ткани — вертикальные складки, глубже к подолу; подол рваный. Без развёртки и швов (номер точки ткани = номер вершины), гладкие
 нормали, двусторонний материал; тёмный низ — цветом вершин. Пишет <W>/knight/cape_black.glb и кадры
 <W>/shots/cape_*.png.
 """
@@ -32,7 +32,7 @@ log = result.setdefault("log", [])
 
 NX, NZ = 15, 20                     # колонок и рядов вершин
 Z_BOT = 0.24                        # низ плаща (до икр), м
-GAP = 0.05                          # зазор от спины
+GAP = 0.025                         # зазор от спины
 HEM = 0.09                          # глубина зубцов подола
 COLOR = (0.196, 0.165, 0.235)       # sRGB — цвет ткани старого плаща
 random.seed(7)
@@ -65,26 +65,39 @@ half_bot = half_top + 0.10
 back = co[co[:, 1] > hips.y]                    # +Y — спина (рыцарь смотрит на -Y)
 log.append(f"z_top {z_top:.2f}, half width {half_top:.2f}..{half_bot:.2f}, back verts {len(back)}")
 
+neck = head("neck")
 verts = []
 grid = {}
 for i in range(NX):
     u = i / (NX - 1) * 2 - 1                    # -1 … 1 поперёк
+    x0 = hips.x + u * half_top
+    # верх колонки лежит на плече / наплечнике: самая высокая точка тела здесь (сзади и сверху), не выше шеи
+    top = co[(np.abs(co[:, 0] - x0) < 0.04) & (co[:, 1] > hips.y - 0.10) & (co[:, 2] > 1.25) & (co[:, 2] < neck.z)]
+    if len(top):
+        k = int(np.argmax(top[:, 2]))
+        zt, yt = float(top[k, 2]) + 0.012, float(top[k, 1])
+    else:
+        zt, yt = z_top, hips.y + 0.1
     ys = []
     for j in range(NZ):
         t = j / (NZ - 1)
-        z = z_top - (z_top - Z_BOT) * t
+        z = zt - (zt - Z_BOT) * t
         x = hips.x + u * (half_top + (half_bot - half_top) * t)
-        sel = back[(np.abs(back[:, 0] - x) < 0.06) & (np.abs(back[:, 2] - z) < 0.05)]
-        y = float(sel[:, 1].max()) + GAP if len(sel) else (ys[-1] if ys else hips.y + 0.18)
-        if ys:
-            y = max(y, ys[-1])                  # ниже самой выпуклой точки — отвесно
+        sel = back[(np.abs(back[:, 0] - x) < 0.05) & (np.abs(back[:, 2] - z) < 0.04)]
+        y = float(sel[:, 1].max()) + GAP if len(sel) else (ys[-1] if ys else yt)
+        if j == 0:
+            y = yt                                # на плече
+        elif ys:
+            y = max(y, ys[-1] if j > 2 else y)    # ниже самой выпуклой точки спины — висит отвесно
         ys.append(y)
     for j in range(NZ):
         t = j / (NZ - 1)
-        z = z_top - (z_top - Z_BOT) * t
+        z = zt - (zt - Z_BOT) * t
         x = hips.x + u * (half_top + (half_bot - half_top) * t)
-        y = ys[j] - (0.04 if j == 0 else 0.0)   # верх чуть заходит на плечи
-        if j == NZ - 1:                         # рваный подол: зубцы разной длины
+        y = ys[j]
+        y -= (abs(u) ** 2) * (0.05 + 0.13 * t)    # края загибаются вокруг тела
+        y += 0.028 * t * math.sin(u * math.pi * 3.5 + 0.7) * (0.4 + 0.6 * abs(math.sin(u * 2.3)))   # складки
+        if j == NZ - 1:                           # рваный подол: зубцы разной длины
             z += random.uniform(-HEM, HEM * 0.4) + (0.12 if random.random() < 0.25 else 0.0)
         elif j == NZ - 2:
             z += random.uniform(-HEM * 0.3, HEM * 0.3)

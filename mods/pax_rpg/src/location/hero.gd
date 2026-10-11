@@ -189,7 +189,7 @@ func has(n: String) -> bool:
 
 
 func locks_move() -> bool:
-	return action != "" and action != "Jump" and action not in ON_THE_GO
+	return action != "" and action != "Jump" and action != "Hurt" and action not in ON_THE_GO
 
 
 ## Достаёт или убирает меч на ходу — бежать нельзя, только шаг.
@@ -340,8 +340,11 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	var pts: Array = g.get("points", [])
 	if nx < 2 or nz < 2 or pts.size() != nx * nz:
 		return false
-	var top_b := _skel.find_bone(str(it.get("top_bone", "Spine02")))
+	var top_b := _skel.find_bone(str(it.get("top_bone", "Spine")))
 	var low_b := _skel.find_bone(str(it.get("low_bone", "Hips")))
+	var sides: Array = it.get("side_bones", ["LeftShoulder", "RightShoulder"])   # +X — левое плечо рыцаря
+	var left_b := _skel.find_bone(str(sides[0]))
+	var right_b := _skel.find_bone(str(sides[1]))
 	if top_b < 0 or low_b < 0:
 		return false
 	var rest := PackedVector3Array()
@@ -371,8 +374,12 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	mat.roughness = 0.92
 	model.add_child(mi)
 	(w.nodes as Array).append(mi)
+	var half := 0.0
+	for i: int in nx:
+		half = maxf(half, absf(rest[i].x))
 	w.cape = {"nx": nx, "nz": nz, "rest": rest, "shade": shade, "cx": cx, "cz": cz, "c_idx": c_idx,
-		"top_b": top_b, "low_b": low_b, "mesh": mesh, "mat": mat,
+		"top_b": top_b, "low_b": low_b, "left_b": left_b, "right_b": right_b, "half": maxf(half, 0.1),
+		"mesh": mesh, "mat": mat,
 		"x": PackedVector3Array(), "prev": PackedVector3Array(), "len_h": 0.0, "len_v": 0.0}
 	var c: Dictionary = w.cape
 	var tg := _cape_targets(c, c_idx)
@@ -385,7 +392,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	return true
 
 
-## Где точки плаща сейчас «на теле»: верх едет с грудью, низ — с тазом, между — плавно.
+## Где точки плаща сейчас «на теле»: верх посередине едет с грудью, углы верха — с плечами, низ — с тазом.
 func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 	var rest: PackedVector3Array = c.rest
 	var nz: int = c.nz
@@ -393,13 +400,22 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 	var mg := model.global_transform
 	var t_top := _bone_world(int(c.top_b)) * _bone_world(int(c.top_b), true).affine_inverse()
 	var t_low := _bone_world(int(c.low_b)) * _bone_world(int(c.low_b), true).affine_inverse()
+	var t_l := t_top
+	var t_r := t_top
+	if int(c.left_b) >= 0 and int(c.right_b) >= 0:
+		t_l = _bone_world(int(c.left_b)) * _bone_world(int(c.left_b), true).affine_inverse()
+		t_r = _bone_world(int(c.right_b)) * _bone_world(int(c.right_b), true).affine_inverse()
+	var half: float = c.half
 	var out := PackedVector3Array()
 	out.resize(idx.size())
 	for k: int in idx.size():
 		var p := mg * rest[idx[k]]
 		var row := floorf(float(idx[k]) / nx) / float(nz - 1)
 		var wl := smoothstep(0.15, 0.9, row)
-		out[k] = (t_top * p).lerp(t_low * p, wl)
+		var u := rest[idx[k]].x / half
+		var ws := smoothstep(0.3, 1.0, absf(u)) * (1.0 - smoothstep(0.0, 0.35, row))
+		var up := (t_top * p).lerp((t_l if u > 0.0 else t_r) * p, ws)
+		out[k] = up.lerp(t_low * p, wl)
 	return out
 
 
@@ -794,6 +810,7 @@ func _ground_burst() -> void:
 # ---------- команды ----------
 
 func toggle_sword(on_floor: bool, moving := false) -> void:
+	_cancel_hurt()
 	if anim == null or action != "" or not on_floor:
 		return
 	var n := "Sheathe" if armed else "Draw"
@@ -806,7 +823,14 @@ func toggle_sword(on_floor: bool, moving := false) -> void:
 	_play_once(n)
 
 
+## Реакция на удар (Hurt) — только картинка: любое действие или шаг её прерывают, управление не отнимается.
+func _cancel_hurt() -> void:
+	if action == "Hurt":
+		action = ""
+
+
 func attack(on_floor: bool) -> void:
+	_cancel_hurt()
 	if anim == null or not has("Attack1"):
 		return
 	if action == "" and on_floor:
@@ -824,6 +848,7 @@ func attack(on_floor: bool) -> void:
 ## Уворот (Alt): кувырок туда, куда смотрит герой (location.gd разворачивает его по направлению ввода).
 ## С мечом — свой клип, тяжелее и дальше.
 func dodge(on_floor: bool) -> bool:
+	_cancel_hurt()
 	if anim == null or not on_floor or action != "":
 		return false
 	var n := "DodgeArmed" if armed and has("DodgeArmed") else "Dodge"
@@ -840,13 +865,14 @@ func invulnerable() -> bool:
 
 ## Получил удар: клип Hurt (если есть в модели) — короткая реакция, не сбивает уворот и удар финала.
 func hurt() -> void:
-	if anim == null or not has("Hurt") or action in ["Dodge", "DodgeArmed", "Attack3"]:
-		return
+	if anim == null or not has("Hurt") or action != "":
+		return                                   # удар, уворот, доставание не сбиваются
 	_play_once("Hurt")
 
 
 ## Прыжок: анимация с момента отрыва (без долгого приседа), отрыв — сразу (tick вернёт jump).
 func jump(on_floor: bool) -> bool:
+	_cancel_hurt()
 	if anim == null or not on_floor or (action != "" and action != "Jump"):
 		return false
 	if has("Jump"):
@@ -907,6 +933,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	if anim == null:
 		return out
 	_combo_left = maxf(0.0, _combo_left - delta)
+	if action == "Hurt" and moving:
+		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
 	if action != "" and not anim.is_playing():
 		_end_action()                        # сигнал конца не пришёл — не застрять
 	if action in ATTACKS:
