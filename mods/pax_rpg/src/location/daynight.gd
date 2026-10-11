@@ -11,6 +11,7 @@ var sun: DirectionalLight3D
 var sky_mat: ShaderMaterial
 var lights: Array = []             # [OmniLight3D, энергия ночью]
 var glass: Array = []              # материалы окон
+var paper: Array = []              # бумажные фонари — свечение мягче окон
 var fog_day := Color(0.95, 0.62, 0.8)
 
 
@@ -58,6 +59,10 @@ func apply() -> void:
 		var ol: OmniLight3D = l[0]
 		if is_instance_valid(ol):
 			ol.light_energy = float(l[1]) * lerpf(0.2, 1.0, night)
+	for pm: Variant in paper:
+		var m2 := pm as BaseMaterial3D
+		if m2 != null:
+			m2.emission_energy_multiplier = lerpf(0.1, 0.55, night)
 	for g: Variant in glass:
 		var m := g as BaseMaterial3D
 		if m != null:

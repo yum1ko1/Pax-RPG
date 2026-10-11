@@ -83,6 +83,7 @@ var _city_leaves: Array = []
 var _city_lights: Array = []
 var _city_smoke: Array = []
 var _city_glass: Array = []
+var _city_paper: Array = []
 var _env: Environment
 var _sun: DirectionalLight3D
 var _sky_mat: ShaderMaterial
@@ -157,6 +158,7 @@ func build(city: Dictionary) -> void:
 	_make_sky()
 	_city_lights = []
 	_city_glass = []
+	_city_paper = []
 	var layout := _city_layout(str(city.get("id", "")))
 	START = ARENA_START
 	_gate_radius = GATE_RADIUS
@@ -172,6 +174,7 @@ func build(city: Dictionary) -> void:
 		_city_smoke = c.smoke
 		_city_lights = c.lights
 		_city_glass = c.glass
+		_city_paper = c.paper_mats
 		var st: Array = layout.get("start", [0, 1.2, 0])
 		START = Vector3(float(st[0]), float(st[1]), float(st[2]))
 		var ex: Array = layout.get("exit", [0, 0])
@@ -191,6 +194,7 @@ func build(city: Dictionary) -> void:
 	_daynight = DayNight.new()
 	_daynight.lights = _city_lights
 	_daynight.glass = _city_glass
+	_daynight.paper = _city_paper
 	_daynight.setup(_env, _sun, _sky_mat, cfg)
 	_view.add_child(_daynight)
 	_make_player()

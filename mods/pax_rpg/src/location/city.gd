@@ -14,7 +14,8 @@ var rects: Array = []          # [центр XZ, размер XZ, цвет] — 
 var count := 0
 var leaves: Array = []
 var lights: Array = []         # [OmniLight3D, энергия ночью] — ими управляет daynight.gd
-var glass: Array = []          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
+var glass: Array = []
+var paper_mats: Array = []     # бумажные фонари рынка — своё, мягкое свечение          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
 
 func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
@@ -446,8 +447,8 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		paper.albedo_color = Color(0.95, 0.32, 0.08)
 		paper.emission_enabled = true
 		paper.emission = Color(1.0, 0.3, 0.05)
-		paper.emission_energy_multiplier = 0.45
-		glass.append(paper)                               # ночью разгорается вместе с окнами (daynight.gd)
+		paper.emission_energy_multiplier = 0.12
+		paper_mats.append(paper)                          # мягко разгорается к ночи (daynight.gd)
 		paper.roughness = 0.8
 		_lantern_mesh = SphereMesh.new()
 		_lantern_mesh.radius = 0.38
@@ -510,11 +511,11 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 			tw.tween_property(holder, "rotation:z", -amp, dur).set_trans(Tween.TRANS_SINE)
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.55, 0.25)
-	light.light_energy = 1.4
-	light.omni_range = 8.0
+	light.light_energy = 0.8
+	light.omni_range = 7.0
 	light.position = a.lerp(b, 0.5) + Vector3(0, hgt - 0.8, 0)
 	root.add_child(light)
-	lights.append([light, 2.6])
+	lights.append([light, 1.3])
 	count += 1
 
 
