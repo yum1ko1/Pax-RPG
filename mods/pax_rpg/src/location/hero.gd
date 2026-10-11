@@ -8,7 +8,7 @@ extends RefCounted
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
-	"DodgeArmed"]
+	"DodgeArmed", "Hurt"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
@@ -831,6 +831,18 @@ func dodge(on_floor: bool) -> bool:
 		return false
 	_play_once(n, _per("clip_skip", n, 0.0))   # без раскачки перед кувырком — уворот срабатывает сразу
 	return true
+
+
+## Во время кувырка удары проходят мимо (i-frames).
+func invulnerable() -> bool:
+	return action in ["Dodge", "DodgeArmed"]
+
+
+## Получил удар: клип Hurt (если есть в модели) — короткая реакция, не сбивает уворот и удар финала.
+func hurt() -> void:
+	if anim == null or not has("Hurt") or action in ["Dodge", "DodgeArmed", "Attack3"]:
+		return
+	_play_once("Hurt")
 
 
 ## Прыжок: анимация с момента отрыва (без долгого приседа), отрыв — сразу (tick вернёт jump).

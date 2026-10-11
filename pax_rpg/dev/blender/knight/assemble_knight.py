@@ -115,6 +115,7 @@ SOURCES = [
     ("WalkArmed", "anim_Library/animation_glb_url.glb", "walk"),
     ("Dodge", "anim_Dodge/animation_glb_url.glb", "roll_dodge"),          # библиотека Meshy 158 (риг 2)
     ("DodgeArmed", "anim_Dodge/animation_glb_url.glb", "roll_dodge_2"),   # 160; руки с мечом — refine_knight.py
+    ("Hurt", "anim_Hurt/animation_glb_url.glb", None),                    # 171 Hit Reaction to Waist — получил удар
 ]
 clips = {}
 cache = {}

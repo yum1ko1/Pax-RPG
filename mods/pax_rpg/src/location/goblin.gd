@@ -14,12 +14,15 @@ const ATTACK_RANGE := 1.8    # м, с такого расстояния бьёт
 const WALK_SPEED := 2.2
 const RUN_SPEED := 4.2
 const RUN_FROM := 6.0        # м, дальше этого бежит, а не идёт
-const ATTACK_HIT_AT := 0.45  # доля анимации атаки, когда удар попадает
+const ATTACK_HIT_AT := 0.5   # доля анимации атаки, когда удар попадает (рубящий удар сверху — Meshy «Attack»)
+const ATTACK_SPEED := 1.5   # клип длинный (2,8 с) — гоблин бьёт быстрее
 const COOLDOWN := 1.6        # с между ударами
 const HURT_TIME := 0.55      # с, на которые гоблин теряет ход после удара
 const RESPAWN := 3.0         # с до возрождения
 const DAMAGE := 10.0         # урон героя за удар
 const GRAVITY := 20.0
+const KNOCKBACK := 5.0       # м/с — отлёт от удара тяжёлым мечом
+const MANA := Color(0.75, 0.45, 1.0)   # гибель — рассыпается маной (Юрума: живое держится на мане)
 
 var mod: PaxMod
 var hp := MAX_HP
@@ -111,31 +114,89 @@ func _update_label() -> void:
 
 # ---------- урон ----------
 
-## Удар героя: отбрасывает и переводит гоблина в «получил урон».
+## Удар героя: кровь, отбрасывание, атака гоблина сорвана — он «получил урон» и на время теряет ход.
 func take_damage(amount: float, from: Vector3) -> void:
 	if dead:
 		return
 	hp = maxf(0.0, hp - amount)
 	_update_label()
+	var away := global_position - from
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
+	_burst(global_position + Vector3(0.0, 0.75, 0.0) - away * 0.2, away, Color(0.55, 0.02, 0.03), 36, 3.5, 9.0, 0.5,
+		0.06)
 	if hp <= 0.0:
 		_die()
 		return
-	var away := global_position - from
-	away.y = 0.0
-	if away.length() > 0.01:
-		velocity = away.normalized() * 2.5
+	velocity = away * KNOCKBACK + Vector3(0.0, 2.0, 0.0)
 	_set_state("hurt")
 
 
+## Гибель: тело рассыпается маной — вспышка искр вверх, модель тает и исчезает.
 func _die() -> void:
 	dead = true
 	_set_state("dead")
+	_burst(global_position + Vector3(0.0, 0.6, 0.0), Vector3.UP, MANA, 90, 1.5, -1.5, 1.4, 0.07, true)
+	if _model != null:
+		var t := create_tween()
+		t.tween_property(_model, "scale", Vector3(1.15, 0.05, 1.15), 0.6).set_ease(Tween.EASE_IN)
+		t.tween_callback(func() -> void: _model.visible = false)
+	if _label != null:
+		_label.visible = false
 	get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
+
+
+## Искры / капли: amount частиц из точки at в сторону dir; gravity < 0 — летят вверх; glow — светятся (мана).
+func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, gravity: float, life: float,
+		size: float, glow := false) -> void:
+	var p := CPUParticles3D.new()
+	p.top_level = true
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.amount = amount
+	p.lifetime = life
+	p.direction = dir
+	p.spread = 55.0 if not glow else 80.0
+	p.initial_velocity_min = speed * 0.4
+	p.initial_velocity_max = speed
+	p.gravity = Vector3(0.0, -gravity, 0.0)
+	p.damping_min = 0.5
+	p.damping_max = 2.0
+	if glow:
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		p.emission_sphere_radius = 0.4
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = curve
+	var q := SphereMesh.new()
+	q.radius = size
+	q.height = size * 2.0
+	q.radial_segments = 6
+	q.rings = 3
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	if glow:
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.emission_enabled = true
+		m.emission = color
+		m.emission_energy_multiplier = 3.0
+	q.material = m
+	p.mesh = q
+	get_parent().add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
 
 
 func _respawn() -> void:
 	hp = MAX_HP
 	dead = false
+	if _model != null:
+		_model.scale = Vector3.ONE
+		_model.visible = true
+	if _label != null:
+		_label.visible = true
 	position = _spawn
 	velocity = Vector3.ZERO
 	_update_label()
@@ -146,6 +207,8 @@ func _respawn() -> void:
 
 func _set_state(s: String) -> void:
 	_state = s
+	if _anim != null:
+		_anim.speed_scale = 1.0
 	_state_t = 0.0
 	_struck = false
 	match s:
@@ -153,6 +216,8 @@ func _set_state(s: String) -> void:
 			_play("idle")
 		"attack":
 			_play("attack", true)
+			if _anim != null:
+				_anim.speed_scale = ATTACK_SPEED
 		"hurt", "dead":
 			_play("hit", true)
 			if s == "dead" and _anim != null:
@@ -198,11 +263,11 @@ func _physics_process(delta: float) -> void:
 				_face(dir, delta)
 		"attack":
 			_face(to / maxf(dist, 0.001), delta)
-			if not _struck and _anim != null and _state_t >= _clip_len("attack") * ATTACK_HIT_AT:
+			if not _struck and _anim != null and _state_t >= _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT:
 				_struck = true
 				if dist <= ATTACK_RANGE + 0.4 and _on_hit.is_valid():
 					_on_hit.call(DAMAGE)
-			if _state_t >= _clip_len("attack"):
+			if _state_t >= _clip_len("attack") / ATTACK_SPEED:
 				_cooldown = COOLDOWN
 				_set_state("chase")
 		"hurt":

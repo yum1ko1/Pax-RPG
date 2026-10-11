@@ -377,7 +377,11 @@ func _strike(hit: Dictionary) -> void:
 
 ## Гоблин попал: урон герою; кончились силы — снова на старте, полные.
 func _on_hero_hit(damage: float) -> void:
+	if _hero != null and _hero.invulnerable():
+		return                                   # кувырок: удар проходит мимо
 	_hp = maxf(0.0, _hp - damage)
+	if _hero != null:
+		_hero.hurt()
 	if _hp <= 0.0 and is_instance_valid(_player):
 		_hp = HERO_HP
 		_player.position = START
