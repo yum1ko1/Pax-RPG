@@ -44,21 +44,26 @@ def main():
     state_f = os.path.join(out, "state.json")
     st = json.load(open(state_f, encoding="utf-8")) if os.path.exists(state_f) else {}
     jobs = shots(md)
-    for k, prompt in jobs.items():
-        if only and k not in only and k.replace("shot", "") not in only:
-            continue
-        if k in st:
-            continue
-        ratio = "16:9" if k.startswith("shot") else "1:1"
-        r = M.call("POST", M.ep("text-to-image"), {"ai_model": model, "prompt": prompt[:2000], "aspect_ratio": ratio})
-        st[k] = {"id": r.get("result"), "done": False}
-        json.dump(st, open(state_f, "w", encoding="utf-8"), indent=1)
-        print(k, "→", st[k]["id"], f"({len(prompt)} симв.)", flush=True)
+    todo = [k for k in jobs if not (only and k not in only and k.replace("shot", "") not in only)]
     t0 = time.time()
-    while any(not v["done"] for v in st.values()) and time.time() - t0 < 900:
-        for k, v in st.items():
-            if v["done"]:
+    while time.time() - t0 < 1800:
+        for k in todo:                         # отправить, пока очередь Meshy принимает (на тарифе ≤ 10 задач)
+            if k in st:
                 continue
+            try:
+                r = M.call("POST", M.ep("text-to-image"), {"ai_model": model, "prompt": jobs[k][:2000],
+                                                           "aspect_ratio": "16:9" if k.startswith("shot") else "1:1"})
+            except SystemExit as e:              # 429 — очередь полна: ждём готовых и пробуем снова
+                print(k, "ждёт очереди:", str(e)[:60], flush=True)
+                break
+            st[k] = {"id": r.get("result"), "done": False}
+            json.dump(st, open(state_f, "w", encoding="utf-8"), indent=1)
+            print(k, "→", st[k]["id"], f"({len(jobs[k])} симв.)", flush=True)
+        pending = [k for k, v in st.items() if not v["done"]]
+        if not pending and all(k in st for k in todo):
+            break
+        for k in pending:
+            v = st[k]
             r = M.call("GET", f"{M.ep('text-to-image')}/{v['id']}")
             s = r.get("status")
             if s == "SUCCEEDED":
