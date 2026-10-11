@@ -118,6 +118,15 @@ SOURCES = [
     ("Dodge", LIB + "Dodge/animation_glb_url.glb", "roll_dodge"),          # библиотека Meshy 158 (риг 2)
     ("DodgeArmed", LIB + "Dodge/animation_glb_url.glb", "roll_dodge_2"),   # 160; руки с мечом — refine_knight.py
     ("Hurt", LIB + "Hurt/animation_glb_url.glb", None),                    # 171 Hit Reaction to Waist — получил удар
+    # бой как в Sekiro (batch_motions.py): шаги вбок / назад в стойке и без меча, парирование, добивание
+    ("GuardStrafeL", LIB + "GuardStrafeL/animation_glb_url.glb", None),
+    ("GuardStrafeR", LIB + "GuardStrafeR/animation_glb_url.glb", None),
+    ("GuardBack", LIB + "GuardBack/animation_glb_url.glb", None),
+    ("StrafeL", LIB + "StrafeL/animation_glb_url.glb", None),
+    ("StrafeR", LIB + "StrafeR/animation_glb_url.glb", None),
+    ("WalkBack", LIB + "WalkBack/animation_glb_url.glb", None),
+    ("Parry", LIB + "Parry/animation_glb_url.glb", None),
+    ("Deathblow", LIB + "Deathblow/animation_glb_url.glb", None),
 ]
 clips = {}
 cache = {}
@@ -165,7 +174,8 @@ def frames(a):
 
 # ---------- root motion: смещение таза по горизонтали — в json, клип — на месте ----------
 ROOT_CLIPS = ("Draw", "Sheathe", "Attack1", "Attack2", "Attack3", "Jump", "Dodge", "DodgeArmed")
-INPLACE = ("Walk", "Run", "WalkArmed", "Idle")
+INPLACE = ("Walk", "Run", "WalkArmed", "Idle", "GuardStrafeL", "GuardStrafeR", "GuardBack", "StrafeL", "StrafeR",
+           "WalkBack", "Parry", "Deathblow", "Hurt")
 motion = {}
 for name, a in clips.items():
     use(rig, a)

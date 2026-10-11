@@ -504,6 +504,9 @@ for name, ob, mode in (("Attack1", sw_hand, "floor"), ("Attack2", sw_hand, "floo
                        ("Draw", sw_hand, "floor"), ("Sheathe", sw_hand, "floor"),
                        ("DrawWalk", sw_hand, "floor"), ("SheatheWalk", sw_hand, "floor"),
                        ("DodgeArmed", sw_hand, "floor"),
+                       ("Parry", sw_hand, "floor"), ("Deathblow", sw_hand, "floor"),
+                       ("GuardStrafeL", sw_hand, "floor"), ("GuardStrafeR", sw_hand, "floor"),
+                       ("GuardBack", sw_hand, "floor"),
                        ("RunArmed", bpy.data.objects["Sword_Drag"], "pin")):
     a = clips[name]
     fr = range(int(a.frame_range[0]), int(a.frame_range[1]) + 1)

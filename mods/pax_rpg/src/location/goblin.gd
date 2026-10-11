@@ -1,48 +1,69 @@
 extends CharacterBody3D
-## Гоблин — враг на тестовой арене. ИИ: стоит, пока не заметит героя; потом гонится за ним и бьёт.
-## Получив урон, проигрывает анимацию Hit и на время теряет ход. Погиб — через пару секунд возрождается.
-## Модель и клипы — models/goblin/ (Meshy: риг + idle / walk / run / attack / hit, в один AnimationPlayer).
+## Гоблин — враг-дуэлянт, бой как в Sekiro. Заметив героя, подходит на дистанцию поединка и кружит вокруг него лицом
+## к нему, выжидая окно; потом короткий выпад: вспышка-предупреждение и рубящий удар. После удара — миг уязвимости и
+## отход. Концентрация (posture): копится от парирований и ударов героя, переполнилась (или кончилось здоровье) —
+## гоблин теряет равновесие, его можно добить (deathblow). Гибель — тело рассыпается маной.
+## Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
 
 const DIR := "models/goblin/"
-const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb"}
-const LOOPED := ["idle", "walk", "run"]
+const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb",
+	"combat_idle": "combat_idle.glb", "strafe_l": "strafe_l.glb", "strafe_r": "strafe_r.glb", "back": "back.glb",
+	"deflected": "deflected.glb"}
+const LOOPED := ["idle", "walk", "run", "combat_idle", "strafe_l", "strafe_r", "back"]
+const FALLBACK := {"combat_idle": "idle", "strafe_l": "walk", "strafe_r": "walk", "back": "walk", "deflected": "hit"}
 
 const MAX_HP := 60.0
-const DETECT := 14.0          # м, на таком расстоянии гоблин замечает героя
-const LOSE := 22.0           # м, дальше — забывает и стоит
-const ATTACK_RANGE := 1.8    # м, с такого расстояния бьёт
-const WALK_SPEED := 2.2
+const MAX_POSTURE := 100.0
+const DETECT := 14.0          # м, замечает героя
+const LOSE := 24.0            # м, теряет
+const CIRCLE_DIST := 3.6      # м, дистанция поединка — на ней кружит
+const ATTACK_RANGE := 1.7     # м, с такой бьёт
+const WALK_SPEED := 2.0
 const RUN_SPEED := 4.2
-const RUN_FROM := 6.0        # м, дальше этого бежит, а не идёт
-const ATTACK_HIT_AT := 0.5   # доля анимации атаки, когда удар попадает (рубящий удар сверху — Meshy «Attack»)
-const ATTACK_SPEED := 1.5   # клип длинный (2,8 с) — гоблин бьёт быстрее
-const COOLDOWN := 1.6        # с между ударами
-const HURT_TIME := 0.55      # с, на которые гоблин теряет ход после удара
-const RESPAWN := 3.0         # с до возрождения
-const DAMAGE := 10.0         # урон героя за удар
+const STRAFE_SPEED := 1.35
+const LUNGE_SPEED := 4.6      # выпад
+const ATTACK_HIT_AT := 0.5    # доля клипа атаки — миг удара
+const ATTACK_SPEED := 1.5
+const DAMAGE := 12.0
+const HURT_TIME := 0.45
+const DEFLECTED_TIME := 0.9
+const BROKEN_TIME := 3.2      # с без равновесия — окно добивания
+const RECOVER_TIME := 0.6
+const RESPAWN := 3.0
+const KNOCKBACK := 5.0
 const GRAVITY := 20.0
-const KNOCKBACK := 5.0       # м/с — отлёт от удара тяжёлым мечом
-const MANA := Color(0.75, 0.45, 1.0)   # гибель — рассыпается маной (Юрума: живое держится на мане)
+const MANA := Color(0.75, 0.45, 1.0)
+
+static var _attacker: Node = null   # у кого жетон атаки
 
 var mod: PaxMod
 var hp := MAX_HP
+var posture := 0.0
 var dead := false
-var _target: Node3D          # герой
-var _on_hit: Callable        # on_hit.call(damage) — урон герою
+var _target: Node3D
+var _hero_attacking: Callable  # () -> bool — герой сейчас бьёт (повод отскочить)
+var _on_hit: Callable          # on_hit.call(damage, self) — удар по герою (там решают: блок, парирование, урон)
 var _spawn := Vector3.ZERO
 var _model: Node3D
 var _anim: AnimationPlayer
-var _label: Label3D
-var _state := "idle"         # idle / chase / attack / hurt / dead
+var _hp_bar: Label3D
+var _posture_bar: Label3D
+var _mark: MeshInstance3D       # красная метка добивания
+var _state := "idle"
 var _state_t := 0.0
-var _cooldown := 0.0
-var _struck := false         # удар этой атаки уже прошёл
+var _struck := false
+var _wait := 2.0               # с кружения до следующего выпада
+var _circle_dir := 1.0         # +1 — вправо от героя, −1 — влево
+var _switch_t := 2.0
+var _since_hit := 99.0
+var _lethal := false
 
 
-func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3) -> void:
+func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attacking := Callable()) -> void:
 	mod = m
 	_target = target
 	_on_hit = on_hit
+	_hero_attacking = hero_attacking
 	_spawn = at
 	name = "Goblin"
 	position = at
@@ -63,25 +84,44 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3) -> void:
 	_anim = _find_anim(_model)
 	if _anim != null:
 		_add_clips()
-	_label = Label3D.new()
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.font_size = 48
-	_label.outline_size = 10
-	_label.pixel_size = 0.0045
-	_label.position = Vector3(0.0, 1.45, 0.0)
-	_label.modulate = Color(0.75, 1.0, 0.55)
-	add_child(_label)
-	_update_label()
+	_hp_bar = _bar_label(1.55, Color(0.85, 0.15, 0.15))
+	_posture_bar = _bar_label(1.43, Color(1.0, 0.75, 0.2))
+	_mark = MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.07
+	sm.height = 0.14
+	var mm := StandardMaterial3D.new()
+	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mm.albedo_color = Color(1.0, 0.1, 0.1)
+	mm.no_depth_test = true
+	sm.material = mm
+	_mark.mesh = sm
+	_mark.position = Vector3(0.0, 0.8, 0.0)
+	_mark.visible = false
+	add_child(_mark)
+	_update_bars()
 	_set_state("idle")
 
 
-## Клипы Meshy — отдельными glb (один клип в каждом). Берём их анимацию и кладём в плеер гоблина под своим именем.
+func _bar_label(y: float, color: Color) -> Label3D:
+	var l := Label3D.new()
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.font_size = 40
+	l.outline_size = 8
+	l.pixel_size = 0.004
+	l.position = Vector3(0.0, y, 0.0)
+	l.modulate = color
+	l.no_depth_test = true
+	add_child(l)
+	return l
+
+
+## Клипы Meshy — отдельными glb. Берём их анимацию и кладём в плеер гоблина под своим именем; нет файла — запасной.
 func _add_clips() -> void:
 	var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 	for clip: String in CLIPS:
 		var src := mod.model(DIR + CLIPS[clip])
 		if src == null:
-			mod.log_warning("Pax RPG: goblin clip %s did not load" % clip)
 			continue
 		var from := _find_anim(src)
 		if from != null and from.get_animation_list().size() > 0:
@@ -107,46 +147,99 @@ func is_alive() -> bool:
 	return not dead
 
 
-func _update_label() -> void:
-	if _label != null:
-		_label.text = "%s  %d / %d" % [mod.tr_key("pax_rpg_goblin"), ceili(hp), int(MAX_HP)]
+func can_deathblow() -> bool:
+	return _state == "broken"
 
 
-# ---------- урон ----------
+func _update_bars() -> void:
+	var n := 12
+	var h := int(round(hp / MAX_HP * n))
+	_hp_bar.text = "%s  %s" % [mod.tr_key("pax_rpg_goblin"), "█".repeat(h) + "░".repeat(n - h)]
+	var p := int(round(posture / MAX_POSTURE * n))
+	_posture_bar.text = "█".repeat(p) + "░".repeat(n - p)
+	_posture_bar.visible = posture > 1.0 and not dead
+	_posture_bar.modulate = Color(1.0, 0.75 - 0.6 * posture / MAX_POSTURE, 0.2)
 
-## Удар героя: кровь, отбрасывание, атака гоблина сорвана — он «получил урон» и на время теряет ход.
+
+# ---------- что с ним делают ----------
+
+## Удар героя: кровь, отлёт, атака сорвана; растёт концентрация. Без равновесия — не принимает обычных ударов.
 func take_damage(amount: float, from: Vector3) -> void:
-	if dead:
+	if dead or _state == "broken":
 		return
 	hp = maxf(0.0, hp - amount)
-	_update_label()
+	posture = minf(MAX_POSTURE, posture + amount * 0.7)
+	_since_hit = 0.0
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
 	_burst(global_position + Vector3(0.0, 0.75, 0.0) - away * 0.2, away, Color(0.55, 0.02, 0.03), 36, 3.5, 9.0, 0.5,
 		0.06)
-	if hp <= 0.0:
-		_die()
+	if hp <= 0.0 or posture >= MAX_POSTURE:
+		_lethal = hp <= 0.0
+		_set_state("broken")
+	else:
+		velocity = away * KNOCKBACK + Vector3(0.0, 2.0, 0.0)
+		_set_state("hurt")
+	_update_bars()
+
+
+## Героя парировали удар: сильно сбивает концентрацию, гоблина отбрасывает в сторону.
+func deflected(from: Vector3) -> void:
+	if dead:
 		return
-	velocity = away * KNOCKBACK + Vector3(0.0, 2.0, 0.0)
-	_set_state("hurt")
+	posture = minf(MAX_POSTURE, posture + 34.0)
+	_since_hit = 0.0
+	var away := global_position - from
+	away.y = 0.0
+	velocity = (away.normalized() if away.length() > 0.01 else Vector3.FORWARD) * 3.0
+	_set_state("broken" if posture >= MAX_POSTURE else "deflected")
+	_update_bars()
 
 
-## Гибель: тело рассыпается маной — вспышка искр вверх, модель тает и исчезает.
+## Удар заблокирован: немного концентрации.
+func blocked() -> void:
+	posture = minf(MAX_POSTURE, posture + 8.0)
+	_update_bars()
+
+
+## Добивание: гибель.
+func deathblow() -> void:
+	if not dead:
+		_die()
+
+
 func _die() -> void:
 	dead = true
+	_release_token()
+	_mark.visible = false
 	_set_state("dead")
 	_burst(global_position + Vector3(0.0, 0.6, 0.0), Vector3.UP, MANA, 90, 1.5, -1.5, 1.4, 0.07, true)
 	if _model != null:
 		var t := create_tween()
 		t.tween_property(_model, "scale", Vector3(1.15, 0.05, 1.15), 0.6).set_ease(Tween.EASE_IN)
 		t.tween_callback(func() -> void: _model.visible = false)
-	if _label != null:
-		_label.visible = false
+	_hp_bar.visible = false
+	_posture_bar.visible = false
 	get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 
 
-## Искры / капли: amount частиц из точки at в сторону dir; gravity < 0 — летят вверх; glow — светятся (мана).
+func _respawn() -> void:
+	hp = MAX_HP
+	posture = 0.0
+	dead = false
+	_lethal = false
+	if _model != null:
+		_model.scale = Vector3.ONE
+		_model.visible = true
+	_hp_bar.visible = true
+	position = _spawn
+	velocity = Vector3.ZERO
+	_update_bars()
+	_set_state("idle")
+
+
+## Искры / капли: amount частиц из at в сторону dir; gravity < 0 — летят вверх; glow — светятся (мана).
 func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, gravity: float, life: float,
 		size: float, glow := false) -> void:
 	var p := CPUParticles3D.new()
@@ -189,46 +282,71 @@ func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, 
 	p.finished.connect(p.queue_free)
 
 
-func _respawn() -> void:
-	hp = MAX_HP
-	dead = false
-	if _model != null:
-		_model.scale = Vector3.ONE
-		_model.visible = true
-	if _label != null:
-		_label.visible = true
-	position = _spawn
-	velocity = Vector3.ZERO
-	_update_label()
-	_set_state("idle")
+## Предупреждение перед выпадом: вспышка над оружием (как красный иероглиф опасности в Sekiro — здесь мана).
+func _telegraph() -> void:
+	_burst(global_position + Vector3(0.0, 1.25, 0.0), Vector3.UP, Color(1.0, 0.35, 0.2), 14, 0.6, 0.0, 0.45, 0.05,
+		true)
 
 
 # ---------- состояния ----------
 
+func _take_token() -> bool:
+	if _attacker == null or not is_instance_valid(_attacker) or _attacker == self:
+		_attacker = self
+		return true
+	return false
+
+
+func _release_token() -> void:
+	if _attacker == self:
+		_attacker = null
+
+
 func _set_state(s: String) -> void:
 	_state = s
-	if _anim != null:
-		_anim.speed_scale = 1.0
 	_state_t = 0.0
 	_struck = false
+	if _anim != null:
+		_anim.speed_scale = 1.0
+	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle"]:
+		if s != "recover":
+			_release_token()
+	_mark.visible = s == "broken"
 	match s:
 		"idle":
 			_play("idle")
+		"circle", "recover":
+			_play("combat_idle")
+			if s == "circle":
+				_wait = randf_range(1.2, 3.2)
+		"windup":
+			_telegraph()
 		"attack":
 			_play("attack", true)
 			if _anim != null:
 				_anim.speed_scale = ATTACK_SPEED
-		"hurt", "dead":
+		"hurt":
 			_play("hit", true)
-			if s == "dead" and _anim != null:
-				_anim.pause()
+		"deflected":
+			_play("deflected", true)
+		"broken", "dead":
+			_play("hit", true)
+
+
+func _clip(name_: String) -> String:
+	if _anim == null:
+		return ""
+	if _anim.has_animation(name_):
+		return name_
+	return str(FALLBACK.get(name_, "idle"))
 
 
 func _play(clip: String, restart := false) -> void:
-	if _anim == null or not _anim.has_animation(clip):
+	var c := _clip(clip)
+	if c == "" or not _anim.has_animation(c):
 		return
-	if restart or _anim.current_animation != clip:
-		_anim.play(clip, 0.15)
+	if restart or _anim.current_animation != c:
+		_anim.play(c, 0.2)
 
 
 func _physics_process(delta: float) -> void:
@@ -240,60 +358,127 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 	if position.y < -20.0:
 		_respawn()
-	_cooldown -= delta
 	_state_t += delta
+	_since_hit += delta
+	if _state not in ["attack", "windup", "broken", "dead"] and _since_hit > 1.5 and posture > 0.0:
+		posture = maxf(0.0, posture - delta * (14.0 if hp > MAX_HP * 0.5 else 6.0))
+		_update_bars()
 	var to := _target.global_position - global_position
 	to.y = 0.0
 	var dist := to.length()
+	var dir := to / maxf(dist, 0.001)
+	var side := Vector3(-dir.z, 0.0, dir.x)          # вправо от гоблина, если он смотрит на героя
 	var flat := Vector3.ZERO
 	match _state:
 		"idle":
 			if not dead and dist < DETECT:
-				_set_state("chase")
-		"chase":
+				_set_state("approach")
+		"approach":
 			if dist > LOSE:
 				_set_state("idle")
-			elif dist <= ATTACK_RANGE and _cooldown <= 0.0:
-				_set_state("attack")
+			elif dist <= CIRCLE_DIST + 0.3:
+				_set_state("circle")
 			else:
-				var dir := to / maxf(dist, 0.001)
-				var fast := dist > RUN_FROM
+				var fast := dist > 6.0
 				flat = dir * (RUN_SPEED if fast else WALK_SPEED)
 				_play("run" if fast else "walk")
 				_face(dir, delta)
+		"circle":
+			_face(dir, delta)
+			if dist > LOSE:
+				_set_state("idle")
+			elif dist > CIRCLE_DIST + 2.5:
+				_set_state("approach")
+			else:
+				_switch_t -= delta
+				if _switch_t <= 0.0:
+					_switch_t = randf_range(1.5, 3.0)
+					_circle_dir = -_circle_dir
+				var radial := 0.0
+				if dist < CIRCLE_DIST - 0.6:
+					radial = -1.0
+				elif dist > CIRCLE_DIST + 0.6:
+					radial = 1.0
+				flat = side * _circle_dir * STRAFE_SPEED + dir * radial * WALK_SPEED * 0.6
+				if radial < 0.0:
+					_play("back")
+				elif radial > 0.0:
+					_play("walk")
+				else:
+					_play("strafe_r" if _circle_dir > 0.0 else "strafe_l")
+				# герой замахнулся рядом — иногда отскок назад
+				if dist < 2.6 and _hero_attacking.is_valid() and bool(_hero_attacking.call()) and randf() < delta * 2.0:
+					velocity = -dir * 4.0
+				_wait -= delta
+				if _wait <= 0.0 and _take_token():
+					_set_state("windup")
+		"windup":
+			_face(dir, delta)
+			if _state_t > 0.25:
+				flat = dir * LUNGE_SPEED
+				_play("run")
+			if dist <= ATTACK_RANGE or _state_t > 1.1:
+				_set_state("attack")
 		"attack":
-			_face(to / maxf(dist, 0.001), delta)
-			if not _struck and _anim != null and _state_t >= _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT:
+			_face(dir, delta * 0.4)
+			var hit_at := _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT
+			if _state_t < hit_at * 0.7:
+				flat = dir * 1.2                         # инерция выпада
+			if not _struck and _state_t >= hit_at:
 				_struck = true
-				if dist <= ATTACK_RANGE + 0.4 and _on_hit.is_valid():
-					_on_hit.call(DAMAGE)
-			if _state_t >= _clip_len("attack") / ATTACK_SPEED:
-				_cooldown = COOLDOWN
-				_set_state("chase")
+				if dist <= ATTACK_RANGE + 0.5 and _on_hit.is_valid():
+					_on_hit.call(DAMAGE, self)
+			if _state == "attack" and _state_t >= _clip_len("attack") / ATTACK_SPEED:
+				_set_state("recover")
+		"recover":
+			_face(dir, delta)
+			if _state_t > RECOVER_TIME:
+				_release_token()
+				flat = -dir * WALK_SPEED
+				_play("back")
+				if _state_t > RECOVER_TIME + 0.8:
+					_set_state("circle")
 		"hurt":
-			velocity.x = lerpf(velocity.x, 0.0, minf(1.0, delta * 6.0))
-			velocity.z = lerpf(velocity.z, 0.0, minf(1.0, delta * 6.0))
+			_damp(delta)
 			if _state_t >= HURT_TIME:
-				_set_state("chase")
+				_set_state("circle")
+		"deflected":
+			_damp(delta)
+			if _state_t >= DEFLECTED_TIME:
+				_set_state("circle")
+		"broken":
+			_damp(delta)
+			if _anim != null and _state_t > 0.5:
+				_anim.pause()                            # на коленях, ждёт добивания
+			if _state_t >= BROKEN_TIME:
+				if _lethal:
+					_die()                               # без добивания — всё равно пал
+				else:
+					posture = MAX_POSTURE * 0.5
+					_update_bars()
+					_set_state("circle")
 		"dead":
 			velocity.x = 0.0
 			velocity.z = 0.0
-	if _state == "chase" or _state == "attack" or _state == "idle":
-		velocity.x = flat.x
-		velocity.z = flat.z
-	elif _state == "dead":
-		velocity.x = 0.0
-		velocity.z = 0.0
+	if _state in ["approach", "circle", "windup", "attack", "recover", "idle"]:
+		velocity.x = lerpf(velocity.x, flat.x, minf(1.0, delta * 10.0))
+		velocity.z = lerpf(velocity.z, flat.z, minf(1.0, delta * 10.0))
 	move_and_slide()
 
 
+func _damp(delta: float) -> void:
+	velocity.x = lerpf(velocity.x, 0.0, minf(1.0, delta * 6.0))
+	velocity.z = lerpf(velocity.z, 0.0, minf(1.0, delta * 6.0))
+
+
 func _clip_len(clip: String) -> float:
-	if _anim == null or not _anim.has_animation(clip):
+	var c := _clip(clip)
+	if c == "" or not _anim.has_animation(c):
 		return 1.0
-	return _anim.get_animation(clip).length
+	return _anim.get_animation(c).length
 
 
-## Модель смотрит вперёд по +Z (как glb героя — по -Z, но у гоблина Meshy ставит вперёд +Z).
+## Модель смотрит вперёд по +Z (у гоблина Meshy ставит вперёд +Z).
 func _face(dir: Vector3, delta: float) -> void:
 	if _model == null or dir.length() < 0.01:
 		return

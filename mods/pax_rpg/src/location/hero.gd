@@ -6,9 +6,10 @@ extends RefCounted
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
-const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed"]
+const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
+	"GuardBack", "StrafeL", "StrafeR", "WalkBack"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
-	"DodgeArmed", "Hurt"]
+	"DodgeArmed", "Hurt", "Parry", "Deathblow"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
@@ -16,6 +17,10 @@ var meta: Dictionary = {}           # *_anim.json: root_motion, sword_switch, im
 var model: Node3D
 var anim: AnimationPlayer
 var armed := false
+var move_dir := Vector2.ZERO        # куда идём в осях героя (x — вправо, y — вперёд): location.gd ставит перед tick
+var blocking := false               # держит блок (ПКМ)
+var _block_t := 0.0                 # с, сколько держит блок: в начале — окно парирования
+var _dir_sector := "F"              # направление шага (F/B/L/R) — с запасом, чтобы клипы не дёргались на диагонали
 var action := ""                    # разовый клип: Draw / Sheathe / Jump / AttackN; "" — ходьба и стойки
 var _queued := false                # удар нажат во время текущего — следующий удар комбо
 var _combo_next := ""               # удар кончился — ещё combo_grace с нажатие продолжает комбо этим ударом
@@ -831,6 +836,7 @@ func _cancel_hurt() -> void:
 
 func attack(on_floor: bool) -> void:
 	_cancel_hurt()
+	blocking = false
 	if anim == null or not has("Attack1"):
 		return
 	if action == "" and on_floor:
@@ -933,6 +939,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	if anim == null:
 		return out
 	_combo_left = maxf(0.0, _combo_left - delta)
+	if blocking:
+		_block_t += delta
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
 	if action != "" and not anim.is_playing():
@@ -975,19 +983,97 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 func _loop(moving: bool, speed: float, running: bool) -> void:
 	var want := "IdleArmed" if armed and has("IdleArmed") else "Idle"
 	var stride := 1.0
+	if blocking and not moving and has("Parry"):
+		_hold_block()
+		return
 	if moving:
 		if running:
 			want = "RunArmed" if armed and has("RunArmed") else "Run"
 			stride = _f("stride_run_armed", 3.2) if want == "RunArmed" else _f("stride_run", 4.0)
 		else:
-			want = "WalkArmed" if armed and has("WalkArmed") else "Walk"
-			stride = _f("stride_walk_armed", 1.3) if want == "WalkArmed" else _f("stride_walk", 1.5)
+			_update_sector()
+			match _dir_sector:
+				"B":
+					want = "GuardBack" if armed else "WalkBack"
+					stride = _f("stride_back", 1.0)
+				"L":
+					want = "GuardStrafeL" if armed else "StrafeL"
+					stride = _f("stride_strafe", 1.0)
+				"R":
+					want = "GuardStrafeR" if armed else "StrafeR"
+					stride = _f("stride_strafe", 1.0)
+				_:
+					want = ""
+			if want == "" or not has(want):
+				want = "WalkArmed" if armed and has("WalkArmed") else "Walk"
+				stride = _f("stride_walk_armed", 1.3) if want == "WalkArmed" else _f("stride_walk", 1.5)
 	if anim.current_animation != want or not anim.is_playing():
 		var bl := _f("blend_loop", 0.3)
 		if want == "RunArmed" or anim.current_animation == "RunArmed":
 			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
 		anim.play(want, bl)
 	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
+
+
+## Направление шага по move_dir: ближайшее из вперёд / вправо / назад / влево, но меняется, только когда новое
+## заметно ближе (на диагонали клип не мигает).
+func _update_sector() -> void:
+	var ang := rad_to_deg(atan2(move_dir.x, move_dir.y))   # 0 — вперёд, 90 — вправо, ±180 — назад
+	var centers := {"F": 0.0, "R": 90.0, "B": 180.0, "L": -90.0}
+	var best := _dir_sector
+	var best_d := absf(wrapf(ang - float(centers[_dir_sector]), -180.0, 180.0)) - 20.0
+	for k: String in centers:
+		var d := absf(wrapf(ang - float(centers[k]), -180.0, 180.0))
+		if d < best_d:
+			best_d = d
+			best = k
+	_dir_sector = best
+
+
+## Блок стоя: поза парирования, задержанная в точке защиты.
+func _hold_block() -> void:
+	if anim.current_animation != "Parry":
+		anim.play("Parry", 0.1)
+		anim.seek(_f("block_hold", 0.35), true)
+	if anim.current_animation_position >= _f("block_hold", 0.35):
+		anim.speed_scale = 0.0
+
+
+## ПКМ: нажал — блок (и первые parry_window с — парирование, как в Sekiro), отпустил — снял.
+func set_block(on: bool) -> void:
+	if on and not blocking:
+		_cancel_hurt()
+		if not armed or (action != "" and action not in ["Jump"]):
+			return
+		blocking = true
+		_block_t = 0.0
+		if has("Parry"):
+			anim.play("Parry", 0.06)
+			anim.speed_scale = _f("parry_speed", 1.6)
+	elif not on:
+		blocking = false
+
+
+func parry_window() -> bool:
+	return blocking and _block_t <= _f("parry_window", 0.25)
+
+
+## Парировал: короткий рывок клипа парирования с начала — меч отбивает удар.
+func deflect() -> void:
+	if has("Parry") and action == "":
+		anim.play("Parry", 0.03)
+		anim.speed_scale = _f("parry_speed", 1.6)
+		_block_t = 0.0
+
+
+## Добивание (враг без равновесия): свой клип, двигаться нельзя. true — началось.
+func deathblow() -> bool:
+	_cancel_hurt()
+	if anim == null or not armed or action != "" or not has("Deathblow"):
+		return false
+	blocking = false
+	_play_once("Deathblow")
+	return true
 
 
 ## Миг удара: середина взмаха (swing_peaks), у финального — касание земли (impact). tick вернёт
