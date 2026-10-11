@@ -28,6 +28,7 @@ func setup(mod: PaxMod, place: String) -> void:
 			rnd.add_stream(-1, st)
 	if rnd.streams_count > 0:
 		_snd = AudioStreamPlayer.new()
+		_snd.bus = "PaxRpgSfx"
 		_snd.stream = rnd
 		_snd.volume_db = -3.0
 		add_child(_snd)

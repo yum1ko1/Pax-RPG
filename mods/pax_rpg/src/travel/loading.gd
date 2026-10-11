@@ -84,6 +84,7 @@ func _player(pattern: String, n: int, vol: float) -> AudioStreamPlayer:
 	if rnd.streams_count == 0:
 		return null
 	var p := AudioStreamPlayer.new()
+	p.bus = "PaxRpgSfx"
 	p.stream = rnd
 	p.volume_db = vol
 	p.max_polyphony = 3

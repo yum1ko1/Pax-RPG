@@ -20,6 +20,8 @@ const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
+const Music := preload("res://mods/pax_rpg/src/location/music.gd")
+const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
@@ -75,6 +77,8 @@ var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] 
 var _help: HelpPanel               # кнопка и окно «Управление» (H)
 var _pause: PauseMenu              # меню паузы (Esc)
 var _sfx: Sfx                      # шаги, снаряжение, гул города
+var _music: Music                  # фоновая музыка (music.gd)
+var _sens := 1.0                   # чувствительность мыши (меню паузы → Настройки)
 var _zoom_want := 0.0              # куда крутят колесом; _zoom догоняет плавно, с лёгкой задержкой
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
@@ -152,7 +156,7 @@ func build(city: Dictionary) -> void:
 	add_child(_box)
 	_view = SubViewport.new()
 	_view.own_world_3d = true
-	_view.msaa_3d = Viewport.MSAA_4X
+	_view.msaa_3d = Viewport.MSAA_2X                 # 4x на 1440p съедал треть кадра
 	_box.add_child(_view)
 	_map_rects.clear()
 	_make_sky()
@@ -221,10 +225,17 @@ func build(city: Dictionary) -> void:
 	_sfx = Sfx.new()
 	_sfx.setup(mod, not layout.is_empty())
 	add_child(_sfx)
+	AudioBus.ensure(mod)
+	_sens = float(mod.get_setting("mouse_sens", 1.0))
+	_music = Music.new()
+	_music.setup(mod, not layout.is_empty())
+	_music.daynight = _daynight
+	add_child(_music)
 	_pause = PauseMenu.new()
 	_pause.setup(mod, mod.tr_key("pax_rpg_pause_leave"))
 	_pause.visible = false
 	_pause.resume.connect(_set_paused.bind(false))
+	_pause.sens_changed.connect(func(v: float) -> void: _sens = v)
 	_pause.show_help.connect(func() -> void:
 		_set_paused(false)
 		_help.set_open(true))
@@ -326,7 +337,7 @@ func _make_sky() -> void:
 	env.fog_aerial_perspective = 0.6
 	env.fog_sky_affect = 0.3
 	env.ssr_enabled = fplus                          # стёкла окон и лужи отражают город
-	env.ssr_max_steps = 48
+	env.ssr_max_steps = 24
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
 	_env = env
@@ -553,6 +564,8 @@ func _set_paused(on: bool) -> void:
 	if not is_instance_valid(_pause):
 		return
 	_pause.visible = on
+	if not on:
+		_pause.reset_view()
 	if is_instance_valid(_box):
 		_box.process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
@@ -1231,7 +1244,7 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock == null:
-			_yaw -= (event as InputEventMouseMotion).relative.x * _f("turn_speed", 0.004)
+			_yaw -= (event as InputEventMouseMotion).relative.x * _f("turn_speed", 0.004) * _sens
 		return
 	if event is InputEventKey and not _typing():
 		var key: InputEventKey = event

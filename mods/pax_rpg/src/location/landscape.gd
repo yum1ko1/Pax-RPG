@@ -152,6 +152,9 @@ func _camps() -> void:
 			m.position = Vector3(x, y, z)
 			m.rotation.y = rng.randf() * TAU
 			root.add_child(m)
+			for g: Node in m.find_children("*", "GeometryInstance3D", true, false):   # даль: без теней, за 320 м не рисуем
+				(g as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				(g as GeometryInstance3D).visibility_range_end = 320.0
 
 
 func yurt_y(x: float, z: float) -> float:

@@ -31,6 +31,7 @@ func setup(mod: PaxMod, in_city: bool) -> void:
 			_bed = AudioStreamPlayer.new()
 			_bed.stream = bed
 			_bed.volume_db = -15.0
+			_bed.bus = "PaxRpgSfx"
 			add_child(_bed)
 			_bed.play()
 
@@ -50,6 +51,7 @@ func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) ->
 	p.stream = rnd
 	p.volume_db = volume
 	p.max_polyphony = 3
+	p.bus = "PaxRpgSfx"
 	add_child(p)
 	return p
 

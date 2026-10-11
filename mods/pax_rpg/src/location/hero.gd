@@ -131,6 +131,7 @@ func _player(files: Variant, pitch: float, volume: float) -> AudioStreamPlayer:
 	if rnd.streams_count == 0:
 		return null
 	var p := AudioStreamPlayer.new()           # не 3D: у SubViewport локации нет своего слушателя
+	p.bus = "PaxRpgSfx"
 	p.stream = rnd
 	p.volume_db = volume
 	model.add_child(p)

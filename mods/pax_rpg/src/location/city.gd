@@ -165,7 +165,11 @@ func _fix_textures() -> void:
 						mat.set_texture(slot, t)
 						continue
 					img.generate_mipmaps(slot == BaseMaterial3D.TEXTURE_NORMAL)
-					done[t] = ImageTexture.create_from_image(img)
+					if t is ImageTexture:                      # на месте: исходник из кэша моделей не висит в памяти вторым
+						(t as ImageTexture).set_image(img)
+						done[t] = t
+					else:
+						done[t] = ImageTexture.create_from_image(img)
 			mat.set_texture(slot, done[t])
 	_mats.clear()
 
@@ -812,6 +816,7 @@ func _lights(path: String, list: Array) -> void:
 
 
 const CELL := 24.0
+const FAR_DRAW := 220.0
 
 
 ## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
@@ -870,6 +875,9 @@ func _place(path: String, list: Array) -> void:
 				mi.visibility_range_end = small
 				mi.visibility_range_end_margin = 6.0
 				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+			else:                                         # дальше FAR_DRAW м всё равно в дымке — не рисуем
+				mi.visibility_range_end = FAR_DRAW
+				mi.visibility_range_end_margin = 20.0
 			root.add_child(mi)
 	for e: Array in list:
 		count += 1
