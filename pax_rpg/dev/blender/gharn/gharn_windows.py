@@ -142,9 +142,12 @@ def analyse(pid):
     # окна по этажам: ровно на 1.3×1.7 м вокруг, не ниже 2.4 м от земли (двери, крыльцо), шаг ≥ 2.8 м
     floors = [lo.z + 2.2 + k * 3.0 for k in range(6) if lo.z + 2.2 + k * 3.0 + 1.4 < lo.z + height * 0.72]
     wins, taken = [], []
+    med = sorted(q[2] for q in pts)[len(pts) // 2]
     for p, n, lum in sorted(pts, key=lambda q: math.atan2(q[0].y - c.y, q[0].x - c.x)):
         fz = min(floors, key=lambda f: abs(p.z - (f + 0.65))) if floors else None
         if fz is None or abs(p.z - (fz + 0.65)) > STEP_Z * 0.6:
+            continue
+        if lum < med * 0.55:                           # тёмное — проём, дверь, арка
             continue
         if any((p - q).length < 2.4 for q in taken):
             continue

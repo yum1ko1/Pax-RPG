@@ -42,6 +42,14 @@ P = {
  "stall_frame": "market stall, wooden counter, colorful cloth awning, goods",
  "quest_board": "wooden notice board with pinned paper notes and daggers, small roof",
  "lantern_string": "rope with red paper lanterns between wooden poles",
+ "cart": "old two-wheeled wooden steppe cart, iron-rimmed spoked wheels, burlap sacks in the bed, mud on wheels",
+ "fence_wood": "woven wattle fence of thin branches between rough stakes, bark, dry",
+ "hay_bale": "rectangular bale of golden dry hay tied with twine",
+ "wood_pile": "stacked split firewood logs between two posts, bark and pale cut ends",
+ "firepit": "campfire ring of blackened stones, charred logs, glowing embers and flames, ash",
+ "awning": "market awning of faded red and cream striped canvas on four wooden poles",
+ "rock_small": "weathered grey steppe boulders with lichen and dirt",
+ "bush_dry": "dry steppe shrub, thin twisted brown branches, sparse olive leaves",
 }
 
 def main():
