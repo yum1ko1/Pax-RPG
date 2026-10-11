@@ -43,6 +43,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
+		if k.ends_with("banner_clan.glb"):
+			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
+			continue
 		_place(k, groups[k])
 		_lights(k, groups[k])
 	_fix_textures()
@@ -121,6 +124,67 @@ func _fix_textures() -> void:
 					done[t] = ImageTexture.create_from_image(img)
 			mat.set_texture(slot, done[t])
 	_mats.clear()
+
+
+## Знамёна Гхарна: древко с перекладиной и полотнище (textures/gharn_flag.png — герб: огненный зверь),
+## полотнище колышется (shaders/flag.gdshader). Каждое — свой узел: фаза ветра от места, флаги не машут в такт.
+func _flags(list: Array) -> void:
+	var tex := _tex("textures/gharn_flag.png")
+	var sh: Shader = mod.shader("shaders/flag.gdshader")
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.16, 0.1, 0.08)
+	wood.roughness = 0.8
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.8, 0.6, 0.25)
+	gold.metallic = 1.0
+	gold.roughness = 0.35
+	var pole := CylinderMesh.new()
+	pole.top_radius = 0.05
+	pole.bottom_radius = 0.07
+	pole.height = 5.4
+	pole.material = wood
+	var bar := BoxMesh.new()
+	bar.size = Vector3(1.45, 0.08, 0.08)
+	bar.material = wood
+	var tip := SphereMesh.new()
+	tip.radius = 0.09
+	tip.height = 0.18
+	tip.material = gold
+	var cloth := QuadMesh.new()
+	cloth.size = Vector2(1.25, 2.0)
+	cloth.subdivide_width = 6
+	cloth.subdivide_depth = 14
+	var mat: Material = null
+	if sh != null:
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("tex", tex)
+		mat = m
+	for e: Array in list:
+		var t: Transform3D = e[0]
+		var n := Node3D.new()
+		n.transform = t
+		root.add_child(n)
+		for part: Array in [[pole, Vector3(0, 2.7, 0)], [bar, Vector3(0, 5.05, 0)], [tip, Vector3(0, 5.45, 0)],
+				[tip, Vector3(0.74, 5.05, 0)], [tip, Vector3(-0.74, 5.05, 0)]]:
+			var mi := MeshInstance3D.new()
+			mi.mesh = part[0]
+			mi.position = part[1]
+			n.add_child(mi)
+		var c := MeshInstance3D.new()
+		c.mesh = cloth
+		c.material_override = mat
+		c.position = Vector3(0, 5.0 - 1.0, 0.07)
+		n.add_child(c)
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(0.25, 5.4, 0.25)
+		cs.shape = bs
+		cs.position = Vector3(0, 2.7, 0)
+		body.add_child(cs)
+		n.add_child(body)
+		count += 1
 
 
 ## Стекло окон: тёмное, почти зеркальное (небо, солнце и фонари в нём — через отражения окружения и SSR),

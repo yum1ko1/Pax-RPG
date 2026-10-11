@@ -1,0 +1,27 @@
+// Полотнище флага на ветру: волна бежит от древка (UV.x = 0) к краю и вниз сильнее; фаза — от мирового места,
+// чтобы флаги вдоль улицы не махали в такт. Бахрома — по альфе текстуры.
+shader_type spatial;
+render_mode cull_disabled;
+
+uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic;
+uniform float amp = 0.12;
+uniform float speed = 2.2;
+
+void vertex() {
+	vec3 w = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	float ph = w.x * 0.37 + w.z * 0.53;
+	float k = UV.y * 0.8 + UV.x * 0.4;                       // у перекладины почти неподвижно
+	float wave = sin(TIME * speed + UV.y * 5.0 + UV.x * 2.0 + ph) * amp * k
+		+ sin(TIME * speed * 1.7 + UV.y * 9.0 + ph * 1.3) * amp * 0.35 * k;
+	VERTEX.z += wave;
+	VERTEX.x += sin(TIME * speed * 0.8 + ph) * amp * 0.25 * UV.y;
+}
+
+void fragment() {
+	vec4 c = texture(tex, UV);
+	ALBEDO = c.rgb;
+	ALPHA = c.a;
+	ALPHA_SCISSOR_THRESHOLD = 0.5;
+	ROUGHNESS = 0.85;
+	BACKLIGHT = vec3(0.35, 0.12, 0.1);                       // солнце сквозь ткань
+}
