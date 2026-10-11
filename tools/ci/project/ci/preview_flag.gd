@@ -22,15 +22,10 @@ func _initialize() -> void:
 
 func _tick() -> void:
 	frame += 1
-	if frame < 55:
-		loc.set("_cine", [[-62.0, 3.6, -1.5], [-65.5, 3.6, -7.5]])
-	if frame == 40:
-		_shot("flag_a")
-	if frame == 55:
-		loc.set("_cine", [[-55.0, 2.0, 3.0], [-67.0, 3.5, -7.0]])
-	if frame == 70:
-		_shot("flag_b")
-	if frame >= 75:
+	loc.set("_cine", [[-62.0, 3.6, -1.5], [-65.5, 3.6, -7.5]])
+	if frame in [78, 84, 90, 96, 102, 108]:
+		_shot("w_%d" % frame)
+	if frame >= 110:
 		quit(0)
 
 

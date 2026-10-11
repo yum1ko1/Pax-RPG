@@ -11,6 +11,7 @@ var mod: PaxMod
 var root: Node3D
 var rects: Array = []          # [центр XZ, размер XZ, цвет] — для миникарты
 var count := 0
+var leaves: Array = []         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
 
 func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
@@ -43,6 +44,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
+		if k.ends_with("flame_tree.glb"):
+			_leaves(groups[k])
 		if k.ends_with("banner_clan.glb"):
 			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
 			continue
@@ -124,6 +127,50 @@ func _fix_textures() -> void:
 					done[t] = ImageTexture.create_from_image(img)
 			mat.set_texture(slot, done[t])
 	_mats.clear()
+
+
+## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
+func _leaves(list: Array) -> void:
+	var leaf := QuadMesh.new()
+	leaf.size = Vector2(0.16, 0.1)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	leaf.material = m
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.95, 0.25, 0.3))
+	ramp.set_color(1, Color(1.0, 0.62, 0.45))
+	ramp.add_point(0.5, Color(0.85, 0.12, 0.22))
+	for e: Array in list:
+		var t: Transform3D = e[0]
+		var sc := t.basis.get_scale().x
+		var p := CPUParticles3D.new()
+		p.mesh = leaf
+		p.amount = 14
+		p.lifetime = 7.0
+		p.preprocess = 7.0
+		p.local_coords = false
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		p.emission_box_extents = Vector3(3.2, 0.8, 3.2) * sc
+		p.direction = Vector3(0, -1, 0)
+		p.spread = 30.0
+		p.initial_velocity_min = 0.1
+		p.initial_velocity_max = 0.4
+		p.gravity = Vector3(0.3, -0.55, 0.1)
+		p.damping_min = 0.2
+		p.damping_max = 0.6
+		p.angle_min = 0.0
+		p.angle_max = 360.0
+		p.angular_velocity_min = -220.0
+		p.angular_velocity_max = 220.0
+		p.scale_amount_min = 0.8
+		p.scale_amount_max = 1.5
+		p.color_initial_ramp = ramp
+		p.position = t.origin + Vector3(0, 5.6 * sc, 0)
+		root.add_child(p)
+		leaves.append(p)
 
 
 ## Знамёна Гхарна: древко с перекладиной и полотнище (textures/gharn_flag.png — герб: огненный зверь),

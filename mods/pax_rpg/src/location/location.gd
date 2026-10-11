@@ -20,6 +20,7 @@ const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
+const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
@@ -74,7 +75,8 @@ var _sfx: Sfx                      # шаги, снаряжение, гул го
 var _zoom_want := 0.0              # куда крутят колесом; _zoom догоняет плавно, с лёгкой задержкой
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
-var _body_turn := false            # тело доворачивается к цели (голова уже не достаёт)
+var _body_turn := false
+var _city_leaves: Array = []            # тело доворачивается к цели (голова уже не достаёт)
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -154,6 +156,7 @@ func build(city: Dictionary) -> void:
 		var c := City.new()
 		c.build(mod, _view, layout)
 		_map_rects.append_array(c.rects)
+		_city_leaves = c.leaves
 		var st: Array = layout.get("start", [0, 1.2, 0])
 		START = Vector3(float(st[0]), float(st[1]), float(st[2]))
 		var ex: Array = layout.get("exit", [0, 0])
@@ -171,6 +174,11 @@ func build(city: Dictionary) -> void:
 		probe.intensity = 1.0
 		_view.add_child(probe)
 	_make_player()
+	if not layout.is_empty():                          # ветер с порывами и листопад — в городе
+		var wind := Wind.new()
+		wind.setup(mod, _player)
+		wind.leaves = _city_leaves
+		_view.add_child(wind)
 	_spawn_goblins(goblins)
 	_cam = Camera3D.new()
 	_cam.fov = 65.0
