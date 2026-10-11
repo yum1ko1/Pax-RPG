@@ -423,7 +423,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	for j: int in cz:
 		for i: int in cx:
 			c_idx.append(roundi(float(j) / (cz - 1) * (nz - 1)) * nx + roundi(float(i) / (cx - 1) * (nx - 1)))
-	var mesh := ImmediateMesh.new()
+	var mesh := ArrayMesh.new()
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.top_level = true
@@ -751,25 +751,43 @@ func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
 			var u := sp[maxi(j - 1, 0) * mx + i]
 			var d := sp[mini(j + 1, mz - 1) * mx + i]
 			nrm[j * mx + i] = (r - l).cross(d - u).normalized()
-	var shade: PackedFloat32Array = c.shade
-	var mesh: ImmediateMesh = c.mesh
-	mesh.clear_surfaces()
-	for side: int in 2:                                   # лицевая сторона — ткань, изнанка — подкладка
-		mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, c.mat if side == 0 else c.lining)
+	# индексы, UV и оттенок — один раз; за кадр движку уходят только позиции и нормали (раньше ImmediateMesh
+	# по вершине: ~50 тыс. вызовов из GDScript на кадр — 13 мс)
+	if not c.has("idx"):
+		var shade: PackedFloat32Array = c.shade
+		var idx := PackedInt32Array()
 		for j: int in mz - 1:
 			for i: int in mx - 1:
 				var a := j * mx + i
-				for k: int in [a, a + mx, a + 1, a + 1, a + mx, a + mx + 1]:
-					var ii := k % mx
-					var jj := k / mx
-					var si := mini(roundi(float(ii) / sub), nx - 1)
-					var sj := mini(roundi(float(jj) / sub), nz - 1)
-					var s := shade[sj * nx + si] if sj * nx + si < shade.size() else 1.0
-					mesh.surface_set_color(Color(s, s, s))
-					mesh.surface_set_normal(nrm[k])
-					mesh.surface_set_uv(Vector2(float(ii) / (mx - 1), float(jj) / (mz - 1)))
-					mesh.surface_add_vertex(sp[k])
-		mesh.surface_end()
+				idx.append_array([a, a + mx, a + 1, a + 1, a + mx, a + mx + 1])
+		var uv := PackedVector2Array()
+		var col := PackedColorArray()
+		uv.resize(mx * mz)
+		col.resize(mx * mz)
+		for k: int in mx * mz:
+			var ii := k % mx
+			var jj := k / mx
+			var si := mini(roundi(float(ii) / sub), nx - 1)
+			var sj := mini(roundi(float(jj) / sub), nz - 1)
+			var s := shade[sj * nx + si] if sj * nx + si < shade.size() else 1.0
+			col[k] = Color(s, s, s)
+			uv[k] = Vector2(float(ii) / (mx - 1), float(jj) / (mz - 1))
+		c.idx = idx
+		c.uv = uv
+		c.col = col
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = sp
+	arr[Mesh.ARRAY_NORMAL] = nrm
+	arr[Mesh.ARRAY_TEX_UV] = c.uv
+	arr[Mesh.ARRAY_COLOR] = c.col
+	arr[Mesh.ARRAY_INDEX] = c.idx
+	var mesh: ArrayMesh = c.mesh
+	mesh.clear_surfaces()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # лицевая сторона — ткань
+	mesh.surface_set_material(0, c.mat)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # изнанка — подкладка (cull front)
+	mesh.surface_set_material(1, c.lining)
 
 
 ## Catmull-Rom по сетке: along_j — вдоль колонки i (параметр t в рядах), иначе вдоль ряда (строка = i).
