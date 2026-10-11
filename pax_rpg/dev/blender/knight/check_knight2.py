@@ -24,9 +24,9 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("IdleArmed", 0, "FRONT34"), ("Attack1", 0.35, "FRONT34"), ("Attack2", 0.4, "FRONT34"),
-         ("Attack3", "impact", "RIGHT"), ("Draw", 13, "BACK34"), ("Draw", 54, "FRONT34"), ("RunArmed", 0.3, "RIGHT"),
-         ("Hurt", 0.4, "FRONT34"), ("Idle", 0, "BACK34"), ("Walk", 0.3, "FRONT34")]
+SHOTS = [("GuardStrafeL", 0.3, "FRONT34"), ("GuardStrafeR", 0.3, "FRONT34"), ("GuardBack", 0.3, "RIGHT"),
+         ("StrafeL", 0.3, "FRONT34"), ("WalkBack", 0.3, "RIGHT"), ("Parry", 0.2, "FRONT34"), ("Parry", 0.45, "FRONT34"),
+         ("Deathblow", 0.35, "RIGHT"), ("Deathblow", 0.55, "RIGHT")]
 files = []
 
 
@@ -49,7 +49,7 @@ for clip, t, view in SHOTS:
     sw_t = (f - f0) / 30
     if clip == "RunArmed":
         show("Sword_Drag")
-    elif clip in ("Run", "Idle", "Dodge", "Walk", "Hurt"):
+    elif clip in ("Run", "Idle", "Dodge", "Walk", "Hurt", "StrafeL", "StrafeR", "WalkBack"):
         show("Sword_Back")
     elif clip.startswith("Sheathe"):
         show("Sword_Hand" if sw_t < meta["sword_switch"]["Sheathe"]["time"] else "Sword_Back")
