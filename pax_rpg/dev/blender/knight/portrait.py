@@ -24,12 +24,14 @@ metal = bpy.data.materials.new("black_steel")        # Чёрный рыцарь
 metal.use_nodes = True
 bsdf = metal.node_tree.nodes["Principled BSDF"]
 bsdf.inputs["Base Color"].default_value = (0.035, 0.03, 0.04, 1)
-bsdf.inputs["Metallic"].default_value = 0.9
-bsdf.inputs["Roughness"].default_value = 0.32
+bsdf.inputs["Metallic"].default_value = 0.65
+bsdf.inputs["Roughness"].default_value = 0.42
 for o in sc.objects:
     if o.type == "MESH":
         for slot in o.material_slots:
             slot.material = metal
+        for poly in o.data.polygons:
+            poly.use_smooth = True
 bpy.context.view_layer.update()
 head = arm.matrix_world @ arm.pose.bones["Head"].head
 neck = arm.matrix_world @ arm.pose.bones["neck"].head
@@ -41,7 +43,7 @@ sc.render.film_transparent = False
 w = bpy.data.worlds.new("w")
 w.use_nodes = True
 w.node_tree.nodes["Background"].inputs[0].default_value = (0.03, 0.03, 0.08, 1)
-w.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+w.node_tree.nodes["Background"].inputs[1].default_value = 0.04
 sc.world = w
 cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
 sc.collection.objects.link(cam)
@@ -59,6 +61,7 @@ for name, col, en, pos in (("rim", (1.0, 0.45, 0.75), 1600, (0.9, 0.9, 0.5)), ("
     sc.collection.objects.link(l)
     l.location = c + Vector(pos)
     l.rotation_euler = (c - l.location).to_track_quat("-Z", "Y").to_euler()
+sc.world.color = (0.03, 0.03, 0.08)
 sc.render.filepath = OUT
 bpy.ops.render.render(write_still=True)
 print("portrait", OUT, flush=True)
