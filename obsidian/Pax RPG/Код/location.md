@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/location.gd
-lines: 1197
+lines: 1251
 weight: 2
 tags: [мод/rpg, функция/location]
 ---
 
 # location
 
-`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1197 строк · подключают: **2**
+`src/location/location.gd` · [[Код Pax RPG]] · `extends CanvasLayer` · 1251 строк · подключают: **2**
 
 > Локация города — прототип механики. Свой 3D-мир в SubViewport поверх игры (own_world_3d: своя физика и свет, мир игры его не видит): платформа, несколько блоков, ворота выхода и герой (config/hero.json: модель, скорости, комбо; логика анимаций — hero.gd; нет модели — овал). WASD — ходьба относительно камеры, Shift — бег, Пробел — прыжок, F — достать / убрать меч, ЛКМ — удар (три подряд — комбо), правая кнопка мыши + движение — поворот камеры, E у ворот — назад на карту мира (сигнал exit_requested, дальше travel.gd).
 
@@ -18,9 +18,11 @@ tags: [мод/rpg, функция/location]
 - [[hud]]
 - [[city]]
 - [[npc]]
+- [[help_panel]]
 - [[pause_menu]]
 - [[sfx]]
 - [[city_title]]
+- [[daynight]]
 - [[wind]]
 - [[progress]]
 
@@ -38,6 +40,7 @@ tags: [мод/rpg, функция/location]
 - `func build(city: Dictionary) -> void`
 - `func clear() -> void`
 - `func _make_sky() -> void`
+- `func set_hour(h: float) -> String` — Консоль F8: rpg_time <час> — поставить время суток (для скриншотов).
 - `func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D`
 - `func _spawn_npcs(layout: Dictionary) -> void` — Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
 - `func _city_layout(id: String) -> Dictionary` — Планировка города (config/<id>.json); нет файла — {} (локация-прототип).

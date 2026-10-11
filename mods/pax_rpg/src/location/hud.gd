@@ -20,6 +20,7 @@ const MAP_M := 30.0                 # м мира от центра до кра�
 var mod: PaxMod
 var st: Dictionary = {}             # состояние кадра (location.gd)
 var portrait: Texture2D             # портрет врага
+var hero_portrait: Texture2D        # портрет героя (textures/hero_portrait.png — pax_rpg/dev/blender/knight/portrait.py)
 var serif: Font
 var sans: Font
 var cjk: Font
@@ -32,6 +33,7 @@ var _map: Control
 func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	mod = m
 	portrait = enemy_portrait
+	hero_portrait = m.texture("textures/hero_portrait.png")
 	name = "PaxRpgHud"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -130,8 +132,18 @@ func _draw_player() -> void:
 	var c := Vector2(98, 92)
 	draw_circle(c, 66.0, Color(PINK, 0.10))
 	draw_circle(c, 58.0, INK2)
+	if hero_portrait != null:                            # портрет в круге (многоугольник с UV)
+		var pts := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		for i: int in 48:
+			var a := TAU * i / 48.0
+			var d := Vector2(cos(a), sin(a))
+			pts.append(c + d * 56.0)
+			uvs.append(Vector2(0.5, 0.5) + d * 0.5)
+		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, hero_portrait)
+	else:
+		_center(c, "騎", cjk, 52, TEXT)
 	draw_arc(c, 58.0, 0.0, TAU, 64, PINK, 2.0, true)
-	_center(c, "騎", cjk, 52, TEXT)
 	var d := _diamond(Vector2(140, 136), 22.0)
 	draw_colored_polygon(d, Color(0.04, 0.06, 0.14))
 	_outline(d, BLUE, 2.0)

@@ -1,14 +1,14 @@
 ---
 mod: pax_rpg
 file: src/location/pause_menu.gd
-lines: 101
+lines: 103
 weight: 1
 tags: [мод/rpg, функция/location]
 ---
 
 # pause_menu
 
-`src/location/pause_menu.gd` · [[Код Pax RPG]] · `extends Control` · 101 строк · подключают: **1**
+`src/location/pause_menu.gd` · [[Код Pax RPG]] · `extends Control` · 103 строк · подключают: **1**
 
 > Меню паузы локации (Esc) в стиле HUD «Сакура и сталь»: затемнение, свиток по центру, кнопки. Мир локации на паузе, пока меню открыто (location.gd отключает обработку SubViewport).
 
