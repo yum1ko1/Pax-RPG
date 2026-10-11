@@ -560,37 +560,34 @@ def main():
         built.append(ob)
     if "--no-render" in ARGS:
         return
-    # лист-превью: сетка, подписи
-    cols = 8
-    cell = 7.0
-    for i, ob in enumerate(built):
-        ob.location = ((i % cols) * cell, -(i // cols) * cell, 0)
-        bpy.ops.object.text_add(location=(ob.location.x - 2.6, ob.location.y - 3.2, 0.02))
-        t = bpy.context.active_object
-        t.data.body = ob.name
-        t.data.size = 0.55
-        t.data.materials.append(mat("label", "#FFFFFF"))
+    # превью: каждая модель отдельно, камера по её габаритам → W\gharn\props\_thumbs\<id>.png (склеить в лист)
+    thumbs = os.path.join(OUT, "_thumbs")
+    os.makedirs(thumbs, exist_ok=True)
     sc = bpy.context.scene
     sc.render.engine = "BLENDER_WORKBENCH"
     sc.display.shading.light = "STUDIO"
     sc.display.shading.color_type = "MATERIAL"
     sc.display.shading.show_shadows = True
     sc.display.shading.show_cavity = True
-    sc.render.resolution_x, sc.render.resolution_y = 2400, 1500
-    w = bpy.data.worlds.new("w") if not sc.world else sc.world
-    sc.world = w
-    rows = (len(built) + cols - 1) // cols
-    cx, cy = (cols - 1) * cell / 2, -(rows - 1) * cell / 2
+    sc.render.resolution_x = sc.render.resolution_y = 420
+    sc.render.film_transparent = False
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
     sc.collection.objects.link(cam)
     sc.camera = cam
     cam.data.type = "ORTHO"
-    cam.data.ortho_scale = cols * cell * 1.02
-    cam.location = (cx, cy - 40, 34)
-    cam.rotation_euler = (math.radians(50), 0, 0)
-    sc.render.filepath = os.path.join(OUT, "_sheet.png")
-    bpy.ops.render.render(write_still=True)
-    print("sheet:", sc.render.filepath, flush=True)
+    for ob in built:
+        for o in built:
+            o.hide_render = o is not ob
+        d = ob.dimensions
+        size = max(d.x, d.y, d.z)
+        cam.data.ortho_scale = size * 1.35
+        c = Vector((0, 0, d.z * 0.45))
+        direc = Vector((0.55, -1.0, 0.62)).normalized()
+        cam.location = c + direc * size * 4
+        cam.rotation_euler = (c - cam.location).to_track_quat("-Z", "Y").to_euler()
+        sc.render.filepath = os.path.join(thumbs, ob.name + ".png")
+        bpy.ops.render.render(write_still=True)
+    print("thumbs:", thumbs, flush=True)
 
 
 main()
