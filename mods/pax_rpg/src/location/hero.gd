@@ -48,6 +48,7 @@ var _owner_body: PhysicsBody3D       # капсула персонажа — с 
 var _items: Dictionary = {}          # config/items.json → items: что вообще можно надеть
 var _worn: Dictionary = {}           # слот → надетый предмет (см. equip)
 var _last_in_slot: Dictionary = {}   # слот → что в нём было — «C» надевает обратно
+var cloth_paused := false           # для замера (rpg_perf auto)
 var _colliders: Array = []           # [AnimatableBody3D, кость от, кость до] — капсулы тела для тканей
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
 var _trail_mat: StandardMaterial3D
@@ -1253,7 +1254,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_on_floor = on_floor
 	_show_sword(delta)
 	_trail_tick(delta)
-	_items_tick(delta)
+	if not cloth_paused:
+		_items_tick(delta)
 	return out
 
 

@@ -195,6 +195,15 @@ func _perf_auto() -> void:
 		["анимации", func(on: bool) -> void:
 			for n: Node in _kids("AnimationPlayer"):
 				n.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED],
+		["NPC", func(on: bool) -> void:
+			var pl: Node = location.get("_player")
+			for n: Node in _kids("CharacterBody3D"):
+				if n != pl:
+					n.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED],
+		["плащ", func(on: bool) -> void:
+			var h: Variant = location.get("_hero")
+			if h is Node:
+				(h as Node).set("cloth_paused", not on)],
 		["HUD", func(on: bool) -> void:
 			if hud: hud.visible = on],
 		["ландшафт", func(on: bool) -> void:
@@ -214,15 +223,17 @@ func _perf_auto() -> void:
 		var gpu := 0.0
 		var t0 := Time.get_ticks_msec()
 		var proc := 0.0
+		var phys := 0.0
 		while Time.get_ticks_msec() - t0 < 4000:
 			await get_tree().process_frame
 			f += 1
 			if vp:
 				gpu += RenderingServer.viewport_get_measured_render_time_gpu(rid)
 			proc += Performance.get_monitor(Performance.TIME_PROCESS)
+			phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
 		var secs := (Time.get_ticks_msec() - t0) / 1000.0
-		log_info("Pax RPG perf: без «%s» — fps %.1f · gpu 3D %.1f мс · скрипты %.1f мс · draw %d" % [st[0], f / secs,
-			gpu / maxf(f, 1), proc / maxf(f, 1) * 1000.0,
+		log_info("Pax RPG perf: без «%s» — fps %.1f · gpu 3D %.1f мс · скрипты %.1f мс · физика %.1f мс · draw %d" % [st[0], f / secs,
+			gpu / maxf(f, 1), proc / maxf(f, 1) * 1000.0, phys / maxf(f, 1) * 1000.0,
 			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
 		(st[1] as Callable).call(true)
 	log_info("Pax RPG perf: готово")

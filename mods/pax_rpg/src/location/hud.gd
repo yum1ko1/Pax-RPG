@@ -279,14 +279,22 @@ func _draw_map() -> void:
 	var to_map := func(w: Vector2) -> Vector2:
 		var d := w - me
 		return c + Vector2(d.dot(right), -d.dot(fwd)) * k
+	# только то, что попадает в круг карты (в городе — сотни коробок; все подряд съедали ~7 мс кадра)
+	var reach := MAP_M * 1.5
+	var pts := PackedVector2Array()
+	pts.resize(4)
+	var ax := Vector2(right.x, -fwd.x) * k                # мир → карта: p = c + (d.x * ax + d.y * ay)
+	var ay := Vector2(right.y, -fwd.y) * k
 	for rect: Variant in _g("map_rects", []):
 		var rr: Array = rect
-		var ctr: Vector2 = rr[0]
-		var half: Vector2 = rr[1] * 0.5
-		var pts := PackedVector2Array()
-		for corner: Vector2 in [Vector2(-half.x, -half.y), Vector2(half.x, -half.y), Vector2(half.x, half.y),
-				Vector2(-half.x, half.y)]:
-			pts.append(to_map.call(ctr + corner))
+		var d: Vector2 = (rr[0] as Vector2) - me
+		var half: Vector2 = (rr[1] as Vector2) * 0.5
+		if absf(d.x) - half.x > reach or absf(d.y) - half.y > reach:
+			continue
+		pts[0] = c + (d.x - half.x) * ax + (d.y - half.y) * ay
+		pts[1] = c + (d.x + half.x) * ax + (d.y - half.y) * ay
+		pts[2] = c + (d.x + half.x) * ax + (d.y + half.y) * ay
+		pts[3] = c + (d.x - half.x) * ax + (d.y + half.y) * ay
 		_map.draw_colored_polygon(pts, rr[2])
 	var gate: Vector2 = _g("gate", Vector2.ZERO)
 	_map.draw_arc(to_map.call(gate), 7.0 * _s, 0.0, TAU, 20, BLUE, 2.0 * _s, true)
