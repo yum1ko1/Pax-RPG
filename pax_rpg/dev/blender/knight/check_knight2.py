@@ -24,9 +24,8 @@ win = bpy.context.window or bpy.context.window_manager.windows[0]
 win.scene = scn
 rig = bpy.data.objects["Knight_rig"]
 sw = {n: bpy.data.objects[n] for n in ("Sword_Back", "Sword_Hand", "Sword_Drag")}
-SHOTS = [("GuardStrafeL", 0.3, "FRONT34"), ("GuardStrafeR", 0.3, "FRONT34"), ("GuardBack", 0.3, "RIGHT"),
-         ("StrafeL", 0.3, "FRONT34"), ("WalkBack", 0.3, "RIGHT"), ("Parry", 0.2, "FRONT34"), ("Parry", 0.45, "FRONT34"),
-         ("Deathblow", 0.35, "RIGHT"), ("Deathblow", 0.55, "RIGHT")]
+SHOTS = [("Block", 0, "FRONT34"), ("Block", 0, "RIGHT"), ("Block", 0, "FRONT"), ("BlockWalkL", 0.3, "FRONT34"),
+         ("BlockWalkB", 0.3, "RIGHT")]
 files = []
 
 

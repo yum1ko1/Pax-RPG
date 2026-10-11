@@ -493,6 +493,41 @@ for f in range(d0, d1 + 1):
     apply(pose)
     key(act, f - d0)
 bpy.data.actions.remove(src)
+# ---------- 3в. блок: меч двумя руками горизонтально перед собой (как в Sekiro) ----------
+# Правая рука на рукояти справа перед лицом, клинок поперёк — влево и чуть вверх, плашмя к врагу (лезвие вверх);
+# левая рука держит клинок снизу на середине. Block — стоя (с дыханием), BlockWalk* — ноги из шагов, руки — блок.
+apply(P_GUARD)
+fw = facing()
+side = fw.cross(UP)
+c = head(CHEST)
+O_BLK = c + fw * 0.42 + UP * 0.30 + side * 0.22
+D_BLK = (-side + UP * 0.12).normalized()
+R_BLK = frame3(D_BLK, fw)
+Rh, Wt = hand_for(R_BLK, O_BLK)
+ik_arm(Wt, (side * 0.6 - UP * 0.6).normalized())
+set_rot_w(HA, Rh)
+ik_left(O_BLK + D_BLK * 0.62 - UP * 0.05, (-side * 0.5 - UP * 0.7).normalized())
+P_BLOCK = current()
+log.append(f"block: grip miss {round((head(HA) - Wt).length * 100, 1)} cm")
+act = new_action("Block")
+for f in range(0, 31, 5):
+    apply(P_BLOCK)
+    turn_bone(CHEST, Quaternion(rot_w(CHEST) @ Vector((1, 0, 0)), math.radians(1.2 * math.sin(2 * math.pi * f / 30))))
+    key(act, f)
+UPPER = [n for n in P_BLOCK if n not in LEGS]
+for name, legs_from in (("BlockWalkF", "WalkArmed"), ("BlockWalkB", "GuardBack"), ("BlockWalkL", "GuardStrafeL"),
+                        ("BlockWalkR", "GuardStrafeR")):
+    if legs_from not in clips:
+        continue
+    lc = clips[legs_from]
+    l0, l1 = int(lc.frame_range[0]), int(lc.frame_range[1])
+    act = new_action(name)
+    for f in range(l0, l1 + 1, 2):
+        pose = capture(lc, f)
+        pose.update({n: P_BLOCK[n] for n in UPPER if n != HIPS})
+        apply(pose)
+        key(act, f - l0)
+
 # ---------- 4. меч не уходит в землю; удар о землю ----------
 def tip_and_grip(ob):
     o, R = sword_frame(ob)
