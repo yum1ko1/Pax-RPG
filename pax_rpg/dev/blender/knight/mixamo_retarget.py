@@ -110,7 +110,7 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
             rot = ds @ T_REST[tn].to_3x3().normalized()
             pbt = rig.pose.bones[tn]
             cur = (MW @ pbt.matrix)
-            M = rot.to_4x4()
+            M = (rot @ Matrix.Diagonal(T_REST[tn].to_scale())).to_4x4()   # масштаб кости (риг Meshy — в см)
             if tn == "Hips":
                 dpos = (spose[sn].translation - hips_rest_s) * ratio
                 if mirror:
