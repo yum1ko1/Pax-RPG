@@ -45,6 +45,12 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if d.has("sign"):
 			_sign(d.sign, pos, float(d.get("r", 0.0)))
 			continue
+		if d.has("lanterns"):
+			_lantern_line(d.lanterns, int(d.get("seed", 0)))
+			continue
+		if d.has("merchant"):
+			_merchant(pos, float(d.get("r", 0.0)), int(d.get("seed", 0)))
+			continue
 		if d.has("laundry"):
 			_laundry(d.laundry, int(d.get("seed", 0)))
 			continue
@@ -421,6 +427,125 @@ func _laundry(l: Array, seed_v: int) -> void:
 		mi.transform = Transform3D(Basis(Vector3.UP, yaw), a + dir.normalized() * (x + w * 0.5) + Vector3(0, top - h * 0.5 - 0.02, 0))
 		root.add_child(mi)
 		x += w + rng.randf_range(0.08, 0.3)
+
+
+## Гирлянда больших бумажных фонарей (как на концепте рынка): верёвка между столбами, оранжевые шары с тёмными
+## ободами качаются; посередине — тёплый свет (ночью ярче, daynight.gd). lanterns: [x1, z1, x2, z2, высота].
+var _lantern_mesh: SphereMesh
+var _rim_mesh: CylinderMesh
+
+
+func _lantern_line(l: Array, seed_v: int) -> void:
+	var a := Vector3(float(l[0]), 0, float(l[1]))
+	var b := Vector3(float(l[2]), 0, float(l[3]))
+	var hgt := float(l[4]) if l.size() > 4 else 4.2
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	if _lantern_mesh == null:
+		var paper := StandardMaterial3D.new()
+		paper.albedo_color = Color(0.95, 0.32, 0.08)
+		paper.emission_enabled = true
+		paper.emission = Color(1.0, 0.3, 0.05)
+		paper.emission_energy_multiplier = 0.45
+		glass.append(paper)                               # ночью разгорается вместе с окнами (daynight.gd)
+		paper.roughness = 0.8
+		_lantern_mesh = SphereMesh.new()
+		_lantern_mesh.radius = 0.38
+		_lantern_mesh.height = 0.86
+		_lantern_mesh.material = paper
+		var dark := StandardMaterial3D.new()
+		dark.albedo_color = Color(0.12, 0.06, 0.04)
+		_rim_mesh = CylinderMesh.new()
+		_rim_mesh.top_radius = 0.2
+		_rim_mesh.bottom_radius = 0.2
+		_rim_mesh.height = 0.08
+		_rim_mesh.material = dark
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.24, 0.16, 0.1)
+	for p: Vector3 in [a, b]:
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.07
+		cm.bottom_radius = 0.09
+		cm.height = hgt + 0.3
+		cm.material = wood
+		mi.mesh = cm
+		mi.position = p + Vector3(0, (hgt + 0.3) * 0.5, 0)
+		root.add_child(mi)
+	var dir := b - a
+	var rope := MeshInstance3D.new()
+	var rm := CylinderMesh.new()
+	rm.top_radius = 0.015
+	rm.bottom_radius = 0.015
+	rm.height = dir.length()
+	rm.material = wood
+	rope.mesh = rm
+	rope.transform = Transform3D(Basis.looking_at(dir.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5),
+		a.lerp(b, 0.5) + Vector3(0, hgt, 0))
+	root.add_child(rope)
+	var n := maxi(2, int(dir.length() / 2.6))
+	for i: int in n:
+		var f := (i + 0.5) / n
+		var sag := sin(f * PI) * 0.35
+		var holder := Node3D.new()
+		holder.position = a.lerp(b, f) + Vector3(0, hgt - sag, 0)
+		root.add_child(holder)
+		var lan := MeshInstance3D.new()
+		lan.mesh = _lantern_mesh
+		var sc := rng.randf_range(0.75, 1.25)
+		lan.scale = Vector3.ONE * sc
+		lan.position = Vector3(0, -0.55 * sc, 0)
+		holder.add_child(lan)
+		for y: float in [-0.12, -0.98]:
+			var rim := MeshInstance3D.new()
+			rim.mesh = _rim_mesh
+			rim.position = Vector3(0, y * sc, 0)
+			holder.add_child(rim)
+		var tw := holder.create_tween()                   # лёгкое покачивание
+		if tw != null:
+			tw.set_loops()
+			var amp := rng.randf_range(0.05, 0.12)
+			var dur := rng.randf_range(1.4, 2.2)
+			tw.tween_property(holder, "rotation:z", amp, dur).set_trans(Tween.TRANS_SINE)
+			tw.tween_property(holder, "rotation:z", -amp, dur).set_trans(Tween.TRANS_SINE)
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.55, 0.25)
+	light.light_energy = 1.4
+	light.omni_range = 8.0
+	light.position = a.lerp(b, 0.5) + Vector3(0, hgt - 0.8, 0)
+	root.add_child(light)
+	lights.append([light, 2.6])
+	count += 1
+
+
+## Торговец за прилавком: гоблин с анимацией покоя (модель и клип — как у мирных жителей), смотрит на покупателей.
+func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
+	var m := mod.model("models/goblin/goblin_rigged.glb")
+	if m == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	m.position = pos
+	m.rotation.y = deg_to_rad(ry)
+	m.scale = Vector3.ONE * rng.randf_range(0.9, 1.1)
+	root.add_child(m)
+	var ap := _find_player(m)
+	var src := mod.model("models/goblin/idle.glb")
+	if ap != null and src != null:
+		var sa := _find_player(src)
+		if sa != null and sa.get_animation_list().size() > 0:
+			var an: Animation = sa.get_animation(sa.get_animation_list()[0]).duplicate()
+			an.loop_mode = Animation.LOOP_LINEAR
+			var lib := AnimationLibrary.new()
+			lib.add_animation("idle", an)
+			if not ap.has_animation_library("m"):
+				ap.add_animation_library("m", lib)
+			ap.play("m/idle")
+			ap.seek(rng.randf() * 2.0, true)
+			ap.speed_scale = rng.randf_range(0.85, 1.15)
+	if src != null:
+		src.free()
+	count += 1
 
 
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).

@@ -175,6 +175,21 @@ for i in range(4):
         add("basket", x - 1.8, z - 1.4)
 add("cauldron", -48, 30)
 add("weapon_rack", -70, 30, 90)
+# по концепту рынка: гирлянды больших оранжевых фонарей над рядами, торговцы за прилавками, тележки с добычей
+for z in (8.5, 17.5):
+    for x0 in (-70.5, -61.5, -52.5, -43.5):
+        items.append({"lanterns": [x0, z, x0 + 9.0, z, 4.4], "seed": int(x0 * 10 + z), "p": [x0, 0, z], "c": False})
+for x, z, r in ((-57.5, 1.5, 30), (-39.5, 23.5, 200), (-71.0, 19.0, 100)):   # тележки торговцев с добычей (Meshy)
+    add("merchant_cart", x, z, r, c=True, rad=2.0)
+for x in (-66, -48):
+    items.append({"lanterns": [x - 4.5, 0.5, x - 4.5, 26.0, 4.6], "seed": int(x), "p": [x, 0, 0], "c": False})
+for i in range(4):
+    for j in range(3):
+        if (i + j) % 3 == 2:
+            continue
+        x, z = -66 + i * 9, -2 + j * 9 + 6
+        items.append({"merchant": True, "p": [x + random.uniform(-0.6, 0.6), 0.0, z - 1.3], "r": 180.0, "seed": i * 7 + j,
+                      "c": False})
 
 # --- Счётный двор (северо-запад): казармы из тёсаного камня, плац
 for k in range(3):
