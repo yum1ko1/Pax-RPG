@@ -25,8 +25,8 @@ if [ -z "$GODOT" ]; then
 fi
 rm -rf "$OUT" && mkdir -p "$OUT"
 fail=0
-# ошибки выполнения и компиляции в выводе Godot
-PAT='SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|Invalid call|Invalid access|Invalid assignment|Invalid operands|Nonexistent function|Attempt to call|smoke: FAIL|check: FAIL'
+# ошибки выполнения и компиляции в выводе Godot; «GDScript backtrace» — любая ошибка движка, вызванная кодом мода
+PAT='SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|Invalid call|Invalid access|Invalid assignment|Invalid operands|Nonexistent function|Attempt to call|GDScript backtrace|smoke: FAIL|check: FAIL'
 
 echo "== 1. статические проверки"
 python3 "$CI/static_checks.py" "$ROOT" | tee "$OUT/static.log" || true
@@ -50,7 +50,7 @@ if [ "${NO_SMOKE:-0}" != "1" ]; then
   else
     "$GODOT" --headless --path "$PROJ" --fixed-fps 60 -s res://ci/smoke.gd > "$OUT/smoke.log" 2>&1
   fi
-  grep -E -A3 "smoke:|SCRIPT ERROR" "$OUT/smoke.log" | head -60
+  grep -E -B2 -A4 "smoke:|SCRIPT ERROR|GDScript backtrace" "$OUT/smoke.log" | head -60
   if grep -qE "$PAT" "$OUT/smoke.log" || ! grep -q "smoke: ok" "$OUT/smoke.log"; then fail=1; fi
 fi
 

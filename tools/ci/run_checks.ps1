@@ -26,7 +26,7 @@ if (-not (Test-Path $Godot)) {
 Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $Out | Out-Null
 $fail = $false
-$pat = 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|Invalid call|Invalid access|Invalid assignment|Invalid operands|Nonexistent function|Attempt to call|smoke: FAIL|check: FAIL'
+$pat = 'SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|Invalid call|Invalid access|Invalid assignment|Invalid operands|Nonexistent function|Attempt to call|GDScript backtrace|smoke: FAIL|check: FAIL'
 
 # статика смотрит на <корень>\mods\pax_rpg — даём ей временный корень со ссылкой на мод
 $tmpRoot = Join-Path $Out 'root'

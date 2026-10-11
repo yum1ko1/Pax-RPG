@@ -745,8 +745,9 @@ func _process(delta: float) -> void:
 
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
 func _hud_tick(delta: float) -> void:
-	if not is_instance_valid(_player) or not is_instance_valid(_cam):
-		return
+	if not is_inside_tree() or not is_instance_valid(_player) or not is_instance_valid(_cam) \
+			or not _player.is_inside_tree():
+		return                                       # build() ещё до входа в дерево — позиций нет
 	for g: Variant in _goblins:
 		if not is_instance_valid(g):
 			continue
