@@ -20,6 +20,16 @@ if arm.animation_data:
 for o in sc.objects:                                   # мечи и прочее — не в кадр
     if o.type == "MESH" and o.name.startswith("Sword"):
         o.hide_render = True
+metal = bpy.data.materials.new("black_steel")        # Чёрный рыцарь: воронёная сталь
+metal.use_nodes = True
+bsdf = metal.node_tree.nodes["Principled BSDF"]
+bsdf.inputs["Base Color"].default_value = (0.035, 0.03, 0.04, 1)
+bsdf.inputs["Metallic"].default_value = 0.9
+bsdf.inputs["Roughness"].default_value = 0.32
+for o in sc.objects:
+    if o.type == "MESH":
+        for slot in o.material_slots:
+            slot.material = metal
 bpy.context.view_layer.update()
 head = arm.matrix_world @ arm.pose.bones["Head"].head
 neck = arm.matrix_world @ arm.pose.bones["neck"].head
@@ -40,7 +50,7 @@ cam.data.lens = 85
 d = Vector((-0.55, -1.0, 0.12)).normalized()          # рыцарь смотрит на −Y: камера спереди-слева
 cam.location = c + d * 1.25
 cam.rotation_euler = (c - cam.location).to_track_quat("-Z", "Y").to_euler()
-for name, col, en, pos in (("rim", (1.0, 0.45, 0.75), 900, (0.9, 0.9, 0.5)), ("fill", (0.45, 0.75, 1.0), 260, (-1.2, -1.0, 0.2)),
+for name, col, en, pos in (("rim", (1.0, 0.45, 0.75), 1600, (0.9, 0.9, 0.5)), ("fill", (0.45, 0.75, 1.0), 420, (-1.2, -1.0, 0.2)),
                            ("key", (1.0, 0.9, 0.85), 380, (-0.4, -1.2, 0.9))):
     l = bpy.data.objects.new(name, bpy.data.lights.new(name, "AREA"))
     l.data.color = col
