@@ -12,6 +12,7 @@ const FALL_Y := -20.0              # упал с платформы — обра
 const START := Vector3(0.0, 1.2, 8.0)
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
+const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -24,7 +25,7 @@ var _view: SubViewport
 var _player: CharacterBody3D
 var _body_mesh: Node3D
 var _cam: Camera3D
-var _hud: Label
+var _hud: Hud                      # HUD «Сакура и сталь» (hud.gd)
 var _gate_pos := Vector3.ZERO
 var _city_name := ""
 var _yaw := 0.0
@@ -49,13 +50,17 @@ var _lock_mark: MeshInstance3D
 var _rmb := false
 var _cam_lock := 0.0               # 0 — свободная камера, 1 — за плечом при захвате (плавно между)
 var _lock_point := Vector3.ZERO
-var _bars: Control
-var _hp_fill: ColorRect
-var _posture_fill: ColorRect
-var _enemy_panel: Control          # справа: портрет врага, имя, здоровье, концентрация
-var _enemy_hp: ColorRect
-var _enemy_posture: ColorRect
-var _enemy_name: Label
+var _kills := 0
+var _mana := 0                     # мана из повергнутых врагов (распыляются в ману)
+var _xp := 0.0                     # доля до следующего уровня
+var _level := 1
+var _flask := 3                    # заряды эликсира (R)
+var _hp_ghost := 1.0               # розовый «след» недавней потери здоровья на полосе
+var _numbers: Array = []           # цифры урона: {pos: Vector3, v, crit, t}
+var _toast: Dictionary = {}        # уведомление слева: {text, t}
+var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
+var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
+var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -109,6 +114,7 @@ func build(city: Dictionary) -> void:
 	_view.own_world_3d = true
 	_view.msaa_3d = Viewport.MSAA_4X
 	_box.add_child(_view)
+	_map_rects.clear()
 	_make_sky()
 	_make_ground()
 	_make_gate()
@@ -118,16 +124,17 @@ func build(city: Dictionary) -> void:
 	_cam.fov = 65.0
 	_view.add_child(_cam)
 	_cam.current = true
-	_hud = Label.new()
-	_hud.position = Vector2(24, 20)
-	_hud.add_theme_font_size_override("font_size", 18)
-	_hud.add_theme_color_override("font_color", Color(1.0, 0.92, 0.98))
-	_hud.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.12))
-	_hud.add_theme_constant_override("outline_size", 6)
+	_hud = Hud.new()
+	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
 	_yaw = 0.0
 	_near_gate = false
-	_make_bars()
+	_flask = int(_hf("flask_charges", 3.0))
+	_hp_ghost = 1.0
+	_numbers.clear()
+	_toast = {}
+	_hint_t = 25.0
+	_dead_seen.clear()
 	_lock_mark = MeshInstance3D.new()
 	var lm := SphereMesh.new()
 	lm.radius = 0.05
@@ -155,12 +162,11 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _bars]:
+	for n: Node in [_box, _hud]:
 		if is_instance_valid(n):
 			n.queue_free()
 	_goblins.clear()
 	test_mode = false
-	_bars = null
 	_lock = null
 	_box = null
 	_view = null
@@ -210,6 +216,9 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 	mesh.material_override = mat
 	body.add_child(mesh)
 	_view.add_child(body)
+	var big := size.x >= 20.0
+	_map_rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z),
+		Color(0.11, 0.16, 0.35) if big else Color(0.2, 0.27, 0.55)])
 	return body
 
 
@@ -426,11 +435,8 @@ func _physics_process(delta: float) -> void:
 	if _lock != null:
 		var d := _lock.global_position - _player.global_position
 		_yaw = lerp_angle(_yaw, atan2(-d.x, -d.z), minf(1.0, delta * 6.0))
-		_lock_mark.visible = true
-		_lock_mark.global_position = _lock.global_position + Vector3(0.0, 0.85, 0.0)
-	elif is_instance_valid(_lock_mark):
-		_lock_mark.visible = false
-	_update_bars()
+	if is_instance_valid(_lock_mark):
+		_lock_mark.visible = false                   # прицел захвата рисует HUD
 	if _player.position.y < FALL_Y:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
@@ -485,6 +491,8 @@ func _strike(hit: Dictionary) -> void:
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
 		gob.take_damage(float(hit.damage), _player.global_position, bool(hit.get("knock", false)))
+		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
+			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
 
 
 # ---------- бой как в Sekiro ----------
@@ -589,7 +597,7 @@ func _toggle_lock() -> void:
 func _set_lock(t: Node3D) -> void:
 	_lock = t
 	if is_instance_valid(_lock_mark):
-		_lock_mark.visible = t != null
+		_lock_mark.visible = false
 
 
 ## ЛКМ рядом с врагом без равновесия (красная метка) — добивание вместо удара.
@@ -644,7 +652,6 @@ func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
 			_stagger = _hf("guard_break_time", 1.2)
 			_hero.set_block(false)
 			_hero.hurt()
-		_update_bars()
 		return
 	_hp = maxf(0.0, _hp - damage)
 	_posture = minf(HERO_POSTURE, _posture + damage * 0.8)
@@ -653,11 +660,12 @@ func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
 		_hero.hurt()
 	if _hp <= 0.0 and is_instance_valid(_player):
 		_hp = HERO_HP
+		_hp_ghost = 1.0
 		_posture = 0.0
+		_flask = int(_hf("flask_charges", 3.0))
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_update_hud()
-	_update_bars()
 
 
 func _regen_posture(delta: float) -> void:
@@ -698,97 +706,6 @@ func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
 	p.finished.connect(p.queue_free)
 
 
-## Полосы героя внизу: здоровье (красная, слева направо) и концентрация (жёлтая — от середины к краям, как в Sekiro).
-func _make_bars() -> void:
-	_bars = Control.new()
-	_bars.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_bars)
-	for spec: Array in [[0.94, Color(0.1, 0.02, 0.03, 0.8)], [0.9, Color(0.12, 0.09, 0.02, 0.8)]]:
-		var bg := ColorRect.new()
-		bg.color = spec[1]
-		bg.anchor_left = 0.35
-		bg.anchor_right = 0.65
-		bg.anchor_top = spec[0]
-		bg.anchor_bottom = float(spec[0]) + 0.012
-		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_bars.add_child(bg)
-	_hp_fill = ColorRect.new()
-	_hp_fill.color = Color(0.8, 0.1, 0.12)
-	_hp_fill.anchor_left = 0.35
-	_hp_fill.anchor_top = 0.94
-	_hp_fill.anchor_bottom = 0.952
-	_hp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bars.add_child(_hp_fill)
-	_posture_fill = ColorRect.new()
-	_posture_fill.color = Color(1.0, 0.7, 0.15)
-	_posture_fill.anchor_top = 0.9
-	_posture_fill.anchor_bottom = 0.912
-	_posture_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bars.add_child(_posture_fill)
-	_make_enemy_panel()
-	_update_bars()
-
-
-## Справа — тот, с кем бьёмся (захваченный, иначе ближний в бою): портрет, имя, здоровье, концентрация.
-func _make_enemy_panel() -> void:
-	_enemy_panel = Control.new()
-	_enemy_panel.anchor_left = 0.80
-	_enemy_panel.anchor_right = 0.97
-	_enemy_panel.anchor_top = 0.30
-	_enemy_panel.anchor_bottom = 0.56
-	_enemy_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bars.add_child(_enemy_panel)
-	var bg := ColorRect.new()
-	bg.color = Color(0.04, 0.03, 0.08, 0.6)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_enemy_panel.add_child(bg)
-	var pic := TextureRect.new()
-	pic.texture = mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png")))
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.anchor_left = 0.05
-	pic.anchor_right = 0.95
-	pic.anchor_top = 0.04
-	pic.anchor_bottom = 0.66
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_enemy_panel.add_child(pic)
-	_enemy_name = Label.new()
-	_enemy_name.anchor_left = 0.05
-	_enemy_name.anchor_right = 0.95
-	_enemy_name.anchor_top = 0.67
-	_enemy_name.anchor_bottom = 0.77
-	_enemy_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_enemy_name.add_theme_font_size_override("font_size", 18)
-	_enemy_name.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.12))
-	_enemy_name.add_theme_constant_override("outline_size", 6)
-	_enemy_panel.add_child(_enemy_name)
-	_enemy_hp = _panel_bar(0.80, Color(0.8, 0.1, 0.12))
-	_enemy_posture = _panel_bar(0.90, Color(1.0, 0.7, 0.15))
-	_enemy_panel.visible = false
-
-
-func _panel_bar(top: float, color: Color) -> ColorRect:
-	var back := ColorRect.new()
-	back.color = Color(0.1, 0.08, 0.1, 0.9)
-	back.anchor_left = 0.06
-	back.anchor_right = 0.94
-	back.anchor_top = top
-	back.anchor_bottom = top + 0.05
-	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_enemy_panel.add_child(back)
-	var fill := ColorRect.new()
-	fill.color = color
-	fill.anchor_left = 0.06
-	fill.anchor_right = 0.94
-	fill.anchor_top = top
-	fill.anchor_bottom = top + 0.05
-	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_enemy_panel.add_child(fill)
-	return fill
-
-
 func _hud_enemy() -> Goblin:
 	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
 		return _lock as Goblin
@@ -807,43 +724,122 @@ func _hud_enemy() -> Goblin:
 	return best
 
 
-func _update_bars() -> void:
-	if not is_instance_valid(_hp_fill):
-		return
-	_hp_fill.anchor_right = 0.35 + 0.3 * _hp / HERO_HP
-	var half := 0.15 * _posture / HERO_POSTURE
-	_posture_fill.anchor_left = 0.5 - half
-	_posture_fill.anchor_right = 0.5 + half
-	_posture_fill.visible = _posture > 0.5
-	_posture_fill.color = Color(1.0, 0.7 - 0.55 * _posture / HERO_POSTURE, 0.15)
-	for c: ColorRect in [_hp_fill, _posture_fill]:
-		c.offset_left = 0.0
-		c.offset_right = 0.0
-	if not is_instance_valid(_enemy_panel):
-		return
-	var e := _hud_enemy()
-	_enemy_panel.visible = e != null
-	if e == null:
-		return
-	_enemy_name.text = mod.tr_key("pax_rpg_goblin")
-	_enemy_hp.anchor_right = 0.06 + 0.88 * e.hp / Goblin.MAX_HP
-	var pk := e.posture / Goblin.MAX_POSTURE
-	_enemy_posture.anchor_left = 0.5 - 0.44 * pk                # концентрация — от середины, как у героя
-	_enemy_posture.anchor_right = 0.5 + 0.44 * pk
-	_enemy_posture.visible = pk > 0.01
-	_enemy_posture.color = Color(1.0, 0.7 - 0.55 * pk, 0.15)
-
-
 func _update_hud() -> void:
-	if not is_instance_valid(_hud):
+	if is_instance_valid(_hud):
+		_hud_tick(0.0)
+
+
+## Эликсир (R): лечит, зарядов мало — пополняются, когда герой пал и вернулся на старт.
+func _drink() -> void:
+	if _flask <= 0 or _hp >= HERO_HP or _stagger > 0.0 or not is_instance_valid(_player):
 		return
-	var lines := PackedStringArray([_city_name, mod.tr_key("pax_rpg_controls")])
-	if _near_gate:
-		lines.append(mod.tr_key("pax_rpg_gate_hint"))
-	_hud.text = "\n".join(lines)
+	_flask -= 1
+	_hp = minf(HERO_HP, _hp + _hf("flask_heal", 45.0))
+	_sparks(_player.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.55, 0.78), 30, 2.5)
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C]
+func _process(delta: float) -> void:
+	if active and is_instance_valid(_hud):
+		_hud_tick(delta)
+
+
+## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
+func _hud_tick(delta: float) -> void:
+	if not is_instance_valid(_player) or not is_instance_valid(_cam):
+		return
+	for g: Variant in _goblins:
+		if not is_instance_valid(g):
+			continue
+		var gob: Goblin = g
+		var id := gob.get_instance_id()
+		if not gob.is_alive() and not bool(_dead_seen.get(id, false)):
+			_dead_seen[id] = true
+			_kills += 1
+			var gain := int(_hf("mana_per_kill", 25.0))
+			_mana += gain
+			_xp += _hf("xp_per_kill", 0.34)
+			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), gain], "t": 0.0}
+			if _xp >= 1.0:
+				_xp -= 1.0
+				_level += 1
+				_toast = {"text": mod.tr_key("pax_rpg_hud_level_up") % _level, "t": 0.0}
+		elif gob.is_alive():
+			_dead_seen[id] = false
+	var hp := _hp / HERO_HP
+	if hp >= _hp_ghost:
+		_hp_ghost = hp
+	elif _since_hit > 0.6:
+		_hp_ghost = move_toward(_hp_ghost, hp, delta * 0.6)
+	_hint_t = maxf(0.0, _hint_t - delta)
+	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": HERO_HP, "posture": _posture / HERO_POSTURE,
+		"level": _level, "xp": _xp, "mana": _mana, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
+		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
+		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,
+		"hint": mod.tr_key("pax_rpg_controls"), "hint_a": clampf(_hint_t, 0.0, 1.0),
+		"gate_hint": mod.tr_key("pax_rpg_gate_hint") if _near_gate else ""}
+	var targets: Array = []
+	var enemies: Array = []
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var d := gob.global_position.distance_to(_player.global_position)
+		var locked := gob == _lock
+		enemies.append({"pos": Vector2(gob.global_position.x, gob.global_position.z), "locked": locked})
+		if d < 45.0:
+			targets.append({"yaw": _yaw_to(gob), "dist": d, "color": Color(1.0, 0.36, 0.56) if locked
+				else Color(1.0, 0.55, 0.78)})
+	targets.append({"yaw": atan2(-(_gate_pos.x - _player.global_position.x), -(_gate_pos.z - _player.global_position.z)),
+		"dist": Vector2(_gate_pos.x - _player.global_position.x, _gate_pos.z - _player.global_position.z).length(),
+		"color": Color(0.47, 0.84, 1.0), "ring": true})
+	st["targets"] = targets
+	st["enemies"] = enemies
+	var e := _hud_enemy()
+	if e != null:
+		st["enemy"] = {"name": mod.tr_key("pax_rpg_goblin"), "hp": e.hp / Goblin.MAX_HP,
+			"posture": e.posture / Goblin.MAX_POSTURE, "broken": e.can_deathblow()}
+		st["ult"] = e.posture / Goblin.MAX_POSTURE if not e.can_deathblow() else 1.0
+		st["ult_ready"] = e.can_deathblow()
+	if _lock != null and is_instance_valid(_lock):
+		var lp := _lock.global_position + Vector3(0.0, 0.85, 0.0)
+		if not _cam.is_position_behind(lp):
+			st["lock_screen"] = _cam.unproject_position(lp)
+			st["lock_broken"] = (_lock as Goblin).can_deathblow()
+	var nums: Array = []
+	for i: int in range(_numbers.size() - 1, -1, -1):
+		var n: Dictionary = _numbers[i]
+		n.t = float(n.t) + delta
+		if float(n.t) > 1.1:
+			_numbers.remove_at(i)
+			continue
+		var wp: Vector3 = n.pos + Vector3(0.0, float(n.t) * 0.7, 0.0)
+		if _cam.is_position_behind(wp):
+			continue
+		nums.append({"p": _cam.unproject_position(wp), "v": n.v, "crit": n.crit,
+			"a": 1.0 - smoothstep(0.65, 1.1, float(n.t))})
+	st["numbers"] = nums
+	if not _toast.is_empty():
+		_toast.t = float(_toast.t) + delta
+		if float(_toast.t) > 3.5:
+			_toast = {}
+		else:
+			st["toast"] = {"text": _toast.text, "a": 1.0 - smoothstep(2.8, 3.5, float(_toast.t))}
+	var act := _hero.action if _hero != null else ""
+	st["skills"] = [
+		{"k": "斬", "key": mod.tr_key("pax_rpg_key_lmb"), "label": mod.tr_key("pax_rpg_hud_attack"),
+			"on": act in Hero.ATTACKS, "color": Color(1.0, 0.55, 0.78)},
+		{"k": "盾", "key": mod.tr_key("pax_rpg_key_rmb"), "label": mod.tr_key("pax_rpg_hud_block"),
+			"on": _hero != null and _hero.blocking, "color": Color(0.47, 0.84, 1.0)},
+		{"k": "風", "key": "Alt", "label": mod.tr_key("pax_rpg_hud_dodge"), "on": act in ["Dodge", "DodgeArmed"],
+			"color": Color(0.47, 0.84, 1.0)},
+		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
+			"color": Color(1.0, 0.55, 0.78)}]
+	_hud.st = st
+	_hud.refresh()
+
+
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H]
 
 
 func _input(event: InputEvent) -> void:
@@ -878,6 +874,10 @@ func _input(event: InputEvent) -> void:
 			_toggle_lock()                           # захват цели (как в Sekiro)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if key.pressed and not key.echo and key.physical_keycode == KEY_R:
+			_drink()                                 # эликсир
+		if key.pressed and not key.echo and key.physical_keycode == KEY_H:
+			_hint_t = 0.0 if _hint_t > 0.0 else 25.0  # подсказка управления
 		if key.pressed and not key.echo and key.physical_keycode == KEY_C and _hero != null:
 			_hero.toggle_slot("back")                # снять / надеть плащ
 		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):
