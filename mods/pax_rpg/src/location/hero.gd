@@ -1302,7 +1302,7 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 				want = "Block"
 		if anim.current_animation != want or not anim.is_playing():
 			anim.play(want, _f("block_blend", 0.1))
-		anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving and want != "Block" else 1.0
+		anim.speed_scale = clampf(speed / stride, 0.25, 2.0) if moving and want != "Block" else 1.0
 		return
 	if moving:
 		if running:
@@ -1332,7 +1332,7 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
 			bl = _f("blend_stance", 0.45)        # приседает в стойку и выпрямляется плавно
 		anim.play(want, bl)
-	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
+	anim.speed_scale = clampf(speed / stride, 0.25, 2.0) if moving else _f("idle_speed", 1.0)   # стойка/idle — медленнее
 
 
 ## Направление шага по move_dir: ближайшее из вперёд / вправо / назад / влево, но меняется, только когда новое
