@@ -19,5 +19,8 @@
 	"pax_rpg_narrator_enter_4": "Mana mist trembles over the roofs. {city} greets you with the noise of its streets.",
 	"pax_rpg_narrator_leave_1": "You leave the city. The world of Yuruma lies before you again.",
 	"pax_rpg_narrator_leave_2": "The gate closes behind you. Where now?",
-	"pax_rpg_item_cape_black": "Black cape"
+	"pax_rpg_item_cape_black": "Black cape",
+	"pax_rpg_menu_test": "Test: arena",
+	"pax_rpg_goblin": "Goblin",
+	"pax_rpg_hero_hp": "Health"
 }

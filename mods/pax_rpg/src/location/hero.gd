@@ -36,6 +36,7 @@ var _swing: AudioStreamPlayer       # свист меча (sounds/swing_*.wav)
 var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wav)
 var _swing_done := false
 var _impact_done := false
+var _hit_done := false              # удар этого взмаха уже нанесён (tick вернул hit)
 var _skel: Skeleton3D
 var _owner_body: PhysicsBody3D       # капсула персонажа — с ней ткань не сталкивается
 var _items: Dictionary = {}          # config/items.json → items: что вообще можно надеть
@@ -635,6 +636,7 @@ func _play_once(n: String, skip := 0.0) -> void:
 	_queued = false
 	_prev_off = Vector2.ZERO
 	_swing_done = false
+	_hit_done = false
 	_impact_done = false
 	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
 	anim.play(n, _per("blend_in", n, 0.15))
@@ -706,6 +708,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 			_end_action()                    # приземлился — дальше ходьба или стойка
 	if action != "":
 		_sounds()
+		_hit(out)
 		out.root = _root_step()
 	else:
 		_loop(moving, speed, running)
@@ -732,6 +735,21 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
 		anim.play(want, bl)
 	anim.speed_scale = clampf(speed / stride, 0.5, 2.0) if moving else 1.0
+
+
+## Миг удара: середина взмаха (swing_peaks), у финального — касание земли (impact). tick вернёт
+## {"hit": {"range": м, "arc": косинус полуугла перед героем (-1 — круг)}} — location.gd бьёт по врагам.
+func _hit(out: Dictionary) -> void:
+	if _hit_done or action not in ATTACKS:
+		return
+	var imp: Dictionary = meta.get("impact", {})
+	var at := float(imp[action]) if imp.has(action) else float((cfg.get("swing_peaks", {}) as Dictionary).get(action, 0.5))
+	if _pos() < at:
+		return
+	_hit_done = true
+	var ground := imp.has(action)
+	out["hit"] = {"range": _per("hit_range", action, 2.6), "arc": -1.0 if ground else 0.2,
+		"damage": _per("hit_damage", action, 15.0)}
 
 
 func _sounds() -> void:

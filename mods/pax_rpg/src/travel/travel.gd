@@ -54,6 +54,9 @@ func enter(city: Dictionary) -> void:
 func leave() -> void:
 	if loading.busy():
 		return
+	if location.test_mode:
+		location.clear()          # тестовая арена из меню — назад в меню, карта мира не нужна
+		return
 	var cfg := location.cfg
 	loading.run(mod.tr_key("pax_rpg_world_map"), _line("pax_rpg_narrator_leave", LEAVE_LINES, ""),
 		float(cfg.get("loading_seconds", 1.6)) * 0.6, location.clear, _back_on_map)

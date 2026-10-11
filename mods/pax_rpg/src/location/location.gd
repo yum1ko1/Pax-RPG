@@ -11,6 +11,8 @@ const GATE_RADIUS := 2.6           # м, насколько близко к во
 const FALL_Y := -20.0              # упал с платформы — обратно на старт
 const START := Vector3(0.0, 1.2, 8.0)
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
+const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
+const HERO_HP := 100.0
 
 var mod: PaxMod
 var cfg: Dictionary = {}
@@ -35,6 +37,9 @@ var _lmb_queued := false           # удар (ЛКМ) — до следующе
 var _space_down := false
 var _alt_down := false             # уворот — по нажатию Alt, не по удержанию
 var game: PaxGame                  # задаёт travel.gd: пока мы на локации, время мира стоит
+var test_mode := false             # тестовая арена из главного меню (герой + гоблин), выход — обратно в меню
+var _goblins: Array = []
+var _hp := HERO_HP
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -55,8 +60,22 @@ func _f(key: String, fallback: float) -> float:
 
 # ---------- построить и убрать ----------
 
+## Кнопка «Тест» главного меню: арена — та же площадка, герой и гоблин; ворота возвращают в меню.
+func build_test() -> void:
+	build({"id": "test"})
+	test_mode = true
+	_city_name = mod.tr_key("pax_rpg_menu_test")
+	var g := Goblin.new()
+	g.setup(mod, _player, _on_hero_hit, START + Vector3(0.0, -1.0, -9.0))
+	_view.add_child(g)
+	_goblins.append(g)
+	_update_hud()
+
+
 func build(city: Dictionary) -> void:
 	clear()
+	test_mode = false
+	_hp = HERO_HP
 	_city_name = mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
 	_box = SubViewportContainer.new()
 	_box.stretch = true
@@ -96,6 +115,8 @@ func clear() -> void:
 	for n: Node in [_box, _hud]:
 		if is_instance_valid(n):
 			n.queue_free()
+	_goblins.clear()
+	test_mode = false
 	_box = null
 	_view = null
 	_player = null
@@ -302,6 +323,8 @@ func _physics_process(delta: float) -> void:
 	if _hero != null:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		var step: Vector3 = r.root
+		if r.has("hit"):
+			_strike(r.hit)
 		if step != Vector3.ZERO and delta > 0.0:
 			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
 			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
@@ -333,10 +356,41 @@ func _follow_camera() -> void:
 	_cam.look_at(target, Vector3.UP)
 
 
+## Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
+func _strike(hit: Dictionary) -> void:
+	var fwd := -_body_mesh.global_transform.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var to := gob.global_position - _player.global_position
+		to.y = 0.0
+		var d := to.length()
+		if d > float(hit.range) + 0.35:
+			continue
+		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
+			continue
+		gob.take_damage(float(hit.damage), _player.global_position)
+
+
+## Гоблин попал: урон герою; кончились силы — снова на старте, полные.
+func _on_hero_hit(damage: float) -> void:
+	_hp = maxf(0.0, _hp - damage)
+	if _hp <= 0.0 and is_instance_valid(_player):
+		_hp = HERO_HP
+		_player.position = START
+		_player.velocity = Vector3.ZERO
+	_update_hud()
+
+
 func _update_hud() -> void:
 	if not is_instance_valid(_hud):
 		return
 	var lines := PackedStringArray([_city_name, mod.tr_key("pax_rpg_controls")])
+	if test_mode:
+		lines.append("%s %d / %d" % [mod.tr_key("pax_rpg_hero_hp"), ceili(_hp), int(HERO_HP)])
 	if _near_gate:
 		lines.append(mod.tr_key("pax_rpg_gate_hint"))
 	_hud.text = "\n".join(lines)

@@ -27,6 +27,7 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
+	Pax.add_menu_item("pax_rpg_test", tr_key("pax_rpg_menu_test"), _open_test_arena)
 
 
 func _mod_unloaded() -> void:
@@ -39,3 +40,8 @@ func _mod_unloaded() -> void:
 func _world_ready(g: PaxGame) -> void:
 	planet.start(g)
 	travel.start(g)
+
+
+## Кнопка «Тест» в главном меню: сразу тестовая арена (герой + гоблин), без карты мира.
+func _open_test_arena() -> void:
+	location.build_test()

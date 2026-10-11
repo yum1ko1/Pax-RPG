@@ -19,5 +19,8 @@
 	"pax_rpg_narrator_enter_4": "Над крышами дрожит мановый туман. {city} встречает вас шумом улиц.",
 	"pax_rpg_narrator_leave_1": "Вы покидаете город. Мир Юрумы снова лежит перед вами.",
 	"pax_rpg_narrator_leave_2": "Ворота закрываются за спиной. Куда теперь?",
-	"pax_rpg_item_cape_black": "Чёрный плащ"
+	"pax_rpg_item_cape_black": "Чёрный плащ",
+	"pax_rpg_menu_test": "Тест: арена",
+	"pax_rpg_goblin": "Гоблин",
+	"pax_rpg_hero_hp": "Здоровье"
 }
