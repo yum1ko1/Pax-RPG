@@ -1,5 +1,5 @@
 {
-	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь). kind: cape — плащ своей тканью: grid — сетка (json из build_cape.py), coarse — грубая решётка, которая движется (остальная сетка гладко повторяет её), max_dist — насколько низ может отойти от места на теле (у плеч 0), follow / follow_hem — пружина к месту на теле у верха и у подола (меньше у подола — больше инерции, плащ отлетает), damping — сколько скорости остаётся за шаг (меньше — вязче), top_bone / side_bones / low_bone — кости, с которыми едут середина верха, углы верха (левое, правое плечо) и низ; cloth — ткань SoftBody3D (pin_bones, pin_band, mass, stiffness…); rigid — жёсткая вещь на кости bone. name — ключ строки в data/lang.",
+	"_note": "Вещи героя (src/location/hero.gd: equip / unequip, «C» — снять / надеть плащ). Каждая сделана в позе покоя модели героя и в её осях (Blender: pax_rpg/dev/blender/knight/build_*.py). slot — куда надевается (в слоте одна вещь). kind: cape — плащ своей тканью: grid — сетка (json из build_cape.py), coarse — грубая решётка, которая движется (остальная сетка гладко повторяет её), max_dist — насколько низ может отойти от места на теле (у плеч 0), follow / follow_hem — пружина к месту на теле у верха и у подола (меньше у подола — больше инерции, плащ отлетает), damping — сколько скорости остаётся за шаг (меньше — вязче), top_bone / side_bones / low_bone — кости, с которыми едут середина верха, углы верха (левое, правое плечо) и низ; cloth — ткань SoftBody3D (pin_bones, pin_band, mass, stiffness…); rigid — жёсткая вещь на кости bone. name — ключ строки в data/lang. texture / normal — ткань (Meshy), lining — цвет подкладки, collar — [назад от шеи, вниз, полуширина] — верх плаща пришит «за шиворот», плюс валик-воротник и фибулы.",
 	"items": {
 		"cape_black": {
 			"name": "pax_rpg_item_cape_black",
@@ -21,6 +21,18 @@
 			"side_bones": [
 				"LeftShoulder",
 				"RightShoulder"
+			],
+			"texture": "models/items/cape_black.jpg",
+			"normal": "models/items/cape_black_n.jpg",
+			"lining": [
+				0.32,
+				0.05,
+				0.1
+			],
+			"collar": [
+				0.075,
+				0.035,
+				0.11
 			]
 		}
 	}

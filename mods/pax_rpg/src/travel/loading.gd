@@ -1,26 +1,29 @@
 extends CanvasLayer
 ## Экран загрузки между картой мира и локацией. Фон — арт (textures/loading/art_*.jpg, медленно наезжает),
 ## сверху вниз: название места, строка рассказчика; внизу — чёрный воин на колене в кольце загрузки.
-## Каждые 20 % в него вонзается катана (звон, искры, вздрагивает); на 100 % — пять катан, воин падает, и от
-## места, где он лёг, экран «расползается» (shaders/reveal.gdshader) — под ним уже игра.
+## Каждые 20 % в него вонзается катана (звон, искры, вздрагивает); на 100 % — пять катан, и воин падает замертво
+## (покадровая анимация: textures/loading/death_sheet.png — рыцарь мода с анимацией смерти Meshy, отрисованный
+## силуэтом в Blender, pax_rpg/dev/blender/knight/death_frames.py; катаны едут за его костями из death.json).
+## От места, где он лёг, экран «расползается» (shaders/reveal.gdshader) — под ним уже игра.
 ## run(): появление → middle (построить / убрать локацию, пока экран закрыт) → катаны → падение → done.
 
 const Katana := preload("res://mods/pax_rpg/src/ui/katana.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const FADE := 0.35
 const ARTS := 4
-# катаны: точка попадания на воине (доли картинки), откуда летит (угол от точки), сколько клинка в теле
-const HITS := [[0.52, 0.3, -2.25], [0.6, 0.4, -0.85], [0.45, 0.45, -2.75], [0.56, 0.24, -1.45], [0.5, 0.55, -0.45]]
-const PIVOT := Vector2(0.24, 0.97)        # колено/ступня впереди — вокруг неё он падает (доли картинки)
-const HIP := Vector2(0.55, 0.6)           # поясница: вокруг неё оседает корпус
-const WAIST := 0.6                        # выше — корпус (оседает), ниже — ноги
+# катаны: отрезок между костями (от нижней к верхней), где на нём, угол рукояти к отрезку (рад)
+const HITS := [["Spine02", "Spine01", 0.5, 0.85], ["Spine01", "Spine", 0.4, -0.8], ["Spine", "neck", 0.3, 1.45],
+	["Hips", "Spine02", 0.7, -1.5], ["Spine01", "Spine", 0.85, 0.3]]
+const KNEEL := Vector2(0.75, 0.55)        # середина воина на колене (доли кадра) — центр кольца
+const FIG := 0.82                         # доля высоты кадра, которую занимает воин на колене
 
 var mod: PaxMod
 var _stage: Control
 var _text: Label
 var _busy := false
 var _art: Texture2D
-var _warrior: Texture2D
+var _sheet: Texture2D               # кадры смерти
+var _anim: Dictionary = {}          # death.json: frames, cols, rows, cell, bones
 var _title := ""
 var _t := 0.0                      # с от начала показа
 var _p := 0.0                      # прогресс 0..1
@@ -58,7 +61,9 @@ func setup(m: PaxMod = null) -> void:
 	_text.add_theme_font_override("font", _serif)
 	if mod == null:
 		return
-	_warrior = mod.texture("textures/loading/warrior.png")
+	_sheet = mod.texture("textures/loading/death_sheet.png")
+	var parsed: Variant = JSON.parse_string(mod.read_text("textures/loading/death.json"))
+	_anim = parsed if parsed is Dictionary else {}
 	var sh: Shader = mod.shader("shaders/reveal.gdshader")
 	if sh != null:
 		var mat := ShaderMaterial.new()
@@ -123,8 +128,8 @@ func run(title: String, text: String, seconds: float, middle: Callable, done: Ca
 	tw.tween_callback(middle)                         # строим за закрытым экраном (кадры на миг замрут)
 	tw.tween_property(self, "_p", 1.0, maxf(seconds, 2.5)).set_trans(Tween.TRANS_SINE)
 	tw.tween_interval(0.3)
-	tw.tween_property(self, "_die", 1.0, 1.7)
-	tw.parallel().tween_callback(_sfx.bind(_thud)).set_delay(1.3)
+	tw.tween_property(self, "_die", 1.0, 2.2)
+	tw.parallel().tween_callback(_sfx.bind(_thud)).set_delay(1.25)
 	tw.tween_interval(0.2)
 	tw.tween_method(_set_reveal, 0.0, 2.2, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_finish.bind(done))
@@ -193,46 +198,52 @@ func _h() -> float:
 	return _stage.get_viewport_rect().size.y
 
 
-## Рамка воина на экране: позиция картинки (левый верх) и размер.
+## Кадр воина на экране (весь кадр листа; воин на колене — по центру внизу).
 func _warrior_rect() -> Rect2:
 	var vs := _stage.get_viewport_rect().size
-	var h := vs.y * 0.2
-	var w := h * (630.0 / 729.0)
-	return Rect2(Vector2(vs.x * 0.5 - w * 0.5, vs.y * 0.955 - h), Vector2(w, h))
+	var cell: Array = _anim.get("cell", [418, 300])
+	var h := vs.y * 0.2 / FIG
+	var w := h * float(cell[0]) / float(cell[1])
+	return Rect2(Vector2(vs.x * 0.5 - KNEEL.x * w, vs.y * 0.955 - h), Vector2(w, h))
 
 
-## Смерть по фазам (_die 0..1): дрожь, корпус оседает вперёд вокруг поясницы, тело заваливается вокруг колена,
-## отскок о землю.
-func _slump() -> float:
-	var f := clampf((_die - 0.42) / 0.36, 0.0, 1.0)
-	return -0.45 * smoothstep(0.12, 0.42, _die) - 0.75 * f * f       # корпус оседает, потом лицом в землю
+## Номер кадра: дрожь (первые 12 %) — кадр 0, потом вся анимация падения.
+func _frame() -> int:
+	var n := int(_anim.get("frames", 1))
+	var k := clampf((_die - 0.12) / 0.88, 0.0, 1.0)
+	return mini(int(k * n), n - 1)
 
 
-func _fall_angle() -> float:
-	var f := clampf((_die - 0.42) / 0.36, 0.0, 1.0)
-	_fall = f * f
-	var bounce := 0.0
-	if _die > 0.78:
-		var b := (_die - 0.78) / 0.22
-		bounce = 0.09 * sin(b * PI) * (1.0 - b)
-	var shiver := sin(_t * 55.0) * 0.025 * (1.0 - smoothstep(0.0, 0.2, _die)) * float(_die > 0.0)
-	return -0.5 * _fall + bounce + shiver + sin(_t * 60.0) * 0.02 * _shake
+func _shiver() -> Vector2:
+	var s := sin(_t * 60.0) * _shake * 3.0
+	if _die > 0.0 and _die < 0.12:
+		s += sin(_t * 70.0) * 2.5
+	return Vector2(s, 0.0)
 
 
-## Поворот куска тела в точке uv (корпус — ещё и оседание).
-func _rot_at(uv: Vector2) -> float:
-	return _fall_angle() + (_slump() if uv.y < WAIST else 0.0)
-
-
-## Точка картинки воина (доли) → экран, с оседанием корпуса, падением, отскоком и дрожью.
-func _body_point(uv: Vector2) -> Vector2:
+## Кость в текущем кадре → экран.
+func _bone(name: String) -> Vector2:
+	var bones: Array = _anim.get("bones", [])
 	var r := _warrior_rect()
-	var p := r.position + uv * r.size
-	if uv.y < WAIST:
-		var hip := r.position + HIP * r.size
-		p = hip + (p - hip).rotated(_slump())
-	var pivot := r.position + PIVOT * r.size
-	return pivot + (p - pivot).rotated(_fall_angle())
+	if bones.is_empty():
+		return r.position + KNEEL * r.size
+	var fr: Dictionary = bones[_frame()]
+	var b: Array = fr.get(name, [KNEEL.x, KNEEL.y])
+	return r.position + Vector2(float(b[0]), float(b[1])) * r.size + _shiver()
+
+
+## Где на теле катана и куда смотрит её рукоять.
+func _hit_pose(i: int) -> Array:
+	var hit: Array = HITS[i]
+	var a := _bone(str(hit[0]))
+	var b := _bone(str(hit[1]))
+	var seg := (b - a).angle() if a.distance_to(b) > 0.5 else -PI * 0.5
+	return [a.lerp(b, float(hit[2])), seg + float(hit[3])]
+
+
+## Точка на экране для «расползания» — где он лёг (таз в последнем кадре).
+func _body_point(_uv: Vector2) -> Vector2:
+	return _bone("Spine02")
 
 
 func _draw_stage() -> void:
@@ -283,58 +294,47 @@ func _draw_stage() -> void:
 	_text.size = Vector2(vs.x * 0.6, h * 0.08)
 	_draw_ring(h)
 	# подсветка за воином (чёрный силуэт на тёмном арте иначе не читается)
-	var glow_c := _warrior_rect().position + Vector2(0.5, 0.55) * _warrior_rect().size
+	var wr := _warrior_rect()
+	var glow_c := wr.position + KNEEL * wr.size
 	for g: int in 10:
 		var rr := h * (0.16 - g * 0.013)
-		_stage.draw_circle(glow_c, rr, Color(1.0, 0.45, 0.72, 0.035 * (1.0 - _fall * 0.7)))
+		_stage.draw_circle(glow_c, rr, Color(1.0, 0.45, 0.72, 0.035 * (1.0 - _die * 0.6)))
 	# катаны — ПОЗАДИ воина: часть клинка в теле скрыта силуэтом, острие выходит с другой стороны
 	for s: Dictionary in _stuck:
-		var hit: Array = HITS[int(s.i)]
-		var uv := Vector2(float(hit[0]), float(hit[1]))
+		var pose := _hit_pose(int(s.i))
+		var entry: Vector2 = pose[0]
+		var ang := float(pose[1])
+		var dir := Vector2.from_angle(ang)                   # от острия к рукояти
 		var age := _t - float(s.t)
-		var entry := _body_point(uv)
-		var from_ang := float(hit[2]) + _rot_at(uv)
-		var dir := Vector2.from_angle(from_ang)              # от острия к рукояти
 		var k := clampf(age / 0.16, 0.0, 1.0)
 		k = 1.0 - pow(1.0 - k, 3.0)
-		var tip := entry - dir * h * 0.075 + dir * h * 0.6 * (1.0 - k)   # насквозь на 7.5 % высоты экрана
-		Katana.draw(_stage, tip, from_ang, h * 0.17, 1.0, 0.0, "", null, 0, 1.0, false, true)
-	# воин: ноги и корпус отдельно (корпус оседает вокруг поясницы), куски чуть перекрываются — шва не видно
-	if _warrior != null:
-		var r := _warrior_rect()
-		var ts := _warrior.get_size()
-		var pivot := r.position + PIVOT * r.size
-		var hip := r.position + HIP * r.size
-		var fa := _fall_angle()
-		var lo := WAIST - 0.03
-		_stage.draw_set_transform(pivot, fa, Vector2.ONE)
-		_stage.draw_texture_rect_region(_warrior, Rect2(r.position + Vector2(0, lo * r.size.y) - pivot,
-			Vector2(r.size.x, (1.0 - lo) * r.size.y)), Rect2(0, lo * ts.y, ts.x, (1.0 - lo) * ts.y))
-		var hp := pivot + (hip - pivot).rotated(fa)
-		_stage.draw_set_transform(hp, fa + _slump(), Vector2.ONE)
-		var hi := WAIST + 0.03
-		_stage.draw_texture_rect_region(_warrior, Rect2(r.position - hip, Vector2(r.size.x, hi * r.size.y)),
-			Rect2(0, 0, ts.x, hi * ts.y))
-		_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var tip := entry - dir * h * 0.06 + dir * h * 0.6 * (1.0 - k)
+		Katana.draw(_stage, tip, ang, h * 0.17, 1.0, 0.0, "", null, 0, 1.0, false, true)
+	# воин — кадр листа
+	if _sheet != null and not _anim.is_empty():
+		var cols := int(_anim.get("cols", 8))
+		var cell: Array = _anim.get("cell", [418, 300])
+		var f := _frame()
+		var src := Rect2(float((f % cols) * int(cell[0])), float((f / cols) * int(cell[1])), float(cell[0]), float(cell[1]))
+		_stage.draw_texture_rect_region(_sheet, Rect2(wr.position + _shiver(), wr.size), src)
 	for s: Dictionary in _stuck:                            # искры удара — поверх
-		var hit: Array = HITS[int(s.i)]
 		var age := _t - float(s.t)
 		if age > 0.16 and age < 0.5:
-			var target := _body_point(Vector2(float(hit[0]), float(hit[1])))
+			var target: Vector2 = _hit_pose(int(s.i))[0]
 			var a := 1.0 - (age - 0.16) / 0.34
 			for j: int in 9:
 				var d := Vector2.from_angle(j * 0.7 + float(s.i)) * h * 0.05 * (1.0 - a + 0.2)
 				_stage.draw_line(target + d * 0.5, target + d, Color(1.0, 0.55, 0.8, a), 2.0, true)
-	if _die > 0.74:                                         # пыль от удара о землю — мягкое облако
-		var b := (_die - 0.74) / 0.26
-		var ground := _body_point(Vector2(0.3, 0.3))
+	if _die > 0.62:                                         # пыль от удара о землю — мягкое облако
+		var b := (_die - 0.62) / 0.38
+		var ground := _bone("Spine01")
 		ground.y = _warrior_rect().end.y
 		for j: int in 22:
 			var hsh := fmod(sin(j * 12.9898) * 43758.5453, 1.0)
 			var dx := (float(j) / 21.0 - 0.5) * h * 0.26 * (0.5 + b * 0.8)
 			var rr := h * (0.02 + 0.02 * absf(hsh)) * (0.6 + b * 1.4)
 			var up := h * 0.03 * b * absf(hsh)
-			_stage.draw_circle(ground + Vector2(dx, -rr * 0.4 - up), rr, Color(0.62, 0.56, 0.6, 0.09 * (1.0 - b)))
+			_stage.draw_circle(ground + Vector2(dx, -rr * 0.4 - up), rr, Color(0.62, 0.56, 0.6, 0.05 * (1.0 - b)))
 	_draw_flash(vs)
 
 
@@ -345,9 +345,9 @@ func _draw_flash(vs: Vector2) -> void:
 
 func _draw_ring(h: float) -> void:
 	var wr := _warrior_rect()
-	var c := wr.position + Vector2(0.5, 0.55) * wr.size
+	var c := wr.position + KNEEL * wr.size
 	var r := h * 0.135
-	var fade := 1.0 - _fall
+	var fade := 1.0 - smoothstep(0.1, 0.5, _die)
 	if fade <= 0.0:
 		return
 	_stage.draw_arc(c, r, 0.0, TAU, 96, Color(0.47, 0.84, 1.0, 0.18 * fade), 3.0, true)

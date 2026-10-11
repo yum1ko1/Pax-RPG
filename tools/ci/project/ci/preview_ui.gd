@@ -7,7 +7,7 @@ var out_dir := "/tmp"
 var frame := 0
 var loading: Node
 var title: Node
-const SHOTS := {230: "loading_a", 262: "loading_b", 300: "loading_c", 330: "loading_d", 352: "loading_e", 372: "loading_f", 392: "loading_g", 430: "loading_h"}
+const SHOTS := {200: "loading_a", 262: "loading_b", 295: "loading_c", 315: "loading_d", 335: "loading_e", 355: "loading_f", 380: "loading_g", 420: "loading_h"}
 
 
 func _initialize() -> void:
