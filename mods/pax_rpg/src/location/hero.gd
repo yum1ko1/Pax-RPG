@@ -199,7 +199,7 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	_owner_body = owner_body
 	# меч за спиной — чуть дальше от спины, поверх плаща (иначе клинок тонет в ткани)
 	if _sword_back != null and _sword_back.is_inside_tree() and _sword_back.get_parent() is Node3D:
-		var back := model.global_transform.basis.z.normalized() * _f("sword_back_out", 0.09)
+		var back := -model.global_transform.basis.z.normalized() * _f("sword_back_out", 0.09)   # спина — −Z модели
 		_sword_back.position += (_sword_back.get_parent() as Node3D).global_transform.basis.inverse() * back
 	for id: Variant in cfg.get("equipped", []):
 		equip(str(id))
@@ -841,7 +841,7 @@ func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
 
 ## Капсулы тела (таз, спина, бёдра, голени) — о них бьётся ткань; персонажа и мир они не трогают.
 func _make_body_colliders() -> void:
-	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.15],
+	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.1],
 			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
 			["LeftLeg", "LeftFoot", 0.08], ["RightLeg", "RightFoot", 0.08]]:
 		var ia := _skel.find_bone(str(d[0]))
