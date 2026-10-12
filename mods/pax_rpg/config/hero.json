@@ -10,7 +10,7 @@
 	"armed_speed_factor": 0.85,
 	"stride_walk": 0.96,
 	"stride_walk_armed": 1.15,
-	"stride_run": 5.5,
+	"stride_run": 5.79,
 	"jump_speed": 6.0,
 	"combo_cancel": {
 		"Attack1": 0.3,
