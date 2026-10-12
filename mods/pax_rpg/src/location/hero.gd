@@ -400,6 +400,9 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	for p: Variant in pts:
 		var a: Array = p
 		rest.append(Vector3(float(a[0]), float(a[1]), float(a[2])))
+	var lift: Array = it.get("lift", [0.0, 0.0, 0.0])            # весь плащ: вверх к плечам и назад (м)
+	for k: int in rest.size():
+		rest[k] += Vector3(float(lift[0]), float(lift[1]), float(lift[2]))
 	# «за шиворот»: середина верхнего края — к основанию шеи сзади (сетка лежала на плечах впереди шеи),
 	# три ряда ниже плавно тянутся следом; края у плеч остаются на месте
 	var half0 := 0.1
