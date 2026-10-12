@@ -30,8 +30,14 @@ func _view(from: Vector3, to: Vector3) -> void:
 
 func _tick() -> void:
 	frame += 1
+	if frame == 60:
+		var hh: Object = loc.get("_hero")
+		print("DBG equip ", hh.call("equip", "cape_black"))
 	if frame == 90:
 		_view(Vector3(0, 0.9, 2.6), Vector3(0, 0.6, 0))      # сзади (герой смотрит на −Z)
+	if frame == 99:
+		var h: Object = loc.get("_hero")
+		print("DBG hero=", h, " worn=", (h.get("_worn") as Dictionary).keys() if h else null, " items=", (h.get("_items") as Dictionary).keys() if h else null, " model=", h.get("model") if h else null)
 	if frame == 100:
 		_shot("cape_back")
 	if frame == 101:
@@ -42,6 +48,19 @@ func _tick() -> void:
 		_view(Vector3(0.4, 0.9, -2.2), Vector3(0, 0.7, 0))
 	if frame == 120:
 		_shot("cape_front")
+	if frame == 125:
+		var hm: Node3D = (loc.get("_hero") as Object).get("model")
+		var bz := hm.global_transform.basis.z.normalized()
+		var hp := hm.global_position
+		var pl: Node3D = loc.get("_player")
+		var o := hp - pl.global_position
+		for k: int in 2:
+			var d := bz * (1.6 if k == 0 else -1.6)
+			loc.set("_cine", [[hp.x + d.x, hp.y + 1.5, hp.z + d.z], [hp.x, hp.y + 1.2, hp.z]])
+			await process_frame
+			await process_frame
+			await process_frame
+			_shot("cape_rear%d" % k)
 	if frame == 121:
 		_view(Vector3(0.9, 1.05, 1.0), Vector3(0, 0.75, 0))
 	if frame == 130:
