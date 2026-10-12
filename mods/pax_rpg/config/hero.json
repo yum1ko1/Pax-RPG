@@ -134,7 +134,7 @@
 	"equipped": [
 		"cape_black"
 	],
-	"cloth_body_scale": 1.5,
+	"cloth_body_scale": 1.1,
 	"trail_life": 0.2,
 	"trail_speed": 4.0,
 	"trail_alpha": 0.6,
