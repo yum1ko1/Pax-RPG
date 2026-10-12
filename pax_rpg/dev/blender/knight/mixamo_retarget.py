@@ -189,4 +189,31 @@ bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_animation_mo
                           export_image_format="JPEG", export_jpeg_quality=88)
 json.dump({c: round((n - 1) / FPS, 3) for c, (_, n) in made.items()},
           open(os.path.splitext(OUT)[0] + "_mixamo.json", "w"))
+
+
+# Blender при экспорте сдвигает узлы мечей (дети костей) по высоте — вернуть их TRS из исходного glb
+def _glb(path):
+    import struct
+    b = open(path, "rb").read()
+    n = struct.unpack_from("<I", b, 12)[0]
+    return json.loads(b[20:20 + n]), b[20 + n:]
+
+
+def _fix_swords():
+    import struct
+    src, _ = _glb(KNIGHT)
+    dst, rest = _glb(OUT)
+    keep = {n["name"]: n for n in src["nodes"] if n.get("name", "").startswith("Sword_")}
+    for n in dst["nodes"]:
+        if n.get("name") in keep:
+            for k in ("translation", "rotation", "scale"):
+                if k in keep[n["name"]]:
+                    n[k] = keep[n["name"]][k]
+    js = json.dumps(dst, separators=(",", ":")).encode()
+    js += b" " * ((4 - len(js) % 4) % 4)
+    body = struct.pack("<II", len(js), 0x4E4F534A) + js + rest
+    open(OUT, "wb").write(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
+
+
+_fix_swords()
 print("exported", OUT, sorted(final), flush=True)
