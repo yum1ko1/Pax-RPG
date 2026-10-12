@@ -75,6 +75,8 @@ made = {}
 for clip, (fname, mirror, inplace) in CLIPS.items():
     before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=os.path.join(FBX, fname))
+    src_fps = sc.render.fps / sc.render.fps_base          # импорт FBX ставит сцене частоту файла (Mixamo — 60)
+    sc.render.fps, sc.render.fps_base = FPS, 1.0          # иначе экспорт сожмёт ВСЕ клипы рыцаря по времени
     new = [o for o in bpy.data.objects if o not in before]
     src = [o for o in new if o.type == "ARMATURE"][0]
     sact = src.animation_data.action
@@ -94,11 +96,12 @@ for clip, (fname, mirror, inplace) in CLIPS.items():
     rig.animation_data.action = act
     if hasattr(rig.animation_data, "action_slot") and len(getattr(act, "slots", [])):
         rig.animation_data.action_slot = act.slots[0]
-    n_out = int((f1 - f0) / 2) + 1
+    step = max(1, round(src_fps / FPS))                  # кадры источника на один кадр рыцаря (60 → 30: 2)
+    n_out = int((f1 - f0) / step) + 1
     first_h = None
     last_h = None
     for k in range(n_out):
-        fs = f0 + k * 2
+        fs = f0 + k * step
         sc.frame_set(fs)
         spose = {p.name: (SW @ p.matrix) for p in src.pose.bones}
         for tn in order:

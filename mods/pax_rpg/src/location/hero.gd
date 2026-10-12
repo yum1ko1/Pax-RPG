@@ -197,6 +197,10 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	if _skel != null:
 		_skel.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
 	_owner_body = owner_body
+	# меч за спиной — чуть дальше от спины, поверх плаща (иначе клинок тонет в ткани)
+	if _sword_back != null and _sword_back.is_inside_tree() and _sword_back.get_parent() is Node3D:
+		var back := model.global_transform.basis.z.normalized() * _f("sword_back_out", 0.09)
+		_sword_back.position += (_sword_back.get_parent() as Node3D).global_transform.basis.inverse() * back
 	for id: Variant in cfg.get("equipped", []):
 		equip(str(id))
 	_make_trail()
@@ -858,7 +862,6 @@ func _make_body_colliders() -> void:
 		body.add_child(sh)
 		model.add_child(body)
 		_colliders.append([body, ia, ib])
-	_sword_collider()
 	_move_colliders()
 
 
