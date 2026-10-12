@@ -3,6 +3,9 @@ var _lang: Dictionary = {}
 var _settings: Dictionary = {}
 func path(relative: String) -> String:
 	return "res://mods/%s/%s" % [id if id != "" else "pax_rpg", relative]
+func read_bytes(relative: String) -> PackedByteArray:
+	var p := path(relative)
+	return FileAccess.get_file_as_bytes(p) if FileAccess.file_exists(p) else PackedByteArray()
 func read_text(relative: String) -> String:
 	var p := path(relative)
 	return FileAccess.get_file_as_string(p) if FileAccess.file_exists(p) else ""

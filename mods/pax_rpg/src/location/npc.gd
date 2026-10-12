@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## Мирный житель (гоблин): ходит по маршрутам улиц из планировки города («paths»: ломаные XZ), иногда
 ## останавливается поглазеть; на героя не нападает, обходить его не умеет — просто ждёт, если упёрся.
 ## Модель и клипы — как у гоблина-врага (models/goblin/), без боя.
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const DIR := "models/goblin/"
@@ -36,18 +37,19 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	shape.shape = cap
 	shape.position = Vector3(0, 0.55, 0)
 	add_child(shape)
-	_model = mod.model(DIR + "goblin_rigged.glb")
+	_model = Assets.model(mod, DIR + "goblin_rigged.glb")
 	if _model == null:
 		return
 	_model.scale = Vector3.ONE * rng.randf_range(0.85, 1.1)
 	add_child(_model)
+	Assets.track(DIR + "goblin_rigged.glb", _model)
 	_anim = _find(_model)
 	if _anim != null:
 		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	if _anim != null:
 		var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 		for clip: String in ["walk", "idle"]:
-			var src := mod.model(DIR + clip + ".glb")
+			var src := Assets.model(mod, DIR + clip + ".glb")
 			if src == null:
 				continue
 			var a := _find(src)

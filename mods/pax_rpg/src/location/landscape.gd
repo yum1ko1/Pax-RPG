@@ -2,6 +2,7 @@ extends RefCounted
 ## Мир за частоколом: степь холмами до горизонта, три гряды гор со снежными шапками (дымка тумана делает их
 ## синими и далёкими), кочевые юрты на холмах. Без коллизий — герой за стену не выходит. Высоты — шум
 ## (FastNoiseLite), город — в плоской «чаше» (land: [центр X, центр Z, полуширина, полуглубина]).
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 
 var mod: PaxMod
 var root: Node3D
@@ -146,7 +147,7 @@ func _camps() -> void:
 			var x := cx + rng.randf_range(-14.0, 14.0)
 			var z := cz + rng.randf_range(-14.0, 14.0)
 			var y := yurt_y(x, z)
-			var m := mod.model("models/gharn/props/" + ("yurt_large.glb" if rng.randf() < 0.3 else "yurt_small.glb"))
+			var m := Assets.model(mod, "models/gharn/props/" + ("yurt_large.glb" if rng.randf() < 0.3 else "yurt_small.glb"))
 			if m == null:
 				return
 			m.position = Vector3(x, y, z)

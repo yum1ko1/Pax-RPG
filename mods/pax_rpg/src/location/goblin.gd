@@ -4,6 +4,7 @@ extends CharacterBody3D
 ## отход. Концентрация (posture): копится от парирований и ударов героя, переполнилась (или кончилось здоровье) —
 ## гоблин теряет равновесие, его можно добить (deathblow). Гибель — тело рассыпается маной.
 ## Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const DIR := "models/goblin/"
@@ -89,13 +90,14 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	shape.shape = cap
 	shape.position = Vector3(0.0, 0.55, 0.0)
 	add_child(shape)
-	_model = mod.model(DIR + "goblin_rigged.glb")
+	_model = Assets.model(mod, DIR + "goblin_rigged.glb")
 	if _model == null:
 		mod.log_warning("Pax RPG: goblin model did not load — the goblin is a box")
 		_model = MeshInstance3D.new()
 		(_model as MeshInstance3D).mesh = BoxMesh.new()
 		(_model as MeshInstance3D).position = Vector3(0.0, 0.55, 0.0)
 	add_child(_model)
+	Assets.track(DIR + "goblin_rigged.glb", _model)
 	_model_y = _model.position.y
 	_anim = _find_anim(_model)
 	if _anim != null:
@@ -123,7 +125,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 func _add_clips() -> void:
 	var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 	for clip: String in CLIPS:
-		var src := mod.model(DIR + CLIPS[clip])
+		var src := Assets.model(mod, DIR + CLIPS[clip])
 		if src == null:
 			continue
 		var from := _find_anim(src)

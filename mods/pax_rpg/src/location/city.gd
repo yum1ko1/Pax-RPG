@@ -1,4 +1,5 @@
 extends RefCounted
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 ## Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py):
 ## земля, модели (glb мода) и простые блоки (терраса, пандус, холм). Одинаковые модели ставятся пачкой —
@@ -588,7 +589,7 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 
 ## Торговец за прилавком: гоблин с анимацией покоя (модель и клип — как у мирных жителей), смотрит на покупателей.
 func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
-	var m := mod.model("models/goblin/goblin_rigged.glb")
+	var m := Assets.model(mod, "models/goblin/goblin_rigged.glb")
 	if m == null:
 		return
 	var rng := RandomNumberGenerator.new()
@@ -597,8 +598,9 @@ func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
 	m.rotation.y = deg_to_rad(ry)
 	m.scale = Vector3.ONE * rng.randf_range(0.9, 1.1)
 	root.add_child(m)
+	Assets.track("models/goblin/goblin_rigged.glb", m)
 	var ap := _find_player(m)
-	var src := mod.model("models/goblin/idle.glb")
+	var src := Assets.model(mod, "models/goblin/idle.glb")
 	if ap != null and src != null:
 		var sa := _find_player(src)
 		if sa != null and sa.get_animation_list().size() > 0:
@@ -663,13 +665,14 @@ func _leaves(list: Array) -> void:
 
 ## Животное (буйвол): своя копия модели, клипы anim по очереди со случайной паузой — пасётся, оглядывается.
 func _animal(path: String, pos: Vector3, ry: float, sc: float, clips: Array, col: Array) -> void:
-	var m := mod.model(path)
+	var m := Assets.model(mod, path)
 	if m == null:
 		return
 	m.position = pos
 	m.rotation.y = deg_to_rad(ry)
 	m.scale = Vector3.ONE * sc
 	root.add_child(m)
+	Assets.track(path, m)
 	count += 1
 	var ap := _find_player(m)
 	if ap != null and not clips.is_empty():
@@ -830,7 +833,7 @@ func _small_prop(path: String) -> float:
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
 func _place(path: String, list: Array) -> void:
-	var src := mod.model(path)
+	var src := Assets.model(mod, path)
 	if src == null:
 		mod.log_warning("Pax RPG city: no model " + path)
 		return
@@ -904,6 +907,10 @@ func _place(path: String, list: Array) -> void:
 			root.add_child(body)
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
+	var pts: Array = []
+	for e: Array in list:
+		pts.append((e[0] as Transform3D).origin)
+	Assets.track(path, null, pts)                        # стриминг текстур: где стоят копии
 	src.free()
 
 

@@ -21,6 +21,7 @@ const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Music := preload("res://mods/pax_rpg/src/location/music.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
@@ -286,9 +287,10 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music]:
 		if is_instance_valid(n):
 			n.queue_free()
+	Assets.clear_tracking(mod)
 	_goblins.clear()
 	test_mode = false
 	_lock = null
@@ -1064,7 +1066,16 @@ func _drink() -> void:
 	_sparks(_player.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.55, 0.78), 30, 2.5)
 
 
+var _stream_t := 0.0
+
+
 func _process(delta: float) -> void:
+	_stream_t -= delta
+	if active and _stream_t <= 0.0 and is_instance_valid(_cam):
+		_stream_t = 0.5
+		var t0 := Time.get_ticks_usec()
+		Assets.stream_tick(mod, _cam.global_position)        # полные текстуры — только вблизи камеры
+		Prof.add("стриминг", t0)
 	if active and is_instance_valid(_hud):
 		var t0 := Time.get_ticks_usec()
 		_hud_tick(delta)

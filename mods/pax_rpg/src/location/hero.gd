@@ -4,6 +4,7 @@ extends RefCounted
 ## Удары ведёт root motion (смещение таза вынуто при сборке — pax_rpg/dev/blender/knight/*.py → *_anim.json):
 ## инерция меча тянет персонажа. Удар без продолжения кончается сразу после взмаха и плавно уходит в стойку.
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
@@ -61,9 +62,10 @@ var _mod: PaxMod
 func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	cfg = c
 	_mod = mod
-	model = mod.model(str(cfg.get("model", "models/hero_simple.glb")))
+	model = Assets.model(mod, str(cfg.get("model", "models/hero_simple.glb")))
 	if model == null:
 		return null
+	Assets.track(str(cfg.get("model", "models/hero_simple.glb")), model)
 	var mp := str(cfg.get("anim_meta", ""))
 	if mp != "":
 		var parsed: Variant = JSON.parse_string(mod.read_text(mp))
@@ -315,7 +317,7 @@ func toggle_slot(slot: String) -> void:
 
 ## Сетка предмета из glb и её положение в осях сцены glb.
 func _load_mesh(path: String) -> Array:
-	var src := _mod.model(path)
+	var src := Assets.model(_mod, path)
 	if src == null:
 		return []
 	var mi: MeshInstance3D = null
@@ -816,7 +818,7 @@ static func _cr_at(g: PackedVector3Array, i: int, nx: int, nz: int, t: float, al
 
 func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
 	var bi := _skel.find_bone(str(it.get("bone", "Head")))
-	var src := _mod.model(str(it.get("model", "")))
+	var src := Assets.model(_mod, str(it.get("model", "")))
 	if src == null or bi < 0:
 		if src != null:
 			src.free()
