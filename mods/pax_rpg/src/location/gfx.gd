@@ -78,15 +78,16 @@ func _f(key: String, fallback: float) -> float:
 ## Сглаживание и чёткость — до первого кадра локации.
 func apply_viewport(v: SubViewport) -> void:
 	view = v
-	match str(cfg.get("aa", "taa")):
+	match str(cfg.get("aa", "fsr2")):
 		"taa":
 			v.msaa_3d = Viewport.MSAA_DISABLED
 			v.use_taa = true
-		"fsr2":                                          # своё временное сглаживание + рендер в меньшем размере
-			v.msaa_3d = Viewport.MSAA_DISABLED
+		"fsr2":                                          # FSR 2: при fsr_scale 1.0 — сглаживание в родном разрешении,
+			v.msaa_3d = Viewport.MSAA_DISABLED                # заметно резче TAA движка (+ своя резкость)
 			v.use_taa = false
 			v.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
-			v.scaling_3d_scale = clampf(_f("fsr_scale", 0.77), 0.5, 1.0)
+			v.scaling_3d_scale = clampf(_f("fsr_scale", 1.0), 0.5, 1.0)
+			v.fsr_sharpness = _f("fsr_sharpness", 0.15)    # 0 — резче всего, 2 — без повышения резкости
 		_:
 			v.msaa_3d = Viewport.MSAA_2X
 	v.use_debanding = _b("debanding", true)
@@ -110,48 +111,66 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 		env.ssil_radius = 4.0
 		env.ssil_intensity = _f("ssil_intensity", 1.0)
 		env.ssil_normal_rejection = 1.0
-	env.fog_height = _f("fog_height", 6.0)               # у земли дымка гуще: улицы вдали тонут мягче
-	env.fog_height_density = _f("fog_height_density", 0.008)
+	# Туман как в The Witcher 3 / Sekiro / Arc Raiders: вблизи (до fog_begin) чисто, дальше дымка растёт,
+	# горы уходят в цвет неба, но силуэт читается. Глубинный туман (начало и конец в метрах), а не экспонента от
+	# камеры; слоя «у земли» нет (город целиком ниже его — была муть у самого героя); объёмный — тонкий, для лучей.
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = _f("fog_begin", 35.0)
+	env.fog_depth_end = _f("fog_end", 1500.0)
+	env.fog_depth_curve = _f("fog_curve", 1.8)           # >1 — средние планы чище, дымка набирает к дали
+	env.fog_density = _f("fog_max", 0.85)                # сколько дымки на самом конце (горы — ~0.6–0.8)
+	env.fog_aerial_perspective = _f("fog_aerial", 0.75)  # даль берёт цвет неба — синеет/розовеет, а не сереет
+	env.fog_sky_affect = _f("fog_sky", 0.15)
+	env.fog_height = _f("fog_height", -2.0)              # лёгкая дымка только в низинах степи
+	env.fog_height_density = _f("fog_height_density", 0.0)
 	env.volumetric_fog_anisotropy = _f("fog_anisotropy", 0.6)   # против солнца — видимые лучи
+	# свечение: узкие ореолы (ближние уровни), только яркое — огонь, мана, солнце в металле
+	env.glow_intensity = _f("glow", 0.55)
+	env.glow_hdr_threshold = 1.0
+	env.glow_hdr_scale = _f("glow_scale", 1.4)
+	var levels := [0.0, 1.0, 0.8, 0.45, 0.15, 0.0, 0.0]
+	for i: int in 7:
+		env.set_glow_level(i, float(levels[i]))
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = _b("auto_exposure", true)
 	ca.auto_exposure_scale = _f("exposure_scale", 0.4)
 	ca.auto_exposure_speed = _f("exposure_speed", 0.6)
 	ca.auto_exposure_min_sensitivity = _f("exposure_min_iso", 60.0)     # узкий диапазон: не больше ±1 ступени
 	ca.auto_exposure_max_sensitivity = _f("exposure_max_iso", 180.0)
-	var far := _f("dof_far", 80.0)
+	var far := _f("dof_far", 0.0)                        # по умолчанию без размытия дали — дымка сама отделяет планы
 	if far > 0.0:
 		ca.dof_blur_far_enabled = true
 		ca.dof_blur_far_distance = far
 		ca.dof_blur_far_transition = _f("dof_far_transition", 70.0)
 		ca.dof_blur_amount = _f("dof_amount", 0.04)
 	we.camera_attributes = ca
-	var mb := _f("motion_blur", 0.0)                     # по умолчанию выкл.: с отдельным потоком рендера висло
-	if _fplus and mb > 0.0:
-		_mb = MotionBlur.new()
-		_mb.shutter = mb
-		var comp := Compositor.new()
-		comp.compositor_effects = [_mb]
-		we.compositor = comp
 
 
-## Облака и блики — эффекты игры на камеру (их у камеры свой Compositor — он главнее окружения, поэтому размытие
-## в движении переезжает в конец его списка). Игрок выключил эффект в настройках — его просто нет.
+## Облака, блики и размытие в движении — эффекты в потоке рендера. Ставятся ПОСЛЕ загрузки (location.gd →
+## _check_ready, через полсекунды), а не посреди стройки: в 0.3.5 игра зависла ровно в миг, когда их вешали на камеру
+## во время загрузки. Каждый шаг пишет в журнал — если повиснет снова, последняя строка покажет виновника.
+## У камеры свой Compositor (главнее окружения): размытие в движении — в конец его списка.
 func apply_camera(c: Camera3D, s: DirectionalLight3D) -> void:
 	cam = c
-	var t0 := Time.get_ticks_msec()
-	if _b("clouds", false) and Pax.graphics.available("clouds"):   # выкл. по умолчанию — см. config gfx._note
+	if not is_instance_valid(c) or not c.is_inside_tree():
+		return
+	if _b("clouds", true) and Pax.graphics.available("clouds"):
+		print("[pax_rpg] fx: clouds…")
 		_clouds = Pax.graphics.clouds(c, {"clouds_coverage": _f("clouds_coverage", 0.42)})
-	print("[pax_rpg] load: clouds %d ms" % (Time.get_ticks_msec() - t0))
-	t0 = Time.get_ticks_msec()
-	if _b("lens", false) and Pax.graphics.available("lens"):
+	if _b("lens", true) and Pax.graphics.available("lens"):
+		print("[pax_rpg] fx: lens…")
 		_lens = Pax.graphics.lens(c, {"sun_color": Color(1.0, 0.82, 0.64, 0.22)}, s)
-	print("[pax_rpg] load: lens %d ms" % (Time.get_ticks_msec() - t0))
-	if _mb != null and c.compositor != null:
+	var mb := _f("motion_blur", 0.35)
+	if _fplus and mb > 0.0:
+		print("[pax_rpg] fx: motion blur…")
+		_mb = MotionBlur.new()
+		_mb.shutter = mb
+		if c.compositor == null:
+			c.compositor = Compositor.new()
 		var list: Array[CompositorEffect] = c.compositor.compositor_effects
-		if not list.has(_mb):
-			list.append(_mb)
-			c.compositor.compositor_effects = list
+		list.append(_mb)
+		c.compositor.compositor_effects = list
+	print("[pax_rpg] fx: camera effects on")
 
 
 func _drop_camera_effects() -> void:
@@ -240,6 +259,7 @@ func _lamp_shadows() -> void:
 		if not is_instance_valid(ol):
 			continue
 		ol.light_size = 0.12                             # мягкий край тени фонаря
+		ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # фонарь подсвечивает воздух рядом, а не туманный шар
 		var d := ol.global_position.distance_to(cp)
 		if ol.visible and ol.light_energy > 0.1 and d < 35.0:
 			near.append([d, ol])
@@ -314,10 +334,10 @@ var _fogs_made := false
 ## Дымка у живого огня: эллипсоид тумана вокруг каждого костра и жаровни (виден при объёмном тумане).
 func _fire_fog() -> void:
 	_fogs_made = true
-	if not _fplus or _f("fire_fog", 0.35) <= 0.0:
+	if not _fplus or _f("fire_fog", 0.06) <= 0.0:
 		return
 	var fm := FogMaterial.new()
-	fm.density = _f("fire_fog", 0.35)
+	fm.density = _f("fire_fog", 0.06)                    # лёгкий ореол в воздухе, а не светящийся шар
 	fm.albedo = Color(1.0, 0.86, 0.76)
 	fm.height_falloff = 0.6
 	fm.edge_fade = 0.6
@@ -328,7 +348,7 @@ func _fire_fog() -> void:
 			continue
 		var fv := FogVolume.new()
 		fv.shape = RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
-		fv.size = Vector3(3.6, 3.0, 3.6)
+		fv.size = Vector3(2.2, 2.0, 2.2)
 		fv.material = fm
 		ol.get_parent().add_child(fv)
 		fv.global_position = ol.global_position + Vector3(0, 0.4, 0)

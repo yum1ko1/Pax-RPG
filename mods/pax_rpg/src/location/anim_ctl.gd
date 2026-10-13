@@ -118,6 +118,13 @@ func setup(p: AnimationPlayer, spaces: Dictionary) -> void:
 	p.active = false
 	tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	tree.active = true
+	# начальные состояния переключателей — явно: у нового AnimationNodeTransition состояние пустое, вывод — без позы
+	# (герой стоял в T-позе, пока «достать меч» не переключало mode туда и обратно)
+	if not _loops.is_empty():
+		tree.set("parameters/loop_tr/transition_request", _loops[0])
+	tree.set("parameters/act_tr/transition_request", "a")
+	tree.set("parameters/mode/transition_request", "loop")
+	tree.advance(0.0)
 	set_physics_process(true)
 
 

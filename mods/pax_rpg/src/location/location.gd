@@ -299,7 +299,7 @@ func build(city: Dictionary) -> void:
 	_view.add_child(_cam)
 	_cam.current = true
 	_mark("player, enemies")
-	_gfx.apply_camera(_cam, _sun)                    # объёмные облака и блики солнца игры
+	_gfx.cam = _cam
 	_gfx.player = _player
 	_gfx.lights = _city_lights
 	_gfx.daynight = _daynight
@@ -399,6 +399,9 @@ func _check_ready(gen: int) -> void:
 	if gen == _build_gen and _build_finished and (_grass == null or _grass.done) and building:
 		building = false
 		_mark("ready (grass %d)" % (_grass.count if _grass != null else 0))
+		get_tree().create_timer(0.5).timeout.connect(func() -> void:   # облака, блики, размытие — уже после загрузки
+			if gen == _build_gen and is_instance_valid(_gfx):
+				_gfx.apply_camera(_cam, _sun))
 
 
 ## Журнал загрузки (godot.log): этап и секунды от начала — видно, где загрузка теряет время.
@@ -1454,12 +1457,12 @@ func _apply_volfog(v: float) -> void:
 	var on := v > 0.01 and RenderingServer.get_current_rendering_method() == "forward_plus"
 	_env.volumetric_fog_enabled = on
 	if on:
-		_env.volumetric_fog_density = 0.004 + 0.016 * v
-		_env.volumetric_fog_albedo = Color(1.0, 0.86, 0.92)
+		_env.volumetric_fog_density = 0.0005 + 0.0035 * v  # тонкий: лучи и ореолы огней, а не стена (0.5 → 0.0023)
+		_env.volumetric_fog_albedo = Color(0.95, 0.9, 0.93)
 		_env.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
-		_env.volumetric_fog_length = 48.0
+		_env.volumetric_fog_length = 64.0
 		_env.volumetric_fog_detail_spread = 2.0
-		_env.volumetric_fog_ambient_inject = 0.15
+		_env.volumetric_fog_ambient_inject = 0.05
 		_env.volumetric_fog_sky_affect = 0.0
 
 
