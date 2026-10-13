@@ -4,12 +4,13 @@ extends RefCounted
 ## тумана делает их синими и далёкими), кочевые юрты на холмах. Без коллизий — герой за стену не выходит. Высоты — шум
 ## (FastNoiseLite), город — в плоской «чаше» (land: [центр X, центр Z, полуширина, полуглубина]).
 ##
-## Загрузка: сетки считаются в потоке (Pax.jobs.background, compute — чистая функция) и запоминаются (_cache) —
+## Загрузка: сетки считаются в потоке (bg.gd, compute — чистая функция) и запоминаются (_cache) —
 ## request() зовут ещё на глобусе (location.prewarm), к входу в город всё готово; повторный вход — без расчёта.
 ## build() — сопрограмма: ждёт данные кадрами (экран загрузки не замирает), потом только собирает сетки.
 ## Степь — CHUNKS×CHUNKS кусков, горы — SECTORS секторов: вне кадра и за камерой не рисуются (frustum).
 ## Нормали — по соседним точкам общей сетки высот: на стыках кусков нет швов света.
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
+const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 
 const STEPPE_SIZE := 1400.0
 const STEPPE_N := 140
@@ -42,13 +43,14 @@ static func request(area: Rect2) -> void:
 	if _cache.has(key) or _pending.has(key):
 		return
 	_pending[key] = true
-	if Pax.jobs == null:                                  # нет системы потоков — считаем сразу
-		_cache[key] = compute(area)
-		_pending.erase(key)
-		return
-	Pax.jobs.background(func() -> Dictionary: return compute(area), func(res: Variant) -> void:
-		_cache[key] = res
-		_pending.erase(key))
+	_run_request(area, key)
+
+
+## Сопрограмма: поток считает, кадры идут; ответ — в _cache (ошибка в потоке — считаем здесь).
+static func _run_request(area: Rect2, key: String) -> void:
+	var res: Variant = await Bg.run(func() -> Variant: return compute(area))
+	_cache[key] = res if res is Dictionary else compute(area)
+	_pending.erase(key)
 
 
 static func ready_for(area: Rect2) -> bool:
@@ -189,7 +191,7 @@ func build(m: PaxMod, parent: Node3D, area: Rect2) -> void:
 	while not ready_for(area):
 		if not is_instance_valid(root) or not root.is_inside_tree():
 			return
-		if Time.get_ticks_msec() - t0 > 20000:              # поток так и не ответил — считаем здесь, но не виснем
+		if Time.get_ticks_msec() - t0 > 30000:              # поток так и не ответил — считаем здесь, но не виснем
 			_cache[str(area)] = compute(area)
 			break
 		await root.get_tree().process_frame

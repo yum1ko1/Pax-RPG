@@ -4,10 +4,11 @@ extends RefCounted
 ## реже на тропах (G), не растёт под постройками (прямоугольники city.rects) и на песке арены.
 ## Ветер, волны по полю и топтание героем — shaders/grass.gdshader. Конфиг — config/location.json → gfx.
 ##
-## Загрузка: где расти — чистый расчёт в потоке (Pax.jobs.background → compute), результат — готовые буферы
+## Загрузка: где расти — чистый расчёт в потоке (bg.gd → compute), результат — готовые буферы
 ## MultiMesh (16 чисел на пучок: матрица и цвет) — ставятся одним присваиванием, без цикла по копиям.
 ## Буферы запоминаются (_cache): повторный вход в город — без расчёта.
 
+const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 const CELL := 16.0
 const OCC := 0.5                   # м на клетку карты занятости
 
@@ -17,7 +18,8 @@ var count := 0
 var done := false                  # трава поставлена (или её нет)
 
 
-## Запустить: расчёт в потоке, потом трава встаёт под parent и зовётся on_done(). Если уже считали — сразу.
+## Запустить (сопрограмма, можно не ждать): расчёт в потоке, потом трава встаёт под parent и зовётся on_done().
+## Если уже считали — сразу.
 func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dictionary, on_done: Callable) -> void:
 	var density := float(cfg.get("grass_density", 6.0))
 	var sh: Shader = mod.shader("shaders/grass.gdshader")
@@ -40,16 +42,12 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 		_spawn(parent, _cache[key], sh, fade_end)
 		_finish(on_done)
 		return
-	if Pax.jobs == null:
-		_cache[key] = compute(input)
-		_spawn(parent, _cache[key], sh, fade_end)
-		_finish(on_done)
-		return
-	Pax.jobs.background(func() -> Dictionary: return compute(input), func(res: Variant) -> void:
+	var res: Variant = await Bg.run(func() -> Variant: return compute(input))
+	if res is Dictionary:
 		_cache[key] = res
 		if is_instance_valid(parent) and parent.is_inside_tree():
 			_spawn(parent, res as Dictionary, sh, fade_end)
-		_finish(on_done))
+	_finish(on_done)                                     # ошибка в потоке — без травы, но загрузка не виснет
 
 
 func _finish(on_done: Callable) -> void:
