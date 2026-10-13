@@ -14,6 +14,7 @@ A = sys.argv[sys.argv.index("--") + 1:]
 KNIGHT, GRID, ITEMS, OUT = A[0], A[1], A[2], A[3]
 os.makedirs(OUT, exist_ok=True)
 CLIPS = [("Idle", 0.5), ("IdleArmed", 0.5), ("CombatIdle", 0.5), ("WalkArmed", 0.3)]
+TOPS = A[4].split(",") if len(A) > 4 else []
 G2B = Matrix(((1, 0, 0), (0, 0, -1), (0, 1, 0)))          # glTF (Y вверх) → Blender (Z вверх)
 
 for o in list(bpy.data.objects):
@@ -39,7 +40,7 @@ def delta(name):
     return bone(name) @ bone(name, False).inverted()
 
 
-def targets(hang):
+def targets(hang, top=None):
     rest = [p.copy() for p in rest0]
     lift = it.get("lift", [0, 0, 0])
     lv = G2B @ Vector(lift)
@@ -55,7 +56,7 @@ def targets(hang):
         for j in range(4):
             rest[j * nx + i] += dd * (1.0 - j / 4.0)
     half = max(0.1, max(abs(rest[i].x) for i in range(nx)))
-    t_top, t_low = delta(it.get("top_bone", "Spine")), delta(it.get("low_bone", "Hips"))
+    t_top, t_low = delta(top or it.get("top_bone", "Spine")), delta(it.get("low_bone", "Hips"))
     sb = it.get("side_bones", ["LeftShoulder", "RightShoulder"])
     t_l, t_r = delta(sb[0]), delta(sb[1])
     zl = t_low.to_3x3() @ Vector((0, -1, 0))               # «вперёд» glTF +Z = Blender −Y
@@ -112,10 +113,18 @@ for clip, frac in CLIPS:
     f = a.frame_range[0] + (a.frame_range[1] - a.frame_range[0]) * frac
     sc.frame_set(int(f))
     bpy.context.view_layer.update()
-    obs = [grid_obj(targets(0.0), "old", (1, 0.2, 0.2, 1)), grid_obj(targets(float(it.get("hang", 0.75))), "new", (0.2, 0.9, 0.3, 1))]
-    for view, loc, rot in [("side", (2.6, 0, 1.1), (math.radians(90), 0, math.radians(90))),
-                           ("back", (0, 2.6, 1.1), (math.radians(90), 0, math.radians(180)))]:
-        cam.location, cam.rotation_euler = loc, rot
+    if TOPS:
+        cols = [(1, 0.2, 0.2, 1), (0.2, 0.9, 0.3, 1), (0.2, 0.4, 1, 1)]
+        obs = [grid_obj(targets(0.75, t), t, cols[i % 3]) for i, t in enumerate(TOPS)]
+    else:
+        obs = [grid_obj(targets(0.0), "old", (1, 0.2, 0.2, 1)), grid_obj(targets(float(it.get("hang", 0.75))), "new", (0.2, 0.9, 0.3, 1))]
+    fz = delta("Hips").to_3x3() @ Vector((0, -1, 0))      # куда смотрит таз
+    yaw0 = math.atan2(fz.x, -fz.y)
+    hp = bone("Hips").translation
+    for view, ang in [("side", yaw0 + math.radians(90)), ("back", yaw0 + math.radians(180))]:
+        d = Vector((math.sin(ang), -math.cos(ang), 0.0))
+        cam.location = Vector((hp.x, hp.y, 1.1)) + d * 2.6
+        cam.rotation_euler = (math.radians(90), 0, math.atan2(d.x, -d.y) + math.radians(180))
         for ob in obs:
             ob.hide_render = False
         sc.render.filepath = os.path.join(OUT, f"cape_{clip}_{view}.png")
