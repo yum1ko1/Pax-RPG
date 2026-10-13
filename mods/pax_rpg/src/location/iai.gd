@@ -20,9 +20,10 @@ const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const LINES := 20
 const T_DRAW := 1.0
 const T_STOP := 1.25
-const T_LINES := 1.65
-const STOP_IN := 0.35           # с — мир уходит в остановку
-const REWIND := 0.9             # с — перемотка
+# остановка и перемотка идут ровно столько, сколько их звуки (iai_timestop / iai_rewind): эффект нарастает
+# под звук остановки, линии — после него, эффект спадает под звук «время вновь идёт»
+var _stop_in := 0.35            # с — мир уходит в остановку
+var _rewind := 0.9              # с — перемотка
 const RAMP := 0.7               # с — время разгоняется после перемотки
 const REACH := 12.0             # м — кого достают разрезы
 
@@ -90,12 +91,19 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 		add_child(p)
 		_snd[n] = p
 	# расписание линий: 1.0, 0.8, 0.64 … (не меньше 0.12 с)
-	var at := T_LINES
+	_stop_in = _len("timestop", _stop_in)
+	_rewind = _len("rewind", _rewind)
+	var at := T_STOP + _stop_in + 0.15
 	var gap := 1.0
 	for i: int in LINES:
 		_times.append(at)
 		at += gap
 		gap = maxf(0.12, gap * 0.8)
+
+
+func _len(n: String, fallback: float) -> float:
+	var p: AudioStreamPlayer = _snd.get(n)
+	return p.stream.get_length() if p != null and p.stream != null else fallback
 
 
 func _play(n: String, pitch := 1.0) -> void:
@@ -117,7 +125,7 @@ func start() -> bool:
 	_lines = []
 	_victims = []
 	_shake = 0.0
-	_t_end = _times[LINES - 1] + 0.65 + 0.2 + REWIND + RAMP + 1.6
+	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + RAMP + 1.6
 	_attach_katana()
 	return true
 
@@ -138,7 +146,7 @@ func _process(delta: float) -> void:
 	var last := _times[LINES - 1]
 	var t_flash := last + 0.65
 	var t_rewind := t_flash + 0.2
-	var t_ramp := t_rewind + REWIND
+	var t_ramp := t_rewind + _rewind
 	var t_sheathe := t_ramp + 0.15
 	_once("draw", T_DRAW, func() -> void:
 		_play("draw")
@@ -160,12 +168,12 @@ func _process(delta: float) -> void:
 	# шейдер: остановка → держим → перемотка
 	var k := 0.0
 	if t >= T_STOP:
-		k = smoothstep(T_STOP, T_STOP + STOP_IN, t) * (1.0 - smoothstep(t_rewind, t_rewind + REWIND, t))
+		k = smoothstep(T_STOP, T_STOP + _stop_in, t) * (1.0 - smoothstep(t_rewind, t_rewind + _rewind, t))
 	var wave := -1.0
-	if t >= T_STOP and t < T_STOP + 0.9:
-		wave = (t - T_STOP) * 1.6
-	elif t >= t_rewind and t < t_rewind + REWIND:
-		wave = 1.4 * (1.0 - (t - t_rewind) / REWIND)              # волна схлопывается обратно к герою
+	if t >= T_STOP and t < T_STOP + _stop_in:
+		wave = 1.44 * (t - T_STOP) / _stop_in                       # волна расходится, пока звучит остановка
+	elif t >= t_rewind and t < t_rewind + _rewind:
+		wave = 1.4 * (1.0 - (t - t_rewind) / _rewind)              # волна схлопывается обратно к герою
 	var flash := 0.0
 	if t >= t_flash:
 		flash = 0.55 * exp(-(t - t_flash) * 9.0)
@@ -317,7 +325,7 @@ func _draw() -> void:
 	var last := _times[LINES - 1]
 	var t_flash := last + 0.65
 	var t_rewind := t_flash + 0.2
-	var fade := 1.0 - smoothstep(t_rewind, t_rewind + REWIND * 0.7, _t)
+	var fade := 1.0 - smoothstep(t_rewind, t_rewind + _rewind * 0.7, _t)
 	var boom := exp(-maxf(0.0, _t - t_flash) * 6.0) if _t >= t_flash else 0.0
 	for ln: Dictionary in _lines:
 		var age := _t - float(ln.t0)
