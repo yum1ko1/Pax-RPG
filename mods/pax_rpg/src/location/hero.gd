@@ -1525,6 +1525,15 @@ func _iai_tick() -> void:
 		_end_action()
 
 
+## Сидя: убрать катану в ножны (клип IaiSheathe), потом iai_end — встать.
+func iai_sheathe() -> void:
+	if action != "Iai" or not has("IaiSheathe"):
+		return
+	_iai_stage = 3
+	anim.play("IaiSheathe", 0.25)
+	anim.speed_scale = 1.0
+
+
 func iai_end() -> void:
 	if action != "Iai":
 		return

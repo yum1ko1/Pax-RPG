@@ -24,6 +24,8 @@ const T_STOP := 1.25
 # под звук остановки, линии — после него, эффект спадает под звук «время вновь идёт»
 var _stop_in := 0.35            # с — мир уходит в остановку
 var _rewind := 0.9              # с — перемотка
+var _sheathe_len := 2.2         # с — клинок в ножны (звук iai_sheathe и клип IaiSheathe)
+const SHEATHE_OUT := 0.24       # м — насколько выдвинут клинок, когда правая рука берёт рукоять
 const RAMP := 0.7               # с — время разгоняется после перемотки
 const REACH := 12.0             # м — кого достают разрезы
 
@@ -93,6 +95,7 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 	# расписание линий: 1.0, 0.8, 0.64 … (не меньше 0.12 с)
 	_stop_in = _len("timestop", _stop_in)
 	_rewind = _len("rewind", _rewind)
+	_sheathe_len = _len("sheathe", _sheathe_len)
 	var at := T_STOP + _stop_in + 0.15
 	var gap := 1.0
 	for i: int in LINES:
@@ -125,7 +128,7 @@ func start() -> bool:
 	_lines = []
 	_victims = []
 	_shake = 0.0
-	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + RAMP + 1.6
+	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + 0.15 + _sheathe_len + 1.6
 	_attach_katana()
 	return true
 
@@ -164,7 +167,7 @@ func _process(delta: float) -> void:
 	_once("rewind", t_rewind, func() -> void: _play("rewind"))
 	_once("ramp", t_ramp, _unfreeze_start)
 	_once("sheathe", t_sheathe, _sheathe)
-	_once("rise", t_sheathe + 0.35, func() -> void: _hero.iai_end())
+	_once("rise", t_sheathe + _sheathe_len + 0.1, func() -> void: _hero.iai_end())
 	# шейдер: остановка → держим → перемотка
 	var k := 0.0
 	if t >= T_STOP:
@@ -344,20 +347,30 @@ func _draw() -> void:
 
 # ---------- финал ----------
 
+## Сидя на колене: правая рука берёт рукоять (клинок выдвинут на SHEATHE_OUT), ведёт клинок в ножны, левая держит
+## ножны (клип IaiSheathe, iai_sheathe.py — та же кривая выдвижения); щелчок цубы — враги падают.
 func _sheathe() -> void:
 	_play("sheathe")
-	_shake = 1.6
-	if _blade != null:
-		var tw := create_tween()
-		tw.tween_property(_blade, "position:z", 0.0, 0.1).set_ease(Tween.EASE_IN)
-		tw.tween_callback(_play.bind("tsuba"))           # цуба встала к ножнам — щелчок
-	for v: Variant in _victims:
-		if is_instance_valid(v) and _on_cut.is_valid():
-			_on_cut.call(v)
+	_hero.iai_sheathe()
 	_unfreeze_all()
 	cam_override = false
 	if _set_hud.is_valid():
 		_set_hud.call(true)
+	if _blade != null:
+		var tw := create_tween()
+		tw.tween_property(_blade, "position:z", SHEATHE_OUT, 0.2).set_ease(Tween.EASE_OUT)
+		tw.tween_interval(maxf(0.0, _sheathe_len * 0.12 - 0.2))
+		tw.tween_property(_blade, "position:z", 0.0, _sheathe_len * 0.73).set_trans(Tween.TRANS_SINE) \
+			.set_ease(Tween.EASE_IN_OUT)
+		tw.tween_callback(_click)
+
+
+func _click() -> void:
+	_play("tsuba")                                      # цуба встала к ножнам — щелчок
+	_shake = 1.6
+	for v: Variant in _victims:
+		if is_instance_valid(v) and _on_cut.is_valid():
+			_on_cut.call(v)
 
 
 func _finish(interrupted: bool) -> void:
