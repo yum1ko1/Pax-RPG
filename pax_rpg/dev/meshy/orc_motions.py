@@ -18,19 +18,19 @@ ORC = ("A huge muscular red-skinned orc champion, very heavy and powerful, holdi
        "hand")
 JOBS = {
     "orc_ChargeStart": (RIG_ORC, ORC + " stops, lowers his head and shoulders, stamps one foot hard on the ground twice "
-                        "like a bull, roars, then leans forward ready to charge.", 1.8),
+                        "like a bull, roars, then leans forward ready to charge.", 2.0),
     "orc_ChargeRun": (RIG_ORC, ORC + " charges forward running heavily like a raging bull, body leaning far forward, "
                       "left shoulder lowered in front as a battering ram, axe held back, huge powerful strides. "
-                      "Seamless loop.", 1.2),
+                      "Seamless loop.", 2.0),
     "orc_ChargeHit": (RIG_ORC, ORC + " running forward slams his lowered shoulder into an enemy with full weight, "
                       "stops abruptly, stumbles one heavy step, straightens up and turns back into a fighting stance.",
-                      1.8),
+                      2.0),
     "orc_Death": (RIG_ORC, ORC + " is mortally wounded: drops the axe, staggers back, falls heavily to his knees, "
                   "then collapses face down on the ground and lies still.", 3.0),
     "knight_Knocked": (RIG_KNIGHT, KNIGHT + " is rammed in the chest by a huge charging enemy: he is thrown backward "
-                       "off his feet, flies back, lands hard flat on his back and lies stunned for a moment.", 1.8),
+                       "off his feet, flies back, lands hard flat on his back and lies stunned for a moment.", 2.0),
     "knight_GetUp": (RIG_KNIGHT, KNIGHT + " lying flat on his back on the ground quickly rolls to his side, pushes "
-                     "himself up with one hand and gets back on his feet into a combat guard with the greatsword.", 2.2),
+                     "himself up with one hand and gets back on his feet into a combat guard with the greatsword.", 2.5),
 }
 
 
