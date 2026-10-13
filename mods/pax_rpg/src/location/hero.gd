@@ -1322,8 +1322,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_block_t += delta
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
-	if action != "" and not anim.is_playing():
-		_end_action()                        # сигнал конца не пришёл — не застрять
+	if action != "" and action != "Iai" and not anim.is_playing():
+		_end_action()                        # сигнал конца не пришёл — не застрять (Иай ведёт стадии сам)
 	if action in ATTACKS:
 		var i := ATTACKS.find(action)
 		# комбо: следующий удар — с точки отмены, и сразу с замаха, без долгой подготовки
@@ -1517,11 +1517,12 @@ func iai_begin() -> bool:
 
 
 func _iai_tick() -> void:
-	if _iai_stage == 0 and _pos() >= anim.current_animation_length - 0.02:
+	var over := not anim.is_playing() or _pos() >= anim.current_animation_length - 0.02
+	if _iai_stage == 0 and over:
 		_iai_stage = 1
 		anim.play("IaiHold", 0.1)
 		anim.speed_scale = 1.0
-	elif _iai_stage == 2 and _pos() >= anim.current_animation_length - 0.03:
+	elif _iai_stage == 2 and over:
 		_end_action()
 
 
