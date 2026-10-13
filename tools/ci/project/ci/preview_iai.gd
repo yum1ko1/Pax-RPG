@@ -38,6 +38,12 @@ func _tick() -> void:
 		_key(KEY_V, true)
 	if frame == START + 2:
 		_key(KEY_V, false)
+	if frame == START + 4:
+		var iai: Node = loc.get("_iai")
+		var hero: Object = loc.get("_hero")
+		print("iai_debug active=%s cd=%s action=%s floor=%s stagger=%s" % [iai.get("active") if iai else "null",
+			loc.get("_iai_cd"), hero.get("action") if hero else "-", (loc.get("_player") as CharacterBody3D).is_on_floor(),
+			loc.get("_stagger")])
 	if frame >= START - 10 and frame < START + LEN and out_dir != "":
 		var img := root.get_texture().get_image()
 		img.save_jpg(out_dir.path_join("f_%04d.jpg" % (frame - START + 10)), 0.9)

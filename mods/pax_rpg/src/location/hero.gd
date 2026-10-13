@@ -1502,6 +1502,8 @@ var _iai_hold := true
 func iai_begin() -> bool:
 	_cancel_hurt()
 	_cancel_recovery()
+	if action.begins_with("Draw") or action.begins_with("Sheathe"):
+		_end_action()                                # приём важнее — меч «долетит» сам
 	if anim == null or action != "" or not has("Deathblow"):
 		return false
 	blocking = false
