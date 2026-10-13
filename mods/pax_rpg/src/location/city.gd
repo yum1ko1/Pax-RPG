@@ -789,6 +789,38 @@ const CELL := 24.0
 const FAR_DRAW := 220.0
 
 
+## Тонкое и открытое (полотнища, навесы, стекло, трава, листва, гирлянды) — двустороннее; остальное — замкнутое.
+const THIN := ["awning", "banner_clan", "tug_banner", "mana_flags_line", "lantern_string", "window_glass", "grass_tuft",
+	"bush_dry", "flame_tree", "stall_frame", "weapon_rack", "laundry"]
+## Заслоняют обзор целиком (сплошные стены и объёмы): по ним — окклюдеры.
+const OCCLUDE := ["house_shop", "guild_hall", "khan_palace", "tavern_hall", "yurt_large", "yurt_small", "palisade_segment",
+	"wall_hob"]
+
+
+func _thin(path: String) -> bool:
+	for k: String in THIN:
+		if path.get_file().begins_with(k):
+			return true
+	return false
+
+
+func _occludes(path: String) -> bool:
+	for k: String in OCCLUDE:
+		if path.get_file().begins_with(k):
+			return true
+	return false
+
+
+## Окклюдер-коробка: рамка модели, ужатая shrink (крыши со свесами и проёмы не должны заслонять лишнего).
+func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
+	var oc := OccluderInstance3D.new()
+	var bo := BoxOccluder3D.new()
+	bo.size = box.size * shrink
+	oc.occluder = bo
+	oc.transform = t * Transform3D(Basis(), box.get_center())
+	root.add_child(oc)
+
+
 ## Растительность → наклон верха на ветру, м (shaders/foliage.gdshader). Нет в списке — модель стоит.
 const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.4}
 var _fol_mats := {}
@@ -857,6 +889,8 @@ func _place(path: String, list: Array) -> void:
 				_glass(sm)
 			elif sm is BaseMaterial3D and not _mats.has(sm):
 				_mats.append(sm)
+				if not _thin(path):                       # Meshy отдаёт всё двусторонним: замкнутым — только лицо
+					(sm as BaseMaterial3D).cull_mode = BaseMaterial3D.CULL_BACK
 		# по ячейкам CELL м: у MultiMesh на весь город рамка на весь город — камера не отсекает ничего,
 		# и каждый каскад тени рисует всё заново. Ячейками — рисуется только то, что в кадре.
 		var cells := {}
@@ -881,8 +915,9 @@ func _place(path: String, list: Array) -> void:
 			if fol != null:
 				mi.material_override = fol
 				mi.extra_cull_margin = 1.5
-			if small > 0.0:                               # мелочь: без тени и не рисуется вдали
+			if small > 0.0:                               # мелочь: без тени, не в отражённом свете, не рисуется вдали
 				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 				mi.visibility_range_end = small
 				mi.visibility_range_end_margin = 6.0
 				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
@@ -915,6 +950,9 @@ func _place(path: String, list: Array) -> void:
 			root.add_child(body)
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
+	if not first and _occludes(path):                    # дома, юрты, стены — заслоняют то, что за ними (окклюзия)
+		for e: Array in list:
+			_occluder(e[0] as Transform3D, aabb, Vector3(0.8, 0.85, 0.8))
 	var pts: Array = []
 	for e: Array in list:
 		pts.append((e[0] as Transform3D).origin)
@@ -1006,6 +1044,8 @@ func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, coll
 		body.add_child(sh)
 		body.transform = Transform3D(basis, pos)
 		root.add_child(body)
+	if collide and size.x < 150.0 and size.y >= 1.5 and maxf(size.x, size.z) >= 2.0:   # сплошная коробка — окклюдер
+		_occluder(Transform3D(basis, pos), AABB(-size * 0.5, size), Vector3(0.97, 0.97, 0.97))
 	if size.x < 150.0:
 		rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z), Color(0.2, 0.27, 0.55)])
 	else:

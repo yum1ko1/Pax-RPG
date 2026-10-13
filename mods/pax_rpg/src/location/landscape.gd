@@ -35,54 +35,74 @@ func height(x: float, z: float) -> float:
 	return lerpf(-0.4, hills + d * 0.02, t)
 
 
+## Степь — CHUNKS×CHUNKS кусков (а не одна сетка на 1.4 км): куски вне кадра и за камерой движок отсекает (frustum).
+## Нормали — из функции высоты, а не по треугольникам куска: на стыках кусков нет швов света.
+const CHUNKS := 7
+
+
 func _terrain() -> void:
 	var size := 1400.0
 	var n := 140
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var per := n / CHUNKS
+	var step := size / n
 	var c := _flat.get_center()
 	var grass := Color(0.52, 0.55, 0.3)
 	var ochre := Color(0.78, 0.6, 0.4)
 	var dry := Color(0.66, 0.56, 0.42)
-	for j: int in n + 1:
-		for i: int in n + 1:
-			var x := c.x - size * 0.5 + size * i / n
-			var z := c.y - size * 0.5 + size * j / n
-			var h := height(x, z)
-			var k := _noise.get_noise_2d(x * 2.0 + 300.0, z * 2.0) * 0.5 + 0.5
-			var col := ochre.lerp(grass, smoothstep(0.35, 0.75, k)).lerp(dry, smoothstep(18.0, 34.0, h) * 0.6)
-			st.set_color(col)
-			st.set_uv(Vector2(x, z) / 8.0)
-			st.add_vertex(Vector3(x, h, z))
-	for j: int in n:
-		for i: int in n:
-			var a := j * (n + 1) + i
+	var mat := _steppe_mat()
+	for cj: int in CHUNKS:
+		for ci: int in CHUNKS:
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			for j: int in per + 1:
+				for i: int in per + 1:
+					var x := c.x - size * 0.5 + (ci * per + i) * step
+					var z := c.y - size * 0.5 + (cj * per + j) * step
+					var h := height(x, z)
+					var k := _noise.get_noise_2d(x * 2.0 + 300.0, z * 2.0) * 0.5 + 0.5
+					var col := ochre.lerp(grass, smoothstep(0.35, 0.75, k)).lerp(dry, smoothstep(18.0, 34.0, h) * 0.6)
+					var e := step * 0.5
+					st.set_normal(Vector3(height(x - e, z) - height(x + e, z), 2.0 * e, height(x, z - e) - height(x, z + e)).normalized())
+					st.set_color(col)
+					st.set_uv(Vector2(x, z) / 8.0)
+					st.add_vertex(Vector3(x, h, z))
+			_grid_indices(st, per + 1, per, per)
+			st.generate_tangents()                       # для карты нормалей земли
+			var mi := MeshInstance3D.new()
+			mi.name = "Steppe"
+			mi.mesh = st.commit()
+			mi.material_override = mat
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED    # даль — не в отражённый свет (SDFGI), дорого и не видно
+			root.add_child(mi)
+
+
+## Сетка треугольников: stride вершин в ряду, cols × rows квадратов (порядок обхода — лицом вверх).
+static func _grid_indices(st: SurfaceTool, stride: int, cols: int, rows: int) -> void:
+	for j: int in rows:
+		for i: int in cols:
+			var a := j * stride + i
 			st.add_index(a)
 			st.add_index(a + 1)
-			st.add_index(a + n + 1)
+			st.add_index(a + stride)
 			st.add_index(a + 1)
-			st.add_index(a + n + 2)
-			st.add_index(a + n + 1)
-	st.generate_normals()
-	st.generate_tangents()                               # для карты нормалей земли
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
+			st.add_index(a + stride + 1)
+			st.add_index(a + stride)
+
+
+func _steppe_mat() -> Material:
 	var sh: Shader = mod.shader("shaders/steppe.gdshader")
 	if sh != null:
 		var m := ShaderMaterial.new()
 		m.shader = sh
 		m.set_shader_parameter("g_col", _tex("models/gharn/tex/ground.jpg", false))
 		m.set_shader_parameter("g_nrm", _tex("models/gharn/tex/ground_n.jpg", true))
-		mi.material_override = m
-	else:
-		var mat := StandardMaterial3D.new()
-		mat.vertex_color_use_as_albedo = true
-		mat.albedo_texture = _tex("models/gharn/tex/ground.jpg", false)
-		mat.roughness = 0.95
-		mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED        # даль — не в отражённый свет (SDFGI), дорого и не видно
-	root.add_child(mi)
+		return m
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_texture = _tex("models/gharn/tex/ground.jpg", false)
+	mat.roughness = 0.95
+	return mat
 
 
 ## Картинка мода с мипмапами (без них даль рябит).
@@ -102,59 +122,69 @@ func _tex(path: String, normal: bool) -> Texture2D:
 
 ## Горы: кольцо хребтов от MOUNT_R0 до MOUNT_R1 м вокруг города — сетка в полярных координатах, высота — ridged-шум
 ## (острые гребни, долины между ними). Ближние хребты ниже (~150 м, без снега), дальние до ~450 м, в снегу.
-## Шум берётся в декартовых X/Z — шва на 360° нет.
+## Шум — в декартовых X/Z (шва на 360° нет). SECTORS секторов по 360/SECTORS° — за спиной камеры не рисуются
+## (frustum); нормали из функции высоты — без швов на стыках секторов.
 const MOUNT_R0 := 545.0
 const MOUNT_R1 := 1550.0
+const SECTORS := 24
+const MOUNT_NA := 720
+const MOUNT_NR := 84
+
+var _ridge := FastNoiseLite.new()
+var _big := FastNoiseLite.new()
+
+
+func _mountain_h(x: float, z: float) -> float:
+	var r := sqrt(x * x + z * z)
+	var amp := lerpf(110.0, 450.0, smoothstep(600.0, 1300.0, r)) * smoothstep(MOUNT_R0, 720.0, r)
+	var v := _ridge.get_noise_2d(x, z) * 0.5 + 0.5
+	var b := _big.get_noise_2d(x, z) * 0.5 + 0.5
+	return -18.0 + amp * pow(v, 1.6) * (0.55 + 0.75 * b)
 
 
 func _mountains() -> void:
-	var ridge := FastNoiseLite.new()
-	ridge.seed = 77
-	ridge.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
-	ridge.fractal_octaves = 6
-	ridge.frequency = 0.0021
-	var big := FastNoiseLite.new()                       # где хребты выше, где седловины
-	big.seed = 78
-	big.frequency = 0.0007
-	var na := 720
-	var nr := 84
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for j: int in nr + 1:
-		var f := float(j) / nr
-		var r := lerpf(MOUNT_R0, MOUNT_R1, pow(f, 1.25))      # ближе — гуще
-		var amp := lerpf(110.0, 450.0, smoothstep(600.0, 1300.0, r)) * smoothstep(MOUNT_R0, 720.0, r)
-		for i: int in na:
-			var a := TAU * i / na
-			var x := cos(a) * r
-			var z := sin(a) * r
-			var v := ridge.get_noise_2d(x, z) * 0.5 + 0.5
-			var b := big.get_noise_2d(x, z) * 0.5 + 0.5
-			var h := -18.0 + amp * pow(v, 1.6) * (0.55 + 0.75 * b)
-			st.add_vertex(Vector3(x, h, z))
-	for j: int in nr:
-		for i: int in na:
-			var i2 := (i + 1) % na
-			var a0 := j * na + i
-			var a1 := j * na + i2
-			var b0 := (j + 1) * na + i
-			var b1 := (j + 1) * na + i2
-			for k: int in [a0, b0, a1, a1, b0, b1]:
-				st.add_index(k)
-	st.generate_normals()
-	var mi := MeshInstance3D.new()
-	mi.name = "Mountains"
-	mi.mesh = st.commit()
+	_ridge.seed = 77
+	_ridge.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	_ridge.fractal_octaves = 6
+	_ridge.frequency = 0.0021
+	_big.seed = 78
+	_big.frequency = 0.0007
+	var mat: Material = null
 	var sh: Shader = mod.shader("shaders/mountain.gdshader")
 	if sh != null:
 		var m := ShaderMaterial.new()
 		m.shader = sh
 		m.set_shader_parameter("detail_n", _tex("models/gharn/tex/ground_n.jpg", true))
-		mi.material_override = m
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	root.add_child(mi)
+		mat = m
+	var per := MOUNT_NA / SECTORS
+	for sec: int in SECTORS:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for j: int in MOUNT_NR + 1:
+			var r := lerpf(MOUNT_R0, MOUNT_R1, pow(float(j) / MOUNT_NR, 1.25))      # ближе — гуще
+			for i: int in per + 1:
+				var a := TAU * float(sec * per + i) / MOUNT_NA
+				var x := cos(a) * r
+				var z := sin(a) * r
+				var e := 3.0
+				st.set_normal(Vector3(_mountain_h(x - e, z) - _mountain_h(x + e, z), 2.0 * e,
+					_mountain_h(x, z - e) - _mountain_h(x, z + e)).normalized())
+				st.add_vertex(Vector3(x, _mountain_h(x, z), z))
+		for j: int in MOUNT_NR:                          # вдоль радиуса — j, по кругу — i
+			for i: int in per:
+				var a0 := j * (per + 1) + i
+				var b0 := a0 + per + 1
+				for k: int in [a0, b0, a0 + 1, a0 + 1, b0, b0 + 1]:
+					st.add_index(k)
+		var mi := MeshInstance3D.new()
+		mi.name = "Mountains"
+		mi.mesh = st.commit()
+		if mat != null:
+			mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		root.add_child(mi)
 
 
 ## Кочевья на холмах: юрты по 2–4, где склон пологий.

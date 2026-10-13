@@ -14,7 +14,7 @@
 	"start_hour": 17.0,
 	"day_minutes": 24.0,
 	"gfx": {
-		"_note": "Качество картинки (src/location/gfx.gd, концепт — pax_rpg/docs/Графика_концепт.md). gi: sdfgi | off; aa: taa | fsr2 | msaa; lamp_shadows — сколько ближайших огней с тенями; dof_far 0 — без размытия дали; rim 0 — без контрового света героя; grass_density — пучков травы на м² (0 — без травы), grass_distance — м, дальше трава уходит в землю; motion_blur — доля кадра «затвора» (0 — выкл.); fire_fog — плотность дымки у костров; clouds / lens — облака и блики солнца игры.",
+		"_note": "Качество картинки (src/location/gfx.gd, концепт — pax_rpg/docs/Графика_концепт.md). gi: sdfgi | off; aa: taa | fsr2 | msaa; lamp_shadows — сколько ближайших огней с тенями; dof_far 0 — без размытия дали; rim 0 — без контрового света героя; grass_density — пучков травы на м² (0 — без травы), grass_distance — м, дальше трава уходит в землю; motion_blur — доля кадра «затвора» (0 — выкл.); fire_fog — плотность дымки у костров; clouds / lens — облака и блики солнца игры. Оптимизация: occlusion — окклюзия по стенам и домам; shadow_splits — границы каскадов теней (доли sun_shadow_distance); mesh_lod_px — порог LOD (больше — быстрее, проще вдали).",
 		"gi": "sdfgi",
 		"gi_cell": 0.2,
 		"gi_energy": 1.0,
@@ -48,6 +48,13 @@
 		"fire_fog": 0.35,
 		"clouds": true,
 		"clouds_coverage": 0.42,
-		"lens": true
+		"lens": true,
+		"occlusion": true,
+		"shadow_splits": [
+			0.06,
+			0.18,
+			0.45
+		],
+		"mesh_lod_px": 1.0
 	}
 }

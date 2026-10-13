@@ -14,6 +14,8 @@ extends Node
 ##  • дымка у костров и жаровен (FogVolume) — огонь светится в воздухе;
 ##  • размытие в движении (motion_blur.gd) — по векторам движения TAA;
 ##  • объёмные облака и блики с лучами солнца — эффекты игры (Pax.graphics.clouds / lens) на камере локации.
+## Оптимизация: окклюзия (Hi-Z движка: окклюдеры стен и домов — city.gd) — заслонённое не рисуется; каскады теней
+## распределены к герою (ближний — несколько метров, чёткий); LOD-порог сеток — mesh_lod_px.
 ## Герой и враги в SDFGI — динамические (иначе оставляют «тень-призрак» в отражённом свете).
 
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
@@ -85,6 +87,8 @@ func apply_viewport(v: SubViewport) -> void:
 		_:
 			v.msaa_3d = Viewport.MSAA_2X
 	v.use_debanding = _b("debanding", true)
+	v.use_occlusion_culling = _b("occlusion", true)      # дома и стены (OccluderInstance3D) заслоняют то, что за ними
+	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
 
 
@@ -157,6 +161,13 @@ func apply_sun(s: DirectionalLight3D) -> void:
 	s.shadow_blur = 1.0
 	s.directional_shadow_blend_splits = true              # без ступеньки на границе каскадов
 	s.directional_shadow_max_distance = _f("sun_shadow_distance", 110.0)
+	# каскады: доли дальности теней — 1-й до ~6 м (герой и враги резко), 2-й ~20 м, 3-й ~50 м, 4-й до конца
+	var sp: Array = cfg.get("shadow_splits", [0.06, 0.18, 0.45])
+	if sp.size() >= 3:
+		s.directional_shadow_split_1 = float(sp[0])
+		s.directional_shadow_split_2 = float(sp[1])
+		s.directional_shadow_split_3 = float(sp[2])
+	s.directional_shadow_fade_start = 0.85
 
 
 ## Глобальные настройки теней — на время локации (атлас солнца, мягкий фильтр); restore_globals() возвращает.
