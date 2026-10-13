@@ -5,13 +5,15 @@ import numpy as np
 log, snd, out = sys.argv[1:4]
 SR = 44100
 OFF = 10 / 30.0                       # видео начинается за 10 кадров до нажатия V
-track = np.zeros(SR * 14)
+track = np.zeros(SR * 20)
 for line in open(log, encoding="utf-8", errors="ignore"):
     if not line.startswith("iai_sound"):
         continue
     _, name, t, pitch = line.split()
     w = wave.open(f"{snd}/iai_{name}.wav")
     x = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32767
+    if w.getnchannels() > 1:                       # стерео → моно (иначе звук вдвое медленнее и ниже)
+        x = x.reshape(-1, w.getnchannels()).mean(axis=1)
     p = float(pitch)
     if abs(p - 1.0) > 1e-3:
         x = np.interp(np.arange(0, len(x), p), np.arange(len(x)), x)

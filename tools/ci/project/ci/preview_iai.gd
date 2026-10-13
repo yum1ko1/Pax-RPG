@@ -8,7 +8,7 @@ var mod: Node
 var out_dir := ""
 var loc: Node
 const START := 70
-const LEN := 540
+const LEN := 600
 
 
 func _initialize() -> void:

@@ -128,7 +128,7 @@ func start() -> bool:
 	_lines = []
 	_victims = []
 	_shake = 0.0
-	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + 0.15 + _sheathe_len + 1.6
+	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + 0.15 + _sheathe_len + 3.0
 	_attach_katana()
 	return true
 
@@ -191,7 +191,7 @@ func _process(delta: float) -> void:
 		_mat.set_shader_parameter("center", sp / get_viewport_rect().size)
 	_camera(k)
 	if t >= t_sheathe:
-		_end_camera(smoothstep(t_sheathe, t_sheathe + 0.6, t) * (1.0 - smoothstep(_t_end - 0.8, _t_end, t)))
+		_end_camera(smoothstep(t_sheathe, t_sheathe + 0.6, t) * (1.0 - smoothstep(_t_end - 0.9, _t_end, t)))
 	if t >= t_ramp and t < t_ramp + RAMP:
 		_unfreeze_step((t - t_ramp) / RAMP)
 	_shake = maxf(0.0, _shake - delta * 4.0)
