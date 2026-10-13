@@ -53,6 +53,7 @@ var hero_cfg: Dictionary = {}      # config/hero.json
 var _hero: Hero                    # модель и её анимации; null — герой-овал
 var _f_down := false               # F была нажата в прошлом кадре — достаём меч по нажатию, не по удержанию
 var _f_queued := false             # нажатие F пришло событием (короткое — опрос мог его не застать)
+var _prev_action := ""
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
 var _alt_down := false             # уворот — по нажатию Alt, не по удержанию
@@ -651,8 +652,7 @@ func _physics_body(delta: float) -> void:
 	if _lmb_queued and _hero != null and _stagger <= 0.0:
 		if not _try_deathblow():
 			if _hero.action == "":
-				var tg := _attack_target()
-				_face_now(_yaw_to(tg) if tg != null else _aim_yaw())   # удар — во врага рядом, иначе куда камера
+				_face_now(_aim_yaw())                # удар — куда смотрит камера (мышь); при захвате — во врага
 			_hero.attack(on_floor)
 	_lmb_queued = false
 	if _hero != null:
@@ -745,6 +745,9 @@ func _physics_body(delta: float) -> void:
 		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
 	if _hero != null:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
+		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
+			_face_now(_aim_yaw())                    # каждый удар серии — заново туда, куда смотрит камера
+		_prev_action = _hero.action
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)

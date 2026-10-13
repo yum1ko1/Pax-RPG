@@ -366,39 +366,66 @@ func _draw_enemy() -> void:
 	_text(Vector2(x, r.position.y + 96), status, sans, 13, sc, HORIZONTAL_ALIGNMENT_LEFT, -1, 0)
 
 
-## Босс (как в Souls/Sekiro): внизу по центру — имя и титул, длинная полоса здоровья со «следом» урона
-## (белёсая часть догоняет красную), над ней — концентрация от центра в стороны.
+## Босс — полоса в стиле Гхарна вверху по центру (под компасом, не мешает приёмам внизу): тёмная лакированная
+## плашка в двойной золотой рамке с клыками на концах (как Врата Клыка), слева — красный ромб с 闘, над полосой —
+## имя золотом, под ней — титул. Здоровье — киноварь со «следом» снятого урона; концентрация — под полосой от центра.
 var _boss_ghost := 1.0
+const GOLD := Color(0.88, 0.68, 0.32)
+const CINNABAR := Color(0.78, 0.12, 0.16)
 
 
 func _draw_boss(e: Dictionary) -> void:
-	var w := 900.0
+	var w := 760.0
 	var x := (_w - w) * 0.5
-	var y := 1080.0 - 150.0
+	var y := 132.0                                     # верх полосы (под компасом)
+	var h := 14.0
 	var hp := clampf(float(e.get("hp", 1.0)), 0.0, 1.0)
 	_boss_ghost = maxf(hp, move_toward(_boss_ghost, hp, 0.004))
-	_text(Vector2(x, y - 14.0), str(e.get("name", "")), serif, 30, TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, 4)
+	# плашка
+	var plate := PackedVector2Array([Vector2(x - 34, y - 46), Vector2(x + w + 34, y - 46), Vector2(x + w + 20, y + h + 30),
+		Vector2(x - 20, y + h + 30)])
+	draw_colored_polygon(plate, Color(0.06, 0.03, 0.05, 0.78))
+	draw_polyline(plate + PackedVector2Array([plate[0]]), Color(GOLD, 0.35), 1.0, true)
+	# имя — золотом по центру, титул — под полосой
+	_center(Vector2(_w * 0.5, y - 22.0), str(e.get("name", "")), serif, 28, Color(1.0, 0.9, 0.7), 4)
 	var title := str(e.get("title", ""))
 	if title != "":
-		_text(Vector2(x + 4.0, y + 4.0), title, sans, 13, MUTED, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
-	var by := y + 14.0
-	draw_rect(Rect2(x - 2.0, by - 2.0, w + 4.0, 16.0), Color(0.02, 0.02, 0.06, 0.85))
-	draw_rect(Rect2(x, by, w * _boss_ghost, 12.0), Color(1.0, 0.85, 0.9, 0.55))
-	draw_rect(Rect2(x, by, w * hp, 12.0), Color(0.78, 0.12, 0.24))
-	draw_rect(Rect2(x, by, w * hp, 3.0), Color(1.0, 0.4, 0.5, 0.7))
-	draw_rect(Rect2(x - 2.0, by - 2.0, w + 4.0, 16.0), Color(PINK, 0.55), false, 1.0)
-	var p := clampf(float(e.get("posture", 0.0)), 0.0, 1.0)      # концентрация: от центра
-	var pw := 520.0
-	var px := (_w - pw) * 0.5
-	var py := y - 52.0
-	if p > 0.005 or bool(e.get("broken", false)):
-		draw_rect(Rect2(px, py, pw, 7.0), Color(0.05, 0.04, 0.1, 0.8))
-		var col := AMBER.lerp(RED, p)
-		if bool(e.get("broken", false)):
-			col = PINK
-			p = 1.0
-		draw_rect(Rect2(px + pw * 0.5 * (1.0 - p), py, pw * p, 7.0), col)
-		draw_rect(Rect2(_w * 0.5 - 1.0, py - 3.0, 2.0, 13.0), Color(TEXT, 0.8))
+		_center(Vector2(_w * 0.5, y + h + 18.0), title.to_upper(), sans, 12, Color(GOLD, 0.9), 3)
+	# полоса: подложка, след, здоровье, блик
+	draw_rect(Rect2(x, y, w, h), Color(0.12, 0.04, 0.06))
+	draw_rect(Rect2(x, y, w * _boss_ghost, h), Color(1.0, 0.82, 0.7, 0.5))
+	draw_rect(Rect2(x, y, w * hp, h), CINNABAR)
+	draw_rect(Rect2(x, y + 1.0, w * hp, 3.0), Color(1.0, 0.45, 0.4, 0.75))
+	for k: int in range(1, 10):                          # насечки по десятым — читается остаток
+		draw_line(Vector2(x + w * k / 10.0, y), Vector2(x + w * k / 10.0, y + h), Color(0, 0, 0, 0.35), 1.0)
+	# двойная золотая рамка и клыки на концах
+	draw_rect(Rect2(x - 2, y - 2, w + 4, h + 4), GOLD, false, 1.5)
+	draw_rect(Rect2(x - 5, y - 5, w + 10, h + 10), Color(GOLD, 0.45), false, 1.0)
+	for sd: float in [-1.0, 1.0]:
+		var ex := x - 5.0 if sd < 0.0 else x + w + 5.0
+		var fang := PackedVector2Array([Vector2(ex, y - 5), Vector2(ex + sd * 26.0, y + h * 0.5), Vector2(ex, y + h + 5),
+			Vector2(ex + sd * 9.0, y + h * 0.5)])
+		draw_colored_polygon(fang, GOLD)
+		draw_line(Vector2(ex + sd * 26.0, y + h * 0.5), Vector2(ex + sd * 38.0, y + h * 0.5), Color(GOLD, 0.6), 1.5)
+	# ромб с 闘 слева
+	var dc := Vector2(x - 62.0, y + h * 0.5)
+	var dm := PackedVector2Array()
+	for v: Vector2 in _diamond(dc, 22.0):
+		dm.append(v)
+	draw_colored_polygon(dm, CINNABAR)
+	_outline(dm, GOLD, 2.0)
+	_center(dc + Vector2(0, 7), "闘", cjk, 22, Color(1.0, 0.92, 0.8), 2)
+	# концентрация — тонкая под полосой, от центра в стороны
+	var p := clampf(float(e.get("posture", 0.0)), 0.0, 1.0)
+	var broken := bool(e.get("broken", false))
+	if p > 0.005 or broken:
+		var pw := 420.0
+		var py := y + h + 30.0
+		draw_rect(Rect2((_w - pw) * 0.5, py, pw, 6.0), Color(0.05, 0.03, 0.06, 0.85))
+		var col := PINK if broken else AMBER.lerp(RED, p)
+		var pp := 1.0 if broken else p
+		draw_rect(Rect2((_w - pw * pp) * 0.5, py, pw * pp, 6.0), col)
+		draw_rect(Rect2(_w * 0.5 - 1.0, py - 3.0, 2.0, 12.0), Color(GOLD, 0.9))
 
 
 ## Метки поверх мира: прицел захвата и цифры урона (координаты — пиксели экрана, location.gd проецирует).

@@ -65,6 +65,10 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	display_key = "pax_rpg_orc"
 	boss = true
 	title_key = "pax_rpg_orc_title"
+	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 2.0)       # тяжёлый топор — ниже и громче
+	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 4.0)
+	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
+	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.55
@@ -147,6 +151,36 @@ func _set_state(s: String) -> void:
 			_play("ChargeHit", true)
 
 
+## Звуки орка: замах (свист), попадание (глухой удар), блок (сталь), получил урон (удар по телу).
+var _snd_swing: AudioStreamPlayer3D
+var _snd_impact: AudioStreamPlayer3D
+var _snd_clang: AudioStreamPlayer3D
+var _snd_hurt: AudioStreamPlayer3D
+
+
+func _sound(pattern: String, first: int, n: int, pitch: float, db: float) -> AudioStreamPlayer3D:
+	var rnd := AudioStreamRandomizer.new()
+	rnd.random_pitch = 1.08
+	for i: int in n:
+		var st: AudioStream = mod.sound(pattern % (first + i))
+		if st != null:
+			rnd.add_stream(-1, st)
+	var p := AudioStreamPlayer3D.new()
+	p.stream = rnd
+	p.pitch_scale = pitch
+	p.volume_db = db
+	p.unit_size = 6.0
+	p.bus = "PaxRpgSfx"
+	p.position = Vector3(0, 1.4, 0)
+	add_child(p)
+	return p
+
+
+func _snd(p: AudioStreamPlayer3D) -> void:
+	if p != null and p.stream != null and (p.stream as AudioStreamRandomizer).streams_count > 0:
+		p.play()
+
+
 ## Удар героя: в первые доли блока — отбит (концентрация героя), в блоке — почти без урона; вихрь не сбить.
 func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	if dead or _state == "broken":
@@ -155,6 +189,7 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 		var away := (from - global_position)
 		away.y = 0.0
 		var at := global_position + Vector3(0.0, 1.5, 0.0) + away.normalized() * 0.6
+		_snd(_snd_clang)
 		if _state_t <= PARRY_WINDOW:
 			_burst(at, away, Color(1.0, 0.8, 0.35), 40, 5.0, 0.0, 0.3, 0.04, true)
 			if _on_hit.is_valid():
@@ -168,6 +203,7 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 			if _guard_hits >= 3:
 				_atk_after_guard()                          # надоело стоять в блоке — контратака
 		return
+	_snd(_snd_hurt)
 	if _state in ["spin", "charge", "charge_wind"] or _atk != "":
 		hp = maxf(0.0, hp - amount)                         # в приёме — урон без срыва (гиперброня)
 		posture = minf(max_posture, posture + amount * 0.4)
@@ -358,7 +394,9 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		flat = dir * float(a.get("step", 0.0))
 	if _hits_done < hits.size() and frac >= float(hits[_hits_done]):
 		_hits_done += 1
+		_snd(_snd_swing)
 		if dist <= float(a.get("reach", 2.8)) and _on_hit.is_valid():
+			_snd(_snd_impact)
 			_on_hit.call(float(a.get("dmg", 20.0)), self, str(a.get("kind", "")))
 	if frac >= 0.98 or (_anim != null and not _anim.is_playing()):
 		_atk = ""
@@ -381,6 +419,7 @@ func _spin_tick_fn(delta: float, dist: float, dir: Vector3) -> Vector3:
 	_spin_tick -= delta
 	if _spin_tick <= 0.0 and _state_t < SPIN_TIME:
 		_spin_tick = SPIN_TICK
+		_snd(_snd_swing)
 		if dist <= SPIN_RADIUS and _on_hit.is_valid():
 			_on_hit.call(SPIN_DMG, self, "perilous")
 	return dir * SPIN_SPEED if _state_t < SPIN_TIME else Vector3.ZERO
@@ -394,6 +433,7 @@ func _charge_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 	_charge_dir = Vector3(sin(nxt), 0.0, cos(nxt))
 	_face(_charge_dir, delta * 3.0)
 	if dist < 1.7 and _charge_dir.dot(dir) > 0.3:
+		_snd(_snd_impact)
 		if _on_hit.is_valid():
 			_on_hit.call(CHARGE_DMG, self, "charge")
 		_set_state("charge_end")
