@@ -304,14 +304,16 @@ func _end_camera(w: float) -> void:
 	if not cam_override or not is_instance_valid(_cam) or _hero == null:
 		return
 	var b := _hero.model.global_transform.basis.orthonormalized()         # +Z — вперёд, +X — левый бок
-	var hp := _player.global_position
-	var focus := hp + Vector3(0, 0.55, 0) + b.x * 0.12
-	var pos := hp + b.x * 1.5 + b.z * 1.3 + Vector3(0, 0.75, 0)
+	var hp := _hero.model.global_position
+	var focus := hp + Vector3(0, 0.75, 0)
+	var pos := hp + b.x * 2.5 + b.z * 2.2 + Vector3(0, 1.25, 0)
 	var e := w * w * (3.0 - 2.0 * w)
-	var xf := Transform3D(Basis(), pos).looking_at(focus, Vector3.UP)
 	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.04 * _shake
-	_cam.global_transform = Transform3D(_cam0.basis.slerp(xf.basis, e), _cam0.origin.lerp(pos, e) + sh)
-	_cam.fov = lerpf(_fov0, 55.0, e)
+	var at := _cam0.origin.lerp(pos, e)
+	var off := at - focus                                              # по дуге: не пролетать сквозь героя
+	at = focus + off.normalized() * maxf(off.length(), lerpf((_cam0.origin - focus).length(), (pos - focus).length(), e))
+	_cam.global_transform = Transform3D(Basis(), at + sh).looking_at(focus, Vector3.UP) if e > 0.0 else _cam0
+	_cam.fov = lerpf(_fov0, 48.0, e)
 
 
 ## Разрез на враге: вспышка-полоса по диагонали тела — белая сердцевина, розовая кромка; раскрывается и тает.
