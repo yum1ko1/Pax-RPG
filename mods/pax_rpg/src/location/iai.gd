@@ -71,6 +71,9 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 	_set_hud = set_hud
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var add := CanvasItemMaterial.new()                  # разрезы — свечение (складывается со сценой)
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	material = add
 	_fx = ColorRect.new()
 	_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -274,7 +277,7 @@ func _camera(k: float) -> void:
 	var back := _cam0.origin - focus
 	back.y = 0.0
 	back = back.normalized() if back.length() > 0.01 else Vector3(0, 0, 1)
-	var far := focus + back * ((_cam0.origin - focus).length() + 1.3) + Vector3(0, 0.7, 0)
+	var far := focus + back * 2.9 + Vector3(0, 0.9, 0)          # крупно: герой на колене в кадре
 	var pos := _cam0.origin.lerp(far, e)
 	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.06 * _shake
 	var xf := Transform3D(Basis(), pos).looking_at(focus, Vector3.UP)
@@ -324,10 +327,9 @@ func _draw() -> void:
 		var tip := a.lerp(b, grow)
 		var hot := exp(-age * 7.0)                                 # вспышка свежего разреза
 		var w := 2.5 + 7.0 * hot + 7.0 * boom
-		var dark := Color(0.08, 0.0, 0.12, 0.55 * fade)
-		var glow := Color(1.0, 0.35, 0.8, (0.35 + 0.5 * hot + 0.6 * boom) * fade)
+		var glow := Color(1.0, 0.3, 0.75, (0.3 + 0.6 * hot + 0.7 * boom) * fade)
+		draw_line(a, tip, Color(glow, glow.a * 0.35), w * 6.0, true)          # широкий ореол
 		var core := Color(1.0, 0.98, 1.0, (0.75 + 0.25 * hot) * fade)
-		draw_line(a, tip, dark, w * 2.0 + 4.0, true)                 # тёмная окантовка — разрез читается на светлом
 		draw_line(a, tip, glow, w * 2.2, true)
 		draw_line(a, tip, core, w * 0.6, true)
 
