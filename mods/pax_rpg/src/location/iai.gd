@@ -224,6 +224,22 @@ func _time_stop() -> void:
 				_targets.append(e)
 
 
+## Прогрев шейдеров (location.gd, под экраном загрузки): разрез-вспышка у точки и шейдер остановки на два кадра.
+func warmup(at: Vector3) -> void:
+	if not is_instance_valid(_view) or not is_instance_valid(_cam):
+		return
+	var v := Node3D.new()
+	_view.add_child(v)
+	v.global_position = at
+	_slash_mark(v)
+	v.queue_free()
+	_set_fx(true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not active:
+		_set_fx(false)
+
+
 ## Шейдер остановки на контейнере 3D-вида: только пока эффект виден (иначе — лишний проход каждый кадр).
 func _set_fx(on: bool) -> void:
 	if not is_instance_valid(_box):

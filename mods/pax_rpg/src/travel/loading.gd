@@ -98,14 +98,23 @@ func _sfx(p: AudioStreamPlayer) -> void:
 		p.play()
 
 
+var _wait := Callable()
+var _done_cb := Callable()
+var _waiting := false
+
+
 func busy() -> bool:
 	return _busy
 
 
-func run(title: String, text: String, seconds: float, middle: Callable, done: Callable) -> void:
+## wait — () -> bool: можно ли открывать (город строится по кадрам — экран держится, пока не готов).
+func run(title: String, text: String, seconds: float, middle: Callable, done: Callable, wait := Callable()) -> void:
 	if _busy:
 		return
 	_busy = true
+	_wait = wait
+	_done_cb = done
+	_waiting = false
 	_title = title
 	_text.text = text
 	_t = 0.0
@@ -127,13 +136,19 @@ func run(title: String, text: String, seconds: float, middle: Callable, done: Ca
 	var tw := create_tween()
 	tw.tween_property(_stage, "modulate:a", 1.0, FADE)
 	tw.tween_interval(0.05)
-	tw.tween_callback(middle)                         # строим за закрытым экраном (кадры на миг замрут)
-	tw.tween_property(self, "_p", 1.0, maxf(seconds, 2.5)).set_trans(Tween.TRANS_SINE)
-	tw.tween_interval(0.3)
-	tw.tween_property(self, "_die", 1.0, 2.2)
+	tw.tween_callback(middle)                         # строим за закрытым экраном (город — по кадрам, ролик живой)
+	tw.tween_property(self, "_p", 1.0, maxf(seconds, 1.5)).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func() -> void: _waiting = true)   # дальше — когда локация готова (_process)
+
+
+## Вторая половина ролика: воин падает, экран раскрывается. Только когда локация готова.
+func _outro() -> void:
+	var tw := create_tween()
 	tw.tween_interval(0.2)
-	tw.tween_method(_set_reveal, 0.0, 2.2, 1.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_callback(_finish.bind(done))
+	tw.tween_property(self, "_die", 1.0, 1.6)
+	tw.tween_interval(0.1)
+	tw.tween_method(_set_reveal, 0.0, 2.2, 1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(_finish.bind(_done_cb))
 
 
 func _finish(done: Callable) -> void:
@@ -161,6 +176,9 @@ func _set_reveal(r: float) -> void:
 func _process(delta: float) -> void:
 	if not visible:
 		return
+	if _waiting and (not _wait.is_valid() or bool(_wait.call())):
+		_waiting = false
+		_outro()
 	_t += delta
 	_shake = maxf(0.0, _shake - delta * 3.0)
 	var due := mini(5, int(floor(_p * 5.0 + 0.0001)))

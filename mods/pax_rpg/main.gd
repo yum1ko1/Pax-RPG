@@ -111,6 +111,7 @@ func _mod_unloaded() -> void:
 func _world_ready(g: PaxGame) -> void:
 	planet.start(g)
 	travel.start(g)
+	location.prewarm()                    # горы и степь городов — в потоке, пока игрок на глобусе
 
 
 ## Консоль F8: rpg_arena.

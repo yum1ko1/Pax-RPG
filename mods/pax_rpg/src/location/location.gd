@@ -22,6 +22,7 @@ const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 const Iai := preload("res://mods/pax_rpg/src/location/iai.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
+const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
@@ -116,6 +117,10 @@ var _sun: DirectionalLight3D
 var _sky_mat: ShaderMaterial
 var _daynight: DayNight            # тело доворачивается к цели (голова уже не достаёт)
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
+var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
+var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
+var _build_finished := false
+var _grass: Grass
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -176,8 +181,29 @@ func _pos_max() -> float:
 	return HERO_POSTURE * (_prog.posture_mult() if _prog != null else 1.0)
 
 
+## Готова ли локация (экран загрузки не открывает её раньше — travel.gd).
+func is_ready() -> bool:
+	return not building
+
+
+## Заранее, ещё на глобусе: горы и степь городов считаются в потоке — к входу в город уже готовы.
+func prewarm() -> void:
+	var parsed: Variant = JSON.parse_string(mod.read_text("config/cities.json"))
+	if not (parsed is Dictionary):
+		return
+	for c: Variant in (parsed as Dictionary).get("cities", []):
+		var layout := _city_layout(str((c as Dictionary).get("id", "")))
+		if not layout.is_empty() and bool(layout.get("landscape", true)):
+			Landscape.request(Landscape.area_of(layout))
+
+
+## Сопрограмма для города (строится несколько кадров, экран загрузки живой); арена без города — сразу.
 func build(city: Dictionary) -> void:
 	clear()
+	_build_gen += 1
+	var gen := _build_gen
+	building = true
+	_build_finished = false
 	if _prog == null:
 		_prog = Progress.new()
 		_prog.setup(mod, hero_cfg.get("progress", {}))
@@ -213,10 +239,13 @@ func build(city: Dictionary) -> void:
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
-		c.build(mod, _view, layout)
+		await c.build(mod, _view, layout)              # по кадрам, горы и степь — из потока
+		if gen != _build_gen or c.cancelled or not is_instance_valid(_view):
+			return                                     # локацию убрали посреди стройки
 		_arena_cfg = layout.get("arena", [])
 		_map_rects.append_array(c.rects)
-		Grass.new().build(mod, _view, layout, c.rects, cfg.get("gfx", {}) as Dictionary)   # сплошная трава с ветром
+		_grass = Grass.new()                           # сплошная трава с ветром: считается в потоке
+		_grass.start(mod, _view, layout, c.rects, cfg.get("gfx", {}) as Dictionary, _check_ready.bind(gen))
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
 		_city_lights = c.lights
@@ -322,7 +351,7 @@ func build(city: Dictionary) -> void:
 		var ct := CityTitle.new()
 		ct.setup(mod, _city_name)
 		add_child(ct)
-		ct.play(float(cfg.get("loading_seconds", 4.0)) + 2.6)   # после экрана загрузки
+		ct.play(3.4)                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
 	_zoom = 0.0
 	_zoom_want = 0.0
 	_yaw = 0.0
@@ -352,9 +381,35 @@ func build(city: Dictionary) -> void:
 	visible = true
 	active = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED     # камера — мышью, без зажатой кнопки (ПКМ — блок)
+	_build_finished = true
+	if not layout.is_empty():
+		_warmup()                                    # шейдеры боя — под закрытым экраном загрузки
+	_check_ready(gen)
 
+
+## Всё построено и трава встала — локацию можно показывать.
+func _check_ready(gen: int) -> void:
+	if gen == _build_gen and _build_finished and (_grass == null or _grass.done):
+		building = false
+
+
+## Прогрев шейдеров: эффекты, которые впервые появятся только в бою (искры со шлейфом, вспышка, лужа крови, разрез
+## и рыбий глаз иая), один раз рисуются перед камерой, пока экран загрузки закрыт, — их шейдеры и конвейеры
+## компилируются сейчас, а не рывком на первом ударе.
+func _warmup() -> void:
+	if not is_instance_valid(_cam) or not is_instance_valid(_view):
+		return
+	var at := _cam.global_position - _cam.global_transform.basis.z * 3.0
+	_sparks(at, Color(1.0, 0.8, 0.35), 4, 1.0)
+	Goblin.blood_decal(_view, at - Vector3(0.0, 1.0, 0.0))
+	if is_instance_valid(_iai):
+		_iai.warmup(at)
 
 func clear() -> void:
+	_build_gen += 1                                  # недостроенный город бросает стройку
+	building = false
+	_build_finished = false
+	_grass = null
 	if active:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	active = false

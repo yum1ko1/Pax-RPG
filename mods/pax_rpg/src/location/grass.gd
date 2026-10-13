@@ -3,43 +3,100 @@ extends RefCounted
 ## ближние ячейки (дальше fade_end шейдер уже опустил траву в землю). Не растёт на дорогах (маска дорог города, R),
 ## реже на тропах (G), не растёт под постройками (прямоугольники city.rects) и на песке арены.
 ## Ветер, волны по полю и топтание героем — shaders/grass.gdshader. Конфиг — config/location.json → gfx.
+##
+## Загрузка: где расти — чистый расчёт в потоке (Pax.jobs.background → compute), результат — готовые буферы
+## MultiMesh (16 чисел на пучок: матрица и цвет) — ставятся одним присваиванием, без цикла по копиям.
+## Буферы запоминаются (_cache): повторный вход в город — без расчёта.
 
 const CELL := 16.0
 const OCC := 0.5                   # м на клетку карты занятости
 
+static var _cache := {}            # ключ → {Vector2i ячейка: PackedFloat32Array}
+
 var count := 0
+var done := false                  # трава поставлена (или её нет)
 
 
-func build(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dictionary) -> void:
+## Запустить: расчёт в потоке, потом трава встаёт под parent и зовётся on_done(). Если уже считали — сразу.
+func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dictionary, on_done: Callable) -> void:
 	var density := float(cfg.get("grass_density", 6.0))
 	var sh: Shader = mod.shader("shaders/grass.gdshader")
-	if density <= 0.0 or sh == null:
-		return
 	var g: Array = layout.get("ground", [])
-	var gm: Dictionary = layout.get("ground_mask", {})
-	if g.size() < 4:
+	if density <= 0.0 or sh == null or g.size() < 4:
+		_finish(on_done)
 		return
-	var gsize := Vector2(float(g[0]), float(g[1]))
-	var gpos := Vector2(float(g[2]), float(g[3])) - gsize * 0.5
+	var fade_end := float(cfg.get("grass_distance", 40.0))
+	var gm: Dictionary = layout.get("ground_mask", {})
 	var mask: Image = null
-	var mr := Rect2()
 	var mt: Texture2D = mod.texture(str(gm.get("tex", "")))
 	if mt != null:
 		mask = mt.get_image()
 		if mask != null and mask.is_compressed():
 			mask.decompress()
-		var r: Array = gm.get("rect", [0, 0, 1, 1])
-		mr = Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
-	var occ := _occupancy(rects, gpos, gsize)
-	var ow := int(ceil(gsize.x / OCC))
-	var arena: Array = layout.get("arena", [])
+	var input := {"density": density, "ground": g, "mask": mask, "mask_rect": gm.get("rect", [0, 0, 1, 1]),
+		"rects": rects, "arena": layout.get("arena", [])}
+	var key := str(hash(var_to_str([density, g, gm.get("tex", ""), rects.size(), layout.get("arena", [])])))
+	if _cache.has(key):
+		_spawn(parent, _cache[key], sh, fade_end)
+		_finish(on_done)
+		return
+	if Pax.jobs == null:
+		_cache[key] = compute(input)
+		_spawn(parent, _cache[key], sh, fade_end)
+		_finish(on_done)
+		return
+	Pax.jobs.background(func() -> Dictionary: return compute(input), func(res: Variant) -> void:
+		_cache[key] = res
+		if is_instance_valid(parent) and parent.is_inside_tree():
+			_spawn(parent, res as Dictionary, sh, fade_end)
+		_finish(on_done))
+
+
+func _finish(on_done: Callable) -> void:
+	done = true
+	if on_done.is_valid():
+		on_done.call()
+
+
+## Ячейки → MultiMeshInstance3D (главный поток): сетка пучка, материал, буфер.
+func _spawn(parent: Node, cells: Dictionary, sh: Shader, fade_end: float) -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
-	var fade_end := float(cfg.get("grass_distance", 40.0))
 	mat.set_shader_parameter("fade_end", fade_end)
 	mat.set_shader_parameter("fade_start", fade_end * 0.7)
 	var mesh := _clump()
 	mesh.surface_set_material(0, mat)
+	for key: Vector2i in cells:
+		var buf: PackedFloat32Array = cells[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = mesh
+		mm.instance_count = buf.size() / 16
+		mm.buffer = buf
+		var mi := MultiMeshInstance3D.new()
+		mi.name = "Grass"
+		mi.multimesh = mm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED        # в отражённый свет (SDFGI) трава не входит
+		mi.extra_cull_margin = 1.0                              # ветер наклоняет за рамку сетки
+		mi.visibility_range_end = fade_end + CELL * 0.75
+		parent.add_child(mi)
+		count += mm.instance_count
+
+
+## Чистый расчёт (поток): где растёт трава. Узлов и мода не трогает.
+static func compute(input: Dictionary) -> Dictionary:
+	var density := float(input.density)
+	var g: Array = input.ground
+	var gsize := Vector2(float(g[0]), float(g[1]))
+	var gpos := Vector2(float(g[2]), float(g[3])) - gsize * 0.5
+	var mask: Image = input.mask
+	var r: Array = input.mask_rect
+	var mr := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+	var occ := _occupancy(input.rects, gpos, gsize)
+	var ow := int(ceil(gsize.x / OCC))
+	var arena: Array = input.arena
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1047
 	var step := 1.0 / sqrt(density)
@@ -51,9 +108,7 @@ func build(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 			var px := x + rng.randf_range(-0.5, 0.5) * step
 			var pz := y + rng.randf_range(-0.5, 0.5) * step
 			x += step
-			var ox := int((px - gpos.x) / OCC)
-			var oz := int((pz - gpos.y) / OCC)
-			if occ[oz * ow + ox] != 0:
+			if occ[int((pz - gpos.y) / OCC) * ow + int((px - gpos.x) / OCC)] != 0:
 				continue
 			if arena.size() >= 3 and Vector2(px - float(arena[0]), pz - float(arena[1])).length() < float(arena[2]) + 3.0:
 				continue
@@ -65,35 +120,20 @@ func build(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 					continue
 			var key := Vector2i(floori(px / CELL), floori(pz / CELL))
 			if not cells.has(key):
-				cells[key] = []
+				cells[key] = PackedFloat32Array()
 			var s := rng.randf_range(0.75, 1.3)
-			var t := Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.25), s)),
-				Vector3(px, 0.0, pz))
-			(cells[key] as Array).append([t, Color(rng.randf_range(0.85, 1.1), rng.randf_range(0.88, 1.08), rng.randf_range(0.85, 1.0))])
+			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.25), s))
+			var buf: PackedFloat32Array = cells[key]
+			cells[key] = PackedFloat32Array()             # одна ссылка на буфер — дописываем без копирования
+			buf.append_array(PackedFloat32Array([b.x.x, b.y.x, b.z.x, px, b.x.y, b.y.y, b.z.y, 0.0, b.x.z, b.y.z, b.z.z, pz,
+				rng.randf_range(0.85, 1.1), rng.randf_range(0.88, 1.08), rng.randf_range(0.85, 1.0), 1.0]))
+			cells[key] = buf
 		y += step
-	for key: Vector2i in cells:
-		var list: Array = cells[key]
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_colors = true
-		mm.mesh = mesh
-		mm.instance_count = list.size()
-		for i: int in list.size():
-			mm.set_instance_transform(i, list[i][0])
-			mm.set_instance_color(i, list[i][1])
-		var mi := MultiMeshInstance3D.new()
-		mi.name = "Grass"
-		mi.multimesh = mm
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED        # в отражённый свет (SDFGI) трава не входит
-		mi.extra_cull_margin = 1.0                              # ветер наклоняет за рамку сетки
-		mi.visibility_range_end = fade_end + CELL * 0.75
-		parent.add_child(mi)
-		count += list.size()
+	return cells
 
 
 ## Где стоят постройки: 1 — занято (прямоугольники city.rects с запасом), 0 — свободно. Огромные (сама земля) — мимо.
-func _occupancy(rects: Array, gpos: Vector2, gsize: Vector2) -> PackedByteArray:
+static func _occupancy(rects: Array, gpos: Vector2, gsize: Vector2) -> PackedByteArray:
 	var w := int(ceil(gsize.x / OCC))
 	var h := int(ceil(gsize.y / OCC))
 	var occ := PackedByteArray()

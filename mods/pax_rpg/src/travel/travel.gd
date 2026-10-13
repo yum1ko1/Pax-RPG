@@ -48,7 +48,7 @@ func enter(city: Dictionary) -> void:
 	if bool(cfg.get("pause_world", true)) and game != null:
 		game.set_speed(0)
 	loading.run(city_name, _line("pax_rpg_narrator_enter", ENTER_LINES, city_name),
-		float(cfg.get("loading_seconds", 1.6)), location.build.bind(city), func() -> void: pass)
+		float(cfg.get("loading_seconds", 1.6)), location.build.bind(city), func() -> void: pass, location.is_ready)
 
 
 func leave() -> void:

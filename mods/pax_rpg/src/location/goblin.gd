@@ -260,7 +260,7 @@ func _die() -> void:
 	_set_state("dead")
 	# тело не исчезает: лежит, потом медленно уходит в землю; мана улетает в шкалу опыта (location.gd)
 	_burst(global_position + Vector3(0.0, 0.5, 0.0), Vector3.UP, MANA, 24, 0.8, -0.6, 0.9, 0.05, true)
-	_blood_pool()
+	blood_decal(get_parent(), global_position)
 	if _model != null:
 		var t := create_tween()
 		t.tween_interval(BODY_STAY)
@@ -276,9 +276,9 @@ static var _blood_tex: ImageTexture
 
 
 ## Лужа крови под павшим (декаль на земле): растекается, лежит, потом тает. Рисунок — свой, из пятен шума.
-func _blood_pool() -> void:
-	var parent := get_parent() as Node3D
-	if parent == null:
+## Статическая — её же зовёт прогрев шейдеров локации (location.gd → _warmup).
+static func blood_decal(parent: Node, at: Vector3) -> void:
+	if parent == null or not parent.is_inside_tree():
 		return
 	if _blood_tex == null:
 		_blood_tex = ImageTexture.create_from_image(_blood_image())
@@ -290,7 +290,7 @@ func _blood_pool() -> void:
 	d.upper_fade = 0.25
 	d.lower_fade = 0.25
 	parent.add_child(d)
-	d.global_position = global_position + Vector3(0.0, 0.2, 0.0)
+	d.global_position = at + Vector3(0.0, 0.2, 0.0)
 	d.rotation.y = randf() * TAU
 	d.scale = Vector3(0.4, 1.0, 0.4)
 	var tw := d.create_tween()

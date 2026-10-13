@@ -21,24 +21,46 @@ var glass: Array = []
 var paper_mats: Array = []     # бумажные фонари рынка — своё, мягкое свечение          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
 
+## Строим порциями: не дольше BUDGET_US за кадр, потом — следующий кадр (экран загрузки живёт, игра не замирает).
+const BUDGET_US := 6000
+var _t0 := 0
+var cancelled := false             # локацию убрали посреди стройки — дальше не строим
+
+
+## Сопрограмма-порция: время кадра вышло — ждём следующий. false — строить дальше нельзя (локация убрана).
+func _slice() -> bool:
+	if cancelled or not is_instance_valid(root) or not root.is_inside_tree():
+		cancelled = true
+		return false
+	if Time.get_ticks_usec() - _t0 > BUDGET_US:
+		await root.get_tree().process_frame
+		_t0 = Time.get_ticks_usec()
+		if not is_instance_valid(root) or not root.is_inside_tree():
+			cancelled = true
+			return false
+	return true
+
+
+## Сопрограмма: зовущий ждёт её (await) — город строится несколько кадров.
 func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	mod = m
 	vfx = Vfx.new(m)
 	root = Node3D.new()
 	root.name = "City"
 	parent.add_child(root)
+	_t0 = Time.get_ticks_usec()
+	if bool(data.get("landscape", true)):
+		Landscape.request(Landscape.area_of(data))         # горы и степь считаются в потоке, пока ставим город
 	var g: Array = data.get("ground", [190, 186, 0, 0])
 	var gm: Dictionary = data.get("ground_mask", {})
 	if gm.is_empty():
 		_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
 	else:
 		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)
-	if bool(data.get("landscape", true)):              # степь, горы и кочевья за стеной
-		var land := Landscape.new()
-		var gw := Vector2(float(g[0]), float(g[1]))
-		land.build(mod, root, Rect2(Vector2(float(g[2]), float(g[3])) - gw * 0.5, gw))
 	var groups := {}
 	for it: Variant in data.get("items", []):
+		if not await _slice():
+			return
 		var d: Dictionary = it
 		var p: Array = d.get("p", [0, 0, 0])
 		var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
@@ -76,6 +98,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	for k: String in groups:
+		if not await _slice():
+			return
 		_smoke_for(k, groups[k])
 		if k.ends_with("fountain_dragon.glb"):
 			for e: Array in groups[k]:
@@ -87,6 +111,11 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			continue
 		_place(k, groups[k])
 		_lights(k, groups[k])
+	if bool(data.get("landscape", true)):              # степь, горы и кочевья за стеной — последними: их сетки
+		var land := Landscape.new()                    # считаются в потоке, пока строится город
+		await land.build(mod, root, Landscape.area_of(data))
+		if not await _slice():
+			return
 	_fix_textures()
 
 
