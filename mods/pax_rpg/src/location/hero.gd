@@ -1313,6 +1313,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	var out := {"root": Vector3.ZERO}
 	if anim == null:
 		return out
+	if action == "Quake":
+		_quake_tick(delta)
 	_combo_left = maxf(0.0, _combo_left - delta)
 	if blocking:
 		_block_t += delta
@@ -1453,6 +1455,41 @@ func _cancel_recovery() -> void:
 		_combo_left = 0.0
 		action = ""
 		_blade_prev = []
+
+
+## Спецприём «Земной разлом» (震): клип Deathblow — меч над головой и вонзить в землю, герой на колене; в миг
+## удара клип замирает на quake_hold с, пока по земле идут волны (их бьёт location.gd), потом встаёт.
+var quake_since := -1.0               # с от удара меча о землю (−1 — ещё не ударил / приём не идёт)
+
+
+func quake(on_floor: bool) -> bool:
+	_cancel_hurt()
+	_cancel_recovery()
+	if anim == null or not armed or not on_floor or action != "" or not has("Deathblow"):
+		return false
+	blocking = false
+	action = "Quake"
+	quake_since = -1.0
+	_prev_off = Vector2.ZERO
+	anim.play("Deathblow", 0.15)
+	anim.speed_scale = _f("quake_speed", 1.0)
+	return true
+
+
+func _quake_tick(delta: float) -> void:
+	var length := anim.current_animation_length
+	var plunge := _f("quake_plunge", 0.43) * length
+	if quake_since < 0.0:
+		if _pos() >= plunge:
+			quake_since = 0.0
+			anim.speed_scale = 0.0                   # замер: на колене, меч в земле
+	else:
+		quake_since += delta
+		if quake_since >= _f("quake_hold", 2.35):
+			anim.speed_scale = _f("quake_speed", 1.0)
+		if _pos() >= length - 0.03:
+			quake_since = -1.0
+			_end_action()
 
 
 func parry_window() -> bool:

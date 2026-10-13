@@ -21,7 +21,8 @@
 		"Attack2": 0.8,
 		"Attack3": 1.15,
 		"Dodge": 1.65,
-		"DodgeArmed": 1.55
+		"DodgeArmed": 1.55,
+		"Quake": 0.0
 	},
 	"air": {
 		"Attack3": [
@@ -153,5 +154,25 @@
 		"posture_per_level": 0.02,
 		"skill_every": 10,
 		"xp_per_kill": 35
-	}
+	},
+	"quake_plunge": 0.43,
+	"quake_hold": 2.35,
+	"quake_speed": 1.0,
+	"quake_cooldown": 30.0,
+	"quake_posture": 35.0,
+	"quake_waves": [
+		[
+			3.0,
+			22.0
+		],
+		[
+			5.5,
+			18.0
+		],
+		[
+			8.0,
+			15.0
+		]
+	],
+	"_note_quake": "Земной разлом (T): quake_plunge — доля клипа Deathblow, где меч входит в землю; quake_hold — сколько стоит на колене; quake_cooldown — перезарядка, с; quake_posture — сколько концентрации героя тратит (риск сломать стойку); quake_waves — волны раз в секунду: [радиус м, урон]."
 }

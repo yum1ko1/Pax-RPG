@@ -11,6 +11,7 @@ var _step: AudioStreamPlayer
 var _gear: AudioStreamPlayer
 var _bed: AudioStreamPlayer
 var _far: AudioStreamPlayer
+var _impact: AudioStreamPlayer
 var _walked := 0.0
 var _next_far := 4.0
 var _left := false
@@ -23,6 +24,7 @@ func setup(mod: PaxMod, in_city: bool) -> void:
 	_step = _rand(mod, "sounds/step_%d.ogg", STEPS, 0.12, -9.0)
 	_gear = _rand(mod, "sounds/gear_%d.ogg", GEAR, 0.15, -17.0)
 	_far = _rand(mod, "sounds/city_%d.ogg", CITY, 0.2, -26.0)
+	_impact = _rand(mod, "sounds/impact_%d.wav", 4, 0.1, -2.0)          # impact_1..3 (0 нет — пропустится)
 	if city:
 		var bed: AudioStream = mod.sound("sounds/city_bed.ogg")
 		if bed is AudioStreamOggVorbis:
@@ -76,6 +78,13 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 
 
 ## Приземление после прыжка — двойной шаг.
+## Удар о землю (волна «Земного разлома»): низкий тяжёлый звук.
+func impact() -> void:
+	if _impact != null:
+		_impact.pitch_scale = randf_range(0.55, 0.7)
+		_impact.play()
+
+
 func land() -> void:
 	if _step != null:
 		_step.volume_db = -4.0

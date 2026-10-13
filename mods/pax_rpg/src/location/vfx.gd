@@ -66,7 +66,7 @@ func _q() -> QuadMesh:
 	return _quad
 
 
-func _parts(parent: Node3D, pos: Vector3, mat: Material, amount: int, life: float) -> CPUParticles3D:
+func _parts(parent: Node, pos: Vector3, mat: Material, amount: int, life: float) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	var q := QuadMesh.new()
 	q.material = mat
@@ -86,7 +86,7 @@ func _parts(parent: Node3D, pos: Vector3, mat: Material, amount: int, life: floa
 
 
 ## Дым: клубы с объёмом, тёмные у источника, светлеют и тают вверху; ветер сносит.
-func smoke(parent: Node3D, pos: Vector3, size: float, col: Color, amount: int, rise := 0.55) -> CPUParticles3D:
+func smoke(parent: Node, pos: Vector3, size: float, col: Color, amount: int, rise := 0.55) -> CPUParticles3D:
 	var p := _parts(parent, pos, _flip_mat(SMOKE, false, 1.0), amount, 5.5)
 	p.direction = Vector3.UP
 	p.spread = 10.0
@@ -113,7 +113,7 @@ func smoke(parent: Node3D, pos: Vector3, size: float, col: Color, amount: int, r
 
 
 ## Огонь из слоёв. size ≈ высота языков, м. Возвращает свет (им управляет daynight как фонарём).
-func fire(parent: Node3D, pos: Vector3, size: float, with_smoke := true) -> OmniLight3D:
+func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLight3D:
 	var core := MeshInstance3D.new()                     # ядро-ореол: жар у основания
 	var cq := QuadMesh.new()
 	cq.size = Vector2.ONE * size * 1.3
@@ -191,7 +191,7 @@ func fire(parent: Node3D, pos: Vector3, size: float, with_smoke := true) -> Omni
 
 
 ## Ореол у фонаря / кристалла: мягкое свечение вокруг источника, чуть дышит.
-func halo(parent: Node3D, pos: Vector3, color: Color, size: float, energy := 1.2) -> MeshInstance3D:
+func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) -> MeshInstance3D:
 	var mi := Halo.new()
 	var q := QuadMesh.new()
 	q.size = Vector2.ONE * size

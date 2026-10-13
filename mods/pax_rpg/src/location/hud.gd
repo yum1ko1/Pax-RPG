@@ -506,7 +506,22 @@ func _draw_skills() -> void:
 		_outline(dm, ring if on else Color(TEXT, 0.35), 2.5 if on else 1.5)
 		if on:
 			draw_colored_polygon(_diamond(c, 41.0), Color(ring, 0.18))
-		_center(c, str(sd.k), cjk, 30, TEXT if on or bool(sd.get("ready", true)) else DIM)
+		var ic: Variant = sd.get("icon", null)
+		if ic is Texture2D:                              # своя иконка (приём) вместо иероглифа
+			var isz := 62.0
+			draw_texture_rect(ic, Rect2(c - Vector2(isz, isz) * 0.5, Vector2(isz, isz)), false,
+				Color(1, 1, 1, 1.0 if bool(sd.get("ready", true)) else 0.35))
+		else:
+			_center(c, str(sd.k), cjk, 30, TEXT if on or bool(sd.get("ready", true)) else DIM)
+		var cd := float(sd.get("cd", 0.0))
+		if cd > 0.0:                                     # перезарядка: тёмная часть ромба сверху и секунды
+			var full := _diamond(c, 41.0)
+			var cut := c.y + 41.0 - 82.0 * (1.0 - cd)
+			var top := Geometry2D.intersect_polygons(full, PackedVector2Array([Vector2(c.x - 50, c.y - 50),
+				Vector2(c.x + 50, c.y - 50), Vector2(c.x + 50, cut), Vector2(c.x - 50, cut)]))
+			if top.size() > 0:
+				draw_colored_polygon(top[0], Color(0.02, 0.02, 0.06, 0.7))
+			_center(c + Vector2(0, 10), str(sd.get("cd_s", "")), sans, 22, TEXT, 4)
 		_center(Vector2(c.x, c.y + 66), "%s · %s" % [sd.key, sd.label], sans, 13, MUTED, 3)
 		x -= 116.0
 

@@ -19,6 +19,7 @@ const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
+const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
@@ -54,6 +55,11 @@ var _hero: Hero                    # модель и её анимации; null
 var _f_down := false               # F была нажата в прошлом кадре — достаём меч по нажатию, не по удержанию
 var _f_queued := false             # нажатие F пришло событием (короткое — опрос мог его не застать)
 var _prev_action := ""
+var _quake_cd := 0.0                 # с до готовности «Земного разлома»
+var _quake_waves_done := 0
+var _vfx: Vfx
+var _vignette: ColorRect
+var _quake_icon: Texture2D
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
 var _alt_down := false             # уворот — по нажатию Alt, не по удержанию
@@ -246,6 +252,8 @@ func build(city: Dictionary) -> void:
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
+	if not is_instance_valid(_vignette):
+		_add_vignette()
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
@@ -320,7 +328,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -379,6 +387,7 @@ func _make_sky() -> void:
 	env.ssr_max_steps = 24
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
+	env.adjustment_color_correction = _grade_lut()      # общий тон Юрумы: тёплые света, сиреневые тени
 	_env = env
 	_apply_volfog(float(mod.get_setting("vol_fog", 0.5)))
 	var we := WorldEnvironment.new()
@@ -627,8 +636,92 @@ func _physics_process(delta: float) -> void:
 		return
 	var t0 := Time.get_ticks_usec()
 	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
+	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
+
+
+## «Земной разлом» (T): тратит концентрацию героя (риск — переполнится, стойка сломана), перезарядка quake_cooldown;
+## пока герой на колене, раз в секунду волна: всё ближе радиуса волны получает урон, теряет равновесие, отлетает.
+func _quake_tex() -> Texture2D:
+	if _quake_icon == null:
+		_quake_icon = mod.texture("textures/icon_quake.png")
+	return _quake_icon
+
+
+func _quake_try() -> void:
+	if _hero == null or _quake_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+		return
+	if not _hero.quake(true):
+		return
+	_quake_cd = _hf("quake_cooldown", 30.0)
+	_quake_waves_done = 0
+	_posture = minf(_pos_max(), _posture + _hf("quake_posture", 35.0))
+	_since_hit = 0.0
+	if _posture >= _pos_max():                     # перебрал — стойка сломана прямо в приёме
+		_posture = _pos_max() * 0.35
+		_stagger = _hf("guard_break_time", 1.2)
+
+
+func _quake_step() -> void:
+	if _hero == null or _hero.action != "Quake" or _hero.quake_since < 0.0:
+		return
+	var waves: Array = hero_cfg.get("quake_waves", [[3.0, 22.0], [5.5, 18.0], [8.0, 15.0]])
+	if _quake_waves_done < waves.size() and _hero.quake_since >= float(_quake_waves_done):
+		var w: Array = waves[_quake_waves_done]
+		_quake_wave(float(w[0]), float(w[1]), _quake_waves_done)
+		_quake_waves_done += 1
+
+
+func _quake_wave(radius: float, dmg: float, i: int) -> void:
+	var c := _player.global_position - Vector3(0, 0.9, 0)
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var d := Vector2(gob.global_position.x - c.x, gob.global_position.z - c.z).length()
+		if d <= radius:
+			gob.take_damage(dmg * _prog.damage_mult(), c, i == 2)          # последняя волна — отбрасывает
+			gob.posture = minf(gob.max_posture, gob.posture + dmg * 0.8)
+			_numbers.append({"pos": gob.global_position + Vector3(0, 1.3, 0), "v": int(dmg), "crit": i == 2, "t": 0.0})
+	if _sfx != null:
+		_sfx.impact()
+	# кольцо волны: светящийся тор от прошлого радиуса до этого, пыль по кругу
+	var ring := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.92
+	tor.outer_radius = 1.0
+	tor.rings = 64
+	ring.mesh = tor
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	rm.albedo_color = Color(2.2, 0.9, 1.6, 0.9)
+	ring.material_override = rm
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_view.add_child(ring)
+	ring.global_position = c + Vector3(0, 0.08, 0)
+	var r0 := maxf(0.5, radius - 2.5)
+	ring.scale = Vector3(r0, 0.6, r0)
+	var tw := ring.create_tween()
+	tw.tween_property(ring, "scale", Vector3(radius, 0.6, radius), 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.parallel().tween_property(rm, "albedo_color:a", 0.0, 0.6)
+	tw.tween_callback(ring.queue_free)
+	if _vfx == null:
+		_vfx = Vfx.new(mod)
+	var dust := _vfx.smoke(_view, c + Vector3(0, 0.2, 0), 0.9 + i * 0.3, Color(0.7, 0.58, 0.5, 0.5), 18, 1.4)
+	dust.one_shot = true
+	dust.explosiveness = 0.9
+	dust.preprocess = 0.0
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	dust.emission_ring_axis = Vector3.UP
+	dust.emission_ring_radius = radius
+	dust.emission_ring_inner_radius = radius * 0.8
+	dust.emission_ring_height = 0.1
+	dust.emitting = true
+	dust.finished.connect(dust.queue_free)
+	_sparks(c + Vector3(0, 0.3, 0), Color(1.0, 0.6, 0.85), 30 + i * 10, 6.0)
 
 
 func _physics_body(delta: float) -> void:
@@ -748,6 +841,7 @@ func _physics_body(delta: float) -> void:
 		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
 			_face_now(_aim_yaw())                    # каждый удар серии — заново туда, куда смотрит камера
 		_prev_action = _hero.action
+		_quake_step()
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)
@@ -1149,6 +1243,56 @@ func _apply_volfog(v: float) -> void:
 		_env.volumetric_fog_sky_affect = 0.0
 
 
+## LUT 17³ (цветокоррекция сцены): тени уходят в сирень неба Юрумы, света — в тёплое золото, мягкая S-кривая.
+## Делаем в коде — без файлов и без потерь при сжатии.
+static func _grade_lut() -> ImageTexture3D:
+	var n := 17
+	var layers: Array[Image] = []
+	var lilac := Vector3(0.93, 0.86, 1.1)
+	var warm := Vector3(1.07, 1.0, 0.88)
+	for b: int in n:
+		var img := Image.create(n, n, false, Image.FORMAT_RGB8)
+		for g: int in n:
+			for r: int in n:
+				var c := Vector3(r, g, b) / float(n - 1)
+				var lum := c.dot(Vector3(0.2126, 0.7152, 0.0722))
+				var ws := 1.0 - smoothstep(0.0, 0.45, lum)
+				var wh := smoothstep(0.45, 1.0, lum)
+				c = c.lerp(c * lilac + Vector3(0.02, 0.008, 0.04), ws * 0.65)
+				c = c.lerp(c * warm, wh * 0.55)
+				c += (c - Vector3.ONE * 0.5) * 0.06
+				img.set_pixel(r, g, Color(clampf(c.x, 0, 1), clampf(c.y, 0, 1), clampf(c.z, 0, 1)))
+		layers.append(img)
+	var t := ImageTexture3D.new()
+	t.create(Image.FORMAT_RGB8, n, n, n, false, layers)
+	return t
+
+
+## Виньетка: мягко темнит и чуть сиренит края кадра (поверх 3D, под HUD).
+const VIGNETTE := """shader_type canvas_item;
+uniform float strength = 0.55;
+void fragment() {
+	vec2 d = UV - vec2(0.5);
+	float v = smoothstep(0.35, 0.85, length(d * vec2(1.0, 0.85)));
+	COLOR = vec4(0.06, 0.03, 0.1, v * strength);
+}"""
+
+
+func _add_vignette() -> void:
+	var r := ColorRect.new()
+	r.name = "PaxRpgVignette"
+	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = VIGNETTE
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	r.material = m
+	add_child(r)
+	move_child(r, 0)
+	_vignette = r
+
+
 func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
@@ -1369,14 +1513,17 @@ func _hud_tick(delta: float) -> void:
 		{"k": "風", "key": "Alt", "label": mod.tr_key("pax_rpg_hud_dodge"), "on": act in ["Dodge", "DodgeArmed"],
 			"color": Color(0.47, 0.84, 1.0)},
 		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
-			"color": Color(1.0, 0.55, 0.78)}]
+			"color": Color(1.0, 0.55, 0.78)},
+		{"k": "震", "key": "T", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
+			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
+			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0}]
 	_hud.st = st
 	if is_instance_valid(_city_map):
 		_city_map.st = st
 	_hud.refresh()
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T]
 
 
 func _input(event: InputEvent) -> void:
@@ -1422,6 +1569,8 @@ func _input(event: InputEvent) -> void:
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
 				and _arena.can_start():
 			_arena.start()
+		if key.pressed and not key.echo and key.physical_keycode == KEY_T:
+			_quake_try()                             # «Земной разлом»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_X and is_instance_valid(_arena):
 			_arena.leave()                           # покинуть арену
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
