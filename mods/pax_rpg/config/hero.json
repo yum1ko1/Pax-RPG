@@ -176,8 +176,7 @@
 		]
 	],
 	"_note_quake": "Земной разлом (T): quake_plunge — доля клипа Deathblow, где меч входит в землю; quake_hold — сколько стоит на колене; quake_cooldown — перезарядка, с; quake_posture — сколько концентрации героя тратит (риск сломать стойку); quake_waves — волны раз в секунду: [радиус м, урон].",
-	"iai_crouch": 0.48,
-	"iai_speed": 0.8,
+	"iai_speed": 1.4, "iai_rise_speed": 1.2,
 	"iai_cooldown": 90.0,
 	"iai_damage": 60.0
 }

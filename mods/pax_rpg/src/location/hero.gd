@@ -1494,9 +1494,9 @@ func _quake_tick(delta: float) -> void:
 			_end_action()
 
 
-## Иай (iai.gd): на колено и держать позу, пока идёт приём; iai_end — встать. Поза — пока клип Deathblow
-## в низком приседе (iai_crouch — доля клипа); позже — свои ключевые позы.
-var _iai_hold := true
+## Иай (iai.gd): IaiKneel — на колено, IaiHold — петля (дыхание, большой палец выталкивает цубу), пока идёт приём;
+## iai_end — IaiRise, встать. Клипы — pax_rpg/dev/blender/knight/iai_clips.py (Mixamo Kneeling Down / Standing).
+var _iai_stage := 0                                  # 0 — садится, 1 — держит, 2 — встаёт
 
 
 func iai_begin() -> bool:
@@ -1504,31 +1504,33 @@ func iai_begin() -> bool:
 	_cancel_recovery()
 	if action.begins_with("Draw") or action.begins_with("Sheathe"):
 		_end_action()                                # приём важнее — меч «долетит» сам
-	if anim == null or action != "" or not has("Deathblow"):
+	if anim == null or action != "" or not has("IaiKneel"):
 		return false
 	blocking = false
 	action = "Iai"
-	_iai_hold = true
+	_iai_stage = 0
 	_prev_off = Vector2.ZERO
-	anim.play("Deathblow", 0.2)
-	anim.speed_scale = _f("iai_speed", 0.8)
+	anim.get_animation("IaiHold").loop_mode = Animation.LOOP_LINEAR
+	anim.play("IaiKneel", 0.15)
+	anim.speed_scale = _f("iai_speed", 1.4)
 	return true
 
 
 func _iai_tick() -> void:
-	var length := anim.current_animation_length
-	if _iai_hold:
-		if _pos() >= _f("iai_crouch", 0.48) * length:
-			anim.speed_scale = 0.0
-	elif _pos() >= length - 0.03:
+	if _iai_stage == 0 and _pos() >= anim.current_animation_length - 0.02:
+		_iai_stage = 1
+		anim.play("IaiHold", 0.1)
+		anim.speed_scale = 1.0
+	elif _iai_stage == 2 and _pos() >= anim.current_animation_length - 0.03:
 		_end_action()
 
 
 func iai_end() -> void:
 	if action != "Iai":
 		return
-	_iai_hold = false
-	anim.speed_scale = _f("iai_speed", 0.8)
+	_iai_stage = 2
+	anim.play("IaiRise", 0.15)
+	anim.speed_scale = _f("iai_rise_speed", 1.2)
 
 
 ## Узел, который ходит за костью (крепить предметы: катана у бедра).

@@ -18,9 +18,9 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 
 const LINES := 20
-const T_DRAW := 0.6
-const T_STOP := 0.85
-const T_LINES := 1.25
+const T_DRAW := 1.0
+const T_STOP := 1.25
+const T_LINES := 1.65
 const STOP_IN := 0.35           # с — мир уходит в остановку
 const REWIND := 0.9             # с — перемотка
 const RAMP := 0.7               # с — время разгоняется после перемотки
@@ -82,7 +82,7 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 	_fx.material = _mat
 	_fx.visible = false
 	add_child(_fx)
-	for n: String in ["timestop", "rewind", "draw", "sheathe", "slash", "heart"]:
+	for n: String in ["timestop", "rewind", "draw", "sheathe", "tsuba", "slash", "heart"]:
 		var p := AudioStreamPlayer.new()
 		p.stream = mod.sound("sounds/iai_%s.wav" % n)
 		p.bus = "PaxRpgSfx"
@@ -342,6 +342,7 @@ func _sheathe() -> void:
 	if _blade != null:
 		var tw := create_tween()
 		tw.tween_property(_blade, "position:z", 0.0, 0.1).set_ease(Tween.EASE_IN)
+		tw.tween_callback(_play.bind("tsuba"))           # цуба встала к ножнам — щелчок
 	for v: Variant in _victims:
 		if is_instance_valid(v) and _on_cut.is_valid():
 			_on_cut.call(v)
