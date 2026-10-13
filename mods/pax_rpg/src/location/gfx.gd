@@ -13,7 +13,10 @@ extends Node
 ##    wind.gd) и pax_rpg_player (где герой — трава расступается) — их читают grass/foliage/steppe/mountain.gdshader;
 ##  • дымка у костров и жаровен (FogVolume) — огонь светится в воздухе;
 ##  • размытие в движении (motion_blur.gd) — по векторам движения TAA;
-##  • объёмные облака и блики с лучами солнца — эффекты игры (Pax.graphics.clouds / lens) на камере локации.
+##  • объёмные облака и блики с лучами солнца — эффекты игры (Pax.graphics.clouds / lens) на камере локации;
+##  • слой камеры (shaders/lens.gdshader на контейнере вида, без потока рендера): цифровая резкость, сияние солнца,
+##    размытие при повороте камеры (как в Sekiro / The Witcher 3); «съёмочные» приёмы (бочка, аберрация, зерно, грязь
+##    на линзе, «призраки», ручная камера — camera_sway) есть, но в RPG выключены (config gfx.lens_*).
 ## Оптимизация: окклюзия (Hi-Z движка: окклюдеры стен и домов — city.gd) — заслонённое не рисуется; каскады теней
 ## распределены к герою (ближний — несколько метров, чёткий); LOD-порог сеток — mesh_lod_px.
 ## Герой и враги в SDFGI — динамические (иначе оставляют «тень-призрак» в отражённом свете).
@@ -91,6 +94,7 @@ func apply_viewport(v: SubViewport) -> void:
 		_:
 			v.msaa_3d = Viewport.MSAA_2X
 	v.use_debanding = _b("debanding", true)
+	_lens_layer(v)
 	v.use_occlusion_culling = _b("occlusion", true)      # дома и стены (OccluderInstance3D) заслоняют то, что за ними
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
@@ -144,6 +148,10 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 		ca.dof_blur_far_transition = _f("dof_far_transition", 70.0)
 		ca.dof_blur_amount = _f("dof_amount", 0.04)
 	we.camera_attributes = ca
+	var dirt := _f("lens_dirt", 0.0)                     # грязь на линзе — приём «съёмки»; в RPG по умолчанию нет
+	if dirt > 0.0:                                        # грязь на линзе: пятна и пылинки видны только в ореолах света
+		env.glow_map = _dirt_texture()
+		env.glow_map_strength = dirt
 
 
 ## Облака, блики и размытие в движении — эффекты в потоке рендера. Ставятся ПОСЛЕ загрузки (location.gd →
@@ -154,13 +162,13 @@ func apply_camera(c: Camera3D, s: DirectionalLight3D) -> void:
 	cam = c
 	if not is_instance_valid(c) or not c.is_inside_tree():
 		return
-	if _b("clouds", true) and Pax.graphics.available("clouds"):
+	if _b("clouds", false) and Pax.graphics.available("clouds"):   # выкл.: с отдельным потоком рендера вешали игру
 		print("[pax_rpg] fx: clouds…")
 		_clouds = Pax.graphics.clouds(c, {"clouds_coverage": _f("clouds_coverage", 0.42)})
-	if _b("lens", true) and Pax.graphics.available("lens"):
+	if _b("lens", false) and Pax.graphics.available("lens"):
 		print("[pax_rpg] fx: lens…")
 		_lens = Pax.graphics.lens(c, {"sun_color": Color(1.0, 0.82, 0.64, 0.22)}, s)
-	var mb := _f("motion_blur", 0.35)
+	var mb := _f("motion_blur", 0.0)                     # свои блики и размытие — в lens.gdshader (flare, cam_blur)
 	if _fplus and mb > 0.0:
 		print("[pax_rpg] fx: motion blur…")
 		_mb = MotionBlur.new()
@@ -239,6 +247,7 @@ func _process(delta: float) -> void:
 		_mark_dynamic()
 	_refresh_probe()
 	_rim_follow()
+	_camera_lens(delta)
 	if is_instance_valid(player):
 		var pp := player.global_position
 		RenderingServer.global_shader_parameter_set(&"pax_rpg_player", Vector4(pp.x, pp.y, pp.z, 0.0))
@@ -353,3 +362,106 @@ func _fire_fog() -> void:
 		ol.get_parent().add_child(fv)
 		fv.global_position = ol.global_position + Vector3(0, 0.4, 0)
 		made += 1
+
+
+var lens_mat: ShaderMaterial
+var mod: PaxMod                    # ставит location.gd до apply_viewport (шейдер слоя камеры — файл мода)
+static var _dirt: ImageTexture
+
+
+## Слой камеры на контейнере 3D-вида (иай рисует в нём же остановку времени — iai.gd).
+func _lens_layer(v: SubViewport) -> void:
+	var box := v.get_parent() as SubViewportContainer
+	if box == null or mod == null or not _b("camera_fx", true):
+		return
+	var sh: Shader = mod.shader("shaders/lens.gdshader")
+	if sh == null:
+		return
+	lens_mat = ShaderMaterial.new()
+	lens_mat.shader = sh
+	lens_mat.set_meta("pax_rpg_lens", true)
+	for kv: Array in [["distortion", 0.0], ["ca", 0.0], ["sharpen", 0.22], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
+		lens_mat.set_shader_parameter(str(kv[0]), _f("lens_" + str(kv[0]), float(kv[1])))
+	box.material = lens_mat
+
+
+## Грязь на линзе (glow_map): разводы и пылинки — свой рисунок, без файла (один раз за сессию).
+static func _dirt_texture() -> ImageTexture:
+	if _dirt != null:
+		return _dirt
+	var n := 256
+	var img := Image.create(n, n, false, Image.FORMAT_RGB8)
+	var noise := FastNoiseLite.new()
+	noise.seed = 4242
+	noise.frequency = 0.012
+	for y: int in n:
+		for x: int in n:
+			var v := 0.18 + 0.55 * smoothstep(0.1, 0.7, noise.get_noise_2d(x, y) * 0.5 + 0.5)   # разводы
+			img.set_pixel(x, y, Color(v, v * 0.97, v * 0.94))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for i: int in 70:                                     # пылинки — каждая только в своём квадрате
+		var c := Vector2(rng.randf(), rng.randf()) * n
+		var rad := rng.randf_range(1.0, 5.0)
+		var peak := rng.randf_range(0.4, 1.0)
+		for y: int in range(maxi(0, int(c.y - rad)), mini(n, int(c.y + rad) + 1)):
+			for x: int in range(maxi(0, int(c.x - rad)), mini(n, int(c.x + rad) + 1)):
+				var a := peak * (1.0 - smoothstep(rad * 0.4, rad, Vector2(x, y).distance_to(c)))
+				if a > img.get_pixel(x, y).r:
+					img.set_pixel(x, y, Color(a, a * 0.97, a * 0.94))
+	_dirt = ImageTexture.create_from_image(img)
+	return _dirt
+
+
+var _prev_fwd := Vector3.ZERO
+var _sun_vis := 0.0
+
+
+## Слой камеры по кадру: размытие поворота (насколько повернулась камера за кадр) и блики солнца (где солнце
+## на экране и не заслонено ли — луч по коллизиям города).
+func _camera_lens(delta: float) -> void:
+	if lens_mat == null or not is_instance_valid(cam) or not is_instance_valid(view):
+		return
+	var b := cam.global_transform.basis
+	var fwd := -b.z
+	var vs := Vector2(view.size)
+	var aspect := vs.x / maxf(vs.y, 1.0)
+	var th := tan(deg_to_rad(cam.fov) * 0.5)
+	var shutter := _f("cam_blur", 0.5)
+	var mb := Vector2.ZERO
+	if _prev_fwd != Vector3.ZERO and shutter > 0.0 and delta > 0.0:
+		var d := fwd - _prev_fwd
+		mb = Vector2(d.dot(b.x) / (2.0 * th * aspect), -d.dot(b.y) / (2.0 * th)) * shutter
+		if mb.length() > 0.035:
+			mb = mb.normalized() * 0.035
+	_prev_fwd = fwd
+	lens_mat.set_shader_parameter("mblur", mb)
+	var fl := _f("flare", 1.0)
+	if fl <= 0.0 or not is_instance_valid(sun):
+		lens_mat.set_shader_parameter("sun_vis", 0.0)
+		return
+	var to_sun := sun.global_transform.basis.z.normalized()        # свет летит по −Z — солнце в стороне +Z
+	var want := 0.0
+	var p := cam.global_position + to_sun * 1000.0
+	if to_sun.y > -0.02 and not cam.is_position_behind(p) and sun.light_energy > 0.3:
+		var uv := cam.unproject_position(p) / vs
+		if uv.x > -0.2 and uv.x < 1.2 and uv.y > -0.2 and uv.y < 1.2:
+			lens_mat.set_shader_parameter("sun_uv", uv)
+			want = 0.0 if _sun_blocked else clampf(sun.light_energy / 1.35, 0.0, 1.0)   # за домом — нет
+	_sun_vis = move_toward(_sun_vis, want, delta * 4.0)
+	lens_mat.set_shader_parameter("sun_vis", _sun_vis * fl)
+	lens_mat.set_shader_parameter("sun_col", Vector3(sun.light_color.r, sun.light_color.g, sun.light_color.b))
+
+
+var _sun_blocked := false
+
+
+## Заслонено ли солнце (луч по коллизиям города) — в такте физики: вне его пространство физики может быть занято.
+func _physics_process(_delta: float) -> void:
+	if not is_instance_valid(cam) or not is_instance_valid(sun) or not is_instance_valid(view) or view.world_3d == null:
+		return
+	var to_sun := sun.global_transform.basis.z.normalized()
+	var q := PhysicsRayQueryParameters3D.create(cam.global_position, cam.global_position + to_sun * 300.0)
+	if player is CollisionObject3D:
+		q.exclude = [(player as CollisionObject3D).get_rid()]   # сам герой солнце не заслоняет
+	_sun_blocked = not view.world_3d.direct_space_state.intersect_ray(q).is_empty()

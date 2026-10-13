@@ -46,6 +46,7 @@ var _on_fx: Callable            # (позиция мира, цвет) -> void �
 var _set_hud: Callable          # (bool) -> void
 var _box: SubViewportContainer    # контейнер 3D-вида — на него ставится шейдер остановки
 var _mat: ShaderMaterial
+var _shared := false            # _mat — общий слой камеры (lens.gdshader): не снимать, только k / wave / flash в 0
 var _times: PackedFloat32Array = []
 var _lines: Array = []          # {a, b, t0}
 var _victims: Array = []
@@ -80,8 +81,15 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = add
 	_box = view.get_parent() as SubViewportContainer
-	_mat = ShaderMaterial.new()
-	_mat.shader = mod.shader("shaders/timestop.gdshader")
+	var lens: ShaderMaterial = null
+	if is_instance_valid(_box):
+		lens = _box.material as ShaderMaterial
+	if lens != null and lens.has_meta("pax_rpg_lens"):
+		_mat = lens                                   # слой камеры (gfx.gd) уже на контейнере — остановка в нём же
+		_shared = true
+	else:
+		_mat = ShaderMaterial.new()
+		_mat.shader = mod.shader("shaders/timestop.gdshader")
 	for n: String in ["timestop", "rewind", "draw", "sheathe", "tsuba", "slash", "heart"]:
 		var p := AudioStreamPlayer.new()
 		p.stream = mod.sound("sounds/iai_%s.wav" % n)
@@ -242,6 +250,12 @@ func warmup(at: Vector3) -> void:
 
 ## Шейдер остановки на контейнере 3D-вида: только пока эффект виден (иначе — лишний проход каждый кадр).
 func _set_fx(on: bool) -> void:
+	if _shared:                                   # слой камеры стоит всегда; без иая k = 0
+		if not on:
+			_mat.set_shader_parameter("k", 0.0)
+			_mat.set_shader_parameter("wave", -1.0)
+			_mat.set_shader_parameter("flash", 0.0)
+		return
 	if not is_instance_valid(_box):
 		return
 	var want: Material = _mat if on else null

@@ -224,6 +224,7 @@ func build(city: Dictionary) -> void:
 	_box.add_child(_view)
 	_gfx = Gfx.new()
 	_gfx.setup(cfg.get("gfx", {}) as Dictionary)
+	_gfx.mod = mod
 	_gfx.apply_viewport(_view)                       # TAA / FSR2 вместо MSAA, debanding
 	_gfx.push_globals()
 	_map_rects.clear()
@@ -1163,6 +1164,17 @@ func _follow_camera(delta := 0.0) -> void:
 		var off := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * a
 		pos += off
 		look += off * 0.6
+	var sway := _f("camera_sway", 0.0)                # по умолчанию выкл.: RPG, а не съёмка с плеча
+	if sway > 0.0 and is_instance_valid(_player):
+		# «ручная» камера (приём Bodycam): дыхание в покое, покачивание на бегу — кадр живой, а не на штативе
+		var t := Time.get_ticks_msec() * 0.001
+		var run := clampf(Vector2(_player.velocity.x, _player.velocity.z).length() / maxf(_f("run_speed", 5.0), 0.1), 0.0, 1.0)
+		var amp := sway * (0.012 + 0.035 * run)
+		var hand := Vector3(sin(t * 1.1) * 0.6 + sin(t * 2.3 + 1.7) * 0.4,
+			sin(t * 1.7 + 0.5) * 0.5 + sin(t * 3.1) * 0.3 + sin(t * 9.0) * 0.25 * run, 0.0) * amp
+		hand = _cam.global_transform.basis * hand
+		pos += hand
+		look += hand * 0.35
 	_cam.position = pos
 	_cam.look_at(look, Vector3.UP)
 
