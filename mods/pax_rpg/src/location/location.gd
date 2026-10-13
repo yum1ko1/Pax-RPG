@@ -15,6 +15,7 @@ var START := ARENA_START           # точка появления (у горо�
 var _gate_radius := GATE_RADIUS
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
+const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
@@ -132,6 +133,18 @@ func _spawn_goblins(n: int) -> void:
 			_hero_blocking)
 		_view.add_child(g)
 		_goblins.append(g)
+
+
+## Орк-чемпион перед героем (консоль rpg_orc — проверка боя).
+func spawn_orc() -> String:
+	if _view == null or not is_instance_valid(_player):
+		return "нет локации"
+	var g := Orc.new()
+	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+	g.setup(mod, _player, _on_hero_hit, _player.global_position + fwd * 8.0, _hero_attacking, _hero_blocking)
+	_view.add_child(g)
+	_goblins.append(g)
+	return "orc spawned"
 
 
 func _hp_max() -> float:
@@ -951,9 +964,23 @@ func _try_deathblow() -> bool:
 
 ## Удар гоблина по герою: кувырок — мимо; парирование в первые доли секунды блока — отбит, у врага сбита
 ## концентрация; блок — урона нет, но копится своя концентрация (переполнилась — стойка сломана); иначе — урон.
-func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
+## kind: "heavy" — блок копит вдвое больше; "perilous" — не блокируется и не парируется (только уйти);
+## "charge" — таран: блок не держит, сбивает с ног; "parried" — враг отбил удар героя, стойка героя проседает.
+func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and _hero.invulnerable():
 		return
+	if kind == "parried":
+		_posture = minf(_pos_max(), _posture + 18.0)
+		_since_hit = 0.0
+		_stagger = maxf(_stagger, 0.5)
+		if _hero != null:
+			_hero.hurt()
+		if _posture >= _pos_max():
+			_posture = _pos_max() * 0.35
+			_stagger = _hf("guard_break_time", 1.2)
+		_update_hud()
+		return
+	var unblockable := kind == "perilous" or kind == "charge"
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	var facing := true
 	if attacker != null:
@@ -961,15 +988,15 @@ func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
 		to.y = 0.0
 		facing = to.length() < 0.01 or fwd.dot(to.normalized()) > 0.2
 	var spark_at := _player.global_position + fwd * 0.7 + Vector3(0.0, 1.2, 0.0)
-	if _hero != null and facing and _hero.parry_window():
+	if _hero != null and facing and not unblockable and _hero.parry_window():
 		_hero.deflect()
 		_posture = minf(_pos_max(), _posture + 4.0)
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
 		if attacker is Goblin:
 			(attacker as Goblin).deflected(_player.global_position)
 		return
-	if _hero != null and facing and _hero.blocking:
-		_posture = minf(_pos_max(), _posture + damage * 2.2)
+	if _hero != null and facing and not unblockable and _hero.blocking:
+		_posture = minf(_pos_max(), _posture + damage * (4.4 if kind == "heavy" else 2.2))
 		_since_hit = 0.0
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
 		_player.velocity -= fwd * 3.0
@@ -985,7 +1012,14 @@ func _on_hero_hit(damage: float, attacker: Node3D = null) -> void:
 	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
-		_hero.hurt()
+		if kind == "charge" and _hp > 0.0:
+			_hero.knock_down()
+			if attacker != null:
+				var push := _player.global_position - attacker.global_position
+				push.y = 0.0
+				_player.velocity += push.normalized() * 7.0
+		else:
+			_hero.hurt()
 	if _hp <= 0.0 and is_instance_valid(_player):
 		_hp = _hp_max()
 		_hp_ghost = 1.0
@@ -1186,9 +1220,9 @@ func _hud_tick(delta: float) -> void:
 	st["enemies"] = enemies
 	var e := _hud_enemy()
 	if e != null:
-		st["enemy"] = {"name": mod.tr_key("pax_rpg_goblin"), "hp": e.hp / Goblin.MAX_HP,
-			"posture": e.posture / Goblin.MAX_POSTURE, "broken": e.can_deathblow()}
-		st["ult"] = e.posture / Goblin.MAX_POSTURE if not e.can_deathblow() else 1.0
+		st["enemy"] = {"name": mod.tr_key(e.display_key), "hp": e.hp / e.max_hp,
+			"posture": e.posture / e.max_posture, "broken": e.can_deathblow()}
+		st["ult"] = e.posture / e.max_posture if not e.can_deathblow() else 1.0
 		st["ult_ready"] = e.can_deathblow()
 	if _lock != null and is_instance_valid(_lock):
 		var lp := _lock.global_position + Vector3(0.0, 0.85, 0.0)

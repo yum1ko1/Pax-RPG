@@ -48,7 +48,10 @@ const MANA := Color(0.75, 0.45, 1.0)
 static var _attacker: Node = null   # у кого жетон атаки
 
 var mod: PaxMod
-var hp := MAX_HP
+var max_hp := MAX_HP
+var max_posture := MAX_POSTURE
+var display_key := "pax_rpg_goblin"   # имя в HUD (ключ перевода)
+var hp := max_hp
 var posture := 0.0
 var dead := false
 var _target: Node3D
@@ -173,14 +176,14 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	if dead or _state == "broken":
 		return
 	hp = maxf(0.0, hp - amount)
-	posture = minf(MAX_POSTURE, posture + amount * 0.7)
+	posture = minf(max_posture, posture + amount * 0.7)
 	_since_hit = 0.0
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
 	_burst(global_position + Vector3(0.0, 0.75, 0.0) - away * 0.2, away, Color(0.55, 0.02, 0.03), 36, 3.5, 9.0, 0.5,
 		0.06)
-	if hp <= 0.0 or posture >= MAX_POSTURE:
+	if hp <= 0.0 or posture >= max_posture:
 		_lethal = hp <= 0.0
 		_set_state("broken")
 		if knock:
@@ -204,18 +207,18 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 func deflected(from: Vector3) -> void:
 	if dead:
 		return
-	posture = minf(MAX_POSTURE, posture + 34.0)
+	posture = minf(max_posture, posture + 34.0)
 	_since_hit = 0.0
 	var away := global_position - from
 	away.y = 0.0
 	velocity = (away.normalized() if away.length() > 0.01 else Vector3.FORWARD) * 3.0
-	_set_state("broken" if posture >= MAX_POSTURE else "deflected")
+	_set_state("broken" if posture >= max_posture else "deflected")
 	_update_bars()
 
 
 ## Удар заблокирован: немного концентрации.
 func blocked() -> void:
-	posture = minf(MAX_POSTURE, posture + 8.0)
+	posture = minf(max_posture, posture + 8.0)
 	_update_bars()
 
 
@@ -241,7 +244,7 @@ func _die() -> void:
 
 
 func _respawn() -> void:
-	hp = MAX_HP
+	hp = max_hp
 	posture = 0.0
 	dead = false
 	_lethal = false
@@ -397,7 +400,7 @@ func _phys(delta: float) -> void:
 	_state_t += delta
 	_since_hit += delta
 	if _state not in ["attack", "windup", "broken", "dead"] and _since_hit > 1.5 and posture > 0.0:
-		posture = maxf(0.0, posture - delta * (14.0 if hp > MAX_HP * 0.5 else 6.0))
+		posture = maxf(0.0, posture - delta * (14.0 if hp > max_hp * 0.5 else 6.0))
 		_update_bars()
 	var to := _target.global_position - global_position
 	to.y = 0.0
@@ -537,7 +540,7 @@ func _phys(delta: float) -> void:
 				if _lethal:
 					_die()                               # без добивания — всё равно пал
 				else:
-					posture = MAX_POSTURE * 0.5
+					posture = max_posture * 0.5
 					_update_bars()
 					_set_state("circle")
 		"dead":

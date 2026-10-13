@@ -11,7 +11,7 @@ const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
-	"DodgeArmed", "Hurt", "Parry", "Deathblow"]
+	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
@@ -1191,7 +1191,16 @@ func dodge(on_floor: bool) -> bool:
 
 ## Во время кувырка удары проходят мимо (i-frames).
 func invulnerable() -> bool:
-	return action in ["Dodge", "DodgeArmed"]
+	return action in ["Dodge", "DodgeArmed", "Knocked", "GetUp"]
+
+
+## Сбит с ног (таран орка): падение, потом подъём; пока лежит — неуязвим и без управления.
+func knock_down() -> void:
+	if anim == null or not has("Knocked"):
+		hurt()
+		return
+	blocking = false
+	_play_once("Knocked")
 
 
 ## Получил удар: клип Hurt (если есть в модели) — короткая реакция, не сбивает уворот и удар финала.
@@ -1233,6 +1242,9 @@ func _on_finished(n: StringName) -> void:
 
 
 func _end_action() -> void:
+	if action == "Knocked" and has("GetUp"):
+		_play_once("GetUp")
+		return
 	if action.begins_with("Draw"):
 		armed = true
 	elif action.begins_with("Sheathe"):

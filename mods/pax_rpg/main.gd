@@ -31,6 +31,7 @@ func _mod_loaded() -> void:
 	add_child(travel)
 	Pax.add_menu_item("pax_rpg_test", tr_key("pax_rpg_menu_test"), _open_test_arena)
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
+	Pax.register_command("rpg_orc", _orc_command, "rpg_orc — орк-чемпион перед героем (тест боя)")
 	Pax.register_command("rpg_city", _city_command, "rpg_city <id> — открыть город (напр. gharn)")
 	Pax.register_command("rpg_cam", _cam_command, "rpg_cam N — ракурс превью города (0 — обычная камера)")
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
@@ -67,6 +68,10 @@ func _world_ready(g: PaxGame) -> void:
 func _arena_command(_args: PackedStringArray) -> String:
 	_open_test_arena()
 	return "Pax RPG: test arena"
+
+
+func _orc_command(_args: PackedStringArray) -> String:
+	return location.spawn_orc()
 
 
 func _city_command(args: PackedStringArray) -> String:
