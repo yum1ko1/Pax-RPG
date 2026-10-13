@@ -422,7 +422,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 	var neck_b := _skel.find_bone(str(it.get("neck_bone", "neck")))
 	var cl: Array = it.get("collar", [0.075, 0.035, 0.11])       # назад от шеи, вниз, полуширина у шеи (м)
 	var nk := Vector3.ZERO
-	if neck_b >= 0:
+	if neck_b >= 0 and it.has("collar"):                       # подтяжка к шее — только если задана: без неё край ровно по плечам
 		nk = model.global_transform.affine_inverse() * _bone_world(neck_b, true).origin
 		for i: int in nx:
 			var u := rest[i].x / half0
