@@ -41,6 +41,8 @@ func _proc(delta: float) -> void:
 		_next = randf_range(4.0, 9.0)
 		_spawn_gust()
 	_gust = maxf(0.0, _gust - delta * 0.35)
+	# трава, листва, степь — шейдеры читают ветер из глобального параметра (gfx.gd: pax_rpg_wind)
+	RenderingServer.global_shader_parameter_set(&"pax_rpg_wind", Vector4(dir.x, dir.z, 0.55 + 0.25 * sin(Time.get_ticks_msec() * 0.0004), _gust))
 	for l: Variant in leaves:
 		if is_instance_valid(l):
 			(l as CPUParticles3D).gravity = Vector3(0.0, -0.55, 0.0) + dir * (0.35 + 1.6 * _gust)

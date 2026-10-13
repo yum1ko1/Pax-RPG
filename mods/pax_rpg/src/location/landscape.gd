@@ -1,6 +1,7 @@
 extends RefCounted
-## Мир за частоколом: степь холмами до горизонта, три гряды гор со снежными шапками (дымка тумана делает их
-## синими и далёкими), кочевые юрты на холмах. Без коллизий — герой за стену не выходит. Высоты — шум
+## Мир за частоколом: степь холмами до горизонта (shaders/steppe.gdshader — текстура земли, волны ветра, тени облаков),
+## горные хребты кольцом (ridged-шум, shaders/mountain.gdshader — скалы слоями, снег по высоте и уклону; дымка
+## тумана делает их синими и далёкими), кочевые юрты на холмах. Без коллизий — герой за стену не выходит. Высоты — шум
 ## (FastNoiseLite), город — в плоской «чаше» (land: [центр X, центр Z, полуширина, полуглубина]).
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 
@@ -63,74 +64,97 @@ func _terrain() -> void:
 			st.add_index(a + n + 2)
 			st.add_index(a + n + 1)
 	st.generate_normals()
+	st.generate_tangents()                               # для карты нормалей земли
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	var tex := mod.texture("models/gharn/tex/ground.jpg")
-	if tex != null:
-		var img := tex.get_image()
-		if img != null and not img.is_compressed() and not img.has_mipmaps():
-			img.generate_mipmaps()
-			tex = ImageTexture.create_from_image(img)
-	mat.albedo_texture = tex
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	mat.roughness = 0.95
-	mi.material_override = mat
+	var sh: Shader = mod.shader("shaders/steppe.gdshader")
+	if sh != null:
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("g_col", _tex("models/gharn/tex/ground.jpg", false))
+		m.set_shader_parameter("g_nrm", _tex("models/gharn/tex/ground_n.jpg", true))
+		mi.material_override = m
+	else:
+		var mat := StandardMaterial3D.new()
+		mat.vertex_color_use_as_albedo = true
+		mat.albedo_texture = _tex("models/gharn/tex/ground.jpg", false)
+		mat.roughness = 0.95
+		mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED        # даль — не в отражённый свет (SDFGI), дорого и не видно
 	root.add_child(mi)
 
 
-## Горы: три кольца пиков (ближние ниже и теплее, дальние выше, голубее — дымка), снег на вершинах.
+## Картинка мода с мипмапами (без них даль рябит).
+func _tex(path: String, normal: bool) -> Texture2D:
+	var tex := mod.texture(path)
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img != null and not img.is_compressed() and not img.has_mipmaps():
+		if normal:
+			img.generate_mipmaps(true)
+		else:
+			img.generate_mipmaps()
+		return ImageTexture.create_from_image(img)
+	return tex
+
+
+## Горы: кольцо хребтов от MOUNT_R0 до MOUNT_R1 м вокруг города — сетка в полярных координатах, высота — ridged-шум
+## (острые гребни, долины между ними). Ближние хребты ниже (~150 м, без снега), дальние до ~450 м, в снегу.
+## Шум берётся в декартовых X/Z — шва на 360° нет.
+const MOUNT_R0 := 545.0
+const MOUNT_R1 := 1550.0
+
+
 func _mountains() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 77
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.roughness = 1.0
-	for ring: Array in [[620.0, 16, 90.0, 170.0], [880.0, 22, 160.0, 290.0], [1180.0, 26, 240.0, 420.0]]:
-		var st := SurfaceTool.new()
-		st.begin(Mesh.PRIMITIVE_TRIANGLES)
-		for p: int in int(ring[1]):
-			var ang := TAU * (p + rng.randf_range(-0.3, 0.3)) / float(ring[1])
-			var r := float(ring[0]) * rng.randf_range(0.92, 1.08)
-			var h := rng.randf_range(float(ring[2]), float(ring[3]))
-			var w := h * rng.randf_range(1.6, 2.4)
-			_peak(st, Vector3(cos(ang) * r, -10.0, sin(ang) * r), w, h, rng)
-		st.generate_normals()
-		var mi := MeshInstance3D.new()
-		mi.mesh = st.commit()
-		mi.material_override = mat
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		root.add_child(mi)
-
-
-func _peak(st: SurfaceTool, base: Vector3, w: float, h: float, rng: RandomNumberGenerator) -> void:
-	var seg := 10
-	var rings := 6
-	var rock := Color(0.42, 0.38, 0.42)
-	var snow := Color(0.95, 0.95, 1.0)
-	var start := []
-	var top := base + Vector3(rng.randf_range(-0.15, 0.15) * w, h, rng.randf_range(-0.15, 0.15) * w)
-	var verts: Array = []
-	for k: int in rings + 1:
-		var f := float(k) / rings
-		var row: Array = []
-		for i: int in seg:
-			var a := TAU * i / seg
-			var rr := w * 0.5 * (1.0 - f) * (0.75 + 0.5 * rng.randf())
-			var p := base.lerp(top, f) + Vector3(cos(a) * rr, rng.randf_range(-0.04, 0.04) * h, sin(a) * rr)
-			row.append(p)
-		verts.append(row)
-	start = verts
-	for k: int in rings:
-		for i: int in seg:
-			var j := (i + 1) % seg
-			var q := [start[k][i], start[k + 1][i], start[k + 1][j], start[k][j]]
-			for v: Vector3 in [q[0], q[1], q[2], q[0], q[2], q[3]]:
-				var hf := (v.y - base.y) / h
-				st.set_color(rock.lerp(snow, smoothstep(0.62, 0.72, hf + rng.randf_range(-0.03, 0.03))))
-				st.add_vertex(v)
+	var ridge := FastNoiseLite.new()
+	ridge.seed = 77
+	ridge.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	ridge.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	ridge.fractal_octaves = 6
+	ridge.frequency = 0.0021
+	var big := FastNoiseLite.new()                       # где хребты выше, где седловины
+	big.seed = 78
+	big.frequency = 0.0007
+	var na := 720
+	var nr := 84
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for j: int in nr + 1:
+		var f := float(j) / nr
+		var r := lerpf(MOUNT_R0, MOUNT_R1, pow(f, 1.25))      # ближе — гуще
+		var amp := lerpf(110.0, 450.0, smoothstep(600.0, 1300.0, r)) * smoothstep(MOUNT_R0, 720.0, r)
+		for i: int in na:
+			var a := TAU * i / na
+			var x := cos(a) * r
+			var z := sin(a) * r
+			var v := ridge.get_noise_2d(x, z) * 0.5 + 0.5
+			var b := big.get_noise_2d(x, z) * 0.5 + 0.5
+			var h := -18.0 + amp * pow(v, 1.6) * (0.55 + 0.75 * b)
+			st.add_vertex(Vector3(x, h, z))
+	for j: int in nr:
+		for i: int in na:
+			var i2 := (i + 1) % na
+			var a0 := j * na + i
+			var a1 := j * na + i2
+			var b0 := (j + 1) * na + i
+			var b1 := (j + 1) * na + i2
+			for k: int in [a0, b0, a1, a1, b0, b1]:
+				st.add_index(k)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "Mountains"
+	mi.mesh = st.commit()
+	var sh: Shader = mod.shader("shaders/mountain.gdshader")
+	if sh != null:
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("detail_n", _tex("models/gharn/tex/ground_n.jpg", true))
+		mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	root.add_child(mi)
 
 
 ## Кочевья на холмах: юрты по 2–4, где склон пологий.

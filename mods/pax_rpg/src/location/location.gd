@@ -33,6 +33,8 @@ const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
+const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
+const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -113,6 +115,7 @@ var _env: Environment
 var _sun: DirectionalLight3D
 var _sky_mat: ShaderMaterial
 var _daynight: DayNight            # тело доворачивается к цели (голова уже не достаёт)
+var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
 var _hold_pause := 0.0             # с; пробел — прыжок, а игра ловит его как «пуск времени» — снова ставим паузу
 
 
@@ -191,6 +194,10 @@ func build(city: Dictionary) -> void:
 	_view.own_world_3d = true
 	_view.msaa_3d = Viewport.MSAA_2X                 # 4x на 1440p съедал треть кадра
 	_box.add_child(_view)
+	_gfx = Gfx.new()
+	_gfx.setup(cfg.get("gfx", {}) as Dictionary)
+	_gfx.apply_viewport(_view)                       # TAA / FSR2 вместо MSAA, debanding
+	_gfx.push_globals()
 	_map_rects.clear()
 	_make_sky()
 	_city_lights = []
@@ -209,6 +216,7 @@ func build(city: Dictionary) -> void:
 		c.build(mod, _view, layout)
 		_arena_cfg = layout.get("arena", [])
 		_map_rects.append_array(c.rects)
+		Grass.new().build(mod, _view, layout, c.rects, cfg.get("gfx", {}) as Dictionary)   # сплошная трава с ветром
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
 		_city_lights = c.lights
@@ -230,6 +238,7 @@ func build(city: Dictionary) -> void:
 		probe.box_projection = false
 		probe.intensity = 1.0
 		_view.add_child(probe)
+		_gfx.probe = probe
 	_daynight = DayNight.new()
 	_daynight.lights = _city_lights
 	_daynight.glass = _city_glass
@@ -255,6 +264,12 @@ func build(city: Dictionary) -> void:
 	_cam.fov = 65.0
 	_view.add_child(_cam)
 	_cam.current = true
+	_gfx.apply_camera(_cam, _sun)                    # объёмные облака и блики солнца игры
+	_gfx.player = _player
+	_gfx.lights = _city_lights
+	_gfx.daynight = _daynight
+	_gfx.sun = _sun
+	_view.add_child(_gfx)
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
@@ -403,12 +418,13 @@ func _make_sky() -> void:
 	env.ssr_enabled = fplus                          # стёкла окон и лужи отражают город
 	env.ssr_max_steps = 24
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.12
+	env.adjustment_saturation = 1.0                   # цвет даёт LUT: тёплые света против холодных теней
 	env.adjustment_color_correction = _grade_lut()      # общий тон Юрумы: тёплые света, сиреневые тени
 	_env = env
 	_apply_volfog(float(mod.get_setting("vol_fog", 0.5)))
 	var we := WorldEnvironment.new()
 	we.environment = env
+	_gfx.apply_env(env, we)                          # отражённый свет, SSIL, туман у земли, экспозиция, DOF
 	_view.add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-30.0, 145.0, 0.0)   # низкое тёплое солнце — длинные тени по улицам
@@ -418,6 +434,7 @@ func _make_sky() -> void:
 	sun.shadow_blur = 1.5
 	sun.directional_shadow_max_distance = 90.0       # дальше тени не видны за дымкой, а каждый метр — лишняя отрисовка
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	_gfx.apply_sun(sun)                              # мягкие тени по угловому размеру солнца
 	_view.add_child(sun)
 	_sun = sun
 
@@ -1375,12 +1392,12 @@ func _apply_volfog(v: float) -> void:
 		_env.volumetric_fog_sky_affect = 0.0
 
 
-## LUT 17³ (цветокоррекция сцены): тени уходят в сирень неба Юрумы, света — в тёплое золото, мягкая S-кривая.
+## LUT 17³ (цветокоррекция сцены): тени уходят в холодную бирюзу, света — в тёплое золото, мягкая S-кривая.
 ## Делаем в коде — без файлов и без потерь при сжатии.
 static func _grade_lut() -> ImageTexture3D:
 	var n := 17
 	var layers: Array[Image] = []
-	var lilac := Vector3(0.93, 0.86, 1.1)
+	var lilac := Vector3(0.9, 0.97, 1.08)            # тени — в холодную бирюзу поверхности Юрумы (контраст тёплым огням)
 	var warm := Vector3(1.07, 1.0, 0.88)
 	for b: int in n:
 		var img := Image.create(n, n, false, Image.FORMAT_RGB8)
@@ -1390,7 +1407,7 @@ static func _grade_lut() -> ImageTexture3D:
 				var lum := c.dot(Vector3(0.2126, 0.7152, 0.0722))
 				var ws := 1.0 - smoothstep(0.0, 0.45, lum)
 				var wh := smoothstep(0.45, 1.0, lum)
-				c = c.lerp(c * lilac + Vector3(0.02, 0.008, 0.04), ws * 0.65)
+				c = c.lerp(c * lilac + Vector3(0.0, 0.012, 0.03), ws * 0.65)
 				c = c.lerp(c * warm, wh * 0.55)
 				c += (c - Vector3.ONE * 0.5) * 0.06
 				img.set_pixel(r, g, Color(clampf(c.x, 0, 1), clampf(c.y, 0, 1), clampf(c.z, 0, 1)))
@@ -1426,33 +1443,55 @@ func _add_vignette() -> void:
 
 
 func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
-	var p := CPUParticles3D.new()
+	var p := GPUParticles3D.new()                    # искры со шлейфами (видно, куда летят), а не точки
 	p.one_shot = true
 	p.explosiveness = 1.0
 	p.amount = amount
 	p.lifetime = 0.35
-	p.spread = 70.0
-	p.direction = Vector3.UP
-	p.initial_velocity_min = speed * 0.5
-	p.initial_velocity_max = speed
-	p.gravity = Vector3(0.0, -9.0, 0.0)
-	var q := SphereMesh.new()
-	q.radius = 0.018
-	q.height = 0.036
-	q.radial_segments = 4
-	q.rings = 2
+	p.local_coords = false
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.UP
+	pm.spread = 70.0
+	pm.initial_velocity_min = speed * 0.5
+	pm.initial_velocity_max = speed
+	pm.gravity = Vector3(0.0, -9.0, 0.0)
+	pm.damping_min = 1.0
+	pm.damping_max = 3.0
+	p.process_material = pm
+	p.trail_enabled = true
+	p.trail_lifetime = 0.07
+	var tm := RibbonTrailMesh.new()
+	tm.shape = RibbonTrailMesh.SHAPE_CROSS
+	tm.size = 0.014
+	tm.sections = 3
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = color
-	m.emission_enabled = true
-	m.emission = color
-	m.emission_energy_multiplier = 4.0
-	q.material = m
-	p.mesh = q
+	m.use_particle_trails = true
+	m.albedo_color = Color(color.r * 4.0, color.g * 4.0, color.b * 4.0)   # HDR — ловит bloom
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	tm.material = m
+	p.draw_pass_1 = tm
 	_view.add_child(p)
 	p.global_position = at
 	p.emitting = true
 	p.finished.connect(p.queue_free)
+	_flash(at, color, 2.6, 4.0)
+
+
+## Вспышка света от удара, искр, разреза: короткий огонёк без тени — освещает лицо, клинок и землю вокруг.
+func _flash(at: Vector3, color: Color, energy: float, radius: float) -> void:
+	if not is_instance_valid(_view):
+		return
+	var l := OmniLight3D.new()
+	l.light_color = color
+	l.light_energy = energy
+	l.omni_range = radius
+	l.shadow_enabled = false
+	_view.add_child(l)
+	l.global_position = at
+	var tw := l.create_tween()
+	tw.tween_property(l, "light_energy", 0.0, 0.16).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(l.queue_free)
 
 
 func _hud_enemy() -> Goblin:

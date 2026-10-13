@@ -260,6 +260,7 @@ func _die() -> void:
 	_set_state("dead")
 	# тело не исчезает: лежит, потом медленно уходит в землю; мана улетает в шкалу опыта (location.gd)
 	_burst(global_position + Vector3(0.0, 0.5, 0.0), Vector3.UP, MANA, 24, 0.8, -0.6, 0.9, 0.05, true)
+	_blood_pool()
 	if _model != null:
 		var t := create_tween()
 		t.tween_interval(BODY_STAY)
@@ -269,6 +270,60 @@ func _die() -> void:
 		get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 	else:
 		get_tree().create_timer(BODY_STAY + 2.0).timeout.connect(queue_free)
+
+
+static var _blood_tex: ImageTexture
+
+
+## Лужа крови под павшим (декаль на земле): растекается, лежит, потом тает. Рисунок — свой, из пятен шума.
+func _blood_pool() -> void:
+	var parent := get_parent() as Node3D
+	if parent == null:
+		return
+	if _blood_tex == null:
+		_blood_tex = ImageTexture.create_from_image(_blood_image())
+	var d := Decal.new()
+	d.texture_albedo = _blood_tex
+	d.size = Vector3(1.9, 1.4, 1.9)
+	d.modulate = Color(0.32, 0.03, 0.04, 0.0)
+	d.albedo_mix = 0.92
+	d.upper_fade = 0.25
+	d.lower_fade = 0.25
+	parent.add_child(d)
+	d.global_position = global_position + Vector3(0.0, 0.2, 0.0)
+	d.rotation.y = randf() * TAU
+	d.scale = Vector3(0.4, 1.0, 0.4)
+	var tw := d.create_tween()
+	tw.tween_property(d, "modulate:a", 1.0, 0.5)
+	tw.parallel().tween_property(d, "scale", Vector3.ONE, 2.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_interval(40.0)
+	tw.tween_property(d, "modulate:a", 0.0, 6.0)
+	tw.tween_callback(d.queue_free)
+
+
+static func _blood_image() -> Image:
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.seed = 31
+	noise.frequency = 0.045
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var drops: Array = []
+	for i: int in 9:                                  # брызги вокруг лужи
+		var a := rng.randf() * TAU
+		drops.append([Vector2(cos(a), sin(a)) * rng.randf_range(0.55, 0.85), rng.randf_range(0.03, 0.07)])
+	for y: int in n:
+		for x: int in n:
+			var p := Vector2(x, y) / float(n) * 2.0 - Vector2.ONE
+			var r := p.length() + noise.get_noise_2d(x, y) * 0.35
+			var a := 1.0 - smoothstep(0.38, 0.5, r)
+			for dr: Array in drops:
+				a = maxf(a, 1.0 - smoothstep(float(dr[1]) * 0.6, float(dr[1]), p.distance_to(dr[0])))
+			var dark := 0.7 + 0.3 * (noise.get_noise_2d(x * 3.0, y * 3.0) * 0.5 + 0.5)
+			img.set_pixel(x, y, Color(dark, dark, dark, a))
+	img.generate_mipmaps()
+	return img
 
 
 func _respawn() -> void:

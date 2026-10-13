@@ -1,4 +1,4 @@
-# Pax RPG 0.0.3 — прототип механики
+# Pax RPG 0.3.0 — прототип механики
 
 Отдельный мод (не серия Pax CorpInc). Сейчас — механика и простой герой:
 
@@ -34,6 +34,12 @@
 | `src/travel/travel.gd` | переходы карта ↔ город, пауза мира |
 | `src/travel/loading.gd` | экран загрузки |
 | `src/location/location.gd` | мир локации (SubViewport со своей физикой), герой, камера, ворота |
+| `src/location/gfx.gd` | качество картинки: SDFGI, SSIL, TAA, тени огней, туман, экспозиция, DOF, облака и блики, ветер для шейдеров (`config/location.json → gfx`) |
+| `src/location/motion_blur.gd` | размытие в движении (CompositorEffect по векторам движения) |
+| `src/location/grass.gd` | сплошная трава с ветром и топтанием (`shaders/grass.gdshader`) |
+| `src/location/landscape.gd` | степь (`steppe.gdshader`), горные хребты (`mountain.gdshader`), юрты |
+
+Концепт графики — `pax_rpg/docs/Графика_концепт.md`.
 
 ## Проверка
 

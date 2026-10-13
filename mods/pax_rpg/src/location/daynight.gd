@@ -14,7 +14,7 @@ var sky_mat: ShaderMaterial
 var lights: Array = []             # [OmniLight3D, энергия ночью]
 var glass: Array = []              # материалы окон
 var paper: Array = []              # бумажные фонари — свечение мягче окон
-var fog_day := Color(0.95, 0.62, 0.8)
+var fog_day := Color(0.9, 0.7, 0.84)          # мана в дымке — розовая, но не заливает весь кадр
 
 
 func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dictionary) -> void:
@@ -71,7 +71,7 @@ func apply() -> void:
 	if env != null:
 		env.ambient_light_energy = lerpf(0.07, 0.55, day)
 		var fog_night := Color(0.18, 0.14, 0.32)
-		env.fog_light_color = fog_night.lerp(fog_day, day).lerp(Color(1.0, 0.5, 0.42), dusk * 0.6)
+		env.fog_light_color = fog_night.lerp(fog_day, day).lerp(Color(1.0, 0.56, 0.46), dusk * 0.4)
 		env.tonemap_exposure = lerpf(1.0, 1.05, day)
 	var night := 1.0 - day
 	for l: Array in lights:

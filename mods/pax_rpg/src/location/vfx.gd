@@ -37,6 +37,9 @@ func _flip_mat(tex: String, additive: bool, energy: float) -> StandardMaterial3D
 	if additive:
 		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		m.albedo_color = Color(energy, energy, energy)       # HDR > 1 — ловит bloom
+	else:                                                # дым и пыль освещены: ночью не светятся сами, у костра — рыжие
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
+		m.disable_receive_shadows = true
 	_mats[key] = m
 	return m
 

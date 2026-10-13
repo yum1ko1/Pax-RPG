@@ -1,0 +1,42 @@
+// Деревья, кусты, пучки травы из моделей (city.gd → _place, список FOLIAGE): материал модели (альбедо, шероховатость)
+// + ветер. Модель качается тем сильнее, чем выше точка над её низом (h² — ствол у земли стоит), по ветру
+// (pax_rpg_wind, ведёт wind.gd) с порывами; листва дрожит мелко; на просвет против солнца — светится (BACKLIGHT).
+// y_min / y_max — низ и верх сетки в её осях (по ним высота точки 0..1); amp — наклон верха в метрах.
+shader_type spatial;
+
+global uniform vec4 pax_rpg_wind;
+global uniform float pax_rpg_time;
+
+uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, hint_default_white;
+uniform sampler2D rough_tex : filter_linear_mipmap, hint_default_white;
+uniform vec4 albedo_col : source_color = vec4(1.0);
+uniform float roughness = 0.9;
+uniform bool use_rough_tex = false;
+uniform float y_min = 0.0;
+uniform float y_max = 1.0;
+uniform float amp = 0.15;
+uniform float backlight = 0.45;
+
+void vertex() {
+	float h = clamp((VERTEX.y - y_min) / max(y_max - y_min, 0.001), 0.0, 1.0);
+	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 org = MODEL_MATRIX[3].xyz;                               // у всех точек одной копии — общая фаза качания
+	vec2 wd = normalize(pax_rpg_wind.xy + vec2(1e-4));
+	float s = pax_rpg_wind.z;
+	float g = pax_rpg_wind.w;
+	float t = pax_rpg_time;
+	float sway = sin(t * 1.1 + org.x * 0.21 + org.z * 0.17) * 0.6 + sin(t * 2.3 + org.x * 0.5) * 0.25;
+	float lean = (0.25 + 0.45 * s + 1.1 * g) + sway * (0.35 + 0.5 * s);
+	float leaf = sin(t * 8.0 + wp.x * 4.1 + wp.y * 3.3 + wp.z * 2.7) * 0.025 * (0.4 + s + g) * h;   // дрожь листвы
+	vec3 off = vec3(wd.x, 0.0, wd.y) * lean * amp * h * h + vec3(leaf, leaf * 0.5, -leaf);
+	off.y -= dot(off.xz, off.xz) * 0.25 * h;                      // клонится — чуть ниже, не тянется
+	VERTEX += inverse(mat3(MODEL_MATRIX)) * off;
+}
+
+void fragment() {
+	vec4 a = texture(albedo_tex, UV) * albedo_col;
+	ALBEDO = a.rgb;
+	ROUGHNESS = use_rough_tex ? texture(rough_tex, UV).g * roughness : roughness;
+	SPECULAR = 0.35;
+	BACKLIGHT = a.rgb * backlight;
+}

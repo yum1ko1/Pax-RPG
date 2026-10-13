@@ -789,6 +789,43 @@ const CELL := 24.0
 const FAR_DRAW := 220.0
 
 
+## Растительность → наклон верха на ветру, м (shaders/foliage.gdshader). Нет в списке — модель стоит.
+const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.4}
+var _fol_mats := {}
+
+
+## Материал ветра для сетки растения: текстура и цвет — из её материала, высоты — из её рамки.
+func _foliage_mat(path: String, mesh: Mesh) -> Material:
+	var amp := 0.0
+	for k: String in FOLIAGE:
+		if path.get_file().begins_with(k):
+			amp = float(FOLIAGE[k])
+	if amp <= 0.0 or mesh.get_surface_count() == 0:
+		return null
+	var key := path + str(mesh.get_rid())
+	if _fol_mats.has(key):
+		return _fol_mats[key]
+	var sh: Shader = mod.shader("shaders/foliage.gdshader")
+	var src := mesh.surface_get_material(0) as BaseMaterial3D
+	if sh == null or src == null:
+		return null
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	if src.albedo_texture != null:
+		m.set_shader_parameter("albedo_tex", src.albedo_texture)
+	m.set_shader_parameter("albedo_col", src.albedo_color)
+	m.set_shader_parameter("roughness", src.roughness)
+	if src.roughness_texture != null:
+		m.set_shader_parameter("rough_tex", src.roughness_texture)
+		m.set_shader_parameter("use_rough_tex", true)
+	var bb := mesh.get_aabb()
+	m.set_shader_parameter("y_min", bb.position.y)
+	m.set_shader_parameter("y_max", bb.end.y)
+	m.set_shader_parameter("amp", amp)
+	_fol_mats[key] = m
+	return m
+
+
 ## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
 func _small_prop(path: String) -> float:
 	for k: Array in [["grass_tuft", 40.0], ["rock_small", 60.0], ["bush_dry", 70.0], ["fence_wood", 80.0],
@@ -830,6 +867,7 @@ func _place(path: String, list: Array) -> void:
 				cells[key] = []
 			(cells[key] as Array).append(i)
 		var small := _small_prop(path)
+		var fol := _foliage_mat(path, mesh)               # деревья, кусты, трава — качаются на ветру
 		for key: Vector2i in cells:
 			var ids: Array = cells[key]
 			var mm := MultiMesh.new()
@@ -840,6 +878,9 @@ func _place(path: String, list: Array) -> void:
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
+			if fol != null:
+				mi.material_override = fol
+				mi.extra_cull_margin = 1.5
 			if small > 0.0:                               # мелочь: без тени и не рисуется вдали
 				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				mi.visibility_range_end = small

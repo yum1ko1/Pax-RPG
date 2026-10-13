@@ -3,13 +3,14 @@ extends Control
 ##  0.0  герой опускается на колено (поза — пока Deathblow в низком приседе), двуручник скрыт, катана у бедра;
 ##  0.6  клинок выдвигается из ножен на палец — щелчок цубы (до этого мига приём сбивается ударом);
 ##  0.85 СТОП ВРЕМЕНИ: звук, музыка глохнет, мир замирает (враги, частицы, огонь, листья висят), шейдер
-##       timestop.gdshader — рыбий глаз, расслоение цвета, сиреневый монохром, волна от героя; камера отъезжает,
-##       FOV растёт;
+##       timestop.gdshader (на контейнере 3D-вида) — рыбий глаз, расслоение цвета, сиреневый монохром, волна от
+##       героя; камера отъезжает и берёт в кадр героя и врагов в досягаемости, FOV растёт;
 ##  1.25 20 линий разреза поверх экрана, всё чаще: 1.0 · 0.8ⁿ с (не меньше 0.12): прочерк, вспышка, шрам; свист и
 ##       микротряска; линии — через врагов (кого задели — список);
 ##  …    полсекунды тишины (сердце), все шрамы вспыхивают, из разрезов — мана;
 ##  …    ПЕРЕМОТКА: звук остановки задом наперёд, шейдер и камера обратно, время разгоняется 0 → 1;
-##  …    катана с щелчком входит в ножны — урон всем задетым разом; герой встаёт.
+##  …    катана с щелчком входит в ножны — урон всем задетым разом; герой встаёт. Камера финала — общий план
+##       героя и задетых врагов (видно, как их разрубает), не крупный план героя.
 ## Время героя, камеры и эффектов — настоящее; мир стоит (у каждого узла своя скорость = 0, не Engine.time_scale).
 
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
@@ -43,11 +44,12 @@ var _enemies: Callable          # () -> Array (враги локации)
 var _on_cut: Callable           # (враг) -> void — урон в финале
 var _on_fx: Callable            # (позиция мира, цвет) -> void — выброс маны
 var _set_hud: Callable          # (bool) -> void
-var _fx: ColorRect
+var _box: SubViewportContainer    # контейнер 3D-вида — на него ставится шейдер остановки
 var _mat: ShaderMaterial
 var _times: PackedFloat32Array = []
 var _lines: Array = []          # {a, b, t0}
 var _victims: Array = []
+var _targets: Array = []        # враги в досягаемости в миг остановки — камера держит их в кадре
 var _frozen: Array = []         # [узел, свойство, значение]
 var _cam0: Transform3D
 var _fov0 := 65.0
@@ -77,14 +79,9 @@ func setup(m: PaxMod, view: Node, hero: Hero, player: Node3D, cam: Camera3D, ene
 	var add := CanvasItemMaterial.new()                  # разрезы — свечение (складывается со сценой)
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = add
-	_fx = ColorRect.new()
-	_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_box = view.get_parent() as SubViewportContainer
 	_mat = ShaderMaterial.new()
 	_mat.shader = mod.shader("shaders/timestop.gdshader")
-	_fx.material = _mat
-	_fx.visible = false
-	add_child(_fx)
 	for n: String in ["timestop", "rewind", "draw", "sheathe", "tsuba", "slash", "heart"]:
 		var p := AudioStreamPlayer.new()
 		p.stream = mod.sound("sounds/iai_%s.wav" % n)
@@ -127,6 +124,7 @@ func start() -> bool:
 	_done = {}
 	_lines = []
 	_victims = []
+	_targets = []
 	_shake = 0.0
 	_t_end = _times[LINES - 1] + 0.65 + 0.2 + _rewind + 0.15 + _sheathe_len + 3.0
 	_attach_katana()
@@ -182,13 +180,14 @@ func _process(delta: float) -> void:
 		flash = 0.55 * exp(-(t - t_flash) * 9.0)
 	if t >= t_sheathe:
 		flash = maxf(flash, 0.35 * exp(-(t - t_sheathe) * 10.0))
-	_fx.visible = k > 0.001 or flash > 0.001
+	_set_fx(k > 0.001 or flash > 0.001)
 	_mat.set_shader_parameter("k", k)
 	_mat.set_shader_parameter("wave", wave)
 	_mat.set_shader_parameter("flash", flash)
 	if is_instance_valid(_player) and is_instance_valid(_cam):
 		var sp := _cam.unproject_position(_player.global_position + Vector3(0, 0.6, 0))
-		_mat.set_shader_parameter("center", sp / get_viewport_rect().size)
+		var vs := Vector2((_view as SubViewport).size) if _view is SubViewport else get_viewport_rect().size
+		_mat.set_shader_parameter("center", sp / vs)
 	_camera(k)
 	if t >= t_sheathe:
 		_end_camera(smoothstep(t_sheathe, t_sheathe + 0.6, t) * (1.0 - smoothstep(_t_end - 0.9, _t_end, t)))
@@ -218,6 +217,20 @@ func _time_stop() -> void:
 	_cam0 = _cam.global_transform
 	_fov0 = _cam.fov
 	cam_override = true
+	_targets = []
+	if _enemies.is_valid():
+		for e: Variant in _enemies.call():
+			if is_instance_valid(e) and (e as Goblin).is_alive() 					and (e as Node3D).global_position.distance_to(_player.global_position) <= REACH:
+				_targets.append(e)
+
+
+## Шейдер остановки на контейнере 3D-вида: только пока эффект виден (иначе — лишний проход каждый кадр).
+func _set_fx(on: bool) -> void:
+	if not is_instance_valid(_box):
+		return
+	var want: Material = _mat if on else null
+	if _box.material != want:
+		_box.material = want
 
 
 ## Всё живое в мире замирает, кроме героя: скорость анимаций и частиц — 0, ИИ и процессы — стоп.
@@ -287,33 +300,69 @@ func _camera(k: float) -> void:
 		return
 	var e := k * k * (3.0 - 2.0 * k)
 	var focus := _player.global_position + Vector3(0, 0.6, 0)
-	var back := _cam0.origin - focus
-	back.y = 0.0
-	back = back.normalized() if back.length() > 0.01 else Vector3(0, 0, 1)
-	var far := focus + back * 2.9 + Vector3(0, 0.9, 0)          # крупно: герой на колене в кадре
-	var pos := _cam0.origin.lerp(far, e)
 	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.06 * _shake
-	var xf := Transform3D(Basis(), pos).looking_at(focus, Vector3.UP)
+	var fov := lerpf(_fov0, 84.0, e)
+	var xf: Transform3D
+	if _alive_targets().is_empty():                       # врагов рядом нет — крупно: герой на колене в кадре
+		var back := _cam0.origin - focus
+		back.y = 0.0
+		back = back.normalized() if back.length() > 0.01 else Vector3(0, 0, 1)
+		xf = Transform3D(Basis(), focus + back * 2.9 + Vector3(0, 0.9, 0)).looking_at(focus, Vector3.UP)
+	else:                                                 # враги есть — общий план: видно, по кому идут разрезы
+		xf = _frame(84.0)
+	var pos := _cam0.origin.lerp(xf.origin, e)
 	_cam.global_transform = Transform3D(_cam0.basis.slerp(xf.basis, e), pos + sh)
-	_cam.fov = lerpf(_fov0, 84.0, e)
+	_cam.fov = fov
 
 
-## Финал крупно: сбоку-спереди с левой стороны героя (катана на левом бедре) — видно, как клинок уходит в ножны
-## и герой встаёт; к концу камера плавно возвращается на место.
+## Финал: общий план героя и задетых врагов — на щелчке цубы видно, как их разрубает; FOV — обычный, без наезда.
+## К концу камера плавно возвращается на место.
 func _end_camera(w: float) -> void:
 	if not cam_override or not is_instance_valid(_cam) or _hero == null:
 		return
-	var b := _hero.model.global_transform.basis.orthonormalized()         # +Z — вперёд, +X — левый бок
-	var hp := _hero.model.global_position
-	var focus := hp + Vector3(0, 0.75, 0)
-	var pos := hp + b.x * 2.5 + b.z * 2.2 + Vector3(0, 1.25, 0)
 	var e := w * w * (3.0 - 2.0 * w)
+	if e <= 0.0:
+		_cam.global_transform = _cam0
+		_cam.fov = _fov0
+		return
+	var xf := _frame(_fov0)
 	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.04 * _shake
-	var at := _cam0.origin.lerp(pos, e)
-	var off := at - focus                                              # по дуге: не пролетать сквозь героя
-	at = focus + off.normalized() * maxf(off.length(), lerpf((_cam0.origin - focus).length(), (pos - focus).length(), e))
-	_cam.global_transform = Transform3D(Basis(), at + sh).looking_at(focus, Vector3.UP) if e > 0.0 else _cam0
-	_cam.fov = lerpf(_fov0, 48.0, e)
+	_cam.global_transform = Transform3D(_cam0.basis.slerp(xf.basis, e), _cam0.origin.lerp(xf.origin, e) + sh)
+	_cam.fov = _fov0
+
+
+func _alive_targets() -> Array:
+	var out: Array = []
+	for v: Variant in _targets:                          # один и тот же набор всё время — кадр не прыгает с каждой линией
+		if is_instance_valid(v):
+			out.append(v)
+	return out
+
+
+## Кадр, в который входят герой и враги в досягаемости (их и задевают разрезы): камера со стороны
+## героя, над ним, смотрит на центр группы; отходит настолько, чтобы все влезли в fov (по вертикали) с запасом.
+func _frame(fov: float) -> Transform3D:
+	var hp := _player.global_position + Vector3(0, 0.8, 0)
+	var pts: Array[Vector3] = [hp]
+	for v: Variant in _alive_targets():
+		pts.append((v as Node3D).global_position + Vector3(0, 0.9, 0))
+	var c := Vector3.ZERO
+	for p: Vector3 in pts:
+		c += p
+	c /= float(pts.size())
+	var r := 1.6
+	for p: Vector3 in pts:
+		r = maxf(r, p.distance_to(c) + 1.2)
+	var back := _cam0.origin - c
+	back.y = 0.0
+	back = back.normalized() if back.length() > 0.01 else Vector3(0, 0, 1)
+	var away := hp - c                                    # со стороны героя: он ближе, враги за ним
+	away.y = 0.0
+	if pts.size() > 1 and away.length() > 0.5:
+		back = (back * 0.6 + away.normalized()).normalized()
+	var dist := maxf(4.5, r / tan(deg_to_rad(fov * 0.5)) * 1.1)
+	var pos := c + back * dist + Vector3(0, dist * 0.42, 0)
+	return Transform3D(Basis(), pos).looking_at(c, Vector3.UP)
 
 
 ## Разрез на враге: вспышка-полоса по диагонали тела — белая сердцевина, розовая кромка; раскрывается и тает.
@@ -448,7 +497,7 @@ func _finish(interrupted: bool) -> void:
 	if is_instance_valid(_cam) and cam_override:
 		_cam.fov = _fov0
 	cam_override = false
-	_fx.visible = false
+	_set_fx(false)
 	if _set_hud.is_valid():
 		_set_hud.call(true)
 	if is_instance_valid(_katana):
