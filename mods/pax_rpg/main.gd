@@ -29,6 +29,9 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
+	Pax.hide_menu_item("new_game")                 # своя «Новая игра»: сценарий Юрума сам, выбор только страны
+	Pax.hide_menu_item("presets")
+	Pax.add_menu_item("pax_rpg_new", tr_key("pax_rpg_menu_new"), _rpg_new_game)
 	Pax.add_menu_item("pax_rpg_test", tr_key("pax_rpg_menu_test"), _open_test_arena)
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
@@ -51,6 +54,51 @@ func _mod_loaded() -> void:
 		t.autostart = true
 		t.timeout.connect(_open_test_arena)
 		add_child(t)
+
+
+## Новая игра Pax RPG: сценарий «Юрума» без выбора, сразу экран страны появления (карта и список), «Далее»
+## (или двойной щелчок по стране) — сразу в партию: играем только за своего героя, экран «кто ты» не нужен.
+## Экраны — меню игры (src/ui/Menu.gd, исходники pax-universe-source): ставим выбор и подменяем шаг «Далее».
+const PRESET := "Юрума"
+
+
+func _rpg_new_game() -> void:
+	var menu: Variant = _find_menu(get_tree().root)
+	if menu == null:
+		log_warning("Pax RPG: главное меню не найдено — открываю обычную новую игру")
+		return
+	menu.preset_chosen = PRESET
+	menu.role_menu = "country"
+	menu.faction_chosen = ""
+	menu.leader_chosen = {}
+	menu._country_choice_screen()
+	var go := func() -> void:
+		if str(menu.faction_chosen) != "":
+			menu._start_game()
+	var map: Variant = menu.choice_map
+	if map is Control:
+		for c: Dictionary in (map as Control).get_signal_connection_list("double_clicked"):
+			(map as Control).disconnect("double_clicked", c.callable)
+		(map as Control).connect("double_clicked", func(name_v: String) -> void:
+			menu._choose_country(name_v)
+			go.call())
+	var screen: Control = menu.screen
+	var row := screen.get_child(screen.get_child_count() - 1)
+	for b: Node in row.get_children():
+		if b is Button and (b as Button).text == str(menu.t_("next")):
+			for c: Dictionary in (b as Button).pressed.get_connections():
+				(b as Button).pressed.disconnect(c.callable)
+			(b as Button).pressed.connect(go)
+
+
+static func _find_menu(n: Node) -> Variant:
+	if n.has_method("_country_choice_screen") and n.has_method("_start_game"):
+		return n
+	for c: Node in n.get_children():
+		var f: Variant = _find_menu(c)
+		if f != null:
+			return f
+	return null
 
 
 func _mod_unloaded() -> void:
