@@ -846,7 +846,7 @@ func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
 
 ## Капсулы тела (таз, спина, бёдра, голени) — о них бьётся ткань; персонажа и мир они не трогают.
 func _make_body_colliders() -> void:
-	for d: Array in [["Hips", "Spine01", 0.17], ["Spine01", "Spine02", 0.17], ["Spine02", "neck", 0.1],
+	for d: Array in [["Hips", "Spine01", 0.15], ["Spine01", "Spine02", 0.12], ["Spine02", "neck", 0.07],
 			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
 			["LeftLeg", "LeftFoot", 0.08], ["RightLeg", "RightFoot", 0.08]]:
 		var ia := _skel.find_bone(str(d[0]))
