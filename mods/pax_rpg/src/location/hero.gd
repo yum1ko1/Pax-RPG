@@ -1315,6 +1315,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		return out
 	if action == "Quake":
 		_quake_tick(delta)
+	elif action == "Iai":
+		_iai_tick()
 	_combo_left = maxf(0.0, _combo_left - delta)
 	if blocking:
 		_block_t += delta
@@ -1492,6 +1494,51 @@ func _quake_tick(delta: float) -> void:
 			_end_action()
 
 
+## Иай (iai.gd): на колено и держать позу, пока идёт приём; iai_end — встать. Поза — пока клип Deathblow
+## в низком приседе (iai_crouch — доля клипа); позже — свои ключевые позы.
+var _iai_hold := true
+
+
+func iai_begin() -> bool:
+	_cancel_hurt()
+	_cancel_recovery()
+	if anim == null or action != "" or not has("Deathblow"):
+		return false
+	blocking = false
+	action = "Iai"
+	_iai_hold = true
+	_prev_off = Vector2.ZERO
+	anim.play("Deathblow", 0.2)
+	anim.speed_scale = _f("iai_speed", 0.8)
+	return true
+
+
+func _iai_tick() -> void:
+	var length := anim.current_animation_length
+	if _iai_hold:
+		if _pos() >= _f("iai_crouch", 0.48) * length:
+			anim.speed_scale = 0.0
+	elif _pos() >= length - 0.03:
+		_end_action()
+
+
+func iai_end() -> void:
+	if action != "Iai":
+		return
+	_iai_hold = false
+	anim.speed_scale = _f("iai_speed", 0.8)
+
+
+## Узел, который ходит за костью (крепить предметы: катана у бедра).
+func bone_holder(bone: String) -> Node3D:
+	if _skel == null or _skel.find_bone(bone) < 0:
+		return null
+	var ba := BoneAttachment3D.new()
+	ba.bone_name = bone
+	_skel.add_child(ba)
+	return ba
+
+
 func parry_window() -> bool:
 	return blocking and _block_t <= _f("parry_window", 0.25)
 
@@ -1604,8 +1651,8 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
 	elif action in ATTACKS:
 		in_hand = true
-	_sword_hand.visible = in_hand
-	_sword_back.visible = not in_hand
+	_sword_hand.visible = in_hand and action != "Iai"
+	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)
 	if not in_hand:
 		_drag_w = 0.0
 		return

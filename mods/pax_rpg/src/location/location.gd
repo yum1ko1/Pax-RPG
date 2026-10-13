@@ -20,6 +20,7 @@ const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
+const Iai := preload("res://mods/pax_rpg/src/location/iai.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
@@ -59,6 +60,8 @@ var _quake_cd := 0.0                 # с до готовности «Земно
 var _quake_waves_done := 0
 var _vfx: Vfx
 var _vignette: ColorRect
+var _iai: Iai                         # «Иай: остановка времени» (V)
+var _iai_cd := 0.0
 var _quake_icon: Texture2D
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
@@ -254,6 +257,17 @@ func build(city: Dictionary) -> void:
 	add_child(_hud)
 	if not is_instance_valid(_vignette):
 		_add_vignette()
+	_iai = Iai.new()
+	add_child(_iai)
+	move_child(_iai, _vignette.get_index() + 1)
+	_iai.setup(mod, _view, _hero, _player, _cam, func() -> Array: return _goblins, _iai_cut,
+		func(at: Vector3, c: Color) -> void: _sparks(at, c, 70, 7.0),
+		func(on: bool) -> void:
+			if is_instance_valid(_hud):
+				_hud.visible = on)
+	_iai.finished.connect(func(interrupted: bool) -> void:
+		if interrupted:
+			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5)
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
@@ -328,7 +342,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -637,12 +651,31 @@ func _physics_process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
 	_quake_cd = maxf(0.0, _quake_cd - delta)
+	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
 
 
 ## «Земной разлом» (T): тратит концентрацию героя (риск — переполнится, стойка сломана), перезарядка quake_cooldown;
 ## пока герой на колене, раз в секунду волна: всё ближе радиуса волны получает урон, теряет равновесие, отлетает.
+func _iai_try() -> void:
+	if _hero == null or not is_instance_valid(_iai) or _iai_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+		return
+	if _iai.start():
+		_iai_cd = _hf("iai_cooldown", 90.0)
+
+
+## Финал Иай: удар по каждому, кого задели разрезы. Рядовые падают, у босса — тяжёлый урон и сбитая стойка.
+func _iai_cut(v: Node) -> void:
+	var g := v as Goblin
+	if g == null or not g.is_alive():
+		return
+	var dmg := _hf("iai_damage", 60.0) * _prog.damage_mult()
+	g.take_damage(dmg if g.boss else maxf(dmg, g.hp + 1.0), _player.global_position, not g.boss)
+	g.posture = minf(g.max_posture, g.posture + (g.max_posture * 0.4 if g.boss else g.max_posture))
+	_numbers.append({"pos": g.global_position + Vector3(0, 1.4, 0), "v": int(dmg), "crit": true, "t": 0.0})
+
+
 func _quake_tex() -> Texture2D:
 	if _quake_icon == null:
 		_quake_icon = mod.texture("textures/icon_quake.png")
@@ -932,6 +965,8 @@ func cine(n: int) -> String:
 
 
 func _follow_camera(delta := 0.0) -> void:
+	if is_instance_valid(_iai) and _iai.cam_override:
+		return                                       # камерой правит «Иай»
 	if not _cine.is_empty() and is_instance_valid(_cam):
 		var a: Array = _cine[0]
 		var b: Array = _cine[1]
@@ -1155,6 +1190,8 @@ func _try_deathblow() -> bool:
 func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and _hero.invulnerable():
 		return
+	if is_instance_valid(_iai) and _iai.active and not _iai.interrupt():
+		return                                       # время стоит — по герою не попасть
 	if kind == "parried":
 		_posture = minf(_pos_max(), _posture + 18.0)
 		_since_hit = 0.0
@@ -1289,7 +1326,7 @@ func _add_vignette() -> void:
 	m.shader = sh
 	r.material = m
 	add_child(r)
-	move_child(r, 0)
+	move_child(r, _box.get_index() + 1 if is_instance_valid(_box) else 0)   # сразу над 3D, под интерфейсом
 	_vignette = r
 
 
@@ -1516,14 +1553,17 @@ func _hud_tick(delta: float) -> void:
 			"color": Color(1.0, 0.55, 0.78)},
 		{"k": "震", "key": "T", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
 			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
-			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0}]
+			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
+		{"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
+			"color": Color(0.75, 0.6, 1.0), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
+			"ready": _iai_cd <= 0.0}]
 	_hud.st = st
 	if is_instance_valid(_city_map):
 		_city_map.st = st
 	_hud.refresh()
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V]
 
 
 func _input(event: InputEvent) -> void:
@@ -1569,6 +1609,8 @@ func _input(event: InputEvent) -> void:
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
 				and _arena.can_start():
 			_arena.start()
+		if key.pressed and not key.echo and key.physical_keycode == KEY_V:
+			_iai_try()                               # «Иай: остановка времени»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_T:
 			_quake_try()                             # «Земной разлом»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_X and is_instance_valid(_arena):
