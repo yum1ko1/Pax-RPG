@@ -3,6 +3,7 @@ extends Control
 ##  1. катана в ножнах влетает в кадр, вращаясь вокруг клинка;
 ##  2. клинок выходит из ножен (ножны соскальзывают и падают);
 ##  3. сверху справа рубит чужой тёмный клинок — катана отбивает: вспышка, сноп искр, встряска экрана, звон;
+##  (всё медленно и весомо, удар — в замедленной съёмке: _speed)
 ##  4. клинки разлетаются в стороны, а на месте искр из тлеющих искр проступает название места.
 
 const Katana3D := preload("res://mods/pax_rpg/src/ui/katana3d.gd")
@@ -46,7 +47,7 @@ func setup(mod: PaxMod, place: String) -> void:
 	_foe = _stage.piece("models/weapons/katana.glb", Color(0.35, 0.3, 0.4))
 	for n: Node3D in [_kat, _saya, _foe]:
 		n.visible = false
-	_sparks = _particles(70, 0.55, 900.0, Color(1.0, 0.85, 0.5), 3.0)
+	_sparks = _particles(90, 1.4, 700.0, Color(1.0, 0.85, 0.5), 3.0)
 	_sparks.explosiveness = 1.0
 	_sparks.one_shot = true
 	_sparks.emitting = false
@@ -122,12 +123,12 @@ func _once(key: String, at: float, fn: Callable) -> void:
 func _process(delta: float) -> void:
 	if _t < -100.0:
 		return
-	_t += delta
+	_t += delta * (1.0 if _t < 0.0 else _speed(_t))
 	if _t < 0.0:
 		return
 	var t := _t
-	_flash = maxf(0.0, _flash - delta * 3.5)
-	_shake = maxf(0.0, _shake - delta * 2.5)
+	_flash = maxf(0.0, _flash - delta * 1.6)
+	_shake = maxf(0.0, _shake - delta * 1.4)
 	# 1. влёт в ножнах (0 … 0.5 с): из-за левого края, вращение вокруг клинка
 	var k1 := _ease_out(_seg(t, 0.0, 0.5))
 	var rest := Vector3(-0.35, -0.05, 0.0)
@@ -178,6 +179,17 @@ func _process(delta: float) -> void:
 	if t > 3.0 + HOLD:
 		queue_free()
 	queue_redraw()
+
+
+## Темп: влёт и вынимание — медленно и весомо, удар — замедленная съёмка, название — обычное время.
+static func _speed(t: float) -> float:
+	if t < 1.0:
+		return 0.4
+	if t < 1.35:
+		return 0.2                                      # slow-mo: видно встречу клинков и искры
+	if t < 1.7:
+		return 0.4
+	return 1.0
 
 
 func _clash() -> void:
