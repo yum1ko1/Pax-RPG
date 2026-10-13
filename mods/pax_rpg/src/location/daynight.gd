@@ -1,4 +1,5 @@
 extends Node
+const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Смена суток в локации: час идёт (config/location.json → day_minutes — длина суток в минутах, start_hour),
 ## солнце ходит по дуге (восход 6:00, закат 18:00), ночью тот же свет — луна, голубая и слабая; небо
 ## (shaders/sky.gdshader: day, dusk), окружение и туман следуют; ночью фонари, костры и кристаллы разгораются,
@@ -76,7 +77,11 @@ func apply() -> void:
 	for l: Array in lights:
 		var ol: OmniLight3D = l[0]
 		if is_instance_valid(ol):
-			ol.light_energy = float(l[1]) * lerpf(0.2, 1.0, night)
+			var e := float(l[1]) * lerpf(0.2, 1.0, night)
+			if ol is Vfx.Flicker:
+				(ol as Vfx.Flicker).base = e                  # огонь мерцает вокруг этой энергии
+			else:
+				ol.light_energy = e
 	for pm: Variant in paper:
 		var m2 := pm as BaseMaterial3D
 		if m2 != null:

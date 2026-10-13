@@ -6,6 +6,7 @@ signal resume
 signal leave_city
 signal show_help
 signal sens_changed(v: float)
+signal fog_changed(v: float)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
@@ -124,6 +125,8 @@ func _build_settings(serif: Font) -> void:
 		AudioBus.set_volume(AudioBus.SFX, v))
 	_slider(_mod.tr_key("pax_rpg_set_mouse"), "mouse_sens", 1.0, 0.3, 2.5, func(v: float) -> void:
 		sens_changed.emit(v))
+	_slider(_mod.tr_key("pax_rpg_set_volfog"), "vol_fog", 0.5, 0.0, 1.0, func(v: float) -> void:
+		fog_changed.emit(v))
 	var back := _button(_mod.tr_key("pax_rpg_set_back"), serif)
 	_box.remove_child(back)
 	_settings.add_child(back)

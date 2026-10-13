@@ -17,6 +17,7 @@ const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
@@ -77,6 +78,7 @@ var _toast: Dictionary = {}        # уведомление слева: {text, t
 var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
 var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
+var _city_map: CityMap               # карта города (M)
 var _help: HelpPanel               # кнопка и окно «Управление» (H)
 var _pause: PauseMenu              # меню паузы (Esc)
 var _sfx: Sfx                      # шаги, снаряжение, гул города
@@ -231,6 +233,10 @@ func build(city: Dictionary) -> void:
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
 	add_child(_hud)
+	_city_map = CityMap.new()
+	_city_map.setup(mod)
+	_city_map.set_city(layout)
+	add_child(_city_map)
 	_help = HelpPanel.new()
 	_help.setup(mod)
 	_help.toggled.connect(func(on: bool) -> void:
@@ -251,6 +257,7 @@ func build(city: Dictionary) -> void:
 	_pause.visible = false
 	_pause.resume.connect(_set_paused.bind(false))
 	_pause.sens_changed.connect(func(v: float) -> void: _sens = v)
+	_pause.fog_changed.connect(_apply_volfog)
 	_pause.show_help.connect(func() -> void:
 		_set_paused(false)
 		_help.set_open(true))
@@ -300,7 +307,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -345,8 +352,11 @@ func _make_sky() -> void:
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.2
 	env.glow_enabled = true                          # фонари, мана, вода фонтана светятся
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.08
+	env.glow_intensity = 0.8
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 0.95                    # светится только по-настоящему яркое: огонь, ореолы, мана
+	env.glow_hdr_scale = 2.4
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.fog_enabled = true                           # розовая дымка маны вдали
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
 	env.fog_density = 0.0016                         # реже: за стеной видны холмы и горы в дымке
@@ -357,6 +367,7 @@ func _make_sky() -> void:
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 1.12
 	_env = env
+	_apply_volfog(float(mod.get_setting("vol_fog", 0.5)))
 	var we := WorldEnvironment.new()
 	we.environment = env
 	_view.add_child(we)
@@ -1038,6 +1049,22 @@ func _regen_posture(delta: float) -> void:
 
 
 ## Искры: блок и парирование.
+## Объёмный туман (настройка «Объёмный туман», 0 — выкл.): свет фонарей и костров висит в воздухе. Только Forward+.
+func _apply_volfog(v: float) -> void:
+	if _env == null:
+		return
+	var on := v > 0.01 and RenderingServer.get_current_rendering_method() == "forward_plus"
+	_env.volumetric_fog_enabled = on
+	if on:
+		_env.volumetric_fog_density = 0.004 + 0.016 * v
+		_env.volumetric_fog_albedo = Color(1.0, 0.86, 0.92)
+		_env.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
+		_env.volumetric_fog_length = 48.0
+		_env.volumetric_fog_detail_spread = 2.0
+		_env.volumetric_fog_ambient_inject = 0.15
+		_env.volumetric_fog_sky_affect = 0.0
+
+
 func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
@@ -1259,10 +1286,12 @@ func _hud_tick(delta: float) -> void:
 		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
 			"color": Color(1.0, 0.55, 0.78)}]
 	_hud.st = st
+	if is_instance_valid(_city_map):
+		_city_map.st = st
 	_hud.refresh()
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M]
 
 
 func _input(event: InputEvent) -> void:
@@ -1307,7 +1336,12 @@ func _input(event: InputEvent) -> void:
 			exit_requested.emit()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
-		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
+		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):
+			_city_map.toggle()                       # карта города
+		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE and is_instance_valid(_city_map) \
+				and _city_map.visible:
+			_city_map.visible = false
+		elif key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
 			_set_paused(true)
 			get_viewport().set_input_as_handled()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_R:

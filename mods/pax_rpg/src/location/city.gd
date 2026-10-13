@@ -1,6 +1,7 @@
 extends RefCounted
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
+const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py):
 ## земля, модели (glb мода) и простые блоки (терраса, пандус, холм). Одинаковые модели ставятся пачкой —
 ## по MultiMeshInstance3D на каждую сетку модели (сотни бочек и тайлов дороги — пара вызовов отрисовки).
@@ -13,6 +14,7 @@ var mod: PaxMod
 var root: Node3D
 var rects: Array = []          # [центр XZ, размер XZ, цвет] — для миникарты
 var count := 0
+var vfx: Vfx
 var leaves: Array = []
 var lights: Array = []         # [OmniLight3D, энергия ночью] — ими управляет daynight.gd
 var glass: Array = []
@@ -21,6 +23,7 @@ var paper_mats: Array = []     # бумажные фонари рынка — с
 
 func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	mod = m
+	vfx = Vfx.new(m)
 	root = Node3D.new()
 	root.name = "City"
 	parent.add_child(root)
@@ -52,6 +55,11 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			continue
 		if d.has("merchant"):
 			_merchant(pos, float(d.get("r", 0.0)), int(d.get("seed", 0)))
+			continue
+		if d.has("brazier"):                              # жаровня: каменная тумба, чаша, огонь
+			_block(Vector3(0.7, 0.9, 0.7), pos + Vector3(0, 0.45, 0), "stone_dark", 0.0, 0.0, true)
+			_block(Vector3(0.95, 0.18, 0.95), pos + Vector3(0, 0.99, 0), "stone_cut", 45.0, 0.0, false)
+			lights.append([vfx.fire(root, pos + Vector3(0, 1.08, 0), 0.75), 2.6])
 			continue
 		if d.has("laundry"):
 			_laundry(d.laundry, int(d.get("seed", 0)))
@@ -176,9 +184,8 @@ func _fix_textures() -> void:
 
 
 ## Дым и пар: из дымоходов юрт (не всех), над кострами — гуще, над котлами — белый пар. Мягкие круглые клубы
-## растут, светлеют и тают, их сносит вдоль ветра. Через smoke_drift их подталкивает ветер (wind.gd).
+## (флипбук с объёмом — vfx.gd) растут, светлеют и тают, их сносит вдоль ветра. Через smoke_drift их подталкивает ветер (wind.gd).
 var smoke: Array = []
-var _puff: QuadMesh
 
 
 func _smoke_for(path: String, list: Array) -> void:
@@ -193,78 +200,17 @@ func _smoke_for(path: String, list: Array) -> void:
 		spec = {"y": 1.3, "col": Color(0.95, 0.95, 1.0, 0.25), "amount": 14, "size": 0.35, "share": 1.0}
 	else:
 		return
-	if _puff == null:
-		var gt := _puff_tex()
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.vertex_color_use_as_albedo = true
-		m.albedo_texture = gt
-		m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-		m.proximity_fade_enabled = true                  # мягко у стен и земли
-		m.proximity_fade_distance = 0.6
-		_puff = QuadMesh.new()
-		_puff.material = m
 	var rng := RandomNumberGenerator.new()
 	rng.seed = path.hash()
 	var col: Color = spec.col
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(col, 0.0))
-	ramp.add_point(0.15, col)
-	ramp.set_color(1, Color(col.lightened(0.25), 0.0))
-	var grow := Curve.new()
-	grow.add_point(Vector2(0, 0.4))
-	grow.add_point(Vector2(1, 1.0))
 	for e: Array in list:
 		if rng.randf() > float(spec.share):
 			continue
 		var t: Transform3D = e[0]
 		var sc := t.basis.get_scale().x
-		var p := CPUParticles3D.new()
-		p.mesh = _puff
-		p.amount = int(spec.amount)
-		p.lifetime = 5.0
-		p.preprocess = 5.0
-		p.visibility_range_end = 90.0                    # далёкий дым не считаем
-		p.local_coords = false
-		p.direction = Vector3.UP
-		p.spread = 12.0
-		p.initial_velocity_min = 0.35
-		p.initial_velocity_max = 0.7
-		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		p.emission_sphere_radius = 0.15 * sc
-		p.gravity = Vector3(0.25, 0.12, 0.08)
-		p.damping_min = 0.05
-		p.damping_max = 0.15
-		p.scale_amount_min = float(spec.size)
-		p.scale_amount_max = float(spec.size) * 1.8
-		p.angular_velocity_min = -25.0
-		p.angular_velocity_max = 25.0
-		p.scale_amount_curve = grow
-		p.color_ramp = ramp
-		p.angle_min = 0.0
-		p.angle_max = 360.0
-		p.position = t.origin + Vector3(0, float(spec.y) * sc, 0)
-		root.add_child(p)
+		var p := vfx.smoke(root, t.origin + Vector3(0, float(spec.y) * sc, 0), float(spec.size) * 1.4, col,
+			maxi(6, int(spec.amount) / 2))
 		smoke.append(p)
-
-
-## Клуб дыма: мягкий круг, изрезанный шумом в клочья — вблизи видно волокна, а не гладкий шар.
-func _puff_tex() -> ImageTexture:
-	var n := FastNoiseLite.new()
-	n.frequency = 0.045
-	n.fractal_octaves = 4
-	var sz := 128
-	var img := Image.create(sz, sz, false, Image.FORMAT_RGBA8)
-	for y: int in sz:
-		for x: int in sz:
-			var d := Vector2(x - sz * 0.5, y - sz * 0.5).length() / (sz * 0.5)
-			var k := n.get_noise_2d(x, y) * 0.5 + 0.5
-			var a := clampf((1.0 - smoothstep(0.25, 1.0, d)) * (0.35 + 1.1 * k) - 0.15, 0.0, 1.0)
-			img.set_pixel(x, y, Color(0.85 + 0.15 * k, 0.85 + 0.15 * k, 0.85 + 0.15 * k, a))
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
 
 
 ## Живая вода фонтана: рябь в чаше (shaders/water.gdshader), струя из пасти дракона веером вниз, брызги и
@@ -806,6 +752,12 @@ func _lights(path: String, list: Array) -> void:
 		return
 	for e: Array in list:
 		var t: Transform3D = e[0]
+		if path.ends_with("firepit.glb") or path.ends_with("cauldron.glb"):     # живой огонь из слоёв
+			var fs := 0.55 if path.ends_with("firepit.glb") else 0.32
+			var fo := Vector3(0, 0.25, 0) if path.ends_with("firepit.glb") else Vector3(0, 0.05, 0)
+			lights.append([vfx.fire(root, t * fo, fs, false), 2.6])
+			continue
+		vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 1.1, 0.9)
 		var l := OmniLight3D.new()
 		l.light_color = col
 		l.light_energy = 1.6
