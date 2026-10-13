@@ -785,6 +785,25 @@ func _physics_body(delta: float) -> void:
 		_update_hud()
 
 
+## Отладка (консоль rpg_probe): всё видимое в радиусе 2 м от героя — имя, родитель, высота над ступнями.
+func probe() -> String:
+	if not is_instance_valid(_player):
+		return "нет героя"
+	var out: PackedStringArray = []
+	var feet := _player.global_position.y - 0.9
+	var stack: Array = [_view]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is GeometryInstance3D and (n as GeometryInstance3D).is_visible_in_tree():
+			var g := n as GeometryInstance3D
+			var d := Vector2(g.global_position.x - _player.global_position.x, g.global_position.z - _player.global_position.z)
+			if d.length() < 2.0:
+				out.append("%s (%s) ← %s, h=%.2f" % [g.name, g.get_class(), g.get_parent().name, g.global_position.y - feet])
+	mod.log_info("[pax_rpg] probe:\n" + "\n".join(out))
+	return "%d объектов рядом — список в логе" % out.size()
+
+
 ## Боец арены (arena.gd): гоблин или орк-чемпион, как обычные враги локации.
 func _arena_spawn(kind: String, pos: Vector3) -> Node:
 	var g: Goblin = Orc.new() if kind == "orc" else Goblin.new()
