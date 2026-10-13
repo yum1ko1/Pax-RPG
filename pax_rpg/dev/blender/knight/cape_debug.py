@@ -47,8 +47,10 @@ def targets(hang, top=None):
     rest = [p + lv for p in rest]
     half0 = max(0.1, max(abs(rest[i].x) for i in range(nx)))
     cl = it.get("collar", [0.075, 0.035, 0.11])
+    if os.environ.get("NOCOLLAR"):
+        cl = None
     nk = bone("neck", False).translation                   # шея в покое (как hero.gd — rest)
-    for i in range(nx):
+    for i in range(nx if cl else 0):
         u = rest[i].x / half0
         w = 1.0 - smooth(0.35, 0.9, abs(u))
         want = Vector((nk.x + u * cl[2], nk.y + cl[0], nk.z - cl[1]))   # назад (−Z glTF = +Y Blender), вниз
