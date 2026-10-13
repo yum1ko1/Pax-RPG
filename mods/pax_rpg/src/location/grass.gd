@@ -10,7 +10,7 @@ const OCC := 0.5                   # м на клетку карты занят�
 var count := 0
 
 
-func build(mod: PaxMod, parent: Node3D, layout: Dictionary, rects: Array, cfg: Dictionary) -> void:
+func build(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dictionary) -> void:
 	var density := float(cfg.get("grass_density", 6.0))
 	var sh: Shader = mod.shader("shaders/grass.gdshader")
 	if density <= 0.0 or sh == null:
