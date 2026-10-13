@@ -126,7 +126,7 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 		ca.dof_blur_far_transition = _f("dof_far_transition", 70.0)
 		ca.dof_blur_amount = _f("dof_amount", 0.04)
 	we.camera_attributes = ca
-	var mb := _f("motion_blur", 0.5)
+	var mb := _f("motion_blur", 0.0)                     # по умолчанию выкл.: с отдельным потоком рендера висло
 	if _fplus and mb > 0.0:
 		_mb = MotionBlur.new()
 		_mb.shutter = mb
@@ -140,11 +140,11 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 func apply_camera(c: Camera3D, s: DirectionalLight3D) -> void:
 	cam = c
 	var t0 := Time.get_ticks_msec()
-	if _b("clouds", true) and Pax.graphics.available("clouds"):
+	if _b("clouds", false) and Pax.graphics.available("clouds"):   # выкл. по умолчанию — см. config gfx._note
 		_clouds = Pax.graphics.clouds(c, {"clouds_coverage": _f("clouds_coverage", 0.42)})
 	print("[pax_rpg] load: clouds %d ms" % (Time.get_ticks_msec() - t0))
 	t0 = Time.get_ticks_msec()
-	if _b("lens", true) and Pax.graphics.available("lens"):
+	if _b("lens", false) and Pax.graphics.available("lens"):
 		_lens = Pax.graphics.lens(c, {"sun_color": Color(1.0, 0.82, 0.64, 0.22)}, s)
 	print("[pax_rpg] load: lens %d ms" % (Time.get_ticks_msec() - t0))
 	if _mb != null and c.compositor != null:
