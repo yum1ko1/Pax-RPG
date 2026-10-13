@@ -228,38 +228,46 @@ func _fountain_water(t: Transform3D) -> void:
 		disc.material_override = wm
 	disc.position = t.origin + Vector3(0, 1.45 * sc, 0)
 	root.add_child(disc)
-	var drop := SphereMesh.new()
-	drop.radius = 0.035
-	drop.height = 0.12
-	drop.radial_segments = 6
-	drop.rings = 3
+	# капли — вытянутые по скорости штрихи (как струя на свету), а не шарики; блеск — HDR, ловит bloom
 	var dm := StandardMaterial3D.new()
-	dm.albedo_color = Color(0.75, 0.92, 1.0, 0.75)
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.albedo_texture = mod.texture("textures/vfx/glow.png")
+	dm.albedo_color = Color(1.3, 1.6, 1.9, 0.55)
+	dm.vertex_color_use_as_albedo = true
 	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dm.emission_enabled = true
-	dm.emission = Color(0.4, 0.75, 0.9)
-	dm.emission_energy_multiplier = 0.5
+	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dm.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	dm.billboard_keep_scale = true
+	var drop := QuadMesh.new()
+	drop.size = Vector2(0.05, 0.32)
 	drop.material = dm
 	var jet := CPUParticles3D.new()                       # струи веером из пасти вниз в чашу
 	jet.mesh = drop
-	jet.amount = 260
+	jet.particle_flag_align_y = true                      # штрих — вдоль полёта
+	jet.amount = 320
 	jet.lifetime = 1.3
 	jet.local_coords = false
 	jet.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	jet.emission_sphere_radius = 0.15 * sc
+	jet.emission_sphere_radius = 0.12 * sc
 	jet.direction = Vector3.UP
 	jet.spread = 70.0
 	jet.initial_velocity_min = 1.6 * sc
 	jet.initial_velocity_max = 2.4 * sc
 	jet.gravity = Vector3(0, -9.8, 0)
-	jet.scale_amount_min = 0.8
-	jet.scale_amount_max = 1.6
+	jet.scale_amount_min = 0.7
+	jet.scale_amount_max = 1.4
+	var jr := Gradient.new()
+	jr.set_color(0, Color(1, 1, 1, 0.9))
+	jr.set_color(1, Color(1, 1, 1, 0.4))
+	jet.color_ramp = jr
 	jet.position = t.origin + Vector3(0, 4.0 * sc, 0)
 	root.add_child(jet)
-	var splash := CPUParticles3D.new()                    # брызги по воде
+	var splash := CPUParticles3D.new()                    # брызги, отскочившие от воды — короткие штрихи
 	splash.mesh = drop
-	splash.amount = 80
-	splash.lifetime = 0.5
+	splash.particle_flag_align_y = true
+	splash.amount = 110
+	splash.lifetime = 0.45
 	splash.local_coords = false
 	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	splash.emission_ring_axis = Vector3.UP
@@ -267,14 +275,21 @@ func _fountain_water(t: Transform3D) -> void:
 	splash.emission_ring_inner_radius = 0.6 * sc
 	splash.emission_ring_height = 0.05
 	splash.direction = Vector3.UP
-	splash.spread = 35.0
-	splash.initial_velocity_min = 0.6
-	splash.initial_velocity_max = 1.4
+	splash.spread = 40.0
+	splash.initial_velocity_min = 0.8
+	splash.initial_velocity_max = 1.8
 	splash.gravity = Vector3(0, -9.8, 0)
-	splash.scale_amount_min = 0.4
-	splash.scale_amount_max = 0.9
+	splash.scale_amount_min = 0.25
+	splash.scale_amount_max = 0.55
 	splash.position = t.origin + Vector3(0, 1.48 * sc, 0)
 	root.add_child(splash)
+	var mist := vfx.smoke(root, t.origin + Vector3(0, 1.7 * sc, 0), 1.1 * sc, Color(0.85, 0.93, 1.0, 0.16), 10, 0.25)
+	mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING     # водяная пыль над чашей
+	mist.emission_ring_axis = Vector3.UP
+	mist.emission_ring_radius = 1.4 * sc
+	mist.emission_ring_inner_radius = 0.5 * sc
+	mist.emission_ring_height = 0.1
+	smoke.append(mist)
 
 
 ## Вывеска лавки: доска тёмного лака в золотой рамке на двух стойках, крупный иероглиф и подпись — с обеих
@@ -894,11 +909,16 @@ func _collect(n: Node, xf: Transform3D, out: Array) -> void:
 		_collect(c, here, out)
 
 
-func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, collide: bool) -> void:
-	var basis := Basis(Vector3.UP, deg_to_rad(ry)) * Basis(Vector3.RIGHT, deg_to_rad(rx))
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
+## Материалы блоков — общие на все блоки (раньше свой на каждый). Арена — CC0 текстуры 4K (Poly Haven, DDS:
+## pax_rpg/dev/assets/tex_dds.gd): цвет 4K, нормали 2K; развёртка трипланарная по миру — без растяжений на кольцах.
+const TEX_MATS := {"arena_wall": ["japanese_stone_wall", 0.33], "arena_seat": ["large_sandstone_blocks", 0.4],
+	"arena_sand": ["dense_sand", 0.22]}
+var _mat_cache := {}
+
+
+func _block_mat(mat: String) -> StandardMaterial3D:
+	if _mat_cache.has(mat):
+		return _mat_cache[mat]
 	var sm := StandardMaterial3D.new()
 	sm.albedo_color = MATS.get(mat, MATS.stone)
 	sm.roughness = 0.95
@@ -908,7 +928,31 @@ func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, coll
 		sm.uv1_triplanar = true
 		sm.uv1_world_triplanar = true
 		sm.uv1_scale = Vector3.ONE * 0.25
-	bm.material = sm
+	elif TEX_MATS.has(mat):
+		var tm: Array = TEX_MATS[mat]
+		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % tm[0])
+		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % tm[0])
+		sm.albedo_color = Color.WHITE
+		if d != null:
+			sm.albedo_texture = ImageTexture.create_from_image(d)
+		if n != null:
+			sm.normal_enabled = true
+			sm.normal_texture = ImageTexture.create_from_image(n)
+			sm.normal_scale = 1.2
+		sm.uv1_triplanar = true
+		sm.uv1_world_triplanar = true
+		sm.uv1_scale = Vector3.ONE * float(tm[1])
+		sm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_mat_cache[mat] = sm
+	return sm
+
+
+func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, collide: bool) -> void:
+	var basis := Basis(Vector3.UP, deg_to_rad(ry)) * Basis(Vector3.RIGHT, deg_to_rad(rx))
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	bm.material = _block_mat(mat)
 	mi.mesh = bm
 	mi.transform = Transform3D(basis, pos)
 	root.add_child(mi)

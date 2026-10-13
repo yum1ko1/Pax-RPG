@@ -78,6 +78,9 @@ var _toast: Dictionary = {}        # уведомление слева: {text, t
 var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
 var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
+var _arena := Vector3.ZERO           # арена города: x, z, радиус ямы (0 — нет)
+var _arena_fight: Array = []         # бойцы текущего боя
+var _arena_in := false               # герой в яме
 var _city_map: CityMap               # карта города (M)
 var _help: HelpPanel               # кнопка и окно «Управление» (H)
 var _pause: PauseMenu              # меню паузы (Esc)
@@ -185,11 +188,14 @@ func build(city: Dictionary) -> void:
 	_gate_radius = GATE_RADIUS
 	var goblins := int(cfg.get("goblins", 1))
 	if layout.is_empty():
+		_arena = Vector3.ZERO
 		_make_ground()
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
 		c.build(mod, _view, layout)
+		var ar: Array = layout.get("arena", [])
+		_arena = Vector3(float(ar[0]), float(ar[1]), float(ar[2])) if ar.size() >= 3 else Vector3.ZERO
 		_map_rects.append_array(c.rects)
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
@@ -274,6 +280,8 @@ func build(city: Dictionary) -> void:
 	_zoom_want = 0.0
 	_yaw = 0.0
 	_near_gate = false
+	_arena_fight = []
+	_arena_in = false
 	_flask = int(_hf("flask_charges", 3.0))
 	_hp_ghost = 1.0
 	_numbers.clear()
@@ -764,10 +772,60 @@ func _physics_body(delta: float) -> void:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_follow_camera(delta)
+	_arena_tick()
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
+
+
+## Арена: вошёл в яму — подсказка «E — вызов»; бой по лестнице славы (побед в настройке мода arena_wins):
+## 0 — гоблин, 1 — двое, 2 — трое, дальше — Гхаррок, орк-чемпион (вызвать его можно, только доказав себя).
+func _arena_tick() -> void:
+	if _arena.z <= 0.0 or not is_instance_valid(_player):
+		return
+	var inside := Vector2(_player.position.x - _arena.x, _player.position.z - _arena.y).length() < _arena.z
+	if inside and not _arena_in and _arena_fight.is_empty():
+		_toast = {"text": mod.tr_key("pax_rpg_arena_prompt") % mod.tr_key(_arena_foe_key()), "t": 0.0}
+	_arena_in = inside
+	if _arena_fight.is_empty():
+		return
+	for g: Variant in _arena_fight:
+		if is_instance_valid(g) and not (g as Goblin).dead:
+			return
+	var wins := int(mod.get_setting("arena_wins", 0)) + 1
+	mod.set_setting("arena_wins", wins)
+	_arena_fight = []
+	_toast = {"text": mod.tr_key("pax_rpg_arena_win") % wins, "t": 0.0}
+
+
+func _arena_foe_key() -> String:
+	var wins := int(mod.get_setting("arena_wins", 0))
+	return "pax_rpg_orc" if wins >= 3 else ("pax_rpg_arena_goblins_%d" % (wins + 1))
+
+
+func _arena_start() -> void:
+	var wins := int(mod.get_setting("arena_wins", 0))
+	var c := Vector3(_arena.x, 0.2, _arena.y)
+	var away := c - Vector3(_player.position.x, 0.2, _player.position.z)
+	away.y = 0.0
+	var dir := away.normalized() if away.length() > 0.5 else Vector3(0, 0, -1)
+	var far := c + dir * (_arena.z * 0.55)               # бойцы — на той стороне ямы
+	if wins >= 3:
+		var o := Orc.new()
+		o.setup(mod, _player, _on_hero_hit, far, _hero_attacking, _hero_blocking)
+		_view.add_child(o)
+		_goblins.append(o)
+		_arena_fight.append(o)
+	else:
+		var side := dir.cross(Vector3.UP)
+		for i: int in wins + 1:
+			var g := Goblin.new()
+			g.setup(mod, _player, _on_hero_hit, far + side * (float(i) - wins * 0.5) * 2.2, _hero_attacking, _hero_blocking)
+			_view.add_child(g)
+			_goblins.append(g)
+			_arena_fight.append(g)
+	_toast = {"text": mod.tr_key("pax_rpg_arena_fight"), "t": 0.0}
 
 
 ## Камера: свободная — сзади и сверху; при захвате врага плавно подлетает к герою и встаёт за правым плечом,
@@ -1334,6 +1392,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
+		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _arena_in and _arena_fight.is_empty():
+			_arena_start()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):

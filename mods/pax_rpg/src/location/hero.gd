@@ -685,7 +685,7 @@ func _cape_tick(w: Dictionary, delta: float) -> void:
 			var d := x[k] - tg[k]
 			if d.length() > lim:
 				x[k] = tg[k] + d.normalized() * lim
-			x[k] = _push_out(x[k])
+			x[k] = _push_out(x[k], tg[k])
 			x[k].y = maxf(x[k].y, floor_y)
 	c.x = x
 	c.prev = prev
@@ -706,7 +706,9 @@ static func _cape_link(x: PackedVector3Array, a: int, b: int, rest_len: float, a
 		x[b] -= corr * 0.5
 
 
-func _push_out(p: Vector3) -> Vector3:
+## Вытолкнуть точку ткани из капсул тела. ref — где ткань должна быть (цель): если нога «перешагнула» точку и та
+## оказалась спереди, выталкиваем в сторону цели (назад, за ногу), а не вперёд сквозь неё.
+func _push_out(p: Vector3, ref := Vector3.INF) -> Vector3:
 	for cl: Array in _colliders:
 		var body: AnimatableBody3D = cl[0]
 		var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
@@ -718,8 +720,15 @@ func _push_out(p: Vector3) -> Vector3:
 		var off := p - nearest
 		var dist := off.length()
 		var r := cap.radius + 0.03
-		if dist < r and dist > 0.0001:
-			p = nearest + off / dist * r
+		if dist < r:
+			var dir := off / dist if dist > 0.0001 else Vector3.ZERO
+			if ref != Vector3.INF:
+				var want := ref - nearest
+				want -= axis * want.dot(axis)
+				if want.length() > 0.0001 and (dir == Vector3.ZERO or dir.dot(want) < 0.0):
+					dir = want.normalized()
+			if dir != Vector3.ZERO:
+				p = nearest + dir * r
 	return p
 
 
@@ -756,7 +765,7 @@ func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
 			var o01 := x[k00 + cx] - tg[k00 + cx]
 			var o11 := x[k00 + cx + 1] - tg[k00 + cx + 1]
 			var off := o00.lerp(o10, tu).lerp(o01.lerp(o11, tu), tv)
-			pos[j * nx + i] = base[j * nx + i] + off
+			pos[j * nx + i] = _push_out(base[j * nx + i] + off, base[j * nx + i])   # и густую сетку — не режет ноги
 	# вдвое гуще и гладко (Catmull-Rom по сетке): без углов на складках
 	var sub := int(c.get("sub", 2))
 	var mx := (nx - 1) * sub + 1
@@ -857,8 +866,8 @@ func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
 ## Капсулы тела (таз, спина, бёдра, голени) — о них бьётся ткань; персонажа и мир они не трогают.
 func _make_body_colliders() -> void:
 	for d: Array in [["Hips", "Spine01", 0.15], ["Spine01", "Spine02", 0.12], ["Spine02", "neck", 0.07],
-			["LeftUpLeg", "LeftLeg", 0.1], ["RightUpLeg", "RightLeg", 0.1],
-			["LeftLeg", "LeftFoot", 0.08], ["RightLeg", "RightFoot", 0.08]]:
+			["LeftUpLeg", "LeftLeg", 0.115], ["RightUpLeg", "RightLeg", 0.115],
+			["LeftLeg", "LeftFoot", 0.09], ["RightLeg", "RightFoot", 0.09]]:
 		var ia := _skel.find_bone(str(d[0]))
 		var ib := _skel.find_bone(str(d[1]))
 		if ia < 0 or ib < 0:

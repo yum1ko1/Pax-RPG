@@ -62,6 +62,59 @@ func _proc(delta: float) -> void:
 	_streaks = keep
 
 
+## Пыль, поднятая порывом: низкие клубы у земли (флипбук дыма, цвет глины), сносит вдоль ветра.
+var _dust_mat: StandardMaterial3D
+
+
+func _dust(at: Vector3) -> void:
+	if _dust_mat == null:
+		_dust_mat = StandardMaterial3D.new()
+		_dust_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_dust_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		_dust_mat.particles_anim_h_frames = 8
+		_dust_mat.particles_anim_v_frames = 8
+		_dust_mat.particles_anim_loop = false
+		_dust_mat.vertex_color_use_as_albedo = true
+		_dust_mat.albedo_texture = mod.texture("textures/vfx/smoke_8x8.png")
+		_dust_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_dust_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_dust_mat.proximity_fade_enabled = true
+		_dust_mat.proximity_fade_distance = 0.6
+	var p := CPUParticles3D.new()
+	var q := QuadMesh.new()
+	q.material = _dust_mat
+	p.mesh = q
+	p.one_shot = true
+	p.explosiveness = 0.6
+	p.amount = 14
+	p.lifetime = 2.4
+	p.local_coords = false
+	p.anim_speed_min = 1.0
+	p.anim_speed_max = 1.0
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(5.0, 0.1, 5.0)
+	p.direction = dir + Vector3(0, 0.15, 0)
+	p.spread = 15.0
+	p.initial_velocity_min = 3.0
+	p.initial_velocity_max = 6.0
+	p.damping_min = 1.0
+	p.damping_max = 2.0
+	p.gravity = Vector3(0, 0.2, 0)
+	p.scale_amount_min = 1.2
+	p.scale_amount_max = 2.4
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.72, 0.56, 0.42, 0.0))
+	ramp.add_point(0.2, Color(0.72, 0.56, 0.42, 0.22))
+	ramp.set_color(1, Color(0.8, 0.66, 0.55, 0.0))
+	p.color_ramp = ramp
+	add_child(p)
+	p.global_position = Vector3(at.x, target.global_position.y + 0.3, at.z)
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
 func _spawn_gust() -> void:
 	if _shader == null:
 		return
@@ -74,7 +127,8 @@ func _spawn_gust() -> void:
 		fw.y = 0.0
 		base = cam0.global_position + fw.normalized() * randf_range(7.0, 12.0) - dir * 6.0
 		base.y = target.global_position.y
-	for i: int in randi_range(4, 7):
+	_dust(base + dir * 6.0)
+	for i: int in randi_range(3, 5):
 		var mi := MeshInstance3D.new()
 		mi.mesh = _mesh
 		var m := ShaderMaterial.new()
