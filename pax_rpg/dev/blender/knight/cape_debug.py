@@ -124,7 +124,7 @@ for clip, frac in CLIPS:
     for view, ang in [("side", yaw0 + math.radians(90)), ("back", yaw0 + math.radians(180))]:
         d = Vector((math.sin(ang), -math.cos(ang), 0.0))
         cam.location = Vector((hp.x, hp.y, 1.1)) + d * 2.6
-        cam.rotation_euler = (math.radians(90), 0, math.atan2(d.x, -d.y) + math.radians(180))
+        cam.rotation_euler = (math.radians(90), 0, ang)
         for ob in obs:
             ob.hide_render = False
         sc.render.filepath = os.path.join(OUT, f"cape_{clip}_{view}.png")
