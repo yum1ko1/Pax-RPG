@@ -479,7 +479,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 		half = maxf(half, absf(rest[i].x))
 	w.cape = {"nx": nx, "nz": nz, "rest": rest, "shade": shade, "cx": cx, "cz": cz, "c_idx": c_idx,
 		"top_b": top_b, "low_b": low_b, "left_b": left_b, "right_b": right_b, "half": maxf(half, 0.1),
-		"mesh": mesh, "mat": mat, "lining": lining,
+		"mesh": mesh, "mat": mat, "lining": lining, "item": it,
 		"x": PackedVector3Array(), "prev": PackedVector3Array(), "len_h": 0.0, "len_v": 0.0}
 	var c: Dictionary = w.cape
 	var tg := _cape_targets(c, c_idx)
@@ -624,6 +624,7 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 		t_l = _bone_world(int(c.left_b)) * _bone_world(int(c.left_b), true).affine_inverse()
 		t_r = _bone_world(int(c.right_b)) * _bone_world(int(c.right_b), true).affine_inverse()
 	var half: float = c.half
+	var it_cape: Dictionary = c.get("item", {})
 	var out := PackedVector3Array()
 	out.resize(idx.size())
 	for k: int in idx.size():
@@ -633,7 +634,16 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 		var u := rest[idx[k]].x / half
 		var ws := smoothstep(0.3, 1.0, absf(u)) * (1.0 - smoothstep(0.0, 0.35, row))
 		var up := (t_top * p).lerp((t_l if u > 0.0 else t_r) * p, ws)
-		out[k] = up.lerp(t_low * p, wl)
+		# ниже лопаток ткань висит под своим весом: от точки крепления этой колонки — прямо вниз (с поворотом
+		# корпуса по горизонтали), а не по наклону спины — иначе в боевой стойке середина выгибается горбом
+		var col := idx[k] % nx
+		var r0: Vector3 = rest[col]
+		var top_w := t_top * (mg * r0)
+		var d := mg.basis * (rest[idx[k]] - r0)
+		var yaw := Basis(Vector3.UP, atan2(t_low.basis.z.x, t_low.basis.z.z))   # поворот таза от покоя, только по горизонтали
+		var hang := top_w + yaw * d
+		var low := (t_low * p).lerp(hang, _iv(it_cape, "hang", 0.75))
+		out[k] = up.lerp(low, wl)
 	return out
 
 
