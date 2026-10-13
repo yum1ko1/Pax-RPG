@@ -21,7 +21,7 @@ void fragment() {
 	// волна от героя: кольцо искажения
 	vec2 dc = (uv - center) * asp;
 	float rc = length(dc);
-	float front = wave > 0.0 ? exp(-pow((rc - wave) / 0.035, 2.0)) : 0.0;
+	float front = wave > 0.0 ? exp(-pow((rc - wave) / 0.012, 2.0)) : 0.0;
 	fe += normalize(dc + 1e-5) * front * 0.025;
 	vec2 base = fe / asp + vec2(0.5);
 	// расслоение цвета: R/B разъезжаются к краям
@@ -33,10 +33,11 @@ void fragment() {
 	col.b = textureLod(screen, base - dir * ca, 0.0).b;
 	// остановленный мир: сиреневый монохром с сохранённым контрастом
 	float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-	vec3 mono = mix(vec3(0.05, 0.03, 0.1), tint * 1.15, smoothstep(0.02, 0.85, l));
-	col = mix(col, mono, k * 0.85);
-	// фронт волны — негатив
-	col = mix(col, vec3(1.0) - col, clamp(front * 1.3, 0.0, 1.0) * step(0.01, k));
+	float lc = pow(smoothstep(0.08, 0.9, l), 1.35);                   // темнее и контрастнее
+	vec3 mono = mix(vec3(0.03, 0.015, 0.07), tint, lc);
+	col = mix(col, mono, k * 0.75);
+	// фронт волны — тонкое светлое сиреневое кольцо
+	col += vec3(0.9, 0.75, 1.0) * clamp(front, 0.0, 1.0) * 0.55 * step(0.01, k);
 	// края темнее, вспышка
 	col *= 1.0 - k * 0.45 * smoothstep(0.15, 0.6, r2);
 	col = mix(col, vec3(1.0, 0.95, 1.0), flash);

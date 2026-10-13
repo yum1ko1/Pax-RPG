@@ -274,12 +274,12 @@ func _camera(k: float) -> void:
 	var back := _cam0.origin - focus
 	back.y = 0.0
 	back = back.normalized() if back.length() > 0.01 else Vector3(0, 0, 1)
-	var far := focus + back * ((_cam0.origin - focus).length() + 3.0) + Vector3(0, 1.6, 0)
+	var far := focus + back * ((_cam0.origin - focus).length() + 1.3) + Vector3(0, 0.7, 0)
 	var pos := _cam0.origin.lerp(far, e)
 	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.06 * _shake
 	var xf := Transform3D(Basis(), pos).looking_at(focus, Vector3.UP)
 	_cam.global_transform = Transform3D(_cam0.basis.slerp(xf.basis, e), pos + sh)
-	_cam.fov = lerpf(_fov0, 100.0, e)
+	_cam.fov = lerpf(_fov0, 84.0, e)
 
 
 # ---------- линии разреза ----------
@@ -288,7 +288,7 @@ func _cut(i: int) -> void:
 	_play("slash", randf_range(0.92, 1.12))
 	_shake = 1.0
 	var vs := get_viewport_rect().size
-	var at := vs * Vector2(randf_range(0.25, 0.75), randf_range(0.3, 0.7))
+	var at := vs * Vector2(randf_range(0.1, 0.9), randf_range(0.15, 0.85))
 	var pool: Array = []
 	if _enemies.is_valid():
 		for e: Variant in _enemies.call():
@@ -297,9 +297,9 @@ func _cut(i: int) -> void:
 				var p3 := (e as Node3D).global_position + Vector3(0, 0.9, 0)
 				if not _cam.is_position_behind(p3):
 					pool.append(e)
-	if not pool.is_empty():
+	if not pool.is_empty() and i % 3 != 2:                  # каждая третья линия — свободный разрез по кадру
 		var e: Node3D = pool[i % pool.size()]
-		at = _cam.unproject_position(e.global_position + Vector3(0, 0.9, 0)) + Vector2(randf_range(-30, 30), randf_range(-40, 40))
+		at = _cam.unproject_position(e.global_position + Vector3(0, 0.9, 0)) + Vector2(randf_range(-160, 160), randf_range(-120, 120))
 		if not _victims.has(e):
 			_victims.append(e)
 	var ang := randf_range(-PI * 0.45, PI * 0.45) + (PI * 0.5 if i % 3 == 1 else 0.0)
@@ -323,11 +323,13 @@ func _draw() -> void:
 		var grow := clampf(age / 0.06, 0.0, 1.0)                  # прочерк от края к краю
 		var tip := a.lerp(b, grow)
 		var hot := exp(-age * 7.0)                                 # вспышка свежего разреза
-		var w := 1.5 + 5.0 * hot + 6.0 * boom
-		var glow := Color(1.0, 0.5, 0.85, (0.25 + 0.5 * hot + 0.6 * boom) * fade)
-		var core := Color(1.0, 0.97, 1.0, (0.55 + 0.45 * hot + 0.45 * boom) * fade)
-		draw_line(a, tip, glow, w * 3.0, true)
-		draw_line(a, tip, core, w, true)
+		var w := 2.5 + 7.0 * hot + 7.0 * boom
+		var dark := Color(0.08, 0.0, 0.12, 0.55 * fade)
+		var glow := Color(1.0, 0.35, 0.8, (0.35 + 0.5 * hot + 0.6 * boom) * fade)
+		var core := Color(1.0, 0.98, 1.0, (0.75 + 0.25 * hot) * fade)
+		draw_line(a, tip, dark, w * 2.0 + 4.0, true)                 # тёмная окантовка — разрез читается на светлом
+		draw_line(a, tip, glow, w * 2.2, true)
+		draw_line(a, tip, core, w * 0.6, true)
 
 
 # ---------- финал ----------
