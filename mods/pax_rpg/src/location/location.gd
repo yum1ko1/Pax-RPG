@@ -261,7 +261,7 @@ func build(city: Dictionary) -> void:
 	add_child(_iai)
 	move_child(_iai, _vignette.get_index() + 1)
 	_iai.setup(mod, _view, _hero, _player, _cam, func() -> Array: return _goblins, _iai_cut,
-		func(at: Vector3, c: Color) -> void: _sparks(at, c, 70, 7.0),
+		_mana_burst,
 		func(on: bool) -> void:
 			if is_instance_valid(_hud):
 				_hud.visible = on)
@@ -663,6 +663,43 @@ func _iai_try() -> void:
 		return
 	if _iai.start():
 		_iai_cd = _hf("iai_cooldown", 90.0)
+
+
+## Выброс маны из разреза (финал Иай): светящиеся сгустки поднимаются и гаснут, немного искр — густо, но без каши.
+func _mana_burst(at: Vector3, c: Color) -> void:
+	if _vfx == null:
+		_vfx = Vfx.new(mod)
+	var p := CPUParticles3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.22, 0.22)
+	q.material = _vfx._glow_mat(c, 1.8)
+	p.mesh = q
+	p.one_shot = true
+	p.explosiveness = 0.85
+	p.amount = 34
+	p.lifetime = 1.3
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.25
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 1.2
+	p.initial_velocity_max = 3.2
+	p.gravity = Vector3(0, 0.8, 0)                       # мана лёгкая — уходит вверх
+	p.damping_min = 1.5
+	p.damping_max = 2.5
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.3
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1, 1, 1, 1))
+	ramp.add_point(0.4, Color(1, 0.8, 1, 0.8))
+	ramp.set_color(1, Color(1, 0.6, 1, 0))
+	p.color_ramp = ramp
+	_view.add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+	_sparks(at, c, 28, 5.0)
 
 
 ## Финал Иай: удар по каждому, кого задели разрезы. Рядовые падают, у босса — тяжёлый урон и сбитая стойка.

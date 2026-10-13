@@ -144,7 +144,7 @@ func _process(delta: float) -> void:
 		_play("draw")
 		if _blade != null:
 			var tw := create_tween()
-			tw.tween_property(_blade, "position:x", -0.05, 0.12).set_ease(Tween.EASE_OUT))
+			tw.tween_property(_blade, "position:z", 0.05, 0.12).set_ease(Tween.EASE_OUT))   # на палец из ножен
 	_once("stop", T_STOP, _time_stop)
 	for i: int in LINES:
 		_once("line%d" % i, _times[i], _cut.bind(i))
@@ -341,7 +341,7 @@ func _sheathe() -> void:
 	_shake = 1.6
 	if _blade != null:
 		var tw := create_tween()
-		tw.tween_property(_blade, "position:x", 0.0, 0.1).set_ease(Tween.EASE_IN)
+		tw.tween_property(_blade, "position:z", 0.0, 0.1).set_ease(Tween.EASE_IN)
 	for v: Variant in _victims:
 		if is_instance_valid(v) and _on_cut.is_valid():
 			_on_cut.call(v)
@@ -371,15 +371,21 @@ func _finish(interrupted: bool) -> void:
 	finished.emit(interrupted)
 
 
-## Катана в ножнах — у левого бедра (кость Hips); клинок выдвигается из ножен вдоль своей оси.
+## Катана в ножнах — на левом бедре, как носят самураи (образец — модель Samurai.fbx от автора): устье и рукоять
+## вперёд-вверх (~15° к горизонту) и чуть внутрь, ножны назад-вниз. Крепится к кости Hips — ходит с тазом.
+## В моделях оружия остриё — −Z, рукоять — +Z, гарда в нуле; модель героя смотрит на +Z (лево героя — +X).
 func _attach_katana() -> void:
 	var holder := _hero.bone_holder("Hips")
 	if holder == null:
 		return
 	_katana = Node3D.new()
 	holder.add_child(_katana)
-	_katana.position = Vector3(0.16, -0.02, 0.08)            # левое бедро, чуть вперёд
-	_katana.rotation_degrees = Vector3(0, 90, -60)           # рукоять вперёд-вверх, ножны назад-вниз
+	var mdl := _hero.model
+	var want := Transform3D(Basis(Vector3.UP, deg_to_rad(-8.0)) * Basis(Vector3.RIGHT, deg_to_rad(-15.0)),
+		Vector3(0.17, 0.0, 0.0))                                   # в осях модели, от кости таза
+	var hip := holder.global_transform
+	var m := mdl.global_transform.basis.orthonormalized()
+	_katana.global_transform = Transform3D(m * want.basis, hip.origin + m * (want.origin + Vector3(0, -0.04, 0.13)))
 	var saya := Assets.model(mod, "models/weapons/katana_saya.glb")
 	if saya != null:
 		_katana.add_child(saya)
