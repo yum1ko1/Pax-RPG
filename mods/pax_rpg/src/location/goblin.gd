@@ -50,11 +50,18 @@ static var _attacker: Node = null   # у кого жетон атаки
 var mod: PaxMod
 var max_hp := MAX_HP
 var max_posture := MAX_POSTURE
+var boss := false                   # мини-босс: своя полоса внизу экрана (HUD), а не карточка врага
+var title_key := ""                 # титул под именем босса
 var display_key := "pax_rpg_goblin"   # имя в HUD (ключ перевода)
 var hp := max_hp
 var posture := 0.0
 var dead := false
-var respawns := true          # на арене — нет: павший уходит насовсем
+var respawns := true
+# характер — у каждого свой (setup): как часто ставит блок, связывает удары в серию, как терпелив
+var _guard_chance := 0.25
+var _combo_chance := 0.4
+var _combo_n := 0
+var _riposte := false          # на арене — нет: павший уходит насовсем
 var _target: Node3D
 var _hero_attacking: Callable  # () -> bool — герой сейчас бьёт (повод отскочить)
 var _hero_blocking: Callable   # () -> bool — герой в блоке (повод подождать или обмануть)
@@ -81,6 +88,8 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 		hero_blocking := Callable()) -> void:
 	mod = m
 	_hero_blocking = hero_blocking
+	_guard_chance = randf_range(0.12, 0.4)
+	_combo_chance = randf_range(0.2, 0.55)
 	_target = target
 	_on_hit = on_hit
 	_hero_attacking = hero_attacking
@@ -175,6 +184,21 @@ func in_combat() -> bool:
 ## Удар героя: кровь, отлёт, атака сорвана; растёт концентрация. Без равновесия — не принимает обычных ударов.
 func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	if dead or _state == "broken":
+		return
+	var face := global_position.direction_to(from)
+	var fwd := -global_transform.basis.z
+	if not knock and _state in ["idle", "circle", "stalk", "evade", "recover", "guard"] \
+			and fwd.dot(Vector3(face.x, 0.0, face.z).normalized()) > 0.3 and randf() < _guard_chance:
+		posture = minf(max_posture, posture + amount * 0.55)     # принял на клинок: урона нет, равновесие шатается
+		_since_hit = 0.0
+		_burst(global_position + Vector3(0.0, 1.0, 0.0) + face * 0.4, face, Color(1.0, 0.75, 0.35), 14, 3.0, 6.0,
+			0.25, 0.03, true)
+		if posture >= max_posture:
+			_set_state("broken")
+		else:
+			_riposte = randf() < 0.5                         # после блока — иногда сразу ответный удар
+			_set_state("guard")
+		_update_bars()
 		return
 	hp = maxf(0.0, hp - amount)
 	posture = minf(max_posture, posture + amount * 0.7)
@@ -478,6 +502,16 @@ func _phys(delta: float) -> void:
 					_set_state("windup")
 			elif _state_t > 3.0:
 				_set_state("circle")
+		"guard":
+			_face(dir, delta * 2.0)
+			_play("hit")
+			_damp(delta)
+			if _state_t > 0.35:
+				if _riposte and dist <= STRIKE_DIST + 0.6:
+					_riposte = false
+					_set_state("attack")                 # ответ без замаха — надо ловить
+				else:
+					_set_state("circle")
 		"evade":
 			_face(dir, delta)
 			flat = -dir * WALK_SPEED * 1.2 + side * _circle_dir * STRAFE_SPEED
@@ -499,8 +533,13 @@ func _phys(delta: float) -> void:
 				_struck = true
 				if dist <= ATTACK_RANGE + 0.5 and _on_hit.is_valid():
 					_on_hit.call(DAMAGE, self)
-			if _state == "attack" and _state_t >= _clip_len("attack") / ATTACK_SPEED:
-				_set_state("recover")
+			if _state == "attack" and _state_t >= _clip_len("attack") / ATTACK_SPEED * 0.85:
+				if _combo_n < 2 and dist <= ATTACK_RANGE + 1.0 and randf() < _combo_chance:
+					_combo_n += 1                        # серия: следующий удар сразу, без отката
+					_set_state("attack")
+				else:
+					_combo_n = 0
+					_set_state("recover")
 		"recover":
 			_face(dir, delta)
 			if _state_t > RECOVER_TIME:

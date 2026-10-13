@@ -219,6 +219,8 @@ func _open(on: bool) -> void:
 			_gates.queue_free()
 			_gates = null
 		return
+	if _gates != null:                                 # уже закрыты (после победы — следующий бой)
+		return
 	_gates = Node3D.new()
 	_root.add_child(_gates)
 	var mat := StandardMaterial3D.new()

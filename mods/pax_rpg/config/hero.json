@@ -20,8 +20,8 @@
 		"Attack1": 0.8,
 		"Attack2": 0.8,
 		"Attack3": 1.15,
-		"Dodge": 1.0,
-		"DodgeArmed": 0.9
+		"Dodge": 1.65,
+		"DodgeArmed": 1.55
 	},
 	"air": {
 		"Attack3": [
@@ -135,9 +135,9 @@
 		"cape_black"
 	],
 	"cloth_body_scale": 1.1,
-	"trail_life": 0.2,
+	"trail_life": 0.3,
 	"trail_speed": 4.0,
-	"trail_alpha": 0.6,
+	"trail_alpha": 0.9,
 	"trail_color": [
 		0.8,
 		0.45,

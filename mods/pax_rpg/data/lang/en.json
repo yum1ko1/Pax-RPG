@@ -85,5 +85,6 @@
 	"pax_rpg_arena_next": "Victory! The crowd roars. Ready for the next fight? E — %s · X — leave the arena",
 	"pax_rpg_arena_champion": "Gharrok falls — you are the arena champion! E — fight the champion again · X — leave",
 	"pax_rpg_arena_lost": "You are carried off the sand…",
-	"pax_rpg_arena_leave": "Leaving the arena"
+	"pax_rpg_arena_leave": "Leaving the arena",
+	"pax_rpg_orc_title": "Champion of the Gharn Arena"
 }

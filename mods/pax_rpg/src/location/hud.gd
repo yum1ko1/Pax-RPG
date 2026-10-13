@@ -329,6 +329,10 @@ func _draw_quest() -> void:
 func _draw_enemy() -> void:
 	var e: Dictionary = _g("enemy", {})
 	if e.is_empty():
+		_boss_ghost = 1.0
+		return
+	if bool(e.get("boss", false)):
+		_draw_boss(e)
 		return
 	var r := Rect2(_w - 40.0 - 380.0, 580.0, 380.0, 116.0)
 	draw_rect(r, Color(0.04, 0.06, 0.14, 0.72))
@@ -360,6 +364,41 @@ func _draw_enemy() -> void:
 	else:
 		status = _tr("pax_rpg_hud_weak")
 	_text(Vector2(x, r.position.y + 96), status, sans, 13, sc, HORIZONTAL_ALIGNMENT_LEFT, -1, 0)
+
+
+## Босс (как в Souls/Sekiro): внизу по центру — имя и титул, длинная полоса здоровья со «следом» урона
+## (белёсая часть догоняет красную), над ней — концентрация от центра в стороны.
+var _boss_ghost := 1.0
+
+
+func _draw_boss(e: Dictionary) -> void:
+	var w := 900.0
+	var x := (_w - w) * 0.5
+	var y := 1080.0 - 150.0
+	var hp := clampf(float(e.get("hp", 1.0)), 0.0, 1.0)
+	_boss_ghost = maxf(hp, move_toward(_boss_ghost, hp, 0.004))
+	_text(Vector2(x, y - 14.0), str(e.get("name", "")), serif, 30, TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, 4)
+	var title := str(e.get("title", ""))
+	if title != "":
+		_text(Vector2(x + 4.0, y + 4.0), title, sans, 13, MUTED, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+	var by := y + 14.0
+	draw_rect(Rect2(x - 2.0, by - 2.0, w + 4.0, 16.0), Color(0.02, 0.02, 0.06, 0.85))
+	draw_rect(Rect2(x, by, w * _boss_ghost, 12.0), Color(1.0, 0.85, 0.9, 0.55))
+	draw_rect(Rect2(x, by, w * hp, 12.0), Color(0.78, 0.12, 0.24))
+	draw_rect(Rect2(x, by, w * hp, 3.0), Color(1.0, 0.4, 0.5, 0.7))
+	draw_rect(Rect2(x - 2.0, by - 2.0, w + 4.0, 16.0), Color(PINK, 0.55), false, 1.0)
+	var p := clampf(float(e.get("posture", 0.0)), 0.0, 1.0)      # концентрация: от центра
+	var pw := 520.0
+	var px := (_w - pw) * 0.5
+	var py := y - 52.0
+	if p > 0.005 or bool(e.get("broken", false)):
+		draw_rect(Rect2(px, py, pw, 7.0), Color(0.05, 0.04, 0.1, 0.8))
+		var col := AMBER.lerp(RED, p)
+		if bool(e.get("broken", false)):
+			col = PINK
+			p = 1.0
+		draw_rect(Rect2(px + pw * 0.5 * (1.0 - p), py, pw * p, 7.0), col)
+		draw_rect(Rect2(_w * 0.5 - 1.0, py - 3.0, 2.0, 13.0), Color(TEXT, 0.8))
 
 
 ## Метки поверх мира: прицел захвата и цифры урона (координаты — пиксели экрана, location.gd проецирует).

@@ -7,6 +7,7 @@
 			"kind": "cape",
 			"grid": "models/items/cape_black.json",
 			"top_bone": "Spine01",
+			"collar_mesh": false,
 			"low_bone": "Hips",
 			"coarse": [
 				5,

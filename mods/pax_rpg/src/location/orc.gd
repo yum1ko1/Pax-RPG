@@ -63,6 +63,8 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	max_posture = 240.0
 	hp = max_hp
 	display_key = "pax_rpg_orc"
+	boss = true
+	title_key = "pax_rpg_orc_title"
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.55

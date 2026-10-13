@@ -748,6 +748,8 @@ func _physics_body(delta: float) -> void:
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)
+		if r.has("blade"):
+			_blade_strike(r.blade)
 		if step != Vector3.ZERO and delta > 0.0:
 			# смещение клипа — в осях модели; модель повёрнута вместе с _body_mesh (и на PI внутри него)
 			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
@@ -888,6 +890,39 @@ func _strike(hit: Dictionary) -> void:
 		gob.take_damage(float(hit.damage) * _prog.damage_mult(), _player.global_position, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
+
+
+## Удар клинком по пути: враг задет, если полоса клинка (сейчас, кадр назад и посередине) прошла ближе
+## blade_radius к его телу (вертикальный отрезок от колен до головы). Один взмах — один урон каждому.
+var _blade_hit := {}                 # id взмаха → {враг: true}
+
+
+func _blade_strike(b: Dictionary) -> void:
+	var id := int(b.id)
+	if not _blade_hit.has(id):
+		_blade_hit = {id: {}}
+	var done: Dictionary = _blade_hit[id]
+	var segs := [[b.a, b.b], [b.pa, b.pb], [((b.a as Vector3) + (b.pa as Vector3)) * 0.5, ((b.b as Vector3) + (b.pb as Vector3)) * 0.5]]
+	var rad := _hf("blade_radius", 0.55)
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive() or done.has(g):
+			continue
+		var gob: Goblin = g
+		var lo := gob.global_position + Vector3(0, 0.3, 0)
+		var hi := gob.global_position + Vector3(0, 1.6 if gob.boss else 1.2, 0)
+		var hit := false
+		for sg: Array in segs:
+			var cp := Geometry3D.get_closest_points_between_segments(sg[0], sg[1], lo, hi)
+			if (cp[0] as Vector3).distance_to(cp[1]) < rad + (0.35 if gob.boss else 0.0):
+				hit = true
+				break
+		if not hit:
+			continue
+		done[g] = true
+		var dmg := float(b.damage) * _prog.damage_mult()
+		gob.take_damage(dmg, _player.global_position, false)
+		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
+			"crit": false, "t": 0.0})
 
 
 # ---------- бой как в Sekiro ----------
@@ -1294,7 +1329,8 @@ func _hud_tick(delta: float) -> void:
 	var e := _hud_enemy()
 	if e != null:
 		st["enemy"] = {"name": mod.tr_key(e.display_key), "hp": e.hp / e.max_hp,
-			"posture": e.posture / e.max_posture, "broken": e.can_deathblow()}
+			"posture": e.posture / e.max_posture, "broken": e.can_deathblow(), "boss": e.boss,
+			"title": mod.tr_key(e.title_key) if e.title_key != "" else ""}
 		st["ult"] = e.posture / e.max_posture if not e.can_deathblow() else 1.0
 		st["ult_ready"] = e.can_deathblow()
 	if _lock != null and is_instance_valid(_lock):

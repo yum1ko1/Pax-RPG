@@ -1042,6 +1042,34 @@ func _make_trail() -> void:
 	model.add_child(mi)
 
 
+## Клинок в ударе (кроме финального по площади): отрезок «четверть клинка — остриё» сейчас и кадр назад, пока меч
+## летит быстро. location.gd бьёт тех, через кого прошла эта полоса, — урон там и тогда, где виден взмах.
+var _blade_prev: Array = []
+var _swing_id := 0
+var _swing_action := ""
+
+
+func _blade_out(out: Dictionary) -> void:
+	var imp: Dictionary = meta.get("impact", {})
+	if action not in ATTACKS or imp.has(action) or _sword_hand == null or not _sword_hand.is_inside_tree():
+		_blade_prev = []
+		_swing_action = ""
+		return
+	if action != _swing_action or _pos() < 0.05:
+		if action != _swing_action:
+			_swing_id += 1
+		_swing_action = action
+	var g := _sword_hand.global_transform
+	var tip := g * _tip
+	var base := g * (_tip * 0.2)
+	if not _blade_prev.is_empty():
+		var fast := (tip - (_blade_prev[1] as Vector3)).length() > _f("blade_min_step", 0.04)
+		if fast:
+			out["blade"] = {"a": base, "b": tip, "pa": _blade_prev[0], "pb": _blade_prev[1], "id": _swing_id,
+				"damage": _per("hit_damage", action, 15.0)}
+	_blade_prev = [base, tip]
+
+
 ## Полоса между четвертью клинка и остриём за последние trail_life с — только в ударах и только пока меч летит
 ## быстро: видно дугу, которую накрывает удар.
 func _trail_tick(delta: float) -> void:
@@ -1189,6 +1217,7 @@ func attack(on_floor: bool) -> void:
 ## С мечом — свой клип, тяжелее и дальше.
 func dodge(on_floor: bool) -> bool:
 	_cancel_hurt()
+	_cancel_recovery()
 	if anim == null or not on_floor or action != "":
 		return false
 	var n := "DodgeArmed" if armed and has("DodgeArmed") else "Dodge"
@@ -1322,6 +1351,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_on_floor = on_floor
 	_show_sword(delta)
 	_trail_tick(delta)
+	_blade_out(out)
 	if not cloth_paused:
 		var t0 := Time.get_ticks_usec()
 		_items_tick(delta)
@@ -1398,6 +1428,7 @@ func _update_sector() -> void:
 func set_block(on: bool) -> void:
 	if on and not blocking:
 		_cancel_hurt()
+		_cancel_recovery()                           # из отката удара — сразу в блок (как в Sekiro)
 		if not armed or (action != "" and action not in ["Jump"]):
 			return
 		blocking = true
@@ -1407,6 +1438,21 @@ func set_block(on: bool) -> void:
 			anim.speed_scale = 1.0
 	elif not on:
 		blocking = false
+
+
+## Удар уже нанесён (клинок прошёл пик) — откат можно прервать блоком или кувырком; замах — нельзя.
+## Порог — доля клипа recover_cancel (по ударам), финальный по площади — только после касания земли.
+func _cancel_recovery() -> void:
+	if action not in ATTACKS:
+		return
+	var imp: Dictionary = meta.get("impact", {})
+	var from := _per("recover_cancel", action, 0.42)
+	if imp.has(action):
+		from = maxf(from, float(imp[action]) / maxf(anim.current_animation_length, 0.01) + 0.05)
+	if _frac() >= from:
+		_combo_left = 0.0
+		action = ""
+		_blade_prev = []
 
 
 func parry_window() -> bool:
@@ -1436,7 +1482,9 @@ func _hit(out: Dictionary) -> void:
 	if _hit_done or action not in ATTACKS:
 		return
 	var imp: Dictionary = meta.get("impact", {})
-	var at := float(imp[action]) if imp.has(action) else float((cfg.get("swing_peaks", {}) as Dictionary).get(action, 0.5))
+	if not imp.has(action):
+		return                                       # обычные взмахи бьют клинком по пути (blade в tick)
+	var at := float(imp[action])
 	if _pos() < at:
 		return
 	_hit_done = true
