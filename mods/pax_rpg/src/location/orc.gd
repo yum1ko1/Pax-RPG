@@ -11,19 +11,19 @@ extends "res://mods/pax_rpg/src/location/goblin.gd"
 const ORC_MODEL := "models/orc/orc_champion.glb"
 const LOOPS := ["Idle", "BlockIdle", "WalkF", "WalkB", "WalkL", "WalkR", "TownWalk", "ChargeRun"]
 
-# удары: клип → {hits: доли клипа, где бьёт; dmg; kind: "" обычный, heavy — тяжёлый (блок сильно сбивает
+# удары: клип → {hits: доли клипа, где бьёт (замерено по пику скорости кисти/стопы — clip_reach_blender.py); dmg; kind: "" обычный, heavy — тяжёлый (блок сильно сбивает
 # концентрацию); reach — м; tempo; hold: [доля, с] — замереть в замахе; step — шаг вперёд м/с до первого удара}
 const ATTACKS := {
-	"Backhand": {"hits": [0.42], "dmg": 30.0, "kind": "heavy", "reach": 3.0, "step": 1.2,
-		"tempo": [[0.0, 0.3, 0.55], [0.3, 0.46, 1.5], [0.46, 1.0, 1.0]], "hold": [0.3, 0.45]},
-	"Combo1": {"hits": [0.2, 0.42, 0.74], "dmg": 22.0, "kind": "", "reach": 2.8, "step": 1.0,
-		"tempo": [[0.0, 0.15, 0.8], [0.15, 0.5, 1.2], [0.5, 0.66, 0.45], [0.66, 1.0, 1.25]], "hold": [0.64, 0.5]},
-	"Combo3": {"hits": [0.36, 0.66], "dmg": 26.0, "kind": "heavy", "reach": 2.8, "step": 1.4,
-		"tempo": [[0.0, 0.28, 0.6], [0.28, 0.7, 1.3], [0.7, 1.0, 1.0]], "hold": []},
-	"Kick": {"hits": [0.42], "dmg": 14.0, "kind": "", "reach": 2.2, "step": 0.0,
-		"tempo": [[0.0, 0.35, 1.5], [0.35, 1.0, 1.1]], "hold": []},
-	"JumpAttack": {"hits": [0.58], "dmg": 38.0, "kind": "heavy", "reach": 3.2, "step": 0.0, "leap": 4.8,
-		"tempo": [[0.0, 0.3, 0.8], [0.3, 0.55, 1.0], [0.55, 1.0, 1.0]], "hold": [0.45, 0.35]},
+	"Backhand": {"hits": [0.34], "dmg": 30.0, "kind": "heavy", "reach": 3.0, "step": 1.2,
+		"tempo": [[0.0, 0.2, 0.55], [0.2, 0.4, 1.5], [0.4, 1.0, 1.0]], "hold": [0.18, 0.45]},
+	"Combo1": {"hits": [0.18, 0.45, 0.64], "dmg": 22.0, "kind": "", "reach": 2.8, "step": 1.0,
+		"tempo": [[0.0, 0.12, 0.8], [0.12, 0.5, 1.2], [0.5, 0.58, 0.45], [0.58, 1.0, 1.25]], "hold": [0.55, 0.5]},
+	"Combo3": {"hits": [0.37, 0.64], "dmg": 26.0, "kind": "heavy", "reach": 2.8, "step": 1.4,
+		"tempo": [[0.0, 0.26, 0.6], [0.26, 0.7, 1.3], [0.7, 1.0, 1.0]], "hold": []},
+	"Kick": {"hits": [0.32], "dmg": 14.0, "kind": "", "reach": 2.2, "step": 0.0,
+		"tempo": [[0.0, 0.28, 1.5], [0.28, 1.0, 1.1]], "hold": []},
+	"JumpAttack": {"hits": [0.46], "dmg": 38.0, "kind": "heavy", "reach": 3.2, "step": 0.0, "leap": 4.8,
+		"tempo": [[0.0, 0.3, 0.8], [0.3, 0.44, 1.0], [0.44, 1.0, 1.0]], "hold": [0.34, 0.35]},
 }
 const MOVES_NEAR := ["Combo1", "Combo3", "Backhand", "Kick"]
 const SPIN_TIME := 3.4          # с вихря
