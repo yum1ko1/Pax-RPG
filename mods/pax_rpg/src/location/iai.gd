@@ -190,6 +190,8 @@ func _process(delta: float) -> void:
 		var sp := _cam.unproject_position(_player.global_position + Vector3(0, 0.6, 0))
 		_mat.set_shader_parameter("center", sp / get_viewport_rect().size)
 	_camera(k)
+	if t >= t_sheathe:
+		_end_camera(smoothstep(t_sheathe, t_sheathe + 0.6, t) * (1.0 - smoothstep(_t_end - 0.8, _t_end, t)))
 	if t >= t_ramp and t < t_ramp + RAMP:
 		_unfreeze_step((t - t_ramp) / RAMP)
 	_shake = maxf(0.0, _shake - delta * 4.0)
@@ -296,6 +298,70 @@ func _camera(k: float) -> void:
 	_cam.fov = lerpf(_fov0, 84.0, e)
 
 
+## Финал крупно: сбоку-спереди с левой стороны героя (катана на левом бедре) — видно, как клинок уходит в ножны
+## и герой встаёт; к концу камера плавно возвращается на место.
+func _end_camera(w: float) -> void:
+	if not cam_override or not is_instance_valid(_cam) or _hero == null:
+		return
+	var b := _hero.model.global_transform.basis.orthonormalized()         # +Z — вперёд, +X — левый бок
+	var hp := _player.global_position
+	var focus := hp + Vector3(0, 0.55, 0) + b.x * 0.12
+	var pos := hp + b.x * 1.5 + b.z * 1.3 + Vector3(0, 0.75, 0)
+	var e := w * w * (3.0 - 2.0 * w)
+	var xf := Transform3D(Basis(), pos).looking_at(focus, Vector3.UP)
+	var sh := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * 0.04 * _shake
+	_cam.global_transform = Transform3D(_cam0.basis.slerp(xf.basis, e), _cam0.origin.lerp(pos, e) + sh)
+	_cam.fov = lerpf(_fov0, 55.0, e)
+
+
+## Разрез на враге: вспышка-полоса по диагонали тела — белая сердцевина, розовая кромка; раскрывается и тает.
+func _slash_mark(v: Node3D) -> void:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(1.7, 0.16)
+	var m := ShaderMaterial.new()
+	m.shader = _slash_shader()
+	q.material = m
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_view.add_child(mi)
+	var at := v.global_position + Vector3(0, 0.75, 0)
+	var to_cam := _cam.global_position - at
+	to_cam.y = 0.0
+	mi.global_transform = Transform3D(Basis(), at).looking_at(at - to_cam, Vector3.UP)   # лицом к камере
+	mi.rotate_object_local(Vector3.FORWARD, deg_to_rad(randf_range(25.0, 40.0) * (1.0 if randf() < 0.5 else -1.0)))
+	mi.scale = Vector3(0.05, 1.0, 1.0)
+	var tw := mi.create_tween()
+	tw.tween_property(mi, "scale:x", 1.0, 0.09).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_method(func(a: float) -> void: m.set_shader_parameter("a", a), 1.0, 1.0, 0.09)
+	tw.tween_interval(0.12)
+	tw.tween_method(func(a: float) -> void: m.set_shader_parameter("a", a), 1.0, 0.0, 0.55)
+	tw.parallel().tween_property(mi, "scale:y", 0.15, 0.55)
+	tw.tween_callback(mi.queue_free)
+
+
+var _slash_sh: Shader
+
+
+func _slash_shader() -> Shader:
+	if _slash_sh == null:
+		_slash_sh = Shader.new()
+		_slash_sh.code = """shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, depth_test_disabled;
+uniform float a = 1.0;
+void fragment() {
+	float d = abs(UV.y - 0.5) * 2.0;                 // 0 — середина, 1 — край
+	float taper = smoothstep(0.0, 0.18, UV.x) * smoothstep(1.0, 0.82, UV.x);
+	float core = smoothstep(0.35, 0.0, d);
+	float edge = smoothstep(1.0, 0.45, d) - core;
+	vec3 c = vec3(1.0, 0.97, 1.0) * core * 2.4 + vec3(1.0, 0.25, 0.7) * max(edge, 0.0) * 2.0;
+	ALBEDO = c * taper * a;
+	ALPHA = clamp((core + edge) * taper * a, 0.0, 1.0);
+}
+"""
+	return _slash_sh
+
+
 # ---------- линии разреза ----------
 
 func _cut(i: int) -> void:
@@ -353,7 +419,6 @@ func _sheathe() -> void:
 	_play("sheathe")
 	_hero.iai_sheathe()
 	_unfreeze_all()
-	cam_override = false
 	if _set_hud.is_valid():
 		_set_hud.call(true)
 	if _blade != null:
@@ -369,8 +434,10 @@ func _click() -> void:
 	_play("tsuba")                                      # цуба встала к ножнам — щелчок
 	_shake = 1.6
 	for v: Variant in _victims:
-		if is_instance_valid(v) and _on_cut.is_valid():
-			_on_cut.call(v)
+		if is_instance_valid(v):
+			_slash_mark(v as Node3D)
+			if _on_cut.is_valid():
+				_on_cut.call(v)
 
 
 func _finish(interrupted: bool) -> void:

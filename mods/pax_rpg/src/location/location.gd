@@ -710,6 +710,8 @@ func _iai_cut(v: Node) -> void:
 	var dmg := _hf("iai_damage", 60.0) * _prog.damage_mult()
 	g.take_damage(dmg if g.boss else maxf(dmg, g.hp + 1.0), _player.global_position, not g.boss)
 	g.posture = minf(g.max_posture, g.posture + (g.max_posture * 0.4 if g.boss else g.max_posture))
+	if not g.boss:
+		g.deathblow()                                    # щелчок цубы — падает сразу, без «на коленях»
 	_numbers.append({"pos": g.global_position + Vector3(0, 1.4, 0), "v": int(dmg), "crit": true, "t": 0.0})
 
 
