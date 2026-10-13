@@ -5,7 +5,7 @@
 # Новая или изменённая модель: положить исходник в models_src/ и запустить:  GODOT=<godot editor> sh build.sh
 set -e
 R=$(cd "$(dirname "$0")/../../.." && pwd)
-SRC=$R/pax_rpg/dev/models_src
+SRC=${SRC:-$R/pax_rpg/dev/models_graded}
 DST=$R/mods/pax_rpg/models
 P=$(mktemp -d)
 echo 'config_version=5' > "$P/project.godot"
