@@ -410,7 +410,22 @@ func _play(clip: String, restart := false, blend := 0.2) -> void:
 		_anim.play(c, blend)
 
 
+## Замирание на миг попадания героя (location.gd, вместе с героем): поза и движение стоят — удар «вязнет» в теле.
+var _hitstop := 0.0
+
+
+func hitstop(t: float) -> void:
+	_hitstop = maxf(_hitstop, t)
+	if _anim != null:
+		_anim.active = false
+
+
 func _physics_process(delta: float) -> void:
+	if _hitstop > 0.0:
+		_hitstop -= delta
+		if _hitstop <= 0.0 and _anim != null:
+			_anim.active = true
+		return
 	var t0 := Time.get_ticks_usec()
 	_phys(delta)
 	Prof.add("гоблины", t0)

@@ -2,10 +2,10 @@
 	"$schema": "../../docs/modding/schemas/mod.schema.json",
 	"id": "pax_rpg",
 	"name": {
-		"en": "Pax RPG 0.2.2",
-		"ru": "Pax RPG 0.2.2"
+		"en": "Pax RPG 0.2.10",
+		"ru": "Pax RPG 0.2.10"
 	},
-	"version": "0.2.2",
+	"version": "0.2.10",
 	"api": 1,
 	"game_version": ">=0.28.0",
 	"authors": ["Babichev Maxim"],

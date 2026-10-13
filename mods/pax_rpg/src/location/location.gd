@@ -101,6 +101,9 @@ var _zoom_want := 0.0              # куда крутят колесом; _zoom
 var _zoom := 0.0                   # приближение камеры колесом: 0 — обычная даль, 1 — как в бою (за плечом)
 var _was_floor := true
 var _body_turn := false
+var _reface := 0.0                  # с: после уворота в захвате герой быстро разворачивается обратно к врагу
+var _shake := 0.0                   # с: тряска камеры от попадания (затухает)
+var _shake_amp := 0.0
 var _city_leaves: Array = []
 var _city_lights: Array = []
 var _city_smoke: Array = []
@@ -811,6 +814,7 @@ func _physics_body(delta: float) -> void:
 	_regen_posture(delta)
 	if _hero != null:
 		_hero.combat = _hud_enemy() != null
+		_hero.lock_on = _lock != null
 	if _lock != null and (not is_instance_valid(_lock) or not (_lock as Goblin).is_alive()
 			or _lock.global_position.distance_to(_player.global_position) > 22.0):
 		_set_lock(null)
@@ -836,8 +840,24 @@ func _physics_body(delta: float) -> void:
 	var alt := Input.is_physical_key_pressed(KEY_ALT) and not _typing()
 	if alt and not _alt_down and not locked and _hero != null:
 		var wish := right * input.x - forward * input.y
-		if _hero.dodge(on_floor):
-			if wish.length() > 0.01:
+		# в захвате — как в соулсах: лицом к врагу; назад — отскок, вбок — уклон, вперёд — кувырок
+		var dir := ""
+		if _lock != null and wish.length() > 0.01:
+			var ty := _aim_yaw()
+			var lf := Vector3(-sin(ty), 0.0, -cos(ty))
+			var lr := Vector3(cos(ty), 0.0, -sin(ty))
+			var w := wish.normalized()
+			var fy := w.dot(lf)
+			if fy < -0.5:
+				dir = "B"
+			elif fy < 0.6:
+				dir = "R" if w.dot(lr) > 0.0 else "L"
+			if dir != "":
+				_face_now(ty)
+		if _hero.dodge(on_floor, dir):
+			if _hero.side_dodge():
+				pass                                     # уклон — лицом к врагу, смещение ведёт root motion клипа
+			elif wish.length() > 0.01:
 				_body_mesh.rotation.y = atan2(-wish.x, -wish.z)
 			locked = true
 	_alt_down = alt
@@ -878,7 +898,7 @@ func _physics_body(delta: float) -> void:
 		if _lock != null and not running:
 			# в захвате на месте: к врагу поворачивается голова; тело — только когда угол для головы велик
 			var want := _aim_yaw()
-			if moving or (_hero != null and (_hero.blocking or _hero_attacking())):
+			if moving or _reface > 0.0 or (_hero != null and (_hero.blocking or _hero_attacking())):
 				face = want
 			else:
 				var diff := absf(angle_difference(_body_mesh.rotation.y, want))
@@ -897,7 +917,11 @@ func _physics_body(delta: float) -> void:
 	if _hero != null:
 		var look: Variant = null
 		if _lock != null and is_instance_valid(_lock):
-			look = _lock.global_position + Vector3(0.0, _hf("look_height", 0.95), 0.0)
+			# цель за спиной (бежит от врага в захвате) — голову отпускаем: иначе она упирается в предел и «кивает»
+			var to := _lock.global_position - _player.global_position
+			var off := absf(angle_difference(_body_mesh.rotation.y, atan2(-to.x, -to.z)))
+			if off < deg_to_rad(_hf("head_limit", 70.0) * _hf("look_release", 1.0)):
+				look = _lock.global_position + Vector3(0.0, _hf("look_height", 0.95), 0.0)
 		_hero.look_at_point(look, delta)
 	# магнит ударов: каждый удар комбо доворачивает к врагу, шаг удара не проносит сквозь него
 	var mag: Goblin = _attack_target() if _hero_attacking() else null
@@ -912,6 +936,9 @@ func _physics_body(delta: float) -> void:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
 			_face_now(_aim_yaw())                    # каждый удар серии — заново туда, куда смотрит камера
+		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
+			_reface = _hf("reface_time", 0.35)
+		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
 		_quake_step()
 		var step: Vector3 = r.root
@@ -1038,8 +1065,27 @@ func _follow_camera(delta := 0.0) -> void:
 		var lock_look := (_player.position + Vector3(0.0, 1.4, 0.0)).lerp(enemy, 0.55)
 		pos = free_pos.lerp(shoulder, k)
 		look = target.lerp(lock_look, k)
+	if _shake > 0.0 and delta > 0.0:
+		# тряска от попадания: короткая, затухает; смещаем и камеру, и точку взгляда — картинка вздрагивает целиком
+		_shake = maxf(0.0, _shake - delta)
+		var a := _shake_amp * _shake / maxf(_f("shake_time", 0.18), 0.01)
+		var off := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * a
+		pos += off
+		look += off * 0.6
 	_cam.position = pos
 	_cam.look_at(look, Vector3.UP)
+
+
+## Вес попадания: герой и враг замирают на миг (hitstop), камера вздрагивает. Тяжёлый удар — дольше и сильнее.
+## Несколько врагов одним взмахом — замирание не складывается.
+func _impact_feel(gob: Goblin, heavy: bool) -> void:
+	var t := _hf("hitstop_heavy", 0.14) if heavy else _hf("hitstop", 0.08)
+	if _hero != null:
+		_hero.hitstop(t)
+	if is_instance_valid(gob):
+		gob.hitstop(t)
+	_shake = _f("shake_time", 0.18)
+	_shake_amp = _hf("shake_heavy", 0.09) if heavy else _hf("shake", 0.045)
 
 
 ## Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
@@ -1059,6 +1105,7 @@ func _strike(hit: Dictionary) -> void:
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
 		gob.take_damage(float(hit.damage) * _prog.damage_mult(), _player.global_position, bool(hit.get("knock", false)))
+		_impact_feel(gob, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
 
@@ -1073,7 +1120,14 @@ func _blade_strike(b: Dictionary) -> void:
 	if not _blade_hit.has(id):
 		_blade_hit = {id: {}}
 	var done: Dictionary = _blade_hit[id]
-	var segs := [[b.a, b.b], [b.pa, b.pb], [((b.a as Vector3) + (b.pa as Vector3)) * 0.5, ((b.b as Vector3) + (b.pb as Vector3)) * 0.5]]
+	# полоса клинка между прошлым и нынешним кадром — с шагом ~blade_sub_step по острию: тяжёлый меч в ударе
+	# пролетает за кадр физики до метра, и три положения могли проскочить врага
+	var segs := []
+	var tip_step := ((b.b as Vector3) - (b.pb as Vector3)).length()
+	var n := clampi(int(ceil(tip_step / _hf("blade_sub_step", 0.25))), 2, 12)
+	for i in n + 1:
+		var k := float(i) / float(n)
+		segs.append([(b.pa as Vector3).lerp(b.a as Vector3, k), (b.pb as Vector3).lerp(b.b as Vector3, k)])
 	var rad := _hf("blade_radius", 0.55)
 	for g: Variant in _goblins:
 		if not is_instance_valid(g) or not (g as Goblin).is_alive() or done.has(g):
@@ -1092,6 +1146,7 @@ func _blade_strike(b: Dictionary) -> void:
 		done[g] = true
 		var dmg := float(b.damage) * _prog.damage_mult()
 		gob.take_damage(dmg, _player.global_position, false)
+		_impact_feel(gob, false)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
 
@@ -1252,6 +1307,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	var spark_at := _player.global_position + fwd * 0.7 + Vector3(0.0, 1.2, 0.0)
 	if _hero != null and facing and not unblockable and _hero.parry_window():
 		_hero.deflect()
+		_hero.block_hit(false)
 		_posture = minf(_pos_max(), _posture + 4.0)
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
 		if attacker is Goblin:
@@ -1261,7 +1317,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_posture = minf(_pos_max(), _posture + damage * (4.4 if kind == "heavy" else 2.2))
 		_since_hit = 0.0
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
-		_player.velocity -= fwd * 3.0
+		_hero.block_hit(kind == "heavy")                # отдача: сдвиг назад — root motion клипа
 		if attacker is Goblin:
 			(attacker as Goblin).blocked()
 		if _posture >= _pos_max():
@@ -1586,7 +1642,7 @@ func _hud_tick(delta: float) -> void:
 			"on": act in Hero.ATTACKS, "color": Color(1.0, 0.55, 0.78)},
 		{"k": "盾", "key": mod.tr_key("pax_rpg_key_rmb"), "label": mod.tr_key("pax_rpg_hud_block"),
 			"on": _hero != null and _hero.blocking, "color": Color(0.47, 0.84, 1.0)},
-		{"k": "風", "key": "Alt", "label": mod.tr_key("pax_rpg_hud_dodge"), "on": act in ["Dodge", "DodgeArmed"],
+		{"k": "風", "key": "Alt", "label": mod.tr_key("pax_rpg_hud_dodge"), "on": act.begins_with("Dodge"),
 			"color": Color(0.47, 0.84, 1.0)},
 		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
 			"color": Color(1.0, 0.55, 0.78)},

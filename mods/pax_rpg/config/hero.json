@@ -7,39 +7,44 @@
 	"idle_speed": 1.0,
 	"walk_speed": 1.4,
 	"run_speed": 4.2,
-	"armed_speed_factor": 0.85,
-	"stride_walk": 0.96,
+	"armed_speed_factor": 0.55,
+	"stride_walk": 1.89,
 	"stride_walk_armed": 1.15,
-	"stride_run": 5.79,
+	"stride_run": 4.86,
 	"jump_speed": 6.0,
 	"combo_cancel": {
-		"Attack1": 0.3,
-		"Attack2": 0.36
+		"Attack1": 0.59,
+		"Attack2": 0.59
 	},
 	"root_motion_scale": {
-		"Attack1": 0.8,
-		"Attack2": 0.8,
-		"Attack3": 1.15,
-		"Dodge": 1.65,
-		"DodgeArmed": 1.55,
+		"Attack1": 1.0,
+		"Attack2": 1.0,
+		"Attack3": 1.0,
+		"Dodge": 0.4,
+		"DodgeArmed": 0.4,
 		"Quake": 0.0,
-		"Iai": 0.0
+		"Iai": 0.0,
+		"DodgeBack": 1.0,
+		"DodgeL": 1.0,
+		"DodgeR": 1.0,
+		"BlockHit": 1.0
 	},
-	"air": {
-		"Attack3": [
-			0.25,
-			1.0,
-			0.7
-		]
+	"air": {},
+	"root_motion_lateral": {
+		"DodgeBack": 1.0,
+		"DodgeL": 1.0,
+		"DodgeR": 1.0,
+		"BlockHit": 1.0,
+		"Dodge": 1.0,
+		"DodgeArmed": 1.0
 	},
-	"root_motion_lateral": 0.5,
 	"reach": {
 		"Attack1": 1.45,
 		"Attack2": 1.45,
 		"Attack3": 1.15
 	},
 	"pull_from": {
-		"Attack3": 0.25
+		"Attack3": 0.7
 	},
 	"swing_files": [
 		"sounds/swing_1.wav",
@@ -50,22 +55,22 @@
 		"sounds/swing_6.wav"
 	],
 	"swing_peaks": {
-		"Attack1": 0.37,
-		"Attack2": 0.67,
+		"Attack1": 0.633,
+		"Attack2": 0.6,
 		"Attack3": 1.03,
-		"Draw": 1.2,
-		"Sheathe": 0.73
+		"Draw": 0.6,
+		"Sheathe": 0.3
 	},
 	"swing_lead": 0.55,
 	"swing_volume_db": -4.0,
 	"swing_pitch_spread": 1.06,
-	"jump_skip": 0.3,
+	"jump_skip": 0.05,
 	"combo_grace": 0.5,
 	"parry_window": 0.25,
 	"parry_speed": 1.6,
 	"block_hold": 0.35,
 	"block_speed_factor": 0.55,
-	"lock_speed_factor": 0.75,
+	"lock_speed_factor": 0.9,
 	"posture_regen": 22.0,
 	"posture_regen_block": 10.0,
 	"guard_break_time": 1.2,
@@ -84,48 +89,62 @@
 		"Attack3": 30
 	},
 	"clip_skip": {
-		"Dodge": 0.3,
-		"DodgeArmed": 0.33
+		"Dodge": 0.06,
+		"DodgeArmed": 0.06,
+		"DodgeBack": 0.0,
+		"DodgeL": 0.0,
+		"DodgeR": 0.0
 	},
 	"clip_speed": {
-		"Dodge": 1.3,
-		"DodgeArmed": 1.15,
-		"Hurt": 1.5
+		"Dodge": 1.0,
+		"DodgeArmed": 1.0,
+		"Hurt": 1.5,
+		"DodgeBack": 1.0,
+		"DodgeL": 1.0,
+		"DodgeR": 1.0,
+		"JumpLand": 1.2,
+		"BlockHit": 1.0
 	},
 	"blend_run_armed": 0.5,
 	"sword_floor": 0.04,
 	"sword_follow": 7.0,
 	"impact_lead": 0.05,
 	"combo_skip": {
-		"Attack2": 0.15,
-		"Attack3": 0.45
+		"Attack2": 0.0,
+		"Attack3": 0.0,
+		"Attack1": 0.0
 	},
 	"attack_end": {
-		"Attack1": 0.36,
-		"Attack2": 0.42,
-		"Attack3": 0.6
+		"Attack1": 0.94,
+		"Attack2": 0.94,
+		"Attack3": 0.94
 	},
 	"attack_speed": {
-		"Attack1": 0.88,
-		"Attack2": 0.9,
-		"Attack3": 0.88
+		"Attack1": 1.0,
+		"Attack2": 1.0,
+		"Attack3": 1.0
 	},
 	"blend_in": {
 		"Attack1": 0.15,
-		"Attack2": 0.18,
-		"Attack3": 0.18,
+		"Attack2": 0.12,
+		"Attack3": 0.12,
 		"Draw": 0.25,
 		"Sheathe": 0.25,
-		"Dodge": 0.1,
-		"DodgeArmed": 0.12,
+		"Dodge": 0.06,
+		"DodgeArmed": 0.06,
 		"Hurt": 0.08,
 		"DrawWalk": 0.3,
 		"SheatheWalk": 0.3,
-		"Jump": 0.1
+		"Jump": 0.08,
+		"DodgeBack": 0.06,
+		"DodgeL": 0.06,
+		"DodgeR": 0.06,
+		"JumpLand": 0.06,
+		"BlockHit": 0.05
 	},
 	"blend_loop": 0.35,
 	"armed_run_factor": 0.8,
-	"stride_run_armed": 3.2,
+	"stride_run_armed": 4.86,
 	"impact_files": [
 		"sounds/impact_1.wav",
 		"sounds/impact_2.wav",
@@ -137,9 +156,9 @@
 		"cape_black"
 	],
 	"cloth_body_scale": 1.1,
-	"trail_life": 0.3,
+	"trail_life": 0.12,
 	"trail_speed": 4.0,
-	"trail_alpha": 0.9,
+	"trail_alpha": 0.4,
 	"trail_color": [
 		0.8,
 		0.45,
@@ -176,7 +195,64 @@
 		]
 	],
 	"_note_quake": "Земной разлом (T): quake_plunge — доля клипа Deathblow, где меч входит в землю; quake_hold — сколько стоит на колене; quake_cooldown — перезарядка, с; quake_posture — сколько концентрации героя тратит (риск сломать стойку); quake_waves — волны раз в секунду: [радиус м, урон].",
-	"iai_speed": 1.4, "iai_rise_speed": 0.85,
+	"iai_speed": 1.4,
+	"iai_rise_speed": 0.85,
 	"iai_cooldown": 90.0,
-	"iai_damage": 60.0
+	"iai_damage": 60.0,
+	"_anim_v1": "Клипы v1 (pax_rpg/dev/blender/anim_lib, apply_v1.py): шаги, удары 1–2, уворот, Draw, Hurt пересчитаны по новым клипам; прежние значения — pax_rpg/dev/anim_backup_v0/hero.json.",
+	"blend_spaces": {
+		"_note": "Пространства смешивания (anim_ctl.gd): шаг в захвате и с мечом (Lock), без меча в захвате (LockU), в блоке (BlockMove) — клипы center/F/B/L/R смешиваются по направлению шага.",
+		"Lock": {
+			"center": "IdleArmed",
+			"F": "LockF",
+			"B": "LockB",
+			"L": "LockL",
+			"R": "LockR"
+		},
+		"LockU": {
+			"center": "Idle",
+			"F": "LockUF",
+			"B": "LockUB",
+			"L": "LockUL",
+			"R": "LockUR"
+		},
+		"BlockMove": {
+			"center": "Block",
+			"F": "BlockWalkF",
+			"B": "BlockWalkB",
+			"L": "BlockWalkL",
+			"R": "BlockWalkR"
+		}
+	},
+	"stride_lock": 0.5,
+	"stride_lock_unarmed": 1.23,
+	"stride_block": 0.35,
+	"blend_space_smooth": 10.0,
+	"hitstop": 0.09,
+	"hitstop_heavy": 0.14,
+	"hitstop_scale": 0.02,
+	"reface_time": 0.35,
+	"_note_stage1": "Этап 1: blend_spaces — шаг смешивается по направлению (stride_lock / stride_lock_unarmed / stride_block — м/с, при которых клипы идут в 1×); уворот в захвате — DodgeBack/L/R лицом к врагу (root_motion_lateral по клипам: у остальных 0.5); hitstop / hitstop_heavy — замирание героя и врага при попадании, с; hitstop_scale — во сколько раз медленнее идут клипы в замирании; reface_time — сколько секунд после уворота в захвате герой разворачивается к врагу; sword_drag_run — волочить меч в беге (клип RunArmed держит его на плече — нет); run_attack_skip — с бега удар начинается со стольких секунд клипа (без раскачки); recover_after_peak — откат удара прерывается блоком/уворотом не раньше пика взмаха + столько секунд; look_release — голова следит за целью, пока та не дальше head_limit × это от взгляда тела.",
+	"sword_drag_run": false,
+	"run_attack_skip": 0.3,
+	"recover_after_peak": 0.25,
+	"look_release": 1.0,
+	"_note_authored": "Удары 1–3 поставлены по ключевым позам (pax_rpg/dev/blender/anim_lib/poses_greatsword.py): в клипе и замах с задержкой, и шаг, и восстановление — attack_end у конца клипа, combo_cancel с довода, combo_skip 0, root motion — из клипа (root_motion_scale 1).",
+	"block_blend": 0.18,
+	"active": {
+		"Attack1": [
+			0.54,
+			0.76
+		],
+		"Attack2": [
+			0.5,
+			0.7
+		],
+		"Attack3": [
+			0.94,
+			1.1
+		]
+	},
+	"trail_from": 0.66,
+	"via_time": 0.4
 }

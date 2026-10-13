@@ -6,18 +6,21 @@ extends RefCounted
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const AnimCtl := preload("res://mods/pax_rpg/src/location/anim_ctl.gd")
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
-const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "Attack1", "Attack2", "Attack3", "Dodge",
+const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
+	"Attack1", "Attack2", "Attack3", "Dodge",
 	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
 var meta: Dictionary = {}           # *_anim.json: root_motion, sword_switch, impact, cape
 var model: Node3D
-var anim: AnimationPlayer
+var anim: AnimCtl                   # AnimationTree с интерфейсом AnimationPlayer (anim_ctl.gd)
+var lock_on := false                # захват цели (location.gd): шаг — пространством смешивания вперёд/назад/вбок
 var armed := false
 var move_dir := Vector2.ZERO        # куда идём в осях героя (x — вправо, y — вперёд): location.gd ставит перед tick
 var combat := false                 # рядом враг в бою или захват цели: боевая стойка (колени согнуты)
@@ -29,6 +32,7 @@ var _queued := false                # удар нажат во время тек
 var _combo_next := ""               # удар кончился — ещё combo_grace с нажатие продолжает комбо этим ударом
 var _combo_left := 0.0
 var _airborne := false
+var _running := false                # в прошлом кадре бежал (Shift и шаг) — удар с бега без долгого замаха
 var _sword_back: Node3D
 var _sword_hand: Node3D
 var _sword_drag: Node3D            # только как цель: где меч в беге; виден всегда _sword_hand
@@ -179,18 +183,30 @@ func look_at_point(p: Variant, delta: float) -> void:
 
 
 func start(owner_body: PhysicsBody3D = null) -> void:
-	anim = _find_anim(model)
-	if anim == null:
+	var player := _find_anim(model)
+	if player == null:
 		return
-	for n: String in LOOPS:
-		if anim.has_animation(n):
-			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	var spaces: Dictionary = cfg.get("blend_spaces", {})
+	var loops: Array = LOOPS.duplicate()
+	loops.append("IaiHold")
+	for sp: Variant in spaces.values():
+		if not (sp is Dictionary):
+			continue                                 # "_note" и прочие пояснения
+		for clip: Variant in (sp as Dictionary).values():
+			loops.append(str(clip))
+	for n: Variant in loops:
+		if player.has_animation(str(n)):
+			player.get_animation(str(n)).loop_mode = Animation.LOOP_LINEAR
 	for n: String in ONCE:
-		if anim.has_animation(n):
-			anim.get_animation(n).loop_mode = Animation.LOOP_NONE
+		if player.has_animation(n):
+			player.get_animation(n).loop_mode = Animation.LOOP_NONE
 	# анимация, поворот головы и меч — в такте физики, как движение и камера: иначе при FPS выше 60 кадры
-	# с поправками и без чередуются — поза дёргается, а бег кажется быстрее
-	anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+	# с поправками и без чередуются — поза дёргается, а бег кажется быстрее (дерево — тоже в такте физики)
+	anim = AnimCtl.new()
+	anim.name = "AnimCtl"
+	anim.blend_smooth = _f("blend_space_smooth", 10.0)
+	model.add_child(anim)
+	anim.setup(player, spaces)
 	anim.animation_finished.connect(_on_finished)
 	anim.play("Idle")
 	_skel = _find_skeleton(model)
@@ -1049,9 +1065,21 @@ var _swing_id := 0
 var _swing_action := ""
 
 
+## Активная фаза удара: клинок бьёт (и рисует след) только в окне active [с, по] секунд клипа — не на замахе
+## (меч, переходя из стойки в замах, мог «чиркнуть» врага раньше удара) и не на возврате. Нет окна — весь удар.
+func _active() -> bool:
+	if action not in ATTACKS:
+		return false
+	var w: Variant = (cfg.get("active", {}) as Dictionary).get(action, null)
+	if not (w is Array) or (w as Array).size() < 2:
+		return true
+	var t := _pos()
+	return t >= float((w as Array)[0]) and t <= float((w as Array)[1])
+
+
 func _blade_out(out: Dictionary) -> void:
 	var imp: Dictionary = meta.get("impact", {})
-	if action not in ATTACKS or imp.has(action) or _sword_hand == null or not _sword_hand.is_inside_tree():
+	if not _active() or imp.has(action) or _sword_hand == null or not _sword_hand.is_inside_tree():
 		_blade_prev = []
 		_swing_action = ""
 		return
@@ -1077,10 +1105,10 @@ func _trail_tick(delta: float) -> void:
 		return
 	_clock += delta
 	var life := _f("trail_life", 0.2)
-	if action in ATTACKS and _sword_hand.visible and _sword_hand.is_inside_tree() and delta > 0.0:
+	if _active() and _sword_hand.visible and _sword_hand.is_inside_tree() and delta > 0.0:
 		var g := _sword_hand.global_transform
 		var tip := g * _tip
-		var base := g * (_tip * 0.25)
+		var base := g * (_tip * _f("trail_from", 0.66))       # след — только конец клинка, не вся длина
 		var fast := true
 		if not _trail.is_empty():
 			var last: Array = _trail[-1]
@@ -1208,28 +1236,46 @@ func attack(on_floor: bool) -> void:
 		if _combo_left > 0.0 and _combo_next != "" and has(_combo_next):
 			_play_once(_combo_next, _per("combo_skip", _combo_next, 0.0))   # успел после конца удара
 		else:
-			_play_once("Attack1")
+			# с бега — как в соулсах: без раскачки, клинок летит сразу (инерция бега уже есть)
+			_play_once("Attack1", _f("run_attack_skip", 0.3) if _running else 0.0)
 	elif action in ATTACKS and action != ATTACKS[-1]:
 		_queued = true                      # следующий удар — сразу после взмаха этого
 
 
 ## Уворот (Alt): кувырок туда, куда смотрит герой (location.gd разворачивает его по направлению ввода).
-## С мечом — свой клип, тяжелее и дальше.
-func dodge(on_floor: bool) -> bool:
+## С мечом — свой клип, тяжелее и дальше. dir — в захвате цели, лицом к врагу: "B" — отскок назад, "L"/"R" — уклон
+## вбок (клипы DodgeBack / DodgeL / DodgeR; нет клипа — обычный кувырок).
+func dodge(on_floor: bool, dir := "") -> bool:
 	_cancel_hurt()
 	_cancel_recovery()
 	if anim == null or not on_floor or action != "":
 		return false
 	var n := "DodgeArmed" if armed and has("DodgeArmed") else "Dodge"
+	var side := {"B": "DodgeBack", "L": "DodgeL", "R": "DodgeR"}
+	if side.has(dir) and has(str(side[dir])):
+		n = str(side[dir])
 	if not has(n):
 		return false
-	_play_once(n, _per("clip_skip", n, 0.0))   # без раскачки перед кувырком — уворот срабатывает сразу
+	# с мечом — свой клип (меч прижат к телу); root motion — общий у пары (action — без «Armed»)
+	var clip := n + "Armed" if armed and n != "DodgeArmed" and has(n + "Armed") else n
+	_play_once(n, _per("clip_skip", n, 0.0), clip)   # без раскачки перед кувырком — уворот срабатывает сразу
 	return true
 
 
 ## Во время кувырка удары проходят мимо (i-frames).
 func invulnerable() -> bool:
-	return action in ["Dodge", "DodgeArmed", "Knocked", "GetUp"]
+	return action.begins_with("Dodge") or action in ["Knocked", "GetUp"]
+
+
+## Уворот в стороны (не кувырок вперёд) — location.gd держит героя лицом к врагу.
+func side_dodge() -> bool:
+	return action in ["DodgeBack", "DodgeL", "DodgeR"]
+
+
+## Попадание: клипы замирают на миг (вес удара).
+func hitstop(t: float) -> void:
+	if anim != null:
+		anim.hitstop(t, _f("hitstop_scale", 0.05))
 
 
 ## Сбит с ног (таран орка): падение, потом подъём; пока лежит — неуязвим и без управления.
@@ -1254,28 +1300,32 @@ func jump(on_floor: bool) -> bool:
 	if anim == null or not on_floor or (action != "" and action != "Jump"):
 		return false
 	if has("Jump"):
-		_play_once("Jump")
-		anim.seek(_f("jump_skip", 0.3), true)
+		# с мечом — свой прыжок: обе руки на рукояти, меч прижат к телу
+		_play_once("Jump", _f("jump_skip", 0.05), "JumpArmed" if armed and has("JumpArmed") else "Jump")
 	_airborne = false
 	return true
 
 
-func _play_once(n: String, skip := 0.0) -> void:
+var _clip := ""                       # клип разового действия (у прыжка с мечом — свой клип при том же action)
+
+
+func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	action = n
+	_clip = clip if clip != "" else n
 	_queued = false
 	_prev_off = Vector2.ZERO
 	_swing_done = false
 	_hit_done = false
 	_impact_done = false
 	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
-	anim.play(n, _per("blend_in", n, 0.15))
+	anim.play(_clip, _per("blend_in", n, 0.15))
 	if skip > 0.0:
 		anim.seek(skip, true)
 		_prev_off = _root_at(skip)
 
 
 func _on_finished(n: StringName) -> void:
-	if String(n) == action:
+	if String(n) == action or String(n) == _clip:
 		_end_action()
 
 
@@ -1313,6 +1363,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	var out := {"root": Vector3.ZERO}
 	if anim == null:
 		return out
+	_running = running and moving and on_floor and action == ""
 	if action == "Quake":
 		_quake_tick(delta)
 	elif action == "Iai":
@@ -1345,7 +1396,9 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		if not on_floor:
 			_airborne = true
 		elif _airborne:
-			_end_action()                    # приземлился — дальше ходьба или стойка
+			_end_action()                    # приземлился — амортизация (присед), потом ходьба или стойка
+			if has("JumpLand"):
+				_play_once("JumpLand", 0.0, "JumpLandArmed" if armed and has("JumpLandArmed") else "JumpLand")
 	if action != "":
 		_sounds()
 		_hit(out)
@@ -1371,7 +1424,12 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 	if blocking and has("Block"):
 		# блок: меч двумя руками поперёк перед собой; на ходу — ноги шагают, руки держат блок
 		want = "Block"
-		if moving:
+		if moving and anim.has_space("BlockMove"):
+			# шаг в блоке: вперёд/назад/вбок смешиваются по направлению — без рывка на диагонали
+			want = "BlockMove"
+			anim.set_blend(want, move_dir.normalized())
+			stride = _f("stride_block", 1.1)
+		elif moving:
 			_update_sector()
 			want = "BlockWalk" + _dir_sector
 			stride = _f("stride_back", 1.0) if _dir_sector == "B" else (_f("stride_strafe", 1.0)
@@ -1386,6 +1444,12 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		if running:
 			want = "RunArmed" if armed and has("RunArmed") else "Run"
 			stride = _f("stride_run_armed", 3.2) if want == "RunArmed" else _f("stride_run", 4.0)
+		elif (armed and anim.has_space("Lock")) or (lock_on and anim.has_space("LockU")):
+			# шаг лицом к цели (с мечом — всегда: тело смотрит туда же, куда камера; без меча — в захвате):
+			# клипы вперёд / назад / влево / вправо смешиваются по направлению шага, как в соулсах
+			want = "Lock" if armed and anim.has_space("Lock") else "LockU"
+			anim.set_blend(want, move_dir.normalized())
+			stride = _f("stride_lock", 1.2) if want == "Lock" else _f("stride_lock_unarmed", 1.4)
 		else:
 			_update_sector()
 			match _dir_sector:
@@ -1409,6 +1473,14 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
 		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
 			bl = _f("blend_stance", 0.45)        # приседает в стойку и выпрямляется плавно
+		if anim.current_animation in ["Block", "BlockMove"]:
+			bl = maxf(bl, _f("block_blend_out", 0.25))   # меч из вертикали блока в стойку — без рывка через горизонталь
+		# меч на плечо (бег) и обратно — через позу «меч вертикально перед грудью», не сквозь корпус
+		var shoulder_a := anim.current_animation == "RunArmed"
+		var shoulder_b := want == "RunArmed"
+		if armed and shoulder_a != shoulder_b and anim.current_animation != "" and has("SwordFront"):
+			anim.via("SwordFront", maxf(bl, _f("via_time", 0.4)))
+			bl = maxf(bl, _f("via_time", 0.4))
 		anim.play(want, bl)
 	anim.speed_scale = clampf(speed / stride, 0.25, 2.0) if moving else _f("idle_speed", 1.0)   # стойка/idle — медленнее
 
@@ -1451,6 +1523,9 @@ func _cancel_recovery() -> void:
 		return
 	var imp: Dictionary = meta.get("impact", {})
 	var from := _per("recover_cancel", action, 0.42)
+	var peak := _per("swing_peaks", action, -1.0)
+	if peak >= 0.0:                              # не раньше, чем клинок прошёл пик взмаха (иначе блок съедает удар)
+		from = maxf(from, (peak + _f("recover_after_peak", 0.2)) / maxf(anim.current_animation_length, 0.01))
 	if imp.has(action):
 		from = maxf(from, float(imp[action]) / maxf(anim.current_animation_length, 0.01) + 0.05)
 	if _frac() >= from:
@@ -1564,6 +1639,17 @@ func deflect() -> void:
 		anim.seek(0.0, true)
 
 
+## Удар по блоку (и парирование): отдача — героя сдвигает назад, корпус откидывается за мечом и возвращается
+## (клип BlockHit, сдвиг — его root motion). Блок не снимается.
+func block_hit(heavy: bool) -> void:
+	if anim == null or not has("BlockHit") or (action != "" and action != "BlockHit"):
+		return
+	var keep := blocking
+	_play_once("BlockHit")
+	anim.speed_scale = _per("clip_speed", "BlockHit", 1.0) * (0.8 if heavy else 1.0)
+	blocking = keep
+
+
 ## Добивание (враг без равновесия): свой клип, двигаться нельзя. true — началось.
 func deathblow() -> bool:
 	_cancel_hurt()
@@ -1649,7 +1735,7 @@ func _root_step() -> Vector3:
 	var d := cur - _prev_off
 	_prev_off = cur
 	var s := _per("root_motion_scale", action, 0.8)
-	return Vector3(d.x * s * _f("root_motion_lateral", 0.5), 0.0, d.y * s)
+	return Vector3(d.x * s * _per("root_motion_lateral", action, 0.5), 0.0, d.y * s)
 
 
 ## Меч там, где он сейчас: на спине или в руке. В беге он плавно перекладывается в «волочится» (цель — узел
@@ -1670,7 +1756,7 @@ func _show_sword(delta: float) -> void:
 	if not in_hand:
 		_drag_w = 0.0
 		return
-	var drag := action == "" and anim != null and anim.current_animation == "RunArmed" and _sword_drag != null
+	var drag := action == "" and anim != null and anim.current_animation == "RunArmed" and _sword_drag != null 		and bool(cfg.get("sword_drag_run", true))         # клип бега сам держит меч (на плече) — не волочить
 	var dur := maxf(0.05, _f("blend_run_armed", 0.5))
 	_drag_w = move_toward(_drag_w, 1.0 if drag else 0.0, delta / dur) if delta > 0.0 else (1.0 if drag else 0.0)
 	_sword_hand.transform = _hand_rest
@@ -1697,6 +1783,8 @@ func _show_sword(delta: float) -> void:
 func _keep_above_floor() -> void:
 	if not _on_floor or _tip == Vector3.ZERO or not _sword_hand.is_inside_tree():
 		return
+	if action.begins_with("Dodge"):
+		return                                   # в перекате меч едет с телом одним движением (поза клипа), без доворотов
 	var g := _sword_hand.global_transform
 	var floor_y := model.global_position.y + _f("sword_floor", 0.04)
 	var tip := g * _tip
