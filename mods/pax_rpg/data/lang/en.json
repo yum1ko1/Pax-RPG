@@ -1,10 +1,6 @@
 {
-	"pax_rpg_arena_prompt": "Arena · E — challenge: %s",
-	"pax_rpg_arena_win": "Arena victory! Wins: %d — the crowd roars",
-	"pax_rpg_arena_fight": "Fight! The stands fall silent",
-	"pax_rpg_arena_goblins_1": "a goblin",
-	"pax_rpg_arena_goblins_2": "two goblins",
-	"pax_rpg_arena_goblins_3": "three goblins",
+	"pax_rpg_arena_prompt": "Arena · E — fight: %s",
+	"pax_rpg_arena_fight": "Fight! The stands roar",
 	"pax_rpg_map_hint": "M — close map · Esc — close",
 	"pax_rpg_set_volfog": "Volumetric fog",
 	"pax_rpg_lm_gate": "Fang Gate",
@@ -83,5 +79,11 @@
 	"pax_rpg_pause_hint": "Esc — back · mouse wheel — zoom",
 	"pax_rpg_hud_skill_points": "skill points",
 	"pax_rpg_hud_skill_point": "Level %d — skill point earned!",
-	"pax_rpg_help": "Controls"
+	"pax_rpg_help": "Controls",
+	"pax_rpg_arena_goblins_n": "goblins ×%d",
+	"pax_rpg_arena_round": "Arena of Gharn\nFight %d of %d · %s",
+	"pax_rpg_arena_next": "Victory! The crowd roars. Ready for the next fight? E — %s · X — leave the arena",
+	"pax_rpg_arena_champion": "Gharrok falls — you are the arena champion! E — fight the champion again · X — leave",
+	"pax_rpg_arena_lost": "You are carried off the sand…",
+	"pax_rpg_arena_leave": "Leaving the arena"
 }

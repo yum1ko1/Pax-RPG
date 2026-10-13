@@ -18,6 +18,7 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
+const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
@@ -78,9 +79,8 @@ var _toast: Dictionary = {}        # уведомление слева: {text, t
 var _hint_t := 25.0                # с, сколько ещё видна подсказка управления (H — показать снова)
 var _dead_seen: Dictionary = {}    # id гоблина → уже засчитан повергнутым
 var _map_rects: Array = []         # [центр XZ, размер XZ, цвет] — платформы для миникарты
-var _arena := Vector3.ZERO           # арена города: x, z, радиус ямы (0 — нет)
-var _arena_fight: Array = []         # бойцы текущего боя
-var _arena_in := false               # герой в яме
+var _arena_cfg: Array = []          # арена города из планировки: [x, z, радиус ямы, вход]
+var _arena: Arena                    # бои на арене (arena.gd)
 var _city_map: CityMap               # карта города (M)
 var _help: HelpPanel               # кнопка и окно «Управление» (H)
 var _pause: PauseMenu              # меню паузы (Esc)
@@ -188,14 +188,13 @@ func build(city: Dictionary) -> void:
 	_gate_radius = GATE_RADIUS
 	var goblins := int(cfg.get("goblins", 1))
 	if layout.is_empty():
-		_arena = Vector3.ZERO
+		_arena_cfg = []
 		_make_ground()
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
 		c.build(mod, _view, layout)
-		var ar: Array = layout.get("arena", [])
-		_arena = Vector3(float(ar[0]), float(ar[1]), float(ar[2])) if ar.size() >= 3 else Vector3.ZERO
+		_arena_cfg = layout.get("arena", [])
 		_map_rects.append_array(c.rects)
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
@@ -232,6 +231,13 @@ func build(city: Dictionary) -> void:
 		wind.smoke = _city_smoke
 		_view.add_child(wind)
 	_spawn_goblins(goblins)
+	if _arena_cfg.size() >= 3:
+		_arena = Arena.new()
+		add_child(_arena)
+		_arena.setup(mod, _view, self, _arena_cfg, _player, _arena_spawn, func() -> void:
+			_hp = _hp_max()
+			_posture = 0.0)
+		_arena.toast.connect(func(t: String) -> void: _toast = {"text": t, "t": 0.0})
 	_cam = Camera3D.new()
 	_cam.fov = 65.0
 	_view.add_child(_cam)
@@ -280,8 +286,6 @@ func build(city: Dictionary) -> void:
 	_zoom_want = 0.0
 	_yaw = 0.0
 	_near_gate = false
-	_arena_fight = []
-	_arena_in = false
 	_flask = int(_hf("flask_charges", 3.0))
 	_hp_ghost = 1.0
 	_numbers.clear()
@@ -315,7 +319,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -621,6 +625,7 @@ func _physics_process(delta: float) -> void:
 	if not active or not is_instance_valid(_player) or paused():
 		return
 	var t0 := Time.get_ticks_usec()
+	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
 
@@ -772,60 +777,21 @@ func _physics_body(delta: float) -> void:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_follow_camera(delta)
-	_arena_tick()
+	if is_instance_valid(_arena):
+		_arena.tick()
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
 
 
-## Арена: вошёл в яму — подсказка «E — вызов»; бой по лестнице славы (побед в настройке мода arena_wins):
-## 0 — гоблин, 1 — двое, 2 — трое, дальше — Гхаррок, орк-чемпион (вызвать его можно, только доказав себя).
-func _arena_tick() -> void:
-	if _arena.z <= 0.0 or not is_instance_valid(_player):
-		return
-	var inside := Vector2(_player.position.x - _arena.x, _player.position.z - _arena.y).length() < _arena.z
-	if inside and not _arena_in and _arena_fight.is_empty():
-		_toast = {"text": mod.tr_key("pax_rpg_arena_prompt") % mod.tr_key(_arena_foe_key()), "t": 0.0}
-	_arena_in = inside
-	if _arena_fight.is_empty():
-		return
-	for g: Variant in _arena_fight:
-		if is_instance_valid(g) and not (g as Goblin).dead:
-			return
-	var wins := int(mod.get_setting("arena_wins", 0)) + 1
-	mod.set_setting("arena_wins", wins)
-	_arena_fight = []
-	_toast = {"text": mod.tr_key("pax_rpg_arena_win") % wins, "t": 0.0}
-
-
-func _arena_foe_key() -> String:
-	var wins := int(mod.get_setting("arena_wins", 0))
-	return "pax_rpg_orc" if wins >= 3 else ("pax_rpg_arena_goblins_%d" % (wins + 1))
-
-
-func _arena_start() -> void:
-	var wins := int(mod.get_setting("arena_wins", 0))
-	var c := Vector3(_arena.x, 0.2, _arena.y)
-	var away := c - Vector3(_player.position.x, 0.2, _player.position.z)
-	away.y = 0.0
-	var dir := away.normalized() if away.length() > 0.5 else Vector3(0, 0, -1)
-	var far := c + dir * (_arena.z * 0.55)               # бойцы — на той стороне ямы
-	if wins >= 3:
-		var o := Orc.new()
-		o.setup(mod, _player, _on_hero_hit, far, _hero_attacking, _hero_blocking)
-		_view.add_child(o)
-		_goblins.append(o)
-		_arena_fight.append(o)
-	else:
-		var side := dir.cross(Vector3.UP)
-		for i: int in wins + 1:
-			var g := Goblin.new()
-			g.setup(mod, _player, _on_hero_hit, far + side * (float(i) - wins * 0.5) * 2.2, _hero_attacking, _hero_blocking)
-			_view.add_child(g)
-			_goblins.append(g)
-			_arena_fight.append(g)
-	_toast = {"text": mod.tr_key("pax_rpg_arena_fight"), "t": 0.0}
+## Боец арены (arena.gd): гоблин или орк-чемпион, как обычные враги локации.
+func _arena_spawn(kind: String, pos: Vector3) -> Node:
+	var g: Goblin = Orc.new() if kind == "orc" else Goblin.new()
+	g.setup(mod, _player, _on_hero_hit, pos, _hero_attacking, _hero_blocking)
+	_view.add_child(g)
+	_goblins.append(g)
+	return g
 
 
 ## Камера: свободная — сзади и сверху; при захвате врага плавно подлетает к герою и встаёт за правым плечом,
@@ -1089,6 +1055,9 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 				_player.velocity += push.normalized() * 7.0
 		else:
 			_hero.hurt()
+	if _hp <= 0.0 and is_instance_valid(_arena) and _arena.fighting:
+		_hp = 1.0                                    # пал на арене — уносят с песка, без потери прогресса
+		_arena.leave(true)
 	if _hp <= 0.0 and is_instance_valid(_player):
 		_hp = _hp_max()
 		_hp_ghost = 1.0
@@ -1349,7 +1318,7 @@ func _hud_tick(delta: float) -> void:
 	_hud.refresh()
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X]
 
 
 func _input(event: InputEvent) -> void:
@@ -1392,8 +1361,11 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
-		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _arena_in and _arena_fight.is_empty():
-			_arena_start()
+		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
+				and _arena.can_start():
+			_arena.start()
+		if key.pressed and not key.echo and key.physical_keycode == KEY_X and is_instance_valid(_arena):
+			_arena.leave()                           # покинуть арену
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):

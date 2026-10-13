@@ -54,6 +54,7 @@ var display_key := "pax_rpg_goblin"   # имя в HUD (ключ перевода
 var hp := max_hp
 var posture := 0.0
 var dead := false
+var respawns := true          # на арене — нет: павший уходит насовсем
 var _target: Node3D
 var _hero_attacking: Callable  # () -> bool — герой сейчас бьёт (повод отскочить)
 var _hero_blocking: Callable   # () -> bool — герой в блоке (повод подождать или обмануть)
@@ -240,7 +241,10 @@ func _die() -> void:
 		t.tween_interval(BODY_STAY)
 		t.tween_property(_model, "position:y", _model.position.y - 0.9, 1.6).set_ease(Tween.EASE_IN)
 		t.tween_callback(func() -> void: _model.visible = false)
-	get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
+	if respawns:
+		get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
+	else:
+		get_tree().create_timer(BODY_STAY + 2.0).timeout.connect(queue_free)
 
 
 func _respawn() -> void:

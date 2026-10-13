@@ -1,10 +1,6 @@
 {
-	"pax_rpg_arena_prompt": "Арена · E — бросить вызов: %s",
-	"pax_rpg_arena_win": "Победа на арене! Побед: %d — толпа ревёт",
-	"pax_rpg_arena_fight": "Бой! Трибуны затихли",
-	"pax_rpg_arena_goblins_1": "гоблин",
-	"pax_rpg_arena_goblins_2": "два гоблина",
-	"pax_rpg_arena_goblins_3": "три гоблина",
+	"pax_rpg_arena_prompt": "Арена · E — бой: %s",
+	"pax_rpg_arena_fight": "Бой! Трибуны ревут",
 	"pax_rpg_map_hint": "M — закрыть карту · Esc — закрыть",
 	"pax_rpg_set_volfog": "Объёмный туман",
 	"pax_rpg_lm_gate": "Врата Клыка",
@@ -83,5 +79,11 @@
 	"pax_rpg_pause_hint": "Esc — вернуться · колесо мыши — ближе / дальше",
 	"pax_rpg_hud_skill_points": "очки умений",
 	"pax_rpg_hud_skill_point": "Уровень %d — получено очко умений!",
-	"pax_rpg_help": "Управление"
+	"pax_rpg_help": "Управление",
+	"pax_rpg_arena_goblins_n": "гоблины ×%d",
+	"pax_rpg_arena_round": "Арена Гхарна\nБой %d из %d · %s",
+	"pax_rpg_arena_next": "Победа! Толпа ревёт. Готов к следующему бою? E — %s · X — покинуть арену",
+	"pax_rpg_arena_champion": "Гхаррок повержен — ты чемпион арены! E — бой с чемпионом снова · X — покинуть арену",
+	"pax_rpg_arena_lost": "Тебя уносят с песка…",
+	"pax_rpg_arena_leave": "Покидаешь арену"
 }
