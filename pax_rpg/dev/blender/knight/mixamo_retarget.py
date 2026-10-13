@@ -31,6 +31,8 @@ CLIPS = {
     "HeavySlash": ("Great_Sword_Slash.fbx", False, False),
     "Turn180Armed": ("Great_Sword_180_Turn.fbx", False, False),
 }
+if os.environ.get("MX_CLIPS"):                          # свой список клипов (напр. для орка): {клип: [fbx, mirror, inplace]}
+    CLIPS = {k: tuple(v) for k, v in json.load(open(os.environ["MX_CLIPS"], encoding="utf-8")).items()}
 MAP = {"Hips": "Hips", "Spine": "Spine02", "Spine1": "Spine01", "Spine2": "Spine", "Neck": "neck", "Head": "Head",
        "LeftShoulder": "LeftShoulder", "LeftArm": "LeftArm", "LeftForeArm": "LeftForeArm", "LeftHand": "LeftHand",
        "RightShoulder": "RightShoulder", "RightArm": "RightArm", "RightForeArm": "RightForeArm", "RightHand": "RightHand",

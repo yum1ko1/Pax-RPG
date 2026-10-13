@@ -1,0 +1,87 @@
+{
+ "Idle": [
+  "Standing Idle.fbx",
+  false,
+  true
+ ],
+ "BlockIdle": [
+  "Standing Block Idle.fbx",
+  false,
+  true
+ ],
+ "WalkF": [
+  "Standing Walk Forward.fbx",
+  false,
+  true
+ ],
+ "WalkB": [
+  "Standing Walk Back.fbx",
+  false,
+  true
+ ],
+ "WalkL": [
+  "Standing Walk Left.fbx",
+  false,
+  true
+ ],
+ "WalkR": [
+  "Standing Walk Left.fbx",
+  true,
+  true
+ ],
+ "TownWalk": [
+  "Unarmed Walk Forward.fbx",
+  false,
+  true
+ ],
+ "Taunt": [
+  "Standing Taunt Battlecry.fbx",
+  false,
+  true
+ ],
+ "Spin360High": [
+  "Standing Melee Attack 360 High.fbx",
+  false,
+  true
+ ],
+ "Spin360Low": [
+  "Standing Melee Attack 360 Low.fbx",
+  false,
+  true
+ ],
+ "Backhand": [
+  "Standing Melee Attack Backhand.fbx",
+  false,
+  true
+ ],
+ "Kick": [
+  "Standing Melee Attack Kick Ver. 1.fbx",
+  false,
+  true
+ ],
+ "Combo1": [
+  "Standing Melee Combo Attack Ver. 1.fbx",
+  false,
+  true
+ ],
+ "Combo3": [
+  "Standing Melee Combo Attack Ver. 3.fbx",
+  false,
+  true
+ ],
+ "JumpAttack": [
+  "Standing Melee Run Jump Attack.fbx",
+  false,
+  true
+ ],
+ "ReactL": [
+  "Standing React Large From Left.fbx",
+  false,
+  true
+ ],
+ "ReactR": [
+  "Standing React Large From Right.fbx",
+  false,
+  true
+ ]
+}
