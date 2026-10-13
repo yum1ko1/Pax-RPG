@@ -10,6 +10,10 @@ const Katana3D := preload("res://mods/pax_rpg/src/ui/katana3d.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const HOLD := 4.2
 const CLASH := Vector3(0.05, 0.06, 0.0)       # точка удара в сцене, м
+const KAT_A := 0.5                            # наклон нашей катаны в миг удара (рад): острие вверх-вправо
+const KAT_D := 0.52                           # где на нашем клинке касание, м от гарды
+const FOE_A := -1.95                          # чужой клинок: острие вниз-влево — крест с нашим
+const FOE_D := 0.48
 
 var _name := ""
 var _t := -1.0                                # время заставки, с (<0 — ещё не началась)
@@ -26,6 +30,7 @@ var _embers: CPUParticles2D
 var _snd_fly: AudioStreamPlayer
 var _snd_draw: AudioStreamPlayer
 var _snd_hit: AudioStreamPlayer
+var _streaks: Array = []                      # искры металла: [позиция, скорость, жизнь, длина]
 var _done := {}                               # какие события уже были
 var _end := 0.0
 
@@ -148,16 +153,20 @@ func _process(delta: float) -> void:
 	_once("draw", 0.65, func() -> void:
 		if _snd_draw != null:
 			_snd_draw.play())
-	# 3. удар чужого клинка (1.0 … 1.15) и парирование: катана встречает его своим взмахом
+	# 3. удар чужого клинка (1.0 … 1.15) и парирование. В миг удара клинки встают крестом и касаются в CLASH:
+	#    наш — острием вверх-вправо (KAT_A), касание на KAT_D м от гарды; чужой рубит сверху справа вниз-влево.
 	var kf := _ease_in(_seg(t, 1.0, 1.15))
-	var foe_from := Vector3(1.4, 1.3, 0.0)
-	var foe_hit := CLASH + Vector3(-0.28, 0.0, 0.0)
+	var foe_hit := CLASH - Vector3(cos(FOE_A), sin(FOE_A), 0.0) * FOE_D + Vector3(0, 0, 0.06)
+	var foe_from := foe_hit + Vector3(1.0, 0.9, 0.0)
 	var foe_pos := foe_from.lerp(foe_hit, kf)
-	var foe_rot := lerpf(-2.4, -2.75, kf)              # рукоять сверху справа, клинок — вниз-влево
-	var parry := _ease_out(_seg(t, 0.98, 1.15))
-	var kat_rot := tilt + 0.35 * parry
-	var kat_pos := fly + Vector3(0.12, 0.04, 0.0) * parry
+	var foe_rot := lerpf(FOE_A + 0.5, FOE_A, kf)          # довод клинка: замах докручивается в удар
+	var parry := _ease_out(_seg(t, 0.95, 1.15))
+	var kat_hit := CLASH - Vector3(cos(KAT_A), sin(KAT_A), 0.0) * KAT_D
+	var kat_rot := lerpf(tilt, KAT_A, parry)
+	var kat_pos := fly.lerp(kat_hit, parry)
+	roll *= 1.0 - parry                                   # плашмя к зрителю — видно сталь
 	_once("clash", 1.15, _clash)
+	_tick_streaks(delta)
 	# 4. отскок: чужой клинок отлетает вверх-вправо, катана — вниз-влево за край
 	var k4 := _ease_in(_seg(t, 1.2, 1.65))
 	foe_pos += Vector3(1.8, 1.4, 0.0) * k4
@@ -170,7 +179,7 @@ func _process(delta: float) -> void:
 	_saya.rotation = Vector3(roll, 0.0, tilt - 2.5 * k2b)
 	_foe.visible = t >= 0.98 and k4 < 1.0
 	_foe.position = foe_pos
-	_foe.rotation = Vector3(0.4, 0.0, foe_rot)
+	_foe.rotation = Vector3(0.25, 0.0, foe_rot)
 	_stage.glint_at = _seg(t, 0.5, 0.75) * 1.2 - 0.1 if t < 0.8 else -1.0
 	# 5. название: тлеет и держится, потом гаснет
 	_text_a = _seg(t, 1.2, 1.7) * (1.0 - _seg(t, 1.7 + HOLD, 2.5 + HOLD))
@@ -192,7 +201,29 @@ static func _speed(t: float) -> float:
 	return 1.0
 
 
+func _tick_streaks(delta: float) -> void:
+	var keep: Array = []
+	var slow := 0.35 if _t < 1.35 else 1.0               # в slow-mo искры тоже медленнее
+	for st: Array in _streaks:
+		st[2] = float(st[2]) - delta * slow
+		if float(st[2]) <= 0.0:
+			continue
+		var v: Vector2 = st[1]
+		v += Vector2(0, 700.0) * delta * slow             # тяжёлые — падают дугой
+		v *= 1.0 - 1.2 * delta * slow
+		st[1] = v
+		st[0] = (st[0] as Vector2) + v * delta * slow
+		keep.append(st)
+	_streaks = keep
+
+
 func _clash() -> void:
+	var c0 := _clash_px()
+	for i: int in 46:                                     # снопом поперёк клинков, в обе стороны
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var a := randf_range(-0.9, 0.5) + (PI if side < 0.0 else 0.0)
+		var sp := randf_range(250.0, 1100.0) * _scale()
+		_streaks.append([c0, Vector2(cos(a), sin(a)) * sp, randf_range(0.35, 1.1), randf_range(0.02, 0.05)])
 	_flash = 1.0
 	_shake = 1.0
 	if _snd_hit != null:
@@ -243,6 +274,14 @@ func _draw() -> void:
 			var a := PI * 0.25 + i * PI * 0.5
 			var d := Vector2(cos(a), sin(a)) * r * 1.3
 			draw_line(c - d, c + d, Color(1, 1, 1, 0.7 * _flash), 3.0 * sc * _flash + 1.0, true)
+	for st: Array in _streaks:                            # искры металла — раскалённые штрихи вдоль полёта
+		var p0: Vector2 = st[0]
+		var v: Vector2 = st[1]
+		var life := float(st[2])
+		var col := Color(1.0, lerpf(0.55, 0.95, clampf(life, 0.0, 1.0)), lerpf(0.2, 0.75, clampf(life, 0.0, 1.0)),
+			clampf(life * 1.6, 0.0, 1.0))
+		draw_line(p0 - v * float(st[3]), p0, col, 2.2 * sc, true)
+		draw_circle(p0, 1.6 * sc, Color(1, 1, 0.9, col.a))
 	if _text_a > 0.0:                                    # название — на месте искр, из огня в белое
 		var fs := _fs()
 		var w := _text_w()
