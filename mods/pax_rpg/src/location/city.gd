@@ -97,9 +97,11 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			var sv: Array = d.sv
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
+	print("[pax_rpg] load: city items placed, %d model groups" % groups.size())
 	for k: String in groups:
 		if not await _slice():
 			return
+		var tg := Time.get_ticks_msec()
 		_smoke_for(k, groups[k])
 		if k.ends_with("fountain_dragon.glb"):
 			for e: Array in groups[k]:
@@ -111,9 +113,14 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			continue
 		_place(k, groups[k])
 		_lights(k, groups[k])
+		if Time.get_ticks_msec() - tg > 150:
+			print("[pax_rpg] load: slow group %s ×%d — %d ms" % [k.get_file(), (groups[k] as Array).size(), Time.get_ticks_msec() - tg])
+	print("[pax_rpg] load: city models done, landscape…")
 	if bool(data.get("landscape", true)):              # степь, горы и кочевья за стеной — последними: их сетки
 		var land := Landscape.new()                    # считаются в потоке, пока строится город
+		var tl := Time.get_ticks_msec()
 		await land.build(mod, root, Landscape.area_of(data))
+		print("[pax_rpg] load: landscape %d ms" % (Time.get_ticks_msec() - tl))
 		if not await _slice():
 			return
 	_fix_textures()

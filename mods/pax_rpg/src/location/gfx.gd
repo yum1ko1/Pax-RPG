@@ -51,17 +51,20 @@ func setup(c: Dictionary) -> void:
 	ensure_globals()
 
 
-## Глобальные параметры шейдеров мода — до того, как скомпилируется первый шейдер, который их читает.
+## Глобальные параметры шейдеров мода — до того, как скомпилируется первый шейдер, который их читает. Один раз
+## за сессию (global_shader_parameter_get_list нельзя: вне редактора она ждёт поток рендера и тормозит игру).
+static var _globals_added := false
+
+
 static func ensure_globals() -> void:
-	var have := RenderingServer.global_shader_parameter_get_list()
-	if not have.has(&"pax_rpg_wind"):
-		RenderingServer.global_shader_parameter_add(&"pax_rpg_wind", RenderingServer.GLOBAL_VAR_TYPE_VEC4,
-			Vector4(0.95, 0.3, 0.5, 0.0))
-	if not have.has(&"pax_rpg_time"):
-		RenderingServer.global_shader_parameter_add(&"pax_rpg_time", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	if not have.has(&"pax_rpg_player"):
-		RenderingServer.global_shader_parameter_add(&"pax_rpg_player", RenderingServer.GLOBAL_VAR_TYPE_VEC4,
-			Vector4(0.0, -1000.0, 0.0, 0.0))
+	if _globals_added:
+		return
+	_globals_added = true
+	RenderingServer.global_shader_parameter_add(&"pax_rpg_wind", RenderingServer.GLOBAL_VAR_TYPE_VEC4,
+		Vector4(0.95, 0.3, 0.5, 0.0))
+	RenderingServer.global_shader_parameter_add(&"pax_rpg_time", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_add(&"pax_rpg_player", RenderingServer.GLOBAL_VAR_TYPE_VEC4,
+		Vector4(0.0, -1000.0, 0.0, 0.0))
 
 
 func _b(key: String, fallback: bool) -> bool:
@@ -136,10 +139,14 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 ## в движении переезжает в конец его списка). Игрок выключил эффект в настройках — его просто нет.
 func apply_camera(c: Camera3D, s: DirectionalLight3D) -> void:
 	cam = c
+	var t0 := Time.get_ticks_msec()
 	if _b("clouds", true) and Pax.graphics.available("clouds"):
 		_clouds = Pax.graphics.clouds(c, {"clouds_coverage": _f("clouds_coverage", 0.42)})
+	print("[pax_rpg] load: clouds %d ms" % (Time.get_ticks_msec() - t0))
+	t0 = Time.get_ticks_msec()
 	if _b("lens", true) and Pax.graphics.available("lens"):
 		_lens = Pax.graphics.lens(c, {"sun_color": Color(1.0, 0.82, 0.64, 0.22)}, s)
+	print("[pax_rpg] load: lens %d ms" % (Time.get_ticks_msec() - t0))
 	if _mb != null and c.compositor != null:
 		var list: Array[CompositorEffect] = c.compositor.compositor_effects
 		if not list.has(_mb):

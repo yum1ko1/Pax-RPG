@@ -204,6 +204,8 @@ func build(city: Dictionary) -> void:
 	var gen := _build_gen
 	building = true
 	_build_finished = false
+	_load_t0 = Time.get_ticks_msec()
+	_mark("start " + str(city.get("id", "")))
 	if _prog == null:
 		_prog = Progress.new()
 		_prog.setup(mod, hero_cfg.get("progress", {}))
@@ -239,13 +241,16 @@ func build(city: Dictionary) -> void:
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
+		_mark("city…")
 		await c.build(mod, _view, layout)              # по кадрам, горы и степь — из потока
+		_mark("city done (%d items)" % c.count)
 		if gen != _build_gen or c.cancelled or not is_instance_valid(_view):
 			return                                     # локацию убрали посреди стройки
 		_arena_cfg = layout.get("arena", [])
 		_map_rects.append_array(c.rects)
 		_grass = Grass.new()                           # сплошная трава с ветром: считается в потоке
 		_grass.start(mod, _view, layout, c.rects, cfg.get("gfx", {}) as Dictionary, _check_ready.bind(gen))
+		_mark("grass started")
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
 		_city_lights = c.lights
@@ -293,6 +298,7 @@ func build(city: Dictionary) -> void:
 	_cam.fov = 65.0
 	_view.add_child(_cam)
 	_cam.current = true
+	_mark("player, enemies")
 	_gfx.apply_camera(_cam, _sun)                    # объёмные облака и блики солнца игры
 	_gfx.player = _player
 	_gfx.lights = _city_lights
@@ -382,6 +388,7 @@ func build(city: Dictionary) -> void:
 	active = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED     # камера — мышью, без зажатой кнопки (ПКМ — блок)
 	_build_finished = true
+	_mark("build done")
 	if not layout.is_empty():
 		_warmup()                                    # шейдеры боя — под закрытым экраном загрузки
 	_check_ready(gen)
@@ -389,8 +396,17 @@ func build(city: Dictionary) -> void:
 
 ## Всё построено и трава встала — локацию можно показывать.
 func _check_ready(gen: int) -> void:
-	if gen == _build_gen and _build_finished and (_grass == null or _grass.done):
+	if gen == _build_gen and _build_finished and (_grass == null or _grass.done) and building:
 		building = false
+		_mark("ready (grass %d)" % (_grass.count if _grass != null else 0))
+
+
+## Журнал загрузки (godot.log): этап и секунды от начала — видно, где загрузка теряет время.
+var _load_t0 := 0
+
+
+func _mark(stage: String) -> void:
+	print("[pax_rpg] load %.2f s: %s" % [(Time.get_ticks_msec() - _load_t0) / 1000.0, stage])
 
 
 ## Прогрев шейдеров: эффекты, которые впервые появятся только в бою (искры со шлейфом, вспышка, лужа крови, разрез

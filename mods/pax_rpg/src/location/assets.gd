@@ -24,11 +24,17 @@ static var _lod_ok := 0              # 0 — не проверяли, 1 — ра
 ## Копия модели; null — нет файла.
 static func model(mod: PaxMod, path: String) -> Node3D:
 	if not _cache.has(path):
+		var t0 := Time.get_ticks_msec()
 		var m := mod.model(path)
 		if m == null:
 			return null
+		var t1 := Time.get_ticks_msec()
 		_textures(mod, path, m)
+		var t2 := Time.get_ticks_msec()
 		_lods(m)
+		var t3 := Time.get_ticks_msec()
+		if t3 - t0 > 150:                               # журнал загрузки: что из моделей долгое
+			print("[pax_rpg] load: model %s — glb %d, textures %d, lod %d ms" % [path.get_file(), t1 - t0, t2 - t1, t3 - t2])
 		_cache[path] = m
 	return (_cache[path] as Node3D).duplicate() as Node3D
 

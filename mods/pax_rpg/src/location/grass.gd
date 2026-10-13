@@ -42,7 +42,9 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 		_spawn(parent, _cache[key], sh, fade_end)
 		_finish(on_done)
 		return
+	var tg := Time.get_ticks_msec()
 	var res: Variant = await Bg.run(func() -> Variant: return compute(input))
+	print("[pax_rpg] load: grass computed %d ms (%s)" % [Time.get_ticks_msec() - tg, "ok" if res is Dictionary else "failed"])
 	if res is Dictionary:
 		_cache[key] = res
 		if is_instance_valid(parent) and parent.is_inside_tree():
