@@ -81,11 +81,27 @@ func _init_rd() -> void:
 	_sampler = _rd.sampler_create(ss)
 
 
+## Ресурсы Vulkan освобождаются только в потоке рендера: эффект уже удаляется — уборку делает отдельный объект,
+## он живёт в Cleanup.pending, пока поток рендера его не вызовет.
+class Cleanup extends RefCounted:
+	static var pending: Array = []
+	var rd: RenderingDevice
+	var rids: Array = []
+
+	func run() -> void:
+		for r: RID in rids:
+			if r.is_valid():
+				rd.free_rid(r)
+		pending.erase(self)
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _rd != null:
-		for r: RID in [_copy, _pipeline, _shader, _sampler]:
-			if r.is_valid():
-				_rd.free_rid(r)
+		var c := Cleanup.new()
+		c.rd = _rd
+		c.rids = [_copy, _pipeline, _shader, _sampler]
+		Cleanup.pending.append(c)
+		RenderingServer.call_on_render_thread(c.run)
 
 
 func _ensure_copy(size: Vector2i) -> void:
