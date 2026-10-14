@@ -890,13 +890,16 @@ func _foliage_mesh(path: String, mesh: Mesh) -> Mesh:
 	var key := "multi" + path + str(mesh.get_rid())
 	if _fol_mats.has(key):
 		return _fol_mats[key]
-	var copy := (mesh as ArrayMesh).duplicate() as ArrayMesh
+	# без копии: материалы ветра — прямо на поверхности самой сетки (её делят только копии этой модели в городе).
+	# Копия сетки (duplicate / по массивам) в игре роняла её: FATAL index 0, size 0
+	var am := mesh as ArrayMesh
 	var any := false
-	for si: int in copy.get_surface_count():
+	for si: int in am.get_surface_count():
 		var m := _foliage_surface(path, mesh, si)
 		if m != null:
-			copy.surface_set_material(si, m)
+			am.surface_set_material(si, m)
 			any = true
+	var copy: Mesh = am
 	_fol_mats[key] = copy if any else null
 	return _fol_mats[key]
 
