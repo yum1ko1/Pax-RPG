@@ -225,6 +225,7 @@ func build(city: Dictionary) -> void:
 	_gfx = Gfx.new()
 	_gfx.setup(cfg.get("gfx", {}) as Dictionary)
 	_gfx.mod = mod
+	_gfx.load_overrides()                            # свои настройки игрока (меню «Графика») главнее конфига
 	_gfx.apply_viewport(_view)                       # TAA / FSR2 вместо MSAA, debanding
 	_gfx.push_globals()
 	_map_rects.clear()
@@ -250,7 +251,9 @@ func build(city: Dictionary) -> void:
 		_arena_cfg = layout.get("arena", [])
 		_map_rects.append_array(c.rects)
 		_grass = Grass.new()                           # сплошная трава с ветром: считается в потоке
-		_grass.start(mod, _view, layout, c.rects, cfg.get("gfx", {}) as Dictionary, _check_ready.bind(gen))
+		var gcfg: Dictionary = (cfg.get("gfx", {}) as Dictionary).duplicate()
+		gcfg["grass_density"] = float(mod.get_setting("gfx_grass_density", gcfg.get("grass_density", 6.0)))
+		_grass.start(mod, _view, layout, c.rects, gcfg, _check_ready.bind(gen))
 		_mark("grass started")
 		_city_leaves = c.leaves
 		_city_smoke = c.smoke
@@ -342,11 +345,14 @@ func build(city: Dictionary) -> void:
 	_music.daynight = _daynight
 	add_child(_music)
 	_pause = PauseMenu.new()
-	_pause.setup(mod, mod.tr_key("pax_rpg_pause_leave"))
+	_pause.setup(mod, mod.tr_key("pax_rpg_pause_leave"), cfg.get("gfx", {}) as Dictionary)
 	_pause.visible = false
 	_pause.resume.connect(_set_paused.bind(false))
 	_pause.sens_changed.connect(func(v: float) -> void: _sens = v)
 	_pause.fog_changed.connect(_apply_volfog)
+	_pause.gfx_changed.connect(func(key: String, value: Variant) -> void:
+		if is_instance_valid(_gfx):
+			_gfx.set_option(key, value))
 	_pause.show_help.connect(func() -> void:
 		_set_paused(false)
 		_help.set_open(true))

@@ -70,39 +70,93 @@ static func ensure_globals() -> void:
 		Vector4(0.0, -1000.0, 0.0, 0.0))
 
 
+## Значение настройки: своё у игрока (меню «Графика», настройки мода gfx_<ключ>) главнее config/location.json.
+func _v(key: String, fallback: Variant) -> Variant:
+	return _ovr[key] if _ovr.has(key) else cfg.get(key, fallback)
+
+
 func _b(key: String, fallback: bool) -> bool:
-	return bool(cfg.get(key, fallback))
+	return bool(_v(key, fallback))
 
 
 func _f(key: String, fallback: float) -> float:
-	return float(cfg.get(key, fallback))
+	return float(_v(key, fallback))
+
+
+## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
+const MENU_KEYS := ["gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
+	"flare", "auto_exposure", "grass_density"]
+var _ovr := {}
+var _env: Environment
+var _we: WorldEnvironment
+
+
+## Свои настройки игрока (зовёт location.gd, когда mod уже есть).
+func load_overrides() -> void:
+	if mod == null:
+		return
+	for k: String in MENU_KEYS:
+		var v: Variant = mod.get_setting("gfx_" + k, null)
+		if v != null:
+			_ovr[k] = v
+
+
+## Меню «Графика»: значение сменилось — применить сразу (трава — со следующего входа в город).
+func set_option(key: String, value: Variant) -> void:
+	_ovr[key] = value
+	match key:
+		"aa", "fsr_scale":
+			if is_instance_valid(view):
+				_apply_aa(view)
+		"lens_sharpen":
+			if lens_mat != null:
+				lens_mat.set_shader_parameter("sharpen", float(value))
+		"gi", "ssil", "ssao", "ssr", "glow", "auto_exposure":
+			if _env != null and is_instance_valid(_we):
+				apply_env(_env, _we)
+
+
+func _gi_on() -> bool:
+	var g: Variant = _v("gi", "sdfgi")
+	return (g is bool and bool(g)) or str(g) == "sdfgi"
 
 
 ## Сглаживание и чёткость — до первого кадра локации.
 func apply_viewport(v: SubViewport) -> void:
 	view = v
-	match str(cfg.get("aa", "fsr2")):
-		"taa":
-			v.msaa_3d = Viewport.MSAA_DISABLED
-			v.use_taa = true
-		"fsr2":                                          # FSR 2: при fsr_scale 1.0 — сглаживание в родном разрешении,
-			v.msaa_3d = Viewport.MSAA_DISABLED                # заметно резче TAA движка (+ своя резкость)
-			v.use_taa = false
-			v.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
-			v.scaling_3d_scale = clampf(_f("fsr_scale", 1.0), 0.5, 1.0)
-			v.fsr_sharpness = _f("fsr_sharpness", 0.15)    # 0 — резче всего, 2 — без повышения резкости
-		_:
-			v.msaa_3d = Viewport.MSAA_2X
+	_apply_aa(v)
 	v.use_debanding = _b("debanding", true)
 	_lens_layer(v)
-	v.use_occlusion_culling = _b("occlusion", true)      # дома и стены (OccluderInstance3D) заслоняют то, что за ними
+	v.use_occlusion_culling = _b("occlusion", false)     # выкл.: на краях стен модели пропадали и появлялись
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
 
 
+## Сглаживание (меню может менять его на ходу).
+func _apply_aa(v: SubViewport) -> void:
+	v.use_taa = false
+	v.msaa_3d = Viewport.MSAA_DISABLED
+	v.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	v.scaling_3d_scale = 1.0
+	match str(_v("aa", "taa")):
+		"taa":                                           # стабильнее FSR 2: свечение мелких огней не мигает
+			v.use_taa = true
+		"fsr2":                                          # FSR 2: fsr_scale 1.0 — в родном разрешении, меньше — быстрее
+			v.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+			v.scaling_3d_scale = clampf(_f("fsr_scale", 1.0), 0.5, 1.0)
+			v.fsr_sharpness = _f("fsr_sharpness", 0.15)    # 0 — резче всего, 2 — без повышения резкости
+		"msaa":
+			v.msaa_3d = Viewport.MSAA_2X
+
+
 func apply_env(env: Environment, we: WorldEnvironment) -> void:
-	if _fplus and str(cfg.get("gi", "sdfgi")) == "sdfgi":
-		env.sdfgi_enabled = true
+	_env = env
+	_we = we
+	env.sdfgi_enabled = _fplus and _gi_on()
+	env.ssil_enabled = _fplus and _b("ssil", true)
+	env.ssao_enabled = _fplus and _b("ssao", true)
+	env.ssr_enabled = _fplus and _b("ssr", true)
+	if env.sdfgi_enabled:
 		env.sdfgi_use_occlusion = true                   # меньше протеканий света сквозь стены
 		env.sdfgi_read_sky_light = true
 		env.sdfgi_cascades = 4
@@ -110,8 +164,7 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 		env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
 		env.sdfgi_bounce_feedback = _f("gi_bounce", 0.5)
 		env.sdfgi_energy = _f("gi_energy", 1.0)
-	if _fplus and _b("ssil", true):
-		env.ssil_enabled = true
+	if env.ssil_enabled:
 		env.ssil_radius = 4.0
 		env.ssil_intensity = _f("ssil_intensity", 1.0)
 		env.ssil_normal_rejection = 1.0
@@ -138,7 +191,7 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = _b("auto_exposure", true)
 	ca.auto_exposure_scale = _f("exposure_scale", 0.4)
-	ca.auto_exposure_speed = _f("exposure_speed", 0.6)
+	ca.auto_exposure_speed = _f("exposure_speed", 0.25)   # медленно: яркость не «дышит» от каждого фонаря в кадре
 	ca.auto_exposure_min_sensitivity = _f("exposure_min_iso", 60.0)     # узкий диапазон: не больше ±1 ступени
 	ca.auto_exposure_max_sensitivity = _f("exposure_max_iso", 180.0)
 	var far := _f("dof_far", 0.0)                        # по умолчанию без размытия дали — дымка сама отделяет планы
@@ -209,11 +262,16 @@ func push_globals() -> void:
 	if not _saved.is_empty():
 		return
 	_saved = {
+		"conv": int(ProjectSettings.get_setting("rendering/global_illumination/sdfgi/frames_to_converge", 4)),
+		"upd": int(ProjectSettings.get_setting("rendering/global_illumination/sdfgi/frames_to_update_lights", 2)),
 		"atlas": int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/size", 4096)),
 		"dq": int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", 2)),
 		"pq": int(ProjectSettings.get_setting("rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality", 2)),
 	}
 	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)), true)
+	# отражённый свет сходится за 30 кадров и обновляет свет за 16: без ступенек и мерцания при движении камеры
+	RenderingServer.environment_set_sdfgi_frames_to_converge(RenderingServer.ENV_SDFGI_CONVERGE_IN_30_FRAMES)
+	RenderingServer.environment_set_sdfgi_frames_to_update_light(RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES)
 	var q := RenderingServer.SHADOW_QUALITY_SOFT_HIGH if _b("soft_shadows", true) else RenderingServer.SHADOW_QUALITY_SOFT_LOW
 	RenderingServer.directional_soft_shadow_filter_set_quality(q)
 	RenderingServer.positional_soft_shadow_filter_set_quality(q)
@@ -223,6 +281,8 @@ func restore_globals() -> void:
 	if _saved.is_empty():
 		return
 	RenderingServer.directional_shadow_atlas_set_size(int(_saved["atlas"]), true)
+	RenderingServer.environment_set_sdfgi_frames_to_converge(int(_saved["conv"]) as RenderingServer.EnvironmentSDFGIFramesToConverge)
+	RenderingServer.environment_set_sdfgi_frames_to_update_light(int(_saved["upd"]) as RenderingServer.EnvironmentSDFGIFramesToUpdateLight)
 	RenderingServer.directional_soft_shadow_filter_set_quality(int(_saved["dq"]) as RenderingServer.ShadowQuality)
 	RenderingServer.positional_soft_shadow_filter_set_quality(int(_saved["pq"]) as RenderingServer.ShadowQuality)
 	_saved = {}
@@ -267,16 +327,23 @@ func _lamp_shadows() -> void:
 		var ol := l[0] as OmniLight3D
 		if not is_instance_valid(ol):
 			continue
-		ol.light_size = 0.12                             # мягкий край тени фонаря
-		ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # фонарь подсвечивает воздух рядом, а не туманный шар
+		if not ol.has_meta("pax_rpg_lamp"):              # параметры — один раз: каждое присваивание пересчитывает свет
+			ol.set_meta("pax_rpg_lamp", true)
+			ol.light_size = 0.12                         # мягкий край тени фонаря
+			ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # подсвечивает воздух рядом, а не туманный шар
 		var d := ol.global_position.distance_to(cp)
+		if ol.shadow_enabled:
+			d -= 6.0                                     # запас: огонь с тенью держит её, пока не станет заметно дальше
 		if ol.visible and ol.light_energy > 0.1 and d < 35.0:
 			near.append([d, ol])
-		else:
+		elif ol.shadow_enabled:
 			ol.shadow_enabled = false
 	near.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	for i: int in near.size():
-		(near[i][1] as OmniLight3D).shadow_enabled = i < n
+		var lo := near[i][1] as OmniLight3D
+		var want := i < n
+		if lo.shadow_enabled != want:                    # переключаем только то, что правда сменилось
+			lo.shadow_enabled = want
 
 
 ## Двигающиеся тела (герой, враги, жители) — динамические для отражённого света; новые (волны арены) — тоже.
@@ -291,9 +358,11 @@ func _mark_dynamic() -> void:
 				var n: Node = stack.pop_back()
 				stack.append_array(n.get_children())
 				if n is GeometryInstance3D:
-					(n as GeometryInstance3D).gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
-					if c == player and n is VisualInstance3D:
-						(n as VisualInstance3D).layers |= RIM_LAYER
+					var gi := n as GeometryInstance3D
+					if gi.gi_mode != GeometryInstance3D.GI_MODE_DYNAMIC:   # только новое (вещи героя) — без пересчёта
+						gi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+					if c == player and (gi.layers & RIM_LAYER) == 0:
+						gi.layers |= RIM_LAYER
 
 
 ## Каждые полчаса мира проба отражений переснимается (сдвиг на миллиметр — Godot снимает её заново).
@@ -380,7 +449,7 @@ func _lens_layer(v: SubViewport) -> void:
 	lens_mat = ShaderMaterial.new()
 	lens_mat.shader = sh
 	lens_mat.set_meta("pax_rpg_lens", true)
-	for kv: Array in [["distortion", 0.0], ["ca", 0.0], ["sharpen", 0.22], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
+	for kv: Array in [["distortion", 0.0], ["ca", 0.0], ["sharpen", 0.3], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
 		lens_mat.set_shader_parameter(str(kv[0]), _f("lens_" + str(kv[0]), float(kv[1])))
 	box.material = lens_mat
 

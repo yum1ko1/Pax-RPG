@@ -11,8 +11,8 @@ const SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, Ba
 	BaseMaterial3D.TEXTURE_ROUGHNESS, BaseMaterial3D.TEXTURE_METALLIC, BaseMaterial3D.TEXTURE_EMISSION,
 	BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION]
 const LOD_MIN_TRIS := 3000           # сетки проще — без LOD
-const NEAR := 40.0
-const FAR := 55.0
+const NEAR := 70.0                   # дальше — реже переключение лёгких/полных текстур на глазах (видеопамяти хватает)
+const FAR := 95.0
 const SWAPS := 2
 
 static var _cache := {}              # путь → образец (вне дерева)
