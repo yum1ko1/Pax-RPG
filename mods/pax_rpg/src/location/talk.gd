@@ -54,6 +54,7 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_log.size = Vector2(W - 56, 180)
 	_log.bbcode_enabled = true
 	_log.scroll_following = true
+	_log.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # реплики переносятся по словам — лента идёт вниз
 	_log.add_theme_font_override("normal_font", sans)
 	_log.add_theme_font_size_override("normal_font_size", 17)
 	_panel.add_child(_log)
@@ -61,8 +62,8 @@ func setup(m: PaxMod, h: Hud) -> void:
 	manner.text = mod.tr_key("pax_rpg_talk_manner")
 	manner.tooltip_text = mod.tr_key("pax_rpg_talk_manner_tip")
 	manner.mouse_filter = Control.MOUSE_FILTER_PASS
-	manner.reset_size()
-	var x := 28.0 + manner.size.x + 10.0
+	# ширину — по шрифту: вне дерева размер надписи ещё не посчитан (reset_size давал 0 — подпись уходила под кнопку)
+	var x := 28.0 + sans.get_string_size(manner.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 12.0
 	for k: String in KEYS:                              # ключи тона
 		var b := Button.new()
 		b.text = mod.tr_key("pax_rpg_talk_key_" + k)
@@ -74,8 +75,9 @@ func setup(m: PaxMod, h: Hud) -> void:
 		b.tooltip_text = mod.tr_key("pax_rpg_talk_manner_tip")
 		b.toggled.connect(_on_key.bind(k))
 		_panel.add_child(b)
-		b.reset_size()
-		x += b.size.x + 8.0
+		var bw := sans.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x + 22.0
+		b.size = Vector2(bw, 32.0)
+		x += bw + 8.0
 		_keys.append(b)
 	_edit = LineEdit.new()
 	_edit.position = Vector2(28, 314)
@@ -260,7 +262,8 @@ func _answer(a: Dictionary, key: String, tok: int) -> void:
 
 func _line(who: String, text: String, hero: bool) -> void:
 	var c: Color = (hud.c_blue if hud != null else Hud.BLUE) if hero else (hud.c_pink if hud != null else Hud.PINK)
-	_log.append_text("[b][color=#%s]%s:[/color][/b] %s\n" % [c.to_html(false), _esc(who), _esc(text)])
+	# имя — своей строкой, реплика — под ним с отступом, между репликами — пустая строка: лента сверху вниз
+	_log.append_text("[b][color=#%s]%s[/color][/b]\n[indent]%s[/indent]\n\n" % [c.to_html(false), _esc(who), _esc(text)])
 
 
 func _is_giver() -> bool:
