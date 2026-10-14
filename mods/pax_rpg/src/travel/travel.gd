@@ -37,6 +37,7 @@ func start(g: PaxGame) -> void:
 	game = g
 	hero_id = ""                                      # новый заход в мир (новая игра или загрузка) — герой выбирается заново
 	location.game = g
+	_pick_hero(func() -> void: pass)                  # выбор героя — сразу при входе в мир, а не у ворот города
 
 
 func _line(prefix: String, count: int, city_name: String) -> String:
@@ -47,8 +48,8 @@ func _line(prefix: String, count: int, city_name: String) -> String:
 func enter(city: Dictionary) -> void:
 	if loading.busy() or location.active:
 		return
-	if hero_id == "":
-		_pick_hero(enter.bind(city))
+	if hero_id == "":                                 # окно выбора ещё открыто (или его закрыли) — сначала герой
+		_pick_hero(func() -> void: pass)
 		return
 	var city_name := mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
 	planet.enabled = false
@@ -74,7 +75,7 @@ func _back_on_map() -> void:
 	planet.enabled = true
 
 
-## Экран выбора героя; после выбора — then (вход в город). Карточка — из config/hero.json → character.
+## Экран выбора героя (при входе в мир); после выбора — then. Карточка — из config/hero.json → character.
 func _pick_hero(then: Callable) -> void:
 	if is_instance_valid(_picker):
 		return
