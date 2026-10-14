@@ -652,26 +652,28 @@ func _make_gate() -> void:
 func _make_portal() -> void:
 	var glow := MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(7.0, 6.0)
+	q.size = Vector2(5.0, 5.4)                       # по проёму ворот (между створками ~5.4 м), не шире
 	glow.mesh = q
 	var sh: Shader = mod.shader("shaders/portal.gdshader")
 	if sh != null:
 		var m := ShaderMaterial.new()
 		m.shader = sh
 		glow.material_override = m
-	glow.position = _gate_pos + Vector3(0.0, 3.0, 0.0)
+	glow.position = _gate_pos + Vector3(0.0, 2.7, 0.0)
+	glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_view.add_child(glow)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.55, 0.85)
-	l.light_energy = 2.2
-	l.omni_range = 9.0
+	l.light_energy = 1.2
+	l.omni_range = 7.0
+	l.light_volumetric_fog_energy = 0.0                # в объёмный туман не светит: его ячейки проступали квадратами
 	l.position = _gate_pos + Vector3(0.0, 2.0, -1.5)
 	_view.add_child(l)
 	var p := CPUParticles3D.new()
 	p.amount = 60
 	p.lifetime = 3.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	p.emission_box_extents = Vector3(3.2, 0.2, 0.6)
+	p.emission_box_extents = Vector3(2.3, 0.2, 0.4)
 	p.direction = Vector3.UP
 	p.spread = 12.0
 	p.gravity = Vector3(0.0, 0.25, 0.0)

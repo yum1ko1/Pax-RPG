@@ -1,26 +1,40 @@
 // Лёгкое свечение выхода из города: мерцающая завеса сакура → лазурь, гаснет к краям и вверх.
+// Шум — гладкий (градиентный, повёрнутые октавы): у прежнего value-шума проступала квадратная сетка.
 shader_type spatial;
-render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
 
 uniform vec4 pink : source_color = vec4(1.0, 0.45, 0.8, 1.0);
 uniform vec4 blue : source_color = vec4(0.4, 0.8, 1.0, 1.0);
-uniform float strength = 0.9;
+uniform float strength = 0.55;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
+vec2 grad(vec2 p) {
+	float a = fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453) * 6.2831853;
+	return vec2(cos(a), sin(a));
+}
+float gnoise(vec2 p) {                                     // градиентный шум 0..1 — без ступенек на границах клеток
 	vec2 i = floor(p), f = fract(p);
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+	float a = dot(grad(i), f);
+	float b = dot(grad(i + vec2(1, 0)), f - vec2(1, 0));
+	float c = dot(grad(i + vec2(0, 1)), f - vec2(0, 1));
+	float d = dot(grad(i + vec2(1, 1)), f - vec2(1, 1));
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 0.7 + 0.5;
+}
+float fbm(vec2 p) {
+	mat2 r = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8));
+	float v = 0.0, w = 0.5;
+	for (int i = 0; i < 4; i++) { v += w * gnoise(p); p = r * p * 2.03 + 1.7; w *= 0.5; }
+	return v;
 }
 
 void fragment() {
 	vec2 uv = UV;
-	float edge = smoothstep(0.0, 0.25, uv.x) * smoothstep(1.0, 0.75, uv.x);
+	float edge = smoothstep(0.0, 0.3, uv.x) * smoothstep(1.0, 0.7, uv.x);
 	float h = 1.0 - uv.y;                                  // 0 — низ, 1 — верх
-	float fade = smoothstep(1.0, 0.15, h) * smoothstep(0.0, 0.08, h);
-	float t = TIME * 0.35;
-	float n = noise(vec2(uv.x * 5.0, h * 3.0 - t * 2.0)) * 0.6 + noise(vec2(uv.x * 11.0 + 3.0, h * 7.0 - t * 3.5)) * 0.4;
-	float streak = pow(n, 2.2);
+	float fade = smoothstep(1.0, 0.2, h) * smoothstep(0.0, 0.1, h);
+	float t = TIME * 0.3;
+	float n = fbm(vec2(uv.x * 3.0, h * 2.0 - t * 1.6));
+	float streak = smoothstep(0.45, 0.85, n);
 	vec3 col = mix(pink.rgb, blue.rgb, clamp(h * 1.2 + n * 0.3 - 0.2, 0.0, 1.0));
-	ALBEDO = col * (0.35 + 1.4 * streak) * edge * fade * strength;
+	ALBEDO = min(col * (0.25 + 0.75 * streak) * edge * fade * strength, vec3(0.8));   // без пересвета в ореол
 }
