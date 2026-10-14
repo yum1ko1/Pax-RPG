@@ -142,7 +142,16 @@ func _core_c() -> Vector2:
 
 func _draw_core() -> void:
 	var c := _core_c()
-	draw_circle(c, 128.0, Color(0.04, 0.06, 0.14, 0.78))
+	draw_circle(c, 132.0, Color(0.04, 0.06, 0.14, 0.82))
+	# оправа «лак и золото»: внешний золотой ободок, засечки как на гарде, тонкое внутреннее кольцо
+	draw_arc(c, 132.0, 0.0, TAU, 128, Color(GOLD, 0.75), 2.0, true)
+	draw_arc(c, 127.0, 0.0, TAU, 128, Color(GOLD, 0.25), 1.0, true)
+	for i: int in 24:
+		var a := TAU * i / 24.0
+		var d := Vector2(cos(a), sin(a))
+		var long := i % 6 == 0
+		draw_line(c + d * (132.0 if not long else 136.0), c + d * (127.0 if not long else 124.0), Color(GOLD, 0.8 if long else 0.45),
+			2.0 if long else 1.0, true)
 	# концентрация: внешнее тонкое кольцо
 	var p := clampf(float(_g("posture", 0.0)), 0.0, 1.0)
 	draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN, 96, Color(TEXT, 0.14), 6.0, true)
@@ -583,7 +592,8 @@ func _draw_skills() -> void:
 		var on := bool(sd.get("on", false))
 		var ring: Color = sd.get("color", PINK)
 		var dm := _diamond(c, 42.0)
-		draw_colored_polygon(dm, Color(0.04, 0.06, 0.14, 0.9 if on else 0.6))
+		draw_colored_polygon(dm, Color(0.04, 0.06, 0.14, 0.9 if on else 0.7))
+		_outline(_diamond(c, 46.0), Color(GOLD, 0.55), 1.0)          # золотая грань — как оправа кольца
 		_outline(dm, ring if on else Color(TEXT, 0.35), 2.5 if on else 1.5)
 		if on:
 			draw_colored_polygon(_diamond(c, 36.0), Color(ring, 0.18))

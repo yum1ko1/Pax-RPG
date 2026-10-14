@@ -37,6 +37,7 @@ const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
+const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -119,6 +120,7 @@ var _sky_mat: ShaderMaterial
 var _daynight: DayNight            # тело доворачивается к цели (голова уже не достаёт)
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
+var _inv: Inventory                # инвентарь (TAB)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
 var _build_finished := false
@@ -327,6 +329,10 @@ func build(city: Dictionary) -> void:
 	_iai.finished.connect(func(interrupted: bool) -> void:
 		if interrupted:
 			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5)
+	_inv = Inventory.new()
+	_inv.setup(mod)
+	add_child(_inv)
+	_inv.closed.connect(func() -> void: _set_inventory(false))
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
@@ -444,7 +450,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -741,7 +747,26 @@ func _set_paused(on: bool) -> void:
 
 
 func paused() -> bool:
-	return is_instance_valid(_pause) and _pause.visible
+	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible)
+
+
+## Инвентарь (TAB): мир на паузе, мышь — интерфейсу; закрыть — TAB или Esc.
+func _set_inventory(on: bool) -> void:
+	if not is_instance_valid(_inv):
+		return
+	if on:
+		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
+			"xp_abs": _prog.xp, "xp_need": _prog.need()}
+		_inv.open(_view, _player, _body_mesh, _hero, st)
+	else:
+		_inv.visible = false
+	if is_instance_valid(_box):
+		_box.process_mode = Node.PROCESS_MODE_DISABLED if on else Node.PROCESS_MODE_INHERIT
+	if is_instance_valid(_hud):
+		_hud.visible = not on
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	_rmb = false
+	_lmb_queued = false
 
 
 func _typing() -> bool:
@@ -1787,17 +1812,21 @@ func _hud_tick(delta: float) -> void:
 
 
 const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V,
-	KEY_Z]
+	KEY_Z, KEY_TAB]
 
 
 func _input(event: InputEvent) -> void:
 	if not active:
 		return
 	if paused():
-		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
-				and (event as InputEventKey).physical_keycode == KEY_ESCAPE:
-			_set_paused(false)
-			get_viewport().set_input_as_handled()
+		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+			var pk := (event as InputEventKey).physical_keycode
+			if is_instance_valid(_inv) and _inv.visible and (pk == KEY_TAB or pk == KEY_ESCAPE):
+				_set_inventory(false)
+				get_viewport().set_input_as_handled()
+			elif pk == KEY_ESCAPE:
+				_set_paused(false)
+				get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event
@@ -1841,6 +1870,8 @@ func _input(event: InputEvent) -> void:
 			_arena.leave()                           # покинуть арену
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
+		if key.pressed and not key.echo and key.physical_keycode == KEY_TAB and is_instance_valid(_inv):
+			_set_inventory(true)                     # инвентарь
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Z:
 			_shoulder = -_shoulder                   # плечо камеры в захвате
 			_toast = {"text": mod.tr_key("pax_rpg_hud_shoulder_left" if _shoulder < 0.0 else "pax_rpg_hud_shoulder_right"),
