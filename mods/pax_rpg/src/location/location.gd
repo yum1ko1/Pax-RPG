@@ -748,6 +748,14 @@ func _set_paused(on: bool) -> void:
 	_lmb_queued = false
 
 
+## Характеристики персонажа (config/hero.json → character.attributes) — для инвентаря.
+func _attributes() -> Dictionary:
+	var ch: Variant = hero_cfg.get("character", {})
+	if ch is Dictionary and (ch as Dictionary).get("attributes", {}) is Dictionary:
+		return (ch as Dictionary)["attributes"]
+	return {}
+
+
 func paused() -> bool:
 	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible)
 
@@ -762,7 +770,7 @@ func _set_inventory(on: bool) -> void:
 	mod.log_info("Pax RPG: inventory %s" % ("open" if on else "closed"))
 	if on:
 		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
-			"xp_abs": _prog.xp, "xp_need": _prog.need(), "attributes": (hero_cfg.get("character", {}) as Dictionary).get("attributes", {})}
+			"xp_abs": _prog.xp, "xp_need": _prog.need(), "attributes": _attributes()}
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
@@ -1100,7 +1108,6 @@ func _physics_body(delta: float) -> void:
 	_follow_camera(delta)
 	if is_instance_valid(_arena):
 		_arena.tick()
-		if _daynight != null and is_instance_valid(_daynight):
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
