@@ -23,6 +23,8 @@ var _t := -1.0                                # время заставки, с 
 var _stage: Katana3D
 var _kat: Node3D
 var _saya: Node3D
+var _sheathed: Node3D                         # катана в ножнах одной моделью — влетает так, ножны снимаются потом
+var _saya_fit := 0.0                          # сдвиг ножен вдоль клинка, чтобы они сидели на нём (по рамкам моделей)
 var _foe: Node3D
 var _font: Font
 var _text_a := 0.0
@@ -62,8 +64,11 @@ func setup(mod: PaxMod, place: String) -> void:
 	add_child(_stage)
 	_kat = _stage.pivot
 	_saya = _stage.piece("models/weapons/katana_saya.glb")
+	_sheathed = _stage.piece("models/weapons/katana_sheathed.glb")
+	_sheathed.visible = false
+	_saya_fit = _end_x(_kat) - _end_x(_saya)                # конец ножен — у острия клинка
 	_foe = _stage.piece("models/weapons/katana.glb", Color(0.35, 0.3, 0.4))
-	for n: Node3D in [_kat, _saya, _foe]:
+	for n: Node3D in [_kat, _saya, _foe, _sheathed]:
 		n.visible = false
 	_sparks = _particles(90, 1.4, 700.0, Color(1.0, 0.85, 0.5), 3.0)
 	_sparks.explosiveness = 1.0
@@ -154,15 +159,12 @@ func _process(delta: float) -> void:
 	var roll := (1.0 - k1) * PI
 	var tilt := lerpf(-0.6, 0.12, k1)
 	_once("fly", 0.0, func() -> void:
-		_kat.visible = true
-		_saya.visible = true
+		_sheathed.visible = true
 		if _snd_fly != null:
 			_snd_fly.play())
 	# 2. вынимание (0.65 … 0.95): ножны соскальзывают к острию, потом падают вниз, вращаясь
 	var k2 := _ease_in(_seg(t, 0.65, 0.95))
-	var saya_off := Vector3(0.95 * k2, 0.0, 0.0)
 	var k2b := _seg(t, 0.95, 1.6)
-	saya_off += Vector3(0.25 * k2b, -1.4 * k2b * k2b, 0.0)
 	_once("draw", 0.65, func() -> void:
 		if _snd_draw != null:
 			_snd_draw.play())
@@ -201,12 +203,16 @@ func _process(delta: float) -> void:
 		_embers.emitting = true)
 	_kat.position = kat_pos
 	_kat.rotation = Vector3(roll, 0.0, kat_rot)
-	if k2 <= 0.0:                                         # в ножнах — ножны точно по клинку
-		_saya.position = _kat.position
-		_saya.rotation = _kat.rotation
-	else:
-		_saya.position = fly + saya_off
-		_saya.rotation = Vector3(0.0, 0.0, tilt - 2.5 * k2b)
+	# до вынимания — одна модель «в ножнах»; с 0.65 — клинок и ножны отдельно: ножны съезжают вдоль клинка и падают
+	var drawn := t >= 0.65
+	_sheathed.visible = not drawn
+	_kat.visible = drawn
+	_saya.visible = drawn and k2b < 1.0
+	_sheathed.position = _kat.position
+	_sheathed.rotation = _kat.rotation
+	var bdir := Vector3(cos(kat_rot), sin(kat_rot), 0.0)
+	_saya.position = _kat.position + bdir * (_saya_fit + 0.95 * k2) + Vector3(0.25 * k2b, -1.4 * k2b * k2b, 0.0)
+	_saya.rotation = Vector3(roll, 0.0, kat_rot - 2.5 * k2b)
 	_foe.visible = t >= 1.04 and k4 < 1.0
 	_foe.position = foe_pos
 	_foe.rotation = Vector3(0.25, 0.0, foe_rot)
@@ -350,3 +356,20 @@ func _draw() -> void:
 			draw_string_outline(_font, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, int(sfs * 0.2),
 				Color(0.05, 0.02, 0.08, 0.8 * _text_a))
 			draw_string(_font, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color(0.95, 0.86, 0.7, _text_a * _seg(_t, 1.6, 2.4)))
+
+
+## Дальний по клинку (+X) край модели на шарнире — по рамкам её сеток (для посадки ножен на клинок).
+static func _end_x(pivot: Node3D) -> float:
+	var best := -INF
+	for mi: Node in pivot.find_children("*", "MeshInstance3D", true, false):
+		var g := mi as MeshInstance3D
+		if g.mesh == null:
+			continue
+		var rel := Transform3D.IDENTITY                # от сетки до шарнира по родителям (заставка может быть ещё вне дерева)
+		var n: Node = g
+		while n != pivot and n is Node3D:
+			rel = (n as Node3D).transform * rel
+			n = n.get_parent()
+		var b := rel * g.mesh.get_aabb()
+		best = maxf(best, b.end.x)
+	return best if best > -INF else 0.0
