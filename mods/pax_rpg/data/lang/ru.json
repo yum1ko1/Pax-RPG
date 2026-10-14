@@ -228,5 +228,16 @@
 	"pax_rpg_npc_role_cook": "Повар",
 	"pax_rpg_npc_role_porter": "Носильщик",
 	"pax_rpg_talk_manner": "Манера:",
-	"pax_rpg_talk_manner_tip": "Как вы это говорите. Смысл берётся из ваших слов: угроза с манерой «Лесть» прозвучит как издёвка."
+	"pax_rpg_talk_manner_tip": "Как вы это говорите. Смысл берётся из ваших слов: угроза с манерой «Лесть» прозвучит как издёвка.",
+	"pax_rpg_city_forest": "Лес Гхарна",
+	"pax_rpg_quest_marker": "Задание: %s",
+	"pax_rpg_quest_new": "Новое задание: найти «%s» в лесу у города. Точка — на карте мира.",
+	"pax_rpg_quest_found": "Найдено: %s. Верните вещь — %s ждёт в городе.",
+	"pax_rpg_quest_done": "Задание выполнено. Отношение улучшилось.",
+	"pax_rpg_qitem_amulet": "Костяной амулет",
+	"pax_rpg_qitem_pouch": "Кошель с монетами",
+	"pax_rpg_qitem_dagger": "Кривой кинжал",
+	"pax_rpg_qitem_lamp": "Шаманская лампа",
+	"pax_rpg_qitem_ring": "Медное кольцо",
+	"pax_rpg_qitem_scroll": "Свиток с заговором"
 }

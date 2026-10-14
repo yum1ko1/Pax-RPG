@@ -27,6 +27,7 @@ var npc_name := ""
 var role := ""
 var temper := ""
 var relation := 50
+var npc_index := -1                 # номер жителя в городе (задания и отношения — по нему, quest.gd)
 var talking := false
 var _prompt: Label3D
 # уровень детализации (как LOD у сеток, только для движения и анимации): рядом и в кадре — каждый кадр, как раньше;

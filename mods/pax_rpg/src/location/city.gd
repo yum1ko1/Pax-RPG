@@ -1,4 +1,5 @@
 extends RefCounted
+const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
@@ -61,7 +62,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		Landscape.request(Landscape.area_of(data))         # горы и степь считаются в потоке, пока ставим город
 	var g: Array = data.get("ground", [190, 186, 0, 0])
 	var gm: Dictionary = data.get("ground_mask", {})
-	if gm.is_empty():
+	if data.has("terrain"):                              # лес заданий (forest.gd): рельеф с коллизией
+		Forest.make_ground(m, root, data.terrain)
+	elif gm.is_empty():
 		_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
 	else:
 		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)

@@ -33,6 +33,8 @@ const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
 const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
+const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
+const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -128,6 +130,8 @@ var _talk: Talk                    # разговор с жителем (E ря�
 var _talk_npc: Node                # ближайший житель в 2.5 м (ему — подсказка «E · имя»)
 var _npcs: Array = []
 var _talk_t := 0.0
+var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
+var _quest_item: Node3D            # находка задания в лесу (светится; вошёл в зону — взял)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
 var _build_finished := false
@@ -244,7 +248,9 @@ func build(city: Dictionary) -> void:
 	_city_lights = []
 	_city_glass = []
 	_city_paper = []
-	var layout := _city_layout(str(city.get("id", "")))
+	city_data = city
+	var layout := Forest.generate(int(city.get("seed", 0)), Quest.get_q(mod)) if str(city.get("id", "")) == "forest" \
+		else _city_layout(str(city.get("id", "")))
 	START = ARENA_START
 	_gate_radius = GATE_RADIUS
 	var goblins := int(cfg.get("goblins", 1))
@@ -278,6 +284,8 @@ func build(city: Dictionary) -> void:
 		_gate_radius = float(layout.get("exit_radius", GATE_RADIUS))
 		goblins = int(layout.get("goblins", 0))
 		_spawn_npcs(layout)
+		if layout.has("quest_item"):
+			_make_quest_item.call_deferred(layout)       # после героя (гоблинам нужен герой)
 		_shots = layout.get("shots", [])
 		_make_portal()
 		var probe := ReflectionProbe.new()             # отражения неба и улиц в стёклах (снимок — один раз)
@@ -610,8 +618,69 @@ func _spawn_npcs(layout: Dictionary) -> void:
 			pts.append(Vector3(float(a[0]) + randf_range(-1.2, 1.2), 0.1, float(a[1]) + randf_range(-1.2, 1.2)))
 		var npc := Npc.new()
 		npc.setup(mod, pts, randi() % pts.size(), n * 7919 + 13)
+		npc.set("npc_index", n)
+		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n, int(npc.get("relation"))))
 		_view.add_child(npc)
 		_npcs.append(npc)
+
+
+## Находка задания: светящаяся вещь на поляне (зона 1.6 м), рядом — гоблины задания (quest_goblins).
+func _make_quest_item(layout: Dictionary) -> void:
+	var q := Quest.get_q(mod)
+	var at: Array = layout.quest_item
+	var pos := Vector3(float(at[0]), 0.0, float(at[1]))
+	if str(q.get("state", "")) == "active":
+		_quest_item = Node3D.new()
+		_quest_item.position = pos
+		_view.add_child(_quest_item)
+		var gem := MeshInstance3D.new()
+		var sm := PrismMesh.new()
+		sm.size = Vector3(0.35, 0.5, 0.35)
+		gem.mesh = sm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.8, 0.4)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.7, 0.3)
+		mat.emission_energy_multiplier = 2.5
+		gem.material_override = mat
+		gem.position = Vector3(0.0, 0.9, 0.0)
+		_quest_item.add_child(gem)
+		var tw := gem.create_tween().set_loops()
+		tw.tween_property(gem, "rotation:y", TAU, 3.0).from(0.0)
+		var l := OmniLight3D.new()
+		l.light_color = Color(1.0, 0.75, 0.4)
+		l.light_energy = 1.4
+		l.omni_range = 5.0
+		l.light_volumetric_fog_energy = 0.0
+		l.position = Vector3(0.0, 1.2, 0.0)
+		_quest_item.add_child(l)
+		var lb := Label3D.new()
+		lb.text = mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "amulet")))
+		lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		lb.font_size = 48
+		lb.outline_size = 10
+		lb.pixel_size = 0.004
+		lb.position = Vector3(0.0, 1.6, 0.0)
+		_quest_item.add_child(lb)
+	for i: int in int(layout.get("quest_goblins", 0)):    # стерегут находку
+		var g := Goblin.new()
+		var a := TAU * i / maxf(1.0, float(layout.get("quest_goblins", 1)))
+		g.setup(mod, _player, _on_hero_hit, pos + Vector3(cos(a) * 4.0, 1.0, sin(a) * 4.0), _hero_attacking, _hero_blocking)
+		_view.add_child(g)
+		_goblins.append(g)
+
+
+## Герой у находки (1.6 м) — вещь у него: задание «найдено», вернуться к жителю.
+func _quest_pickup() -> void:
+	if not is_instance_valid(_quest_item) or not is_instance_valid(_player):
+		return
+	if _quest_item.global_position.distance_to(_player.global_position) < 1.6:
+		Quest.found(mod)
+		var q := Quest.get_q(mod)
+		_toast = {"text": mod.tr_key("pax_rpg_quest_found") % [mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))),
+			str(q.get("npc_name", ""))], "t": 0.0}
+		_quest_item.queue_free()
+		_quest_item = null
 
 
 ## Планировка города (config/<id>.json); нет файла — {} (локация-прототип).
@@ -856,6 +925,7 @@ func _start_talk() -> void:
 	var place := {"city": _city_name, "hero": mod.tr_key("pax_rpg_hero_name"), "hero_title": mod.tr_key("pax_rpg_hero_title")}
 	if _daynight != null and is_instance_valid(_daynight):
 		place["time"] = DayNight.label(mod, _daynight.hour)
+	place["city_data"] = city_data
 	_talk.context = place
 	_talk.open(_talk_npc)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1264,6 +1334,7 @@ func _physics_body(delta: float) -> void:
 	Prof.add("камера", tc)
 	if is_instance_valid(_arena):
 		_arena.tick()
+	_quest_pickup()
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near

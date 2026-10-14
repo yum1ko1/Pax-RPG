@@ -228,5 +228,16 @@
 	"pax_rpg_npc_role_cook": "Cook",
 	"pax_rpg_npc_role_porter": "Porter",
 	"pax_rpg_talk_manner": "Manner:",
-	"pax_rpg_talk_manner_tip": "How you say it. The meaning comes from your words: a threat in the «Flatter» manner sounds like mockery."
+	"pax_rpg_talk_manner_tip": "How you say it. The meaning comes from your words: a threat in the «Flatter» manner sounds like mockery.",
+	"pax_rpg_city_forest": "Gharn Forest",
+	"pax_rpg_quest_marker": "Quest: %s",
+	"pax_rpg_quest_new": "New quest: find the «%s» in the forest near the city. Marked on the world map.",
+	"pax_rpg_quest_found": "Found: %s. Bring it back — %s waits in town.",
+	"pax_rpg_quest_done": "Quest complete. Relation improved.",
+	"pax_rpg_qitem_amulet": "Bone amulet",
+	"pax_rpg_qitem_pouch": "Coin pouch",
+	"pax_rpg_qitem_dagger": "Crooked dagger",
+	"pax_rpg_qitem_lamp": "Shaman's lamp",
+	"pax_rpg_qitem_ring": "Copper ring",
+	"pax_rpg_qitem_scroll": "Charm scroll"
 }

@@ -8,6 +8,7 @@ extends Node
 signal city_chosen(city: Dictionary)
 
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
+const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 
 const CHECK_EVERY := 1.0           # с. Игра может заново выдать планете материал — проверяем и ставим свой снова
 const CLICK_PX := 18.0             # насколько близко к значку надо щёлкнуть, пикселей
@@ -353,7 +354,12 @@ func _make_markers() -> void:
 		_layer.name = "PaxRpgCityLabels"
 		_layer.layer = src.get_canvas_layer_node().layer if src != null and src.get_canvas_layer_node() != null else 1
 		add_child(_layer)
-	for c: Variant in cities:
+	var list: Array = cities.duplicate()
+	var q := Quest.get_q(mod)
+	if str(q.get("state", "")) == "active":             # точка задания: лес у города (щелчок — туда)
+		list.append({"id": "forest", "seed": int(q.get("seed", 0)), "lat": float(q.get("lat", 0.0)),
+			"lon": float(q.get("lon", 0.0)), "quest": true})
+	for c: Variant in list:
 		if not (c is Dictionary):
 			continue
 		var city: Dictionary = c
@@ -365,13 +371,22 @@ func _make_markers() -> void:
 		var lb := Label.new()
 		var capital := bool(city.get("capital", false))
 		lb.text = ("◆ " if capital else "• ") + mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
+		if bool(city.get("quest", false)):
+			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_marker") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
 		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_style(lb, src, Color.from_string(str(colors.get(str(city.get("empire", "")), "#ffffff")), Color.WHITE))
+		_style(lb, src, Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) else
+			Color.from_string(str(colors.get(str(city.get("empire", "")), "#ffffff")), Color.WHITE))
 		lb.visible = false
 		_layer.add_child(lb)
 		lb.reset_size()
 		lb.set_meta(&"pax_rpg_dot", _dot_half(lb))
 		_labels.append(lb)
+
+
+## Задание выдано или сдано — значки заново (точка задания появилась или пропала).
+func refresh_quest() -> void:
+	if is_instance_valid(_node):
+		_make_markers()
 
 
 ## Подпись страны/провинции игры на глобусе — образец вида; null, если её нет.

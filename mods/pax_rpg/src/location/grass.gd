@@ -8,6 +8,7 @@ extends RefCounted
 ## MultiMesh (16 чисел на пучок: матрица и цвет) — ставятся одним присваиванием, без цикла по копиям.
 ## Буферы запоминаются (_cache): повторный вход в город — без расчёта.
 
+const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 const CELL := 16.0
 const OCC := 0.5                   # м на клетку карты занятости
@@ -36,8 +37,9 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 		if mask != null and mask.is_compressed():
 			mask.decompress()
 	var input := {"density": density, "ground": g, "mask": mask, "mask_rect": gm.get("rect", [0, 0, 1, 1]),
-		"rects": rects, "arena": layout.get("arena", [])}
-	var key := str(hash(var_to_str([density, g, gm.get("tex", ""), rects.size(), layout.get("arena", [])])))
+		"rects": rects, "arena": layout.get("arena", []), "terrain": layout.get("terrain", {})}
+	var key := str(hash(var_to_str([density, g, gm.get("tex", ""), rects.size(), layout.get("arena", []),
+		(layout.get("terrain", {}) as Dictionary).get("seed", 0)])))
 	if _cache.has(key):
 		_spawn(parent, _cache[key], sh, fade_end)
 		_finish(on_done)
@@ -101,6 +103,8 @@ static func compute(input: Dictionary) -> Dictionary:
 	rng.seed = 1047
 	var step := 1.0 / sqrt(density)
 	var cells := {}
+	var terr: Dictionary = input.get("terrain", {})
+	var tn: FastNoiseLite = Forest.noise(int(terr.get("seed", 0))) if not terr.is_empty() else null   # лес: трава — по рельефу
 	var y := gpos.y + 1.5
 	while y < gpos.y + gsize.y - 1.5:
 		var x := gpos.x + 1.5
@@ -125,7 +129,8 @@ static func compute(input: Dictionary) -> Dictionary:
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.25), s))
 			var buf: PackedFloat32Array = cells[key]
 			cells[key] = PackedFloat32Array()             # одна ссылка на буфер — дописываем без копирования
-			buf.append_array(PackedFloat32Array([b.x.x, b.y.x, b.z.x, px, b.x.y, b.y.y, b.z.y, 0.0, b.x.z, b.y.z, b.z.z, pz,
+			var py := Forest.height(tn, px, pz, terr) if tn != null else 0.0
+			buf.append_array(PackedFloat32Array([b.x.x, b.y.x, b.z.x, px, b.x.y, b.y.y, b.z.y, py, b.x.z, b.y.z, b.z.z, pz,
 				rng.randf_range(0.85, 1.1), rng.randf_range(0.88, 1.08), rng.randf_range(0.85, 1.0), 1.0]))
 			cells[key] = buf
 		y += step

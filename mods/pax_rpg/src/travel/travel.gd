@@ -73,6 +73,7 @@ func leave() -> void:
 
 func _back_on_map() -> void:
 	planet.enabled = true
+	planet.refresh_quest()                               # задание выдано / найдено / сдано — точка на глобусе
 
 
 ## Экран выбора героя (при входе в мир); после выбора — then. Карточка — из config/hero.json → character.
