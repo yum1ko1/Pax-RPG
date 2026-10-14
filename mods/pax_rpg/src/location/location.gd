@@ -32,6 +32,7 @@ const Music := preload("res://mods/pax_rpg/src/location/music.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
+const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -123,6 +124,10 @@ var _gfx: Gfx                       # качество картинки (gfx.gd,
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var _inv: Inventory                # инвентарь (TAB)
 var _wrist: Wrist                  # наручный терминал (TAB / Esc): инвентарь, карта, меню
+var _talk: Talk                    # разговор с жителем (E рядом) — через нейросеть игры
+var _talk_npc: Node                # ближайший житель в 2.5 м (ему — подсказка «E · имя»)
+var _npcs: Array = []
+var _talk_t := 0.0
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
 var _build_finished := false
@@ -340,6 +345,10 @@ func build(city: Dictionary) -> void:
 	_wrist.setup(mod, _hud)
 	add_child(_wrist)
 	_wrist.picked.connect(_on_wrist)
+	_talk = Talk.new()
+	_talk.setup(mod, _hud)
+	add_child(_talk)
+	_talk.closed.connect(_end_talk)
 	_inv.stat_added.connect(func(key: String) -> void:
 		if _prog.add_stat(key):
 			_set_inventory(false)
@@ -477,7 +486,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -602,6 +611,7 @@ func _spawn_npcs(layout: Dictionary) -> void:
 		var npc := Npc.new()
 		npc.setup(mod, pts, randi() % pts.size(), n * 7919 + 13)
 		_view.add_child(npc)
+		_npcs.append(npc)
 
 
 ## Планировка города (config/<id>.json); нет файла — {} (локация-прототип).
@@ -811,7 +821,51 @@ func _dmg_mult() -> float:
 
 
 func paused() -> bool:
-	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible)
+	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible)
+
+
+## Ближайший житель в 2.5 м — подсказка над ним (раз в 0.2 с).
+func _talk_scan(delta: float) -> void:
+	_talk_t -= delta
+	if _talk_t > 0.0 or not is_instance_valid(_player):
+		return
+	_talk_t = 0.2
+	var best: Node = null
+	var bd := 2.5
+	for n: Variant in _npcs:
+		if not is_instance_valid(n):
+			continue
+		var d := (n as Node3D).global_position.distance_to(_player.global_position)
+		if d < bd:
+			bd = d
+			best = n
+	if best != _talk_npc:
+		if is_instance_valid(_talk_npc):
+			_talk_npc.call("show_prompt", false)
+		_talk_npc = best
+	if is_instance_valid(_talk_npc) and not (is_instance_valid(_talk) and _talk.visible):
+		_talk_npc.call("show_prompt", true)
+
+
+func _start_talk() -> void:
+	if not is_instance_valid(_talk_npc) or not is_instance_valid(_talk):
+		return
+	_talk_npc.call("talk", true, _player.global_position)
+	var place := {"city": _city_name, "hero": mod.tr_key("pax_rpg_hero_name"), "hero_title": mod.tr_key("pax_rpg_hero_title")}
+	if _daynight != null and is_instance_valid(_daynight):
+		place["time"] = DayNight.label(mod, _daynight.hour)
+	_talk.context = place
+	_talk.open(_talk_npc)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_rmb = false
+	_lmb_queued = false
+
+
+func _end_talk() -> void:
+	if is_instance_valid(_talk_npc):
+		_talk_npc.call("talk", false)
+	if not paused():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 ## Наручный терминал: над левым запястьем героя; мир на паузе, мышь — интерфейсу.
@@ -1774,6 +1828,8 @@ func _process(delta: float) -> void:
 		var t0 := Time.get_ticks_usec()
 		Assets.stream_tick(mod, _cam.global_position)        # полные текстуры — только вблизи камеры
 		Prof.add("стриминг", t0)
+	if active and not paused():
+		_talk_scan(delta)
 	if active and is_instance_valid(_hud):
 		var t0 := Time.get_ticks_usec()
 		_hud_tick(delta)
@@ -1945,7 +2001,10 @@ func _input(event: InputEvent) -> void:
 	if paused():
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
-			if is_instance_valid(_wrist) and _wrist.visible and pk == KEY_ESCAPE:
+			if is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
+				_talk.close()
+				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_wrist) and _wrist.visible and pk == KEY_ESCAPE:
 				_set_wrist(false)
 				get_viewport().set_input_as_handled()
 			elif is_instance_valid(_inv) and _inv.visible and pk == KEY_ESCAPE:
@@ -1985,7 +2044,9 @@ func _input(event: InputEvent) -> void:
 		var key: InputEventKey = event
 		if key.physical_keycode in KEYS or key.keycode in KEYS:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
-		if key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
+		if key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_talk_npc) and not _near_gate:
+			_start_talk()                            # житель рядом — разговор
+		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
 				and _arena.can_start():

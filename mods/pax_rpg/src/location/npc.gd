@@ -17,6 +17,18 @@ var _dir := 1
 var _wait := 0.0
 var _speed := SPEED
 var _stuck := 0                    # сколько раз подряд упёрся — на третий разворачивается назад по маршруту
+# кто это (разговор через нейросеть — talk.gd): имя, ремесло, характер, отношение к герою 0..100
+const NAMES := ["Гракх", "Зугба", "Мырт", "Шнырь", "Каргаш", "Ульба", "Бзык", "Трокх", "Ырза", "Хряп", "Сквирт", "Дорна",
+	"Гнилоглаз", "Курба", "Пырх", "Ярга", "Щербач", "Мокла", "Згрит", "Нахра"]
+const ROLES := ["merchant", "guard", "herder", "shaman", "smith", "beggar", "cook", "porter"]
+const TEMPERS := ["жадный и хитрый", "угрюмый и подозрительный", "болтливый и любопытный", "трусливый, но услужливый",
+	"гордый и вспыльчивый", "добродушный простак", "мрачный, говорит загадками", "насмешливый и дерзкий"]
+var npc_name := ""
+var role := ""
+var temper := ""
+var relation := 50
+var talking := false
+var _prompt: Label3D
 # уровень детализации (как LOD у сеток, только для движения и анимации): рядом и в кадре — каждый кадр, как раньше;
 # дальше FAR м — анимация 15 раз в секунду (с 30+ м глаз разницы не видит); за кадром — не рисуется, анимация стоит, шаг пути —
 # раз в PHYS_SKIP тактов физики с накопленным временем (маршрут тот же, просто реже считается)
@@ -37,6 +49,21 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	rng.seed = seed_v
 	_speed = SPEED * rng.randf_range(0.8, 1.25)
 	_dir = 1 if rng.randf() < 0.5 else -1
+	npc_name = NAMES[rng.randi() % NAMES.size()]
+	role = ROLES[rng.randi() % ROLES.size()]
+	temper = TEMPERS[rng.randi() % TEMPERS.size()]
+	relation = rng.randi_range(35, 65)
+	_prompt = Label3D.new()                           # «E — поговорить», когда герой рядом (location.gd → show_prompt)
+	_prompt.text = "E · " + npc_name
+	_prompt.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_prompt.font_size = 40
+	_prompt.outline_size = 10
+	_prompt.pixel_size = 0.004
+	_prompt.position = Vector3(0.0, 1.55, 0.0)
+	_prompt.no_depth_test = true
+	_prompt.modulate = Color(1.0, 0.9, 0.75)
+	_prompt.visible = false
+	add_child(_prompt)
 	position = path[_i]
 	floor_snap_length = 0.4
 	floor_max_angle = deg_to_rad(50.0)
@@ -122,7 +149,31 @@ func _process(delta: float) -> void:
 	_anim_acc = 0.0
 
 
+func show_prompt(on: bool) -> void:
+	if _prompt != null and _prompt.visible != on:
+		_prompt.visible = on
+
+
+## Разговор: стоит и смотрит на героя (look — куда).
+func talk(on: bool, look := Vector3.ZERO) -> void:
+	talking = on
+	if on:
+		show_prompt(false)
+		_play("idle")
+		if _model != null:
+			var d := look - global_position
+			_model.rotation.y = atan2(d.x, d.z)
+
+
+## Настроение ответа (talk.gd): пока — только отношение; позы под настроение — когда будут клипы.
+func react(_mood: String) -> void:
+	pass
+
+
 func _phys(delta: float) -> void:
+	if talking:
+		velocity = Vector3.ZERO
+		return
 	if _path.size() < 2:
 		return
 	var fall := velocity.y - 20.0 * delta if not is_on_floor() else -0.5      # по пандусам и ступеням — с землёй
