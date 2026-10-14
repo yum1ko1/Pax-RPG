@@ -126,6 +126,8 @@ func _gi_on() -> bool:
 ## Сглаживание и чёткость — до первого кадра локации.
 func apply_viewport(v: SubViewport) -> void:
 	view = v
+	if not v.get_tree().node_added.is_connected(_on_node_added):
+		v.get_tree().node_added.connect(_on_node_added)
 	_apply_aa(v)
 	v.use_debanding = _b("debanding", true)
 	_lens_layer(v)
@@ -173,6 +175,18 @@ func leave_frame_limits() -> void:
 	Engine.max_fps = int(_frame_saved[0])
 	DisplayServer.window_set_vsync_mode(int(_frame_saved[1]) as DisplayServer.VSyncMode)
 	_frame_saved = []
+
+
+## Частицы (огонь, искры, дым, брызги) не отбрасывают тень: они двигаются каждый кадр, и тень огня рядом
+## перерисовывалась постоянно — плясала по стенам и стоила проход сцены на каждую тень.
+func _on_node_added(n: Node) -> void:
+	if (n is GPUParticles3D or n is CPUParticles3D) and is_instance_valid(view) and view.is_ancestor_of(n):
+		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _exit_tree_signals() -> void:
+	if is_inside_tree() and get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.disconnect(_on_node_added)
 
 
 ## Сглаживание (меню может менять его на ходу).
@@ -366,6 +380,7 @@ func restore_globals() -> void:
 
 
 func _exit_tree() -> void:
+	_exit_tree_signals()
 	restore_globals()
 	leave_frame_limits()
 	_drop_camera_effects()

@@ -2,9 +2,9 @@ extends Control
 ## Заставка входа в город (как в больших играх), настоящие 3D-модели (ui/katana3d.gd):
 ##  1. катана в ножнах влетает в кадр, вращаясь вокруг клинка;
 ##  2. клинок выходит из ножен (ножны соскальзывают и падают);
-##  3. сверху справа рубит чужой тёмный клинок — катана отбивает: вспышка, сноп искр, встряска экрана, звон;
-##  (всё медленно и весомо, удар — в замедленной съёмке: _speed)
-##  4. клинки разлетаются в стороны, а на месте искр из тлеющих искр проступает название места.
+##  3. сверху справа ложится чужой тёмный клинок — у гарды, крестом, — и медленно съезжает по нашему к острию:
+##     в точке касания сыплются искры, скрежет стали (sounds/katana_scrape.wav);
+##  4. сорвавшись с острия, клинки уходят за края кадра, а на их месте из тлеющих искр проступает название места.
 
 const Katana3D := preload("res://mods/pax_rpg/src/ui/katana3d.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
@@ -14,6 +14,8 @@ const KAT_A := 0.5                            # наклон нашей ката
 const KAT_D := 0.52                           # где на нашем клинке касание, м от гарды
 const FOE_A := -1.95                          # чужой клинок: острие вниз-влево — крест с нашим
 const FOE_D := 0.48
+const SLIDE_FROM := 0.12                      # где чужой клинок ложится на наш, м от гарды
+const SLIDE_TO := 0.98                        # где срывается (у острия)
 
 var _name := ""
 var sub := ""                                 # под названием мелко: время суток (location.gd)
@@ -31,6 +33,9 @@ var _embers: CPUParticles2D
 var _snd_fly: AudioStreamPlayer
 var _snd_draw: AudioStreamPlayer
 var _snd_hit: AudioStreamPlayer
+var _snd_scrape: AudioStreamPlayer
+var _contact := Vector3.ZERO                  # точка касания клинков (сцена), пока чужой съезжает
+var _spark_acc := 0.0
 var _streaks: Array = []                      # искры металла: [позиция, скорость, жизнь, длина]
 var _done := {}                               # какие события уже были
 var _end := 0.0
@@ -44,9 +49,16 @@ func setup(mod: PaxMod, place: String) -> void:
 	_font = Hud._sys(["Yu Mincho", "Cormorant Garamond", "Georgia", "Times New Roman"], 700)
 	_snd_fly = _snd(mod, "sounds/katana_fly_%d.ogg", 3, -3.0)
 	_snd_draw = _snd(mod, "sounds/swing_%d.wav", 6, -6.0)
-	_snd_hit = _snd(mod, "sounds/katana_hit_%d.ogg", 3, 0.0)
+	_snd_hit = _snd(mod, "sounds/katana_hit_%d.ogg", 3, -8.0)    # тихий звон касания
+	var scr: AudioStream = mod.sound("sounds/katana_scrape.wav")
+	if scr != null:
+		_snd_scrape = AudioStreamPlayer.new()
+		_snd_scrape.bus = "PaxRpgSfx"
+		_snd_scrape.stream = scr
+		_snd_scrape.volume_db = -2.0
+		add_child(_snd_scrape)
 	_stage = Katana3D.new()
-	_stage.setup(mod, Vector2i(1600, 900), 1.35)
+	_stage.setup(mod, Vector2i(1600, 900), 2.0)      # кадр шире — катаны мельче (раньше 1.35)
 	add_child(_stage)
 	_kat = _stage.pivot
 	_saya = _stage.piece("models/weapons/katana_saya.glb")
@@ -135,11 +147,11 @@ func _process(delta: float) -> void:
 	var t := _t
 	_flash = maxf(0.0, _flash - delta * 1.6)
 	_shake = maxf(0.0, _shake - delta * 1.4)
-	# 1. влёт в ножнах (0 … 0.5 с): из-за левого края, вращение вокруг клинка
+	# 1. влёт в ножнах (0 … 0.5 с): из-за левого края, пол-оборота вокруг клинка; ножны и клинок — одним целым
 	var k1 := _ease_out(_seg(t, 0.0, 0.5))
 	var rest := Vector3(-0.35, -0.05, 0.0)
-	var fly := Vector3(-2.2, 0.35, 0.0).lerp(rest, k1)
-	var roll := (1.0 - k1) * TAU * 2.0
+	var fly := Vector3(-2.6, 0.35, 0.0).lerp(rest, k1)
+	var roll := (1.0 - k1) * PI
 	var tilt := lerpf(-0.6, 0.12, k1)
 	_once("fly", 0.0, func() -> void:
 		_kat.visible = true
@@ -154,57 +166,74 @@ func _process(delta: float) -> void:
 	_once("draw", 0.65, func() -> void:
 		if _snd_draw != null:
 			_snd_draw.play())
-	# 3. удар чужого клинка (1.0 … 1.15) и парирование. В миг удара клинки встают крестом и касаются в CLASH:
-	#    наш — острием вверх-вправо (KAT_A), касание на KAT_D м от гарды; чужой рубит сверху справа вниз-влево.
-	var kf := _ease_in(_seg(t, 1.0, 1.15))
-	var foe_hit := CLASH - Vector3(cos(FOE_A), sin(FOE_A), 0.0) * FOE_D + Vector3(0, 0, 0.06)
-	var foe_from := foe_hit + Vector3(1.0, 0.9, 0.0)
-	var foe_pos := foe_from.lerp(foe_hit, kf)
-	var foe_rot := lerpf(FOE_A + 0.5, FOE_A, kf)          # довод клинка: замах докручивается в удар
-	var parry := _ease_out(_seg(t, 0.95, 1.15))
-	var kat_hit := CLASH - Vector3(cos(KAT_A), sin(KAT_A), 0.0) * KAT_D
-	var kat_rot := lerpf(tilt, KAT_A, parry)
-	var kat_pos := fly.lerp(kat_hit, parry)
-	roll *= 1.0 - parry                                   # плашмя к зрителю — видно сталь
-	_once("clash", 1.15, _clash)
+	# 3. катана встаёт острием вверх-вправо (0.95 … 1.15); чужой клинок ложится у гарды (1.05 … 1.2) и съезжает
+	#    по нашему к острию (1.2 … 2.05): касание бежит от SLIDE_FROM до SLIDE_TO м по клинку
+	var guard := _ease_out(_seg(t, 0.95, 1.15))
+	var kat_base := CLASH - Vector3(cos(KAT_A), sin(KAT_A), 0.0) * 0.55
+	var kat_pos := fly.lerp(kat_base, guard)
+	var kat_rot := lerpf(tilt, KAT_A, guard)
+	roll *= 1.0 - guard
+	var kdir := Vector3(cos(kat_rot), sin(kat_rot), 0.0)
+	var slide := _seg(t, 1.2, 2.05)
+	var along := lerpf(SLIDE_FROM, SLIDE_TO, slide * slide * (3.0 - 2.0 * slide))
+	var fdir := Vector3(cos(FOE_A), sin(FOE_A), 0.0)
+	var land := _ease_out(_seg(t, 1.05, 1.2))
+	_contact = kat_pos + kdir * along
+	var foe_pos := (_contact - fdir * FOE_D + Vector3(0, 0, 0.06)) + Vector3(0.9, 0.8, 0.0) * (1.0 - land)
+	var foe_rot := FOE_A + 0.35 * (1.0 - land) - 0.12 * slide          # чуть доворачивается, пока давит
+	kat_pos += Vector3(0.0, -0.025, 0.0) * land * (1.0 - slide) * sin(t * 60.0)   # дрожь клинка под нажимом
+	_once("touch", 1.2, _touch)
+	if t >= 1.2 and t < 2.05:
+		_spark_acc += delta
+		while _spark_acc > 0.012:                         # искры из точки касания — непрерывно, пока скрежет
+			_spark_acc -= 0.012
+			_scrape_spark()
 	_tick_streaks(delta)
-	# 4. отскок: чужой клинок отлетает вверх-вправо, катана — вниз-влево за край
-	var k4 := _ease_in(_seg(t, 1.2, 1.65))
-	foe_pos += Vector3(1.8, 1.4, 0.0) * k4
-	foe_rot -= 3.0 * k4
-	kat_pos += Vector3(-2.6, -0.5, 0.0) * k4
-	kat_rot += 1.2 * k4
+	# 4. сорвался с острия (2.05 …): чужой уходит вниз-вправо, наша — вниз-влево, за края кадра
+	var k4 := _ease_in(_seg(t, 2.05, 2.5))
+	foe_pos += Vector3(1.6, -1.6, 0.0) * k4
+	foe_rot -= 1.2 * k4
+	kat_pos += Vector3(-2.4, -0.9, 0.0) * k4
+	kat_rot += 0.8 * k4
+	_once("end", 2.1, func() -> void:
+		_embers.position = _clash_px()
+		_embers.emission_rect_extents = Vector2(_text_w() * 0.5, 18.0)
+		_embers.emitting = true)
 	_kat.position = kat_pos
 	_kat.rotation = Vector3(roll, 0.0, kat_rot)
-	_saya.position = fly + saya_off
-	_saya.rotation = Vector3(roll, 0.0, tilt - 2.5 * k2b)
-	_foe.visible = t >= 0.98 and k4 < 1.0
+	if k2 <= 0.0:                                         # в ножнах — ножны точно по клинку
+		_saya.position = _kat.position
+		_saya.rotation = _kat.rotation
+	else:
+		_saya.position = fly + saya_off
+		_saya.rotation = Vector3(0.0, 0.0, tilt - 2.5 * k2b)
+	_foe.visible = t >= 1.04 and k4 < 1.0
 	_foe.position = foe_pos
 	_foe.rotation = Vector3(0.25, 0.0, foe_rot)
 	_stage.glint_at = _seg(t, 0.5, 0.75) * 1.2 - 0.1 if t < 0.8 else -1.0
 	# 5. название: тлеет и держится, потом гаснет
-	_text_a = _seg(t, 1.2, 1.7) * (1.0 - _seg(t, 1.7 + HOLD, 2.5 + HOLD))
-	if t > 1.7 and _embers.emitting and t > 1.7 + HOLD:
+	_text_a = _seg(t, 2.15, 2.65) * (1.0 - _seg(t, 2.65 + HOLD, 3.45 + HOLD))
+	if _embers.emitting and t > 2.65 + HOLD:
 		_embers.emitting = false
-	if t > 3.0 + HOLD:
+	if t > 3.95 + HOLD:
 		queue_free()
 	queue_redraw()
 
 
-## Темп: влёт и вынимание — медленно и весомо, удар — замедленная съёмка, название — обычное время.
+## Темп: влёт и вынимание — медленно и весомо, скрежет — под звук (~1.7 с), название — обычное время.
 static func _speed(t: float) -> float:
-	if t < 1.0:
+	if t < 1.2:
 		return 0.4
-	if t < 1.35:
-		return 0.2                                      # slow-mo: видно встречу клинков и искры
-	if t < 1.7:
-		return 0.4
+	if t < 2.05:
+		return 0.5
+	if t < 2.6:
+		return 0.6
 	return 1.0
 
 
 func _tick_streaks(delta: float) -> void:
 	var keep: Array = []
-	var slow := 0.35 if _t < 1.35 else 1.0               # в slow-mo искры тоже медленнее
+	var slow := 0.6 if _t < 2.05 else 1.0                # в замедлении искры тоже медленнее
 	for st: Array in _streaks:
 		st[2] = float(st[2]) - delta * slow
 		if float(st[2]) <= 0.0:
@@ -216,6 +245,24 @@ func _tick_streaks(delta: float) -> void:
 		st[0] = (st[0] as Vector2) + v * delta * slow
 		keep.append(st)
 	_streaks = keep
+
+
+## Касание: тихий звон, начинается скрежет.
+func _touch() -> void:
+	_flash = 0.35
+	_shake = 0.25
+	if _snd_hit != null:
+		_snd_hit.play()
+	if _snd_scrape != null:
+		_snd_scrape.play()
+
+
+## Искра из точки касания: короткий яркий штрих по касательной к клинку и вниз (сталь срезается стружкой).
+func _scrape_spark() -> void:
+	var c0 := _origin() + _stage.to_px(_contact) * _scale()
+	var a := randf_range(-0.2, 1.4) if randf() < 0.75 else randf_range(PI - 1.0, PI + 0.3)
+	var sp := randf_range(180.0, 650.0) * _scale()
+	_streaks.append([c0, Vector2(cos(a), sin(a)) * sp, randf_range(0.2, 0.6), randf_range(0.015, 0.035)])
 
 
 func _clash() -> void:

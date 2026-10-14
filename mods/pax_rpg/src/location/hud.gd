@@ -181,9 +181,11 @@ func _draw() -> void:
 	# низ (панель, кольцо героя, эликсир, приёмы) — уменьшен в BOT раз к середине нижнего края
 	var anchor := Vector2(_w * 0.5, 1080.0)
 	draw_set_transform(anchor * (1.0 - BOT) * _s, 0.0, Vector2(_s * BOT, _s * BOT))
+	_txt_k = BOT_TEXT / BOT
 	_draw_core()
 	_draw_flask()
 	_draw_skills()
+	_txt_k = 1.0
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
 	_draw_compass()
 	_draw_map_frame()
@@ -438,23 +440,33 @@ func _draw_deco() -> void:
 	_plate(Rect2(rx - 336.0, 350.0, 344.0, 126.0), 14.0, Color(0, 0, 0, 0), 0.97)
 	_deco.draw_line(Vector2(rx - 300, 380.0), Vector2(rx - 8, 380.0), Color(c_gold, 0.45), 1.0, true)
 	_deco.draw_set_transform(anchor * (1.0 - BOT) * _s, 0.0, Vector2(_s * BOT, _s * BOT))
-	var uc := Vector2(rx - 68, 1080 - 50 - 68 - 10)                                        # кольцо добивания
+	var uc := _ult_c()                                                                      # кольцо добивания
 	_deco.draw_circle(uc, 68.0, Color(c_ink, 0.9))
 	_bezel(uc, 72.0, 9.0, 6)
 	_crest(uc + Vector2(0, -79.0), 22.0, c_pink)
 	_ci = self
 
 
+var _txt_k := 1.0                    # множитель кегля (в нижнем блоке — BOT_TEXT / BOT)
+
+
+## Текст; width > 0 — строка ужимается кеглем, пока не влезет в ширину (ничего не вылезает за рамки).
 func _text(pos: Vector2, s: String, font: Font, fs: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT,
 		width := -1.0, outline := 4) -> void:
+	fs = maxi(8, roundi(fs * _txt_k))
+	outline = roundi(outline * _txt_k)
+	if width > 0.0:
+		var tw := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		if tw > width:
+			fs = maxi(8, int(fs * width / tw))
 	if outline > 0:
 		draw_string_outline(font, pos, s, align, width, fs, outline, Color(SHADOW, SHADOW.a * color.a))
 	draw_string(font, pos, s, align, width, fs, color)
 
 
 ## Текст по центру точки (по ширине и примерно по высоте).
-func _center(c: Vector2, s: String, font: Font, fs: int, color: Color, outline := 0) -> void:
-	_text(Vector2(c.x - 200.0, c.y + fs * 0.36), s, font, fs, color, HORIZONTAL_ALIGNMENT_CENTER, 400.0, outline)
+func _center(c: Vector2, s: String, font: Font, fs: int, color: Color, outline := 0, maxw := 400.0) -> void:
+	_text(Vector2(c.x - maxw * 0.5, c.y + fs * _txt_k * 0.36), s, font, fs, color, HORIZONTAL_ALIGNMENT_CENTER, maxw, outline)
 
 
 func _diamond(c: Vector2, r: float) -> PackedVector2Array:
@@ -478,7 +490,8 @@ func _skew_bar(x: float, y: float, w: float, h: float, frac: float, color: Color
 ## Герой по центру снизу (макет «HUD A»): портрет в круге, вокруг — толстое кольцо здоровья (270°, разрыв внизу —
 ## там числа), снаружи — тонкое кольцо концентрации (растёт от левого края разрыва; ближе к пределу — краснее).
 ## Слева от кольца — эликсир и навыки ЛКМ / ПКМ / Alt, справа — Q / T / V (_draw_skills). Опыт — полоса по низу.
-const BOT := 0.74                    # масштаб нижнего блока HUD (не занимает пол-экрана)
+const BOT := 0.6                     # масштаб нижнего блока HUD (не занимает пол-экрана)
+const BOT_TEXT := 0.82               # текст нижнего блока — во столько от исходного (не мельчит вместе с рамками)
 const CORE_UP := 150.0               # px макета от низа экрана до центра кольца
 const ARC0 := PI * 0.75              # начало дуг — левый край разрыва внизу
 const ARC_LEN := PI * 1.5            # 270°
@@ -685,8 +698,8 @@ func _draw_map_frame() -> void:
 	var yaw := float(_g("yaw", 0.0))
 	var n := c + Vector2(sin(yaw), -cos(yaw)) * (MAP_R - 14.0)
 	_center(n, "北", cjk, 14, c_pink, 3)
-	_center(Vector2(c.x, c.y + MAP_R + 36), str(_g("place", "")), serif, 26, c_text, 4)
-	_center(Vector2(c.x, c.y + MAP_R + 60), _tr("pax_rpg_hud_region"), sans, 13, c_muted, 3)
+	_center(Vector2(c.x, c.y + MAP_R + 36), str(_g("place", "")), serif, 26, c_text, 4, 220.0)
+	_center(Vector2(c.x, c.y + MAP_R + 60), _tr("pax_rpg_hud_region"), sans, 13, c_muted, 3, 220.0)
 
 
 func _draw_mask() -> void:
@@ -907,10 +920,15 @@ func _draw_flask() -> void:
 	_text(Vector2(box.end.x - 22, box.end.y - 8), str(n), sans, 20, c_text if n > 0 else c_dim)
 
 
+## Кольцо добивания — справа на нижней панели, за последним приёмом (симметрично эликсиру слева).
+func _ult_c() -> Vector2:
+	var cc := _core_c()
+	return Vector2(cc.x + 566.0, cc.y + 8.0)
+
+
 func _draw_skills() -> void:
-	var rx := _w - 40.0
 	# кольцо добивания: заполнено концентрацией врага, горит, когда можно добить
-	var uc := Vector2(rx - 68, 1080 - 50 - 68 - 10)
+	var uc := _ult_c()
 	var up := float(_g("ult", 0.0))
 	var ready := bool(_g("ult_ready", false))
 	if ready:
@@ -919,8 +937,8 @@ func _draw_skills() -> void:
 		draw_arc(uc, 63.0, -PI * 0.5, -PI * 0.5 + TAU * clampf(up, 0.0, 1.0), 72, c_pink, 10.0, true)
 	draw_circle(uc, 58.0, c_ink2)
 	_center(uc, "桜", cjk, 56, Color(1.0, 0.89, 0.95) if ready else Color(0.72, 0.66, 0.8))
-	_text(Vector2(uc.x - 160, uc.y + 98), _tr("pax_rpg_hud_deathblow_ready") if ready else
-		_tr("pax_rpg_hud_deathblow") % int(up * 100.0), sans, 13, c_pink if ready else c_muted, HORIZONTAL_ALIGNMENT_RIGHT, 228)
+	_center(Vector2(uc.x, uc.y + 92.0), _tr("pax_rpg_hud_deathblow_ready") if ready else
+		_tr("pax_rpg_hud_deathblow") % int(up * 100.0), sans, 13, c_pink if ready else c_muted, 3, 170.0)
 	var skills: Array = _g("skills", [])
 	var cc := _core_c()
 	var half := ceili(skills.size() / 2.0)
@@ -958,7 +976,7 @@ func _draw_skills() -> void:
 				draw_colored_polygon(top[0], Color(0.02, 0.02, 0.06, 0.7))
 			_center(c + Vector2(0, 10), str(sd.get("cd_s", "")), sans, 22, c_text, 4)
 		_gem(c + Vector2(0, -50), 4.5, ring if on else Color(0.5, 0.5, 0.6))
-		_center(Vector2(c.x, c.y + 60), "%s · %s" % [sd.key, sd.label], sans, 13, c_muted, 3)
+		_center(Vector2(c.x, c.y + 66), "%s · %s" % [sd.key, sd.label], sans, 13, c_muted, 3, 106.0)
 
 
 func _draw_xp() -> void:
