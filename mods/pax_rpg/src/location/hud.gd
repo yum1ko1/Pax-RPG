@@ -85,7 +85,7 @@ func _draw() -> void:
 	if st.is_empty():
 		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
-	_draw_player()
+	_draw_core()
 	_draw_compass()
 	_draw_map_frame()
 	_draw_quest()
@@ -126,6 +126,90 @@ func _skew_bar(x: float, y: float, w: float, h: float, frac: float, color: Color
 	var f := clampf(frac, 0.0, 1.0) * w
 	draw_colored_polygon(PackedVector2Array([Vector2(x + k, y), Vector2(x + k + f, y), Vector2(x + f, y + h),
 		Vector2(x, y + h)]), color)
+
+
+## Герой по центру снизу (макет «HUD A»): портрет в круге, вокруг — толстое кольцо здоровья (270°, разрыв внизу —
+## там числа), снаружи — тонкое кольцо концентрации (растёт от левого края разрыва; ближе к пределу — краснее).
+## Слева от кольца — эликсир и навыки ЛКМ / ПКМ / Alt, справа — Q / T / V (_draw_skills). Опыт — полоса по низу.
+const CORE_UP := 150.0               # px макета от низа экрана до центра кольца
+const ARC0 := PI * 0.75              # начало дуг — левый край разрыва внизу
+const ARC_LEN := PI * 1.5            # 270°
+
+
+func _core_c() -> Vector2:
+	return Vector2(_w * 0.5, 1080.0 - CORE_UP)
+
+
+func _draw_core() -> void:
+	var c := _core_c()
+	draw_circle(c, 128.0, Color(0.04, 0.06, 0.14, 0.78))
+	# концентрация: внешнее тонкое кольцо
+	var p := clampf(float(_g("posture", 0.0)), 0.0, 1.0)
+	draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN, 96, Color(TEXT, 0.14), 6.0, true)
+	if p > 0.005:
+		draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN * p, 96, AMBER.lerp(RED, p * p), 6.0, true)
+		_center(c + Vector2(0, -142), "%s %d%%" % [_tr("pax_rpg_hud_posture_label"), int(p * 100.0)], sans, 13,
+			AMBER.lerp(RED, p * p), 3)
+	# здоровье: толстое кольцо; светлый «след» недавней потери, поверх — текущее
+	draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN, 96, Color(0.1, 0.1, 0.24), 17.0, true)
+	var ghost := clampf(float(_g("hp_ghost", 1.0)), 0.0, 1.0)
+	var hp := clampf(float(_g("hp", 1.0)), 0.0, 1.0)
+	if ghost > 0.003:
+		draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN * ghost, 96, Color(1.0, 0.9, 0.96, 0.55), 17.0, true)
+	if hp > 0.003:
+		draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN * hp, 96, PINK if hp > 0.3 else RED, 17.0, true)
+	# портрет
+	draw_circle(c, 76.0, INK2)
+	if hero_portrait != null:
+		var pts := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		for i: int in 48:
+			var a := TAU * i / 48.0
+			var d := Vector2(cos(a), sin(a))
+			pts.append(c + d * 74.0)
+			uvs.append(Vector2(0.5, 0.5) + d * 0.5)
+		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, hero_portrait)
+	else:
+		_center(c, "騎", cjk, 60, TEXT)
+	draw_arc(c, 76.0, 0.0, TAU, 72, BLUE, 2.0, true)
+	# числа здоровья — в разрыве колец внизу
+	_center(c + Vector2(0, 112), "%d / %d" % [int(_g("hp_abs", 100)), int(_g("hp_max", 100))], serif, 22, TEXT, 4)
+	# уровень — ромб справа сверху у портрета
+	var lv := c + Vector2(70, -70)
+	var dm := _diamond(lv, 20.0)
+	draw_colored_polygon(dm, Color(0.04, 0.06, 0.14))
+	_outline(dm, BLUE, 2.0)
+	_center(lv, str(int(_g("level", 1))), sans, 15, BLUE)
+	var fl := float(_g("lvl_flash", 0.0))
+	if fl > 0.0:                                         # новый уровень: свет вокруг кольца
+		var k := clampf(fl / 1.6, 0.0, 1.0)
+		for j: int in 4:
+			draw_arc(c, 126.0 + (1.0 - k) * 50.0 + j * 6.0, 0.0, TAU, 96, Color(PINK, 0.14 * k), 3.0, true)
+	_draw_xp_line()
+
+
+## Опыт — тонкая полоса во всю ширину по низу экрана; сюда летит мана повергнутых (xp_target).
+func _xp_rect() -> Rect2:
+	return Rect2(0.0, 1080.0 - 5.0, _w, 5.0)
+
+
+func _draw_xp_line() -> void:
+	var r := _xp_rect()
+	draw_rect(r, Color(0.1, 0.1, 0.24, 0.9))
+	var xp := clampf(float(_g("xp", 0.0)), 0.0, 1.0)
+	if xp > 0.002:
+		var f := r.size.x * xp
+		draw_polygon(PackedVector2Array([r.position, r.position + Vector2(f, 0), r.position + Vector2(f, r.size.y),
+			r.position + Vector2(0, r.size.y)]), PackedColorArray([BLUE, PINK, PINK, BLUE]))
+		draw_circle(r.position + Vector2(f, r.size.y * 0.5), 4.0, Color(1, 0.9, 0.97, 0.9))
+	var txt := "%s %d · %d / %d" % [_tr("pax_rpg_hud_level"), int(_g("level", 1)), int(_g("xp_abs", 0)),
+		int(_g("xp_need", 100))]
+	_text(Vector2(40, r.position.y - 10), txt, sans, 13, MUTED, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+	var sp := int(_g("skill_points", 0))
+	if sp > 0:
+		var tw := sans.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		_text(Vector2(40 + tw + 20, r.position.y - 10), "◆ %s: %d" % [_tr("pax_rpg_hud_skill_points"), sp], sans, 13,
+			AMBER, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
 
 
 func _draw_player() -> void:
@@ -191,9 +275,10 @@ func _draw_player() -> void:
 const XP_BAR := Rect2(178, 152, 440, 6)              # px макета
 
 
-## Куда летит мана (экранные px): конец заполненной части полоски опыта.
+## Куда летит мана (экранные px): конец заполненной части полоски опыта (по низу экрана).
 func xp_target(frac: float) -> Vector2:
-	return (XP_BAR.position + Vector2(XP_BAR.size.x * clampf(frac, 0.0, 1.0), XP_BAR.size.y * 0.5)) * _s
+	var r := _xp_rect()
+	return (r.position + Vector2(r.size.x * clampf(frac, 0.0, 1.0), r.size.y * 0.5)) * _s
 
 
 func _draw_orbs() -> void:
@@ -464,11 +549,12 @@ func _draw_toast() -> void:
 func _draw_flask() -> void:
 	var n := int(_g("flask", 0))
 	var nmax := int(_g("flask_max", 3))
-	var box := Rect2(40, 1080 - 60 - 92, 92, 92)
+	var box := Rect2(_core_c().x - 560.0 - 40.0, 1080.0 - CORE_UP - 46.0, 80, 92)   # слева от навыков у кольца
 	draw_rect(box, INK)
 	draw_rect(box, Color(TEXT, 0.7), false, 2.0)
-	_text(Vector2(40, box.position.y - 12), _tr("pax_rpg_hud_flask"), sans, 13, MUTED)
-	var o := box.position + Vector2(24, 18)
+	_text(Vector2(box.position.x - 60, box.position.y - 12), _tr("pax_rpg_hud_flask"), sans, 13, MUTED,
+		HORIZONTAL_ALIGNMENT_CENTER, box.size.x + 120)
+	var o := box.position + Vector2(18, 18)
 	var bottle := PackedVector2Array([o + Vector2(16, 0), o + Vector2(28, 0), o + Vector2(28, 10), o + Vector2(40, 26),
 		o + Vector2(40, 54), o + Vector2(4, 54), o + Vector2(4, 26), o + Vector2(16, 10)])
 	if n > 0:
@@ -494,18 +580,21 @@ func _draw_skills() -> void:
 	_center(uc, "桜", cjk, 56, Color(1.0, 0.89, 0.95) if ready else Color(0.72, 0.66, 0.8))
 	_text(Vector2(uc.x - 160, uc.y + 98), _tr("pax_rpg_hud_deathblow_ready") if ready else
 		_tr("pax_rpg_hud_deathblow") % int(up * 100.0), sans, 13, PINK if ready else MUTED, HORIZONTAL_ALIGNMENT_RIGHT, 228)
-	var x := uc.x - 68.0 - 70.0
 	var skills: Array = _g("skills", [])
-	for i: int in range(skills.size() - 1, -1, -1):
+	var cc := _core_c()
+	var half := ceili(skills.size() / 2.0)
+	for i: int in skills.size():
 		var sd: Dictionary = skills[i]
-		var c := Vector2(x, uc.y - 8)
+		# первая половина — слева от кольца (дальняя — первая), вторая — справа (ближняя — первая)
+		var x := cc.x + (-200.0 - (half - 1 - i) * 112.0 if i < half else 200.0 + (i - half) * 112.0)
+		var c := Vector2(x, cc.y + 20.0)
 		var on := bool(sd.get("on", false))
 		var ring: Color = sd.get("color", PINK)
-		var dm := _diamond(c, 47.0)
+		var dm := _diamond(c, 42.0)
 		draw_colored_polygon(dm, Color(0.04, 0.06, 0.14, 0.9 if on else 0.6))
 		_outline(dm, ring if on else Color(TEXT, 0.35), 2.5 if on else 1.5)
 		if on:
-			draw_colored_polygon(_diamond(c, 41.0), Color(ring, 0.18))
+			draw_colored_polygon(_diamond(c, 36.0), Color(ring, 0.18))
 		var ic: Variant = sd.get("icon", null)
 		if ic is Texture2D:                              # своя иконка (приём) вместо иероглифа
 			var isz := 62.0
@@ -522,8 +611,7 @@ func _draw_skills() -> void:
 			if top.size() > 0:
 				draw_colored_polygon(top[0], Color(0.02, 0.02, 0.06, 0.7))
 			_center(c + Vector2(0, 10), str(sd.get("cd_s", "")), sans, 22, TEXT, 4)
-		_center(Vector2(c.x, c.y + 66), "%s · %s" % [sd.key, sd.label], sans, 13, MUTED, 3)
-		x -= 116.0
+		_center(Vector2(c.x, c.y + 60), "%s · %s" % [sd.key, sd.label], sans, 13, MUTED, 3)
 
 
 func _draw_xp() -> void:
@@ -574,4 +662,4 @@ func _draw_hint() -> void:
 				y += 22.0
 	var g := str(_g("gate_hint", ""))
 	if g != "":
-		_center(Vector2(_w * 0.5, 1080 - 90), g, sans, 18, PINK, 5)
+		_center(Vector2(_w * 0.5, 1080 - CORE_UP - 175), g, sans, 18, PINK, 5)   # над кольцом героя

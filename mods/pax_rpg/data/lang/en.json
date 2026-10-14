@@ -114,5 +114,6 @@
 	"pax_rpg_gfx_flare": "Sun glare",
 	"pax_rpg_gfx_exposure": "Eye adaptation",
 	"pax_rpg_gfx_grass": "Grass (next visit)",
-	"pax_rpg_weapon_greatsword": "Cleaver"
+	"pax_rpg_weapon_greatsword": "Cleaver",
+	"pax_rpg_hud_posture_label": "Posture"
 }
