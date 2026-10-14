@@ -367,6 +367,13 @@ func _make_markers() -> void:
 	if str(q.get("state", "")) == "active":             # точка задания: лес у города (щелчок — туда)
 		list.append({"id": "forest", "seed": int(q.get("seed", 0)), "lat": float(q.get("lat", 0.0)),
 			"lon": float(q.get("lon", 0.0)), "quest": true})
+	elif str(q.get("state", "")) == "found":             # вещь найдена — вернуть её в город жителя
+		for c0: Variant in cities:
+			if c0 is Dictionary and str((c0 as Dictionary).get("id", "")) == str(q.get("city", "")):
+				var back: Dictionary = (c0 as Dictionary).duplicate()
+				back["quest_back"] = true
+				back["lat"] = float(back.get("lat", 0.0)) - 1.2   # чуть ниже подписи города
+				list.append(back)
 	var pp := player_pos()                               # индикатор героя: где он сейчас (щелчком не выбирается)
 	list.append({"id": "player", "lat": pp.x, "lon": pp.y, "player": true})
 	for c: Variant in list:
@@ -383,10 +390,13 @@ func _make_markers() -> void:
 		lb.text = ("◆ " if capital else "• ") + mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
 		if bool(city.get("player", false)):
 			lb.text = "▲ " + mod.tr_key("pax_rpg_map_you")
+		if bool(city.get("quest_back", false)):
+			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_back") % [mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))),
+				str(q.get("npc_name", ""))]
 		if bool(city.get("quest", false)):
 			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_marker") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
 		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_style(lb, src, Color(0.55, 1.0, 0.75) if bool(city.get("player", false)) else Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) else
+		_style(lb, src, Color(0.55, 1.0, 0.75) if bool(city.get("player", false)) else Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) or bool(city.get("quest_back", false)) else
 			Color.from_string(str(colors.get(str(city.get("empire", "")), "#ffffff")), Color.WHITE))
 		lb.visible = false
 		_layer.add_child(lb)

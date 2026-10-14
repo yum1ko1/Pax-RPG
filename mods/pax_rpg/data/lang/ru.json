@@ -243,5 +243,19 @@
 	"pax_rpg_map_you": "Вы",
 	"pax_rpg_map_here": "Вы здесь",
 	"pax_rpg_map_travel": "В пути ~%.1f ч, на месте:",
-	"pax_rpg_wrist_leave": "Покинуть локацию"
+	"pax_rpg_wrist_leave": "Покинуть локацию",
+	"pax_rpg_talk_give": "Отдать: %s",
+	"pax_rpg_talk_give_line": "Вот, держи — %s. Нашёл в лесу.",
+	"pax_rpg_quest_back": "Вернуть: %s — %s",
+	"pax_rpg_journal_title": "Журнал заданий",
+	"pax_rpg_journal_none": "Заданий нет.",
+	"pax_rpg_journal_how": "Поговорите с жителями города и попросите работу — манера «Задание» или слова вроде «есть дело?».",
+	"pax_rpg_journal_find": "Найти: %s",
+	"pax_rpg_journal_giver": "Дал задание",
+	"pax_rpg_journal_where": "Где искать",
+	"pax_rpg_journal_status": "Состояние",
+	"pax_rpg_journal_active": "Ищется",
+	"pax_rpg_journal_found": "Найдено — вернуть",
+	"pax_rpg_journal_todo_active": "Отправляйтесь в лес: точка «❖ Задание» на карте мира. Вещь стерегут гоблины.",
+	"pax_rpg_journal_todo_found": "Вернитесь к жителю %s (%s): над ним золотой ❖. В разговоре — кнопка «Отдать»."
 }

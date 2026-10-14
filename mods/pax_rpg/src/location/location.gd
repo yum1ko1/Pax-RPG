@@ -35,6 +35,7 @@ const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
 const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
+const Journal := preload("res://mods/pax_rpg/src/location/journal.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -131,6 +132,7 @@ var _talk_npc: Node                # ближайший житель в 2.5 м (
 var _npcs: Array = []
 var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
+var _journal: Journal              # журнал заданий (J)
 var _quest_item: Node3D            # находка задания в лесу (светится; вошёл в зону — взял)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
@@ -285,6 +287,7 @@ func build(city: Dictionary) -> void:
 		_gate_radius = float(layout.get("exit_radius", GATE_RADIUS))
 		goblins = int(layout.get("goblins", 0))
 		_spawn_npcs(layout)
+		_mark_giver()
 		if layout.has("quest_item"):
 			_make_quest_item.call_deferred(layout)       # после героя (гоблинам нужен герой)
 		_shots = layout.get("shots", [])
@@ -361,6 +364,10 @@ func build(city: Dictionary) -> void:
 	_talk.setup(mod, _hud)
 	add_child(_talk)
 	_talk.closed.connect(_end_talk)
+	_talk.quest_changed.connect(_mark_giver)
+	_journal = Journal.new()
+	_journal.setup(mod, _hud)
+	add_child(_journal)
 	_inv.stat_added.connect(func(key: String) -> void:
 		if _prog.add_stat(key):
 			_set_inventory(false)
@@ -498,7 +505,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -894,7 +901,26 @@ func _dmg_mult() -> float:
 
 
 func paused() -> bool:
-	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible)
+	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible) \
+		or (is_instance_valid(_journal) and _journal.visible)
+
+
+## Житель, давший задание, — с меткой ❖ над головой (в его городе).
+func _mark_giver() -> void:
+	var q := Quest.get_q(mod)
+	for n: Variant in _npcs:
+		if is_instance_valid(n):
+			var me := not q.is_empty() and str(q.get("city", "")) == str(city_data.get("id", "")) \
+				and int(q.get("npc", -1)) == int((n as Node).get("npc_index"))
+			(n as Node).call("set_giver", me)
+
+
+func _set_journal(on: bool) -> void:
+	if not is_instance_valid(_journal):
+		return
+	_journal.visible = on
+	_journal.queue_redraw()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else (Input.MOUSE_MODE_CAPTURED if not paused() else Input.mouse_mode)
 
 
 ## Ближайший житель в 2.5 м — подсказка над ним (раз в 0.2 с).
@@ -2085,7 +2111,7 @@ func _hud_tick(delta: float) -> void:
 
 
 const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V,
-	KEY_Z, KEY_TAB]
+	KEY_Z, KEY_TAB, KEY_J]
 
 
 func _input(event: InputEvent) -> void:
@@ -2094,7 +2120,10 @@ func _input(event: InputEvent) -> void:
 	if paused():
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
-			if is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
+			if is_instance_valid(_journal) and _journal.visible and (pk == KEY_ESCAPE or pk == KEY_J):
+				_set_journal(false)
+				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
 				_talk.close()
 				get_viewport().set_input_as_handled()
 			elif is_instance_valid(_wrist) and _wrist.visible and pk == KEY_ESCAPE:
@@ -2156,6 +2185,8 @@ func _input(event: InputEvent) -> void:
 			_shoulder = -_shoulder                   # плечо камеры в захвате
 			_toast = {"text": mod.tr_key("pax_rpg_hud_shoulder_left" if _shoulder < 0.0 else "pax_rpg_hud_shoulder_right"),
 				"t": 0.0}
+		if key.pressed and not key.echo and key.physical_keycode == KEY_J:
+			_set_journal(true)                       # журнал заданий
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):
 			_city_map.toggle()                       # карта города
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE and is_instance_valid(_city_map) \

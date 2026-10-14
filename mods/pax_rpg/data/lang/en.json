@@ -243,5 +243,19 @@
 	"pax_rpg_map_you": "You",
 	"pax_rpg_map_here": "You are here",
 	"pax_rpg_map_travel": "~%.1f h on the road, arriving:",
-	"pax_rpg_wrist_leave": "Leave the area"
+	"pax_rpg_wrist_leave": "Leave the area",
+	"pax_rpg_talk_give": "Give: %s",
+	"pax_rpg_talk_give_line": "Here — your %s. Found it in the forest.",
+	"pax_rpg_quest_back": "Return: %s — %s",
+	"pax_rpg_journal_title": "Quest journal",
+	"pax_rpg_journal_none": "No quests.",
+	"pax_rpg_journal_how": "Talk to the townsfolk and ask for work — the «Quest» manner or words like «any work?».",
+	"pax_rpg_journal_find": "Find: %s",
+	"pax_rpg_journal_giver": "Given by",
+	"pax_rpg_journal_where": "Where",
+	"pax_rpg_journal_status": "Status",
+	"pax_rpg_journal_active": "Searching",
+	"pax_rpg_journal_found": "Found — return it",
+	"pax_rpg_journal_todo_active": "Go to the forest: the «❖ Quest» mark on the world map. Goblins guard the item.",
+	"pax_rpg_journal_todo_found": "Return to %s (%s): a golden ❖ above them. In the talk — the «Give» button."
 }

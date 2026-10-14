@@ -1,0 +1,80 @@
+extends Control
+## Журнал заданий (J): что за задание, кто дал (имя, ремесло, город), что найти и где, что делать сейчас. Задание
+## одно (quest.gd); нет — «заданий нет» и как его получить. Мир на паузе, пока открыт (location.gd → paused()).
+## Закрыть — J или Esc.
+
+const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
+const W := 640.0
+const H := 420.0
+
+var mod: PaxMod
+var hud: Hud
+var _serif: Font
+var _sans: Font
+
+
+func setup(m: PaxMod, h: Hud) -> void:
+	mod = m
+	hud = h
+	name = "PaxRpgJournal"
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	visible = false
+	_serif = Hud._sys(["Cormorant Garamond", "Georgia", "Times New Roman"], 700)
+	_sans = Hud._sys(["Bahnschrift", "Segoe UI", "Arial"], 400)
+
+
+func toggle() -> void:
+	visible = not visible
+	queue_redraw()
+
+
+func _gui_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+		visible = false                                   # щелчок — закрыть
+
+
+func _draw() -> void:
+	var s := clampf(size.y / 1080.0, 0.6, 2.0)
+	var r := Rect2((size - Vector2(W, H) * s) * 0.5, Vector2(W, H) * s)
+	var gold: Color = hud.c_gold if hud != null else Hud.GOLD
+	var text: Color = hud.c_text if hud != null else Hud.TEXT
+	var muted: Color = hud.c_muted if hud != null else Hud.MUTED
+	var accent: Color = hud.c_pink if hud != null else Hud.PINK
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.45))
+	draw_rect(r, Color(0.05, 0.04, 0.035, 0.95))
+	draw_rect(r, Color(gold, 0.85), false, 2.0 * s)
+	draw_rect(r.grow(-6.0 * s), Color(gold, 0.3), false, 1.0)
+	var x := r.position.x + 34.0 * s
+	var w := r.size.x - 68.0 * s
+	var y := r.position.y + 58.0 * s
+	draw_string(_serif, Vector2(x, y), mod.tr_key("pax_rpg_journal_title"), HORIZONTAL_ALIGNMENT_LEFT, w, int(36 * s), text)
+	draw_string(_sans, Vector2(x, y), "J", HORIZONTAL_ALIGNMENT_RIGHT, w, int(14 * s), Color(gold, 0.8))
+	y += 18.0 * s
+	draw_line(Vector2(x, y), Vector2(x + w, y), Color(gold, 0.5), 1.0)
+	y += 44.0 * s
+	var q := Quest.get_q(mod)
+	if q.is_empty():
+		draw_string(_sans, Vector2(x, y), mod.tr_key("pax_rpg_journal_none"), HORIZONTAL_ALIGNMENT_LEFT, w, int(20 * s), muted)
+		draw_multiline_string(_sans, Vector2(x, y + 36.0 * s), mod.tr_key("pax_rpg_journal_how"), HORIZONTAL_ALIGNMENT_LEFT, w,
+			int(16 * s), -1, Color(muted, 0.8))
+		return
+	var item := mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
+	var found := str(q.get("state", "")) == "found"
+	draw_string(_serif, Vector2(x, y), "❖ " + mod.tr_key("pax_rpg_journal_find") % item, HORIZONTAL_ALIGNMENT_LEFT, w,
+		int(28 * s), Color(1.0, 0.8, 0.35))
+	y += 44.0 * s
+	var rows := [
+		[mod.tr_key("pax_rpg_journal_giver"), "%s · %s" % [str(q.get("npc_name", "")), mod.tr_key("pax_rpg_city_" + str(q.get("city", "")))]],
+		[mod.tr_key("pax_rpg_journal_where"), mod.tr_key("pax_rpg_city_forest")],
+		[mod.tr_key("pax_rpg_journal_status"), mod.tr_key("pax_rpg_journal_found" if found else "pax_rpg_journal_active")],
+	]
+	for row: Array in rows:
+		draw_string(_sans, Vector2(x, y), str(row[0]).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 180.0 * s, int(13 * s), Color(muted, 0.8))
+		draw_string(_sans, Vector2(x + 190.0 * s, y), str(row[1]), HORIZONTAL_ALIGNMENT_LEFT, w - 190.0 * s, int(19 * s), text)
+		y += 38.0 * s
+	y += 14.0 * s
+	var todo := mod.tr_key("pax_rpg_journal_todo_found") % [str(q.get("npc_name", "")),
+		mod.tr_key("pax_rpg_city_" + str(q.get("city", "")))] if found else mod.tr_key("pax_rpg_journal_todo_active")
+	draw_multiline_string(_sans, Vector2(x, y), "→ " + todo, HORIZONTAL_ALIGNMENT_LEFT, w, int(18 * s), -1, accent)

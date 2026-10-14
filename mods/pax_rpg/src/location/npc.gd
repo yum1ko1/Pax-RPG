@@ -150,6 +150,25 @@ func _process(delta: float) -> void:
 	_anim_acc = 0.0
 
 
+var _giver: Label3D
+
+
+## Над жителем, давшим задание, — золотой ❖ с именем (видно издалека, quest.gd).
+func set_giver(on: bool) -> void:
+	if on and _giver == null:
+		_giver = Label3D.new()
+		_giver.text = "❖ " + npc_name
+		_giver.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_giver.font_size = 56
+		_giver.outline_size = 12
+		_giver.pixel_size = 0.004
+		_giver.position = Vector3(0.0, 1.9, 0.0)
+		_giver.modulate = Color(1.0, 0.8, 0.35)
+		add_child(_giver)
+	if _giver != null:
+		_giver.visible = on
+
+
 func show_prompt(on: bool) -> void:
 	if _prompt != null and _prompt.visible != on:
 		_prompt.visible = on
