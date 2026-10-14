@@ -33,6 +33,7 @@ var _cjk: Font
 var _t := 0.0
 var _points := 0                     # свободные очки характеристик
 var _main_stat := ""
+var _bg_tex: Texture2D               # textures/inventory_bg.jpg (если есть)
 var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
 var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
 
@@ -44,6 +45,7 @@ func setup(m: PaxMod) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_panel_sh = m.shader("shaders/ui_panel.gdshader")
+	_bg_tex = m.texture("textures/inventory_bg.jpg")
 	_serif = Hud._sys(["Cormorant Garamond", "Georgia", "Palatino Linotype", "Times New Roman"], 700)
 	_sans = Hud._sys(["Bahnschrift", "Segoe UI", "Arial"], 400)
 	_cjk = Hud._sys(["Yu Mincho", "MS Mincho", "Noto Serif JP", "Noto Serif CJK JP", "SimSun"], 700)
@@ -167,7 +169,7 @@ func _build_preview() -> void:
 	_cam.current = true
 	var hero_rect := TextureRect.new()
 	hero_rect.texture = _pv.get_texture()
-	hero_rect.position = Vector2(610, 140)
+	hero_rect.position = Vector2(620, 84)            # в центре кольца фона (textures/inventory_bg.jpg)
 	hero_rect.size = Vector2(700, 860)
 	hero_rect.mouse_filter = Control.MOUSE_FILTER_STOP
 	hero_rect.gui_input.connect(_on_preview_input)
@@ -194,21 +196,37 @@ func _on_preview_input(e: InputEvent) -> void:
 
 
 ## Фон: лунный диск за героем, туманные гряды, лепестки сакуры.
+## Фон (макет «Инвентарь A»): ночная лазурь, светящееся розовое кольцо — герой ровно в его центре, дымка у пола и
+## отражение кольца. Есть textures/inventory_bg.jpg — рисуется он (картинка 16:9, кольцо по центру).
+const RING_C := Vector2(970, 514)              # кольцо фона-картинки; превью героя — по нему (hero_rect)
+const RING_R := 437.0
+
+
 func _draw_bg() -> void:
-	var c := Vector2(960, 560)
-	_bg.draw_circle(c, 300.0, Color(0.12, 0.13, 0.31))
-	_bg.draw_circle(c, 286.0, Color(0.16, 0.17, 0.38))
-	_bg.draw_arc(c, 300.0, 0.0, TAU, 128, Color(0.86, 0.66, 0.34, 0.35), 2.0, true)
-	for k: int in 3:                                    # гряды тумана
-		var y := 760.0 + k * 34.0
-		var pts := PackedVector2Array()
-		for i: int in 33:
-			var x := 560.0 + i * 25.0
-			pts.append(Vector2(x, y + sin(i * 0.7 + k * 1.3) * 10.0))
-		_bg.draw_polyline(pts, Color(0.22, 0.24, 0.45, 0.6 - k * 0.15), 3.0, true)
-	_bg.draw_set_transform(Vector2.ZERO)
-	var ring := Vector2(960, 960)
-	_bg.draw_arc(ring, 170.0, PI, TAU, 64, Color(1.0, 0.55, 0.78, 0.45), 1.5, true)
+	if _bg_tex != null:
+		_bg.draw_texture_rect(_bg_tex, Rect2(0, 0, W, H), false)
+	else:
+		_bg.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(W, 0), Vector2(W, H), Vector2(0, H)]),
+			PackedColorArray([Color(0.06, 0.08, 0.16), Color(0.06, 0.08, 0.16), Color(0.2, 0.22, 0.36), Color(0.2, 0.22, 0.36)]))
+		_bg.draw_circle(RING_C, RING_R * 0.98, Color(0.1, 0.16, 0.3, 0.6))          # свет внутри кольца
+		for k: int in 6:                                                            # ореол кольца
+			_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.55, 0.78, 0.07), 10.0 + k * 9.0, true)
+		_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.7, 0.86, 0.95), 7.0, true)
+		_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.95, 0.98), 2.5, true)
+		var floor_y := RING_C.y + RING_R
+		_bg.draw_rect(Rect2(0, floor_y, W, H - floor_y), Color(0.16, 0.18, 0.3, 0.75))
+		for k: int in 5:                                                            # отражение кольца на полу
+			var w := 520.0 - k * 90.0
+			_bg.draw_set_transform(Vector2(RING_C.x, floor_y + 8.0), 0.0, Vector2(1.0, 0.16))
+			_bg.draw_circle(Vector2.ZERO, w, Color(1.0, 0.6, 0.82, 0.05 + k * 0.03))
+		_bg.draw_set_transform(Vector2.ZERO)
+		for k: int in 3:                                                            # гряды дымки у пола
+			var y := floor_y - 70.0 + k * 30.0
+			var pts := PackedVector2Array()
+			for i: int in 49:
+				var x := i * 40.0
+				pts.append(Vector2(x, y + sin(i * 0.5 + k * 1.3 + _t * 0.3) * 12.0))
+			_bg.draw_polyline(pts, Color(0.62, 0.6, 0.78, 0.16 - k * 0.04), 26.0, true)
 	for i: int in 14:                                   # лепестки
 		var ph := float(i) * 1.7
 		var p := Vector2(fmod(200.0 + i * 131.0 + _t * (12.0 + i), W), fmod(80.0 + i * 77.0 + _t * (18.0 + i * 2.0), H))

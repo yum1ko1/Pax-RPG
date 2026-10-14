@@ -315,6 +315,7 @@ func build(city: Dictionary) -> void:
 	_view.add_child(_gfx)
 	_hud = Hud.new()
 	_hud.setup(mod, mod.texture(str(hero_cfg.get("enemy_portrait", "models/goblin/portrait.png"))))
+	_hud.apply_theme(str(mod.get_setting("character", "black_knight")))   # палитра HUD — своя у каждого героя
 	add_child(_hud)
 	if not is_instance_valid(_vignette):
 		_add_vignette()
