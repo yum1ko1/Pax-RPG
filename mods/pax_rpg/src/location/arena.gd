@@ -19,6 +19,11 @@ signal toast(text: String)
 var mod: PaxMod
 var center := Vector3.ZERO
 var pit := 13.5
+const DEPTH := 4.0                            # пол ямы ниже земли (models/gharn/arena_pit.glb, pax_rpg/dev — bl_arena.py)
+const STX := 12.3                             # лестницы: хорды у стены при x = ±STX, верх у z = +5, низ у z = −4
+const ST_TOP := 5.0
+const ST_BOT := -4.0
+const RIM := 17.5
 var fighting := false
 var _root: Node3D                             # трибуны со зрителями, решётки
 var _crowd: Node3D
@@ -38,6 +43,7 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	name = "PaxRpgArena"
 	center = Vector3(float(arena[0]), 0.0, float(arena[1]))
 	pit = float(arena[2])
+	_build_bowl.call_deferred(view)
 	_player = player
 	_spawn_foe = spawn_foe
 	_heal = heal
@@ -96,9 +102,9 @@ func start() -> void:
 		_open(false)
 		_fill_crowd(true)
 		_heal.call()
-		var south := center + Vector3(0, 0.2, pit - 2.5)
+		var south := center + Vector3(0, -DEPTH + 0.3, pit - 3.0)
 		_player.global_position = south
-		var far := center + Vector3(0, 0.2, -pit * 0.5)
+		var far := center + Vector3(0, -DEPTH + 0.3, -pit * 0.45)
 		var n: int = LADDER[i]
 		if n == 0:
 			_foes.append(_spawn_foe.call(ORC, far))
@@ -139,7 +145,7 @@ func leave(lost := false) -> void:
 		_fill_crowd(false)
 		_open(true)
 		_heal.call()
-		_player.global_position = center + Vector3(0, 0.2, pit + 7.0)
+		_player.global_position = center + Vector3(0, 0.3, RIM + 3.0)   # наверх, за забор
 	_transition(mod.tr_key("pax_rpg_arena_lost" if lost else "pax_rpg_arena_leave"), out, "")
 
 
@@ -189,7 +195,7 @@ func _fill_crowd(on: bool) -> void:
 		anim_src.free()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1047
-	var tiers := [[14.85, 0.7], [15.95, 1.4], [17.05, 2.1]]
+	var tiers := [[15.3, 0.05], [16.4, 0.05]]                      # на ободе у забора, смотрят вниз сквозь решётку
 	for ti: int in tiers.size():
 		var rr := float(tiers[ti][0])
 		var h := float(tiers[ti][1])
@@ -197,7 +203,7 @@ func _fill_crowd(on: bool) -> void:
 		var a := rng.randf_range(0.0, step)
 		while a < TAU:
 			var deg := fposmod(rad_to_deg(a), 360.0)
-			if absf(fposmod(deg + 180.0, 360.0) - 180.0) > 12.0 and absf(deg - 180.0) > 12.0 and rng.randf() < 0.6:
+			if absf(deg - 68.0) > 14.0 and absf(deg - 292.0) > 14.0 and rng.randf() < 0.6:   # не в проходах к лестницам
 				var g := src.duplicate() as Node3D
 				g.position = center + Vector3(sin(a) * rr, h, cos(a) * rr)
 				g.rotation.y = a + PI                      # лицом к яме
@@ -233,17 +239,17 @@ func _open(on: bool) -> void:
 	mat.albedo_color = Color(0.16, 0.14, 0.15)
 	mat.metallic = 0.8
 	mat.roughness = 0.45
-	for zs: float in [1.0, -1.0]:
-		var at := center + Vector3(0, 0, zs * (pit + 0.4))
+	for xs: float in [1.0, -1.0]:                      # решётки внизу обеих лестниц
+		var at := center + Vector3(xs * STX, -DEPTH, ST_BOT - 0.6)
 		var body := StaticBody3D.new()
 		var sh := CollisionShape3D.new()
 		var bs := BoxShape3D.new()
-		bs.size = Vector3(7.0, 3.6, 0.5)
+		bs.size = Vector3(2.6, 3.6, 0.5)
 		sh.shape = bs
 		body.add_child(sh)
 		body.position = at + Vector3(0, 1.8, 0)
 		_gates.add_child(body)
-		for k: int in 15:                                  # прутья и две перекладины
+		for k: int in 6:                                   # прутья и две перекладины
 			var bar := MeshInstance3D.new()
 			var cm := CylinderMesh.new()
 			cm.top_radius = 0.045
@@ -251,16 +257,106 @@ func _open(on: bool) -> void:
 			cm.height = 3.4
 			cm.material = mat
 			bar.mesh = cm
-			bar.position = at + Vector3(-3.3 + k * 0.47, 1.7, 0)
+			bar.position = at + Vector3(-1.2 + k * 0.48, 1.7, 0)
 			_gates.add_child(bar)
 		for y: float in [0.8, 2.6]:
 			var cross := MeshInstance3D.new()
 			var bm := BoxMesh.new()
-			bm.size = Vector3(6.9, 0.12, 0.12)
+			bm.size = Vector3(2.6, 0.12, 0.12)
 			bm.material = mat
 			cross.mesh = bm
 			cross.position = at + Vector3(0, y, 0)
 			_gates.add_child(cross)
+
+
+## Чаша арены: модель (пол, стена, обод, лестницы, забор, решётка на уровне земли), материалы — текстуры арены (DDS),
+## коллизия — по сетке; под ступенями — невидимые пандусы (шагом по ступеням 0.4 м герой не поднимется).
+func _build_bowl(view: Node) -> void:
+	if not is_instance_valid(view):
+		return
+	var m := Assets.model(mod, "models/gharn/arena_pit.glb")
+	if m == null:
+		mod.log_warning("Pax RPG arena: no models/gharn/arena_pit.glb")
+		return
+	m.position = center
+	view.add_child(m)
+	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
+		var g := mi as MeshInstance3D
+		var nm := String(g.name)
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		if nm.begins_with("grate_col"):
+			cs.shape = g.mesh.create_trimesh_shape()   # по решётке ходят; сама плоскость не рисуется
+			g.visible = false
+		elif nm.begins_with("stairs") or nm.begins_with("roof"):
+			cs.shape = null
+		else:
+			cs.shape = g.mesh.create_trimesh_shape()
+		if cs.shape != null:
+			body.add_child(cs)
+			g.add_child(body)
+		var key := ""                                     # материал — по имени части (имена материалов glb не доходят)
+		for pair: Array in [["floor", "arena_sand"], ["wall", "arena_wall"], ["rim", "arena_seat"], ["stairs", "arena_seat"],
+				["fence", "wood"], ["roof", "iron"]]:
+			if nm.begins_with(str(pair[0])):
+				key = str(pair[1])
+		for si: int in g.mesh.get_surface_count():
+			var mat := _bowl_mat(key)
+			if mat != null:
+				g.set_surface_override_material(si, mat)
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var run := ST_TOP - ST_BOT
+	for xs: float in [1.0, -1.0]:
+		var ramp := StaticBody3D.new()
+		var rs := CollisionShape3D.new()
+		var rb := BoxShape3D.new()
+		rb.size = Vector3(2.2, 0.2, sqrt(run * run + DEPTH * DEPTH))
+		rs.shape = rb
+		ramp.add_child(rs)
+		ramp.transform = Transform3D(Basis(Vector3.RIGHT, -atan2(DEPTH, run)),
+			center + Vector3(xs * STX, -DEPTH * 0.5 - 0.05, (ST_TOP + ST_BOT) * 0.5))
+		view.add_child(ramp)
+
+
+var _bowl_mats := {}
+
+
+func _bowl_mat(key: String) -> Material:
+	if _bowl_mats.has(key):
+		return _bowl_mats[key]
+	var sm := StandardMaterial3D.new()
+	sm.roughness = 0.92
+	var tex := {"arena_sand": ["dense_sand", 0.22], "arena_wall": ["japanese_stone_wall", 0.33],
+		"arena_seat": ["large_sandstone_blocks", 0.4]}
+	if tex.has(key):
+		var t: Array = tex[key]
+		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % t[0])
+		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % t[0])
+		if d != null:
+			sm.albedo_texture = ImageTexture.create_from_image(d)
+		if n != null:
+			sm.normal_enabled = true
+			sm.normal_texture = ImageTexture.create_from_image(n)
+		sm.uv1_triplanar = true
+		sm.uv1_world_triplanar = true
+		sm.uv1_scale = Vector3.ONE * float(t[1])
+		sm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	elif key == "wood":
+		var wt := mod.texture("models/gharn/tex/ground.jpg")
+		sm.albedo_color = Color(0.45, 0.32, 0.22)
+		if wt != null:
+			sm.albedo_texture = wt
+			sm.uv1_triplanar = true
+			sm.uv1_scale = Vector3.ONE * 0.8
+	elif key == "iron":
+		sm.albedo_color = Color(0.14, 0.13, 0.14)
+		sm.metallic = 0.85
+		sm.roughness = 0.5
+	else:
+		_bowl_mats[key] = null
+		return null
+	_bowl_mats[key] = sm
+	return sm
 
 
 static func _find_anim(n: Node) -> AnimationPlayer:

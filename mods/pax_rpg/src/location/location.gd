@@ -257,6 +257,7 @@ func build(city: Dictionary) -> void:
 		else _city_layout(str(city.get("id", "")))
 	if str(city.get("id", "")) == "gharn":
 		_palace_stairs(layout)
+		_sink_arena(layout)
 	if not layout.is_empty() and not layout.has("forest") and not layout.has("decor"):
 		layout["decor"] = {"seed": 4242, "count": 420}    # природа в городе: камни, трава, цветы (city.gd → _decor)
 	START = ARENA_START
@@ -642,6 +643,22 @@ func _spawn_npcs(layout: Dictionary) -> void:
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n, int(npc.get("relation"))))
 		_view.add_child(npc)
 		_npcs.append(npc)
+
+
+## Арена — в яме (models/gharn/arena_pit.glb, ставит arena.gd): прежние блоки трибун, стен и песка убраны, в земле —
+## круглый вырез под чашу (city.gd → _holed_plane).
+func _sink_arena(layout: Dictionary) -> void:
+	var ar: Array = layout.get("arena", [])
+	if ar.size() < 3:
+		return
+	var keep: Array = []
+	for it: Variant in layout.get("items", []):
+		var d: Dictionary = it
+		if d.has("box") and str(d.get("mat", "")).begins_with("arena_"):
+			continue
+		keep.append(d)
+	layout["items"] = keep
+	layout["hole"] = [float(ar[0]), float(ar[1]), float(ar[2]) + 2.1]
 
 
 ## Ко дворцу хана — лестница: цоколь (коробка 52 × 3 × 36 у z = −54) раньше стоял глухой стеной перед входом.

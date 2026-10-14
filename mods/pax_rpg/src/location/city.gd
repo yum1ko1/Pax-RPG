@@ -67,7 +67,7 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	elif gm.is_empty():
 		_block(Vector3(float(g[0]), 1.0, float(g[1])), Vector3(float(g[2]), -0.5, float(g[3])), "earth", 0.0, 0.0, true)
 	else:
-		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)
+		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm, data.get("hole", []))
 	var groups := {}
 	var all_items: Array = (data.get("items", []) as Array).duplicate()
 	if data.has("decor"):
@@ -156,12 +156,17 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 
 
 ## Земля: плоскость с шейдером (глина, кладка дорог и тропы по маске — shaders/ground.gdshader) и коробка-коллизия.
-func _ground(size: Vector2, center: Vector2, gm: Dictionary) -> void:
+func _ground(size: Vector2, center: Vector2, gm: Dictionary, hole: Array = []) -> void:
 	var mi := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = size
-	pm.subdivide_width = 8
-	pm.subdivide_depth = 8
+	var pm: Mesh
+	if hole.size() >= 3:
+		pm = _holed_plane(size, center, Vector2(float(hole[0]), float(hole[1])), float(hole[2]))
+	else:
+		var plane := PlaneMesh.new()
+		plane.size = size
+		plane.subdivide_width = 8
+		plane.subdivide_depth = 8
+		pm = plane
 	var sh: Shader = mod.shader("shaders/ground.gdshader")
 	if sh != null:
 		var m := ShaderMaterial.new()
@@ -173,19 +178,49 @@ func _ground(size: Vector2, center: Vector2, gm: Dictionary) -> void:
 		m.set_shader_parameter("mask", mod.texture(str(gm.get("tex", ""))))
 		var r: Array = gm.get("rect", [0, 0, 1, 1])
 		m.set_shader_parameter("mask_rect", Vector4(float(r[0]), float(r[1]), float(r[2]), float(r[3])))
-		pm.material = m
+		if pm is PlaneMesh:
+			(pm as PlaneMesh).material = m
+		else:
+			pm.surface_set_material(0, m)
 	mi.mesh = pm
 	mi.position = Vector3(center.x, 0.0, center.y)
 	root.add_child(mi)
 	var body := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(size.x, 1.0, size.y)
-	cs.shape = bs
+	if hole.size() >= 3:                                 # земля с ямой арены: коллизия — та же сетка
+		cs.shape = pm.create_trimesh_shape()
+		body.position = Vector3(center.x, 0.0, center.y)
+	else:
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(size.x, 1.0, size.y)
+		cs.shape = bs
+		body.position = Vector3(center.x, -0.5, center.y)
 	body.add_child(cs)
-	body.position = Vector3(center.x, -0.5, center.y)
 	root.add_child(body)
 	rects.append([center, size, Color(0.11, 0.16, 0.35)])
+
+
+## Плоскость земли с круглой ямой (заглублённая арена): клетки 2 м, без тех, что в круге; рваный край закрывает обод арены.
+func _holed_plane(size: Vector2, center: Vector2, hc: Vector2, hr: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var cell := 2.0
+	var nx := int(ceil(size.x / cell))
+	var nz := int(ceil(size.y / cell))
+	for j: int in nz:
+		for i: int in nx:
+			var x0 := -size.x * 0.5 + i * cell
+			var z0 := -size.y * 0.5 + j * cell
+			var x1 := minf(x0 + cell, size.x * 0.5)
+			var z1 := minf(z0 + cell, size.y * 0.5)
+			var wc := center + Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
+			if wc.distance_to(hc) < hr:
+				continue
+			for v: Vector2 in [Vector2(x0, z0), Vector2(x1, z0), Vector2(x1, z1), Vector2(x0, z0), Vector2(x1, z1), Vector2(x0, z1)]:
+				st.set_normal(Vector3.UP)
+				st.set_uv(Vector2((v.x + size.x * 0.5) / size.x, (v.y + size.y * 0.5) / size.y))
+				st.add_vertex(Vector3(v.x, 0.0, v.y))
+	return st.commit()
 
 
 ## Картинка мода с мипмапами (без них плитка вдали рябит при движении камеры).
