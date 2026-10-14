@@ -10,6 +10,8 @@ const Planet := preload("res://mods/pax_rpg/src/planet/planet.gd")
 const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const CharSelect := preload("res://mods/pax_rpg/src/ui/char_select.gd")
+const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
+const HOURS_PER_DEG := 0.6           # часы пути на градус дуги по глобусу (Гхарн → лес у него ≈ 1–1.5 ч)
 
 var mod: PaxMod
 var game: PaxGame
@@ -30,6 +32,7 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 	name = "PaxRpgTravel"
 	_rng.randomize()
 	planet.city_chosen.connect(enter)
+	DayNight.clock = m
 	location.exit_requested.connect(leave)
 
 
@@ -52,6 +55,7 @@ func enter(city: Dictionary) -> void:
 		_pick_hero(func() -> void: pass)
 		return
 	var city_name := mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
+	_move_to(city)                                    # путь занимает время — часы мира идут только сейчас
 	planet.enabled = false
 	var cfg := location.cfg
 	if bool(cfg.get("pause_world", true)) and game != null:
@@ -69,6 +73,27 @@ func leave() -> void:
 	var cfg := location.cfg
 	loading.run(mod.tr_key("pax_rpg_world_map"), _line("pax_rpg_narrator_leave", LEAVE_LINES, ""),
 		float(cfg.get("loading_seconds", 1.6)) * 0.6, location.clear, _back_on_map)
+
+
+## Герой идёт в место city: часы мира + время пути по дуге от прежнего места, место героя — новое.
+func _move_to(city: Dictionary) -> void:
+	var from := planet.player_pos()
+	var to := Vector2(float(city.get("lat", from.x)), float(city.get("lon", from.y)))
+	var deg := rad_to_deg(Planet.dir_of(from.x, from.y).angle_to(Planet.dir_of(to.x, to.y)))
+	DayNight.advance(location.cfg, clampf(deg * HOURS_PER_DEG, 0.25, 8.0))
+	mod.set_setting("player_pos", [to.x, to.y])
+
+
+var _hold := 0.0
+
+
+## На глобусе мир стоит: игра на паузе, пока игрок не пошёл куда-то (время — только в пути).
+func _process(delta: float) -> void:
+	_hold -= delta
+	if _hold <= 0.0:
+		_hold = 0.5
+		if game != null and planet.enabled and not loading.busy() and not location.active:
+			game.set_speed(0)
 
 
 func _back_on_map() -> void:

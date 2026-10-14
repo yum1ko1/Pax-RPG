@@ -239,5 +239,8 @@
 	"pax_rpg_qitem_dagger": "Кривой кинжал",
 	"pax_rpg_qitem_lamp": "Шаманская лампа",
 	"pax_rpg_qitem_ring": "Медное кольцо",
-	"pax_rpg_qitem_scroll": "Свиток с заговором"
+	"pax_rpg_qitem_scroll": "Свиток с заговором",
+	"pax_rpg_map_you": "Вы",
+	"pax_rpg_map_here": "Вы здесь",
+	"pax_rpg_map_travel": "В пути ~%.1f ч, на месте:"
 }

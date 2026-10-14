@@ -105,7 +105,15 @@ func _update_tip() -> void:
 		_tip.add_theme_font_size_override("font_size", 14)
 		_layer.add_child(_tip)
 	var city: Dictionary = mk.get_meta(&"pax_rpg_city", {})
-	_tip.text = "%s\n%s" % [mod.tr_key("pax_rpg_city_" + str(city.get("id", ""))), DayNight.label(mod, DayNight.world_hour(_loc_cfg))]
+	var now := DayNight.world_hour(_loc_cfg)
+	if bool(city.get("player", false)):
+		_tip.text = "%s\n%s" % [mod.tr_key("pax_rpg_map_here"), DayNight.label(mod, now)]
+	else:                                                 # путь занимает время: когда герой будет на месте
+		var pp := player_pos()
+		var deg := rad_to_deg(dir_of(pp.x, pp.y).angle_to(dir_of(float(city.get("lat", 0.0)), float(city.get("lon", 0.0)))))
+		var hrs := clampf(deg * 0.6, 0.25, 8.0)
+		_tip.text = "%s\n%s\n%s" % [mod.tr_key("pax_rpg_city_" + str(city.get("id", ""))),
+			mod.tr_key("pax_rpg_map_travel") % hrs, DayNight.label(mod, fmod(now + hrs, 24.0))]
 	_tip.reset_size()
 	_tip.position = (get_viewport().get_mouse_position() + Vector2(16, 18)).round()
 	_tip.visible = true
@@ -359,6 +367,8 @@ func _make_markers() -> void:
 	if str(q.get("state", "")) == "active":             # точка задания: лес у города (щелчок — туда)
 		list.append({"id": "forest", "seed": int(q.get("seed", 0)), "lat": float(q.get("lat", 0.0)),
 			"lon": float(q.get("lon", 0.0)), "quest": true})
+	var pp := player_pos()                               # индикатор героя: где он сейчас (щелчком не выбирается)
+	list.append({"id": "player", "lat": pp.x, "lon": pp.y, "player": true})
 	for c: Variant in list:
 		if not (c is Dictionary):
 			continue
@@ -371,16 +381,29 @@ func _make_markers() -> void:
 		var lb := Label.new()
 		var capital := bool(city.get("capital", false))
 		lb.text = ("◆ " if capital else "• ") + mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
+		if bool(city.get("player", false)):
+			lb.text = "▲ " + mod.tr_key("pax_rpg_map_you")
 		if bool(city.get("quest", false)):
 			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_marker") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
 		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_style(lb, src, Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) else
+		_style(lb, src, Color(0.55, 1.0, 0.75) if bool(city.get("player", false)) else Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) else
 			Color.from_string(str(colors.get(str(city.get("empire", "")), "#ffffff")), Color.WHITE))
 		lb.visible = false
 		_layer.add_child(lb)
 		lb.reset_size()
 		lb.set_meta(&"pax_rpg_dot", _dot_half(lb))
 		_labels.append(lb)
+
+
+## Где герой на глобусе (настройка «player_pos»; новая игра — столица Гхарн): lat, lon.
+func player_pos() -> Vector2:
+	var p: Variant = mod.get_setting("player_pos", [])
+	if p is Array and (p as Array).size() >= 2:
+		return Vector2(float(p[0]), float(p[1]))
+	for c: Variant in cities:
+		if c is Dictionary and str((c as Dictionary).get("id", "")) == "gharn":
+			return Vector2(float(c.get("lat", 0.0)), float(c.get("lon", 0.0)))
+	return Vector2.ZERO
 
 
 ## Задание выдано или сдано — значки заново (точка задания появилась или пропала).
@@ -481,4 +504,6 @@ func _input(event: InputEvent) -> void:
 		return
 	get_viewport().set_input_as_handled()   # щелчок по городу не уходит игре (выбор провинции)
 	var city: Dictionary = mk.get_meta(&"pax_rpg_city", {})
+	if bool(city.get("player", false)):
+		return                                           # «Вы» — индикатор, не место
 	city_chosen.emit(city)

@@ -239,5 +239,8 @@
 	"pax_rpg_qitem_dagger": "Crooked dagger",
 	"pax_rpg_qitem_lamp": "Shaman's lamp",
 	"pax_rpg_qitem_ring": "Copper ring",
-	"pax_rpg_qitem_scroll": "Charm scroll"
+	"pax_rpg_qitem_scroll": "Charm scroll",
+	"pax_rpg_map_you": "You",
+	"pax_rpg_map_here": "You are here",
+	"pax_rpg_map_travel": "~%.1f h on the road, arriving:"
 }

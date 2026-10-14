@@ -31,12 +31,20 @@ func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dicti
 	apply()
 
 
-## Часы мира: час суток по системному времени (start_hour в полночь по UTC 1970, сутки — day_minutes минут);
-## одни и те же для глобуса (подсказка над городом, planet.gd) и для города при входе.
+## Часы мира: время идёт только в пути — пока игрок стоит (на глобусе или в городе), час не меняется. Хранится в
+## настройке мода «world_hour» (clock — мод, ставит travel.gd); переход добавляет часы пути (advance).
+static var clock: PaxMod
+
+
 static func world_hour(cfg: Dictionary) -> float:
-	var dm := maxf(1.0, float(cfg.get("day_minutes", 20.0)))
-	var days := Time.get_unix_time_from_system() / (dm * 60.0)
-	return fmod(float(cfg.get("start_hour", 17.0)) + fmod(days, 1.0) * 24.0, 24.0)
+	if clock == null:
+		return float(cfg.get("start_hour", 17.0))
+	return fmod(float(clock.get_setting("world_hour", cfg.get("start_hour", 17.0))), 24.0)
+
+
+static func advance(cfg: Dictionary, hours: float) -> void:
+	if clock != null:
+		clock.set_setting("world_hour", fmod(world_hour(cfg) + hours, 24.0))
 
 
 ## Ключ перевода части суток: pax_rpg_tod_night / morning / day / evening.
