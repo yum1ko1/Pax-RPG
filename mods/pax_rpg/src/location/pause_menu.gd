@@ -207,16 +207,16 @@ func _show_gfx(on: bool) -> void:
 ## Качество одной кнопкой: значения настроек (ключи gfx.gd; vol_fog — ползунок объёмного тумана).
 const PRESETS := {
 	"low": {"gi": false, "ssil": false, "ssao": false, "ssr": false, "aa": "fsr2", "fsr_scale": 0.77, "lamp_shadows": 0.0,
-		"glow": 0.45, "lens_sharpen": 0.3, "cam_blur": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0,
+		"glow": 0.3, "lens_sharpen": 0.3, "cam_blur": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0,
 		"vol_fog": 0.0},
 	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 2.0,
-		"glow": 0.55, "lens_sharpen": 0.3, "cam_blur": 0.25, "flare": true, "auto_exposure": true, "grass_density": 4.0,
+		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.25, "flare": true, "auto_exposure": true, "grass_density": 4.0,
 		"vol_fog": 0.3},
 	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 4.0,
-		"glow": 0.55, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 6.0,
+		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 6.0,
 		"vol_fog": 0.5},
 	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 8.0,
-		"glow": 0.6, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 9.0,
+		"glow": 0.45, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 9.0,
 		"vol_fog": 0.6},
 }
 

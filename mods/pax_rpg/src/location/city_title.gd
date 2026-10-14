@@ -16,6 +16,7 @@ const FOE_A := -1.95                          # чужой клинок: ост�
 const FOE_D := 0.48
 
 var _name := ""
+var sub := ""                                 # под названием мелко: время суток (location.gd)
 var _t := -1.0                                # время заставки, с (<0 — ещё не началась)
 var _stage: Katana3D
 var _kat: Node3D
@@ -295,3 +296,10 @@ func _draw() -> void:
 		draw_string(_font, p, _name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 		var lw := w * 0.6 * _seg(_t, 1.4, 2.0)               # черта под названием
 		draw_line(c + Vector2(-lw, fs * 0.6), c + Vector2(lw, fs * 0.6), Color(Hud.PINK, 0.8 * _text_a), 2.0)
+		if sub != "":
+			var sfs := int(fs * 0.36)
+			var sw := _font.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x
+			var sp := c + Vector2(-sw * 0.5, fs * 0.6 + sfs * 1.4)
+			draw_string_outline(_font, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, int(sfs * 0.2),
+				Color(0.05, 0.02, 0.08, 0.8 * _text_a))
+			draw_string(_font, sp, sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color(0.95, 0.86, 0.7, _text_a * _seg(_t, 1.6, 2.4)))

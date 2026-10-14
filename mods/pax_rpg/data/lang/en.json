@@ -140,5 +140,9 @@
 	"pax_rpg_inv_xp": "Experience",
 	"pax_rpg_inv_damage": "Damage",
 	"pax_rpg_inv_defense": "Defence",
-	"pax_rpg_inv_hint": "LMB — equip / remove   ·   Drag the hero — rotate   ·   TAB — close"
+	"pax_rpg_inv_hint": "LMB — equip / remove   ·   Drag the hero — rotate   ·   TAB — close",
+	"pax_rpg_tod_night": "Night",
+	"pax_rpg_tod_morning": "Morning",
+	"pax_rpg_tod_day": "Day",
+	"pax_rpg_tod_evening": "Evening"
 }

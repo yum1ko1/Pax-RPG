@@ -40,6 +40,7 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	serif = _sys(["Cormorant Garamond", "Georgia", "Palatino Linotype", "Times New Roman"], 600)
 	sans = _sys(["Bahnschrift", "Segoe UI", "Arial"], 400)
 	cjk = _sys(["Yu Mincho", "MS Mincho", "Noto Serif JP", "Noto Serif CJK JP", "SimSun", "MS Gothic"], 700)
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED      # лак плашек — плиткой (_lacquer)
 	_mask = Control.new()
 	_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
@@ -85,6 +86,7 @@ func _draw() -> void:
 	if st.is_empty():
 		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	_draw_bar()
 	_draw_core()
 	_draw_compass()
 	_draw_map_frame()
@@ -96,6 +98,148 @@ func _draw() -> void:
 	_draw_skills()
 	_draw_hint()
 	_draw_orbs()
+
+
+# ---------- оправа: лак, кованое золото, накладки, камни (как в Diablo / Sekiro — всё рисуется, без файлов) ----------
+
+const BRONZE := Color(0.32, 0.22, 0.12)
+const GOLD_HI := Color(1.0, 0.88, 0.58)
+const GOLD_LO := Color(0.46, 0.31, 0.14)
+static var _lac: ImageTexture
+
+
+## Плитка лака 256 × 256: тёмная лазурь с зерном и горизонтальными мазками кисти (один раз за сессию).
+static func _lacquer() -> ImageTexture:
+	if _lac != null:
+		return _lac
+	var n := 256
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var grain := FastNoiseLite.new()
+	grain.seed = 11
+	grain.frequency = 0.09
+	var brush := FastNoiseLite.new()
+	brush.seed = 5
+	brush.frequency = 0.02
+	for y: int in n:
+		for x: int in n:
+			var g := grain.get_noise_2d(x, y) * 0.5 + 0.5
+			var b := brush.get_noise_2d(x * 0.15, y * 2.2) * 0.5 + 0.5
+			var v := 0.75 + g * 0.3 + b * 0.25
+			img.set_pixel(x, y, Color(0.045 * v, 0.055 * v, 0.13 * v, 1.0))
+	_lac = ImageTexture.create_from_image(img)
+	return _lac
+
+
+## Восьмиугольник со срезанными углами (cut — срез, px).
+static func _octa(r: Rect2, cut: float) -> PackedVector2Array:
+	var a := r.position
+	var b := r.end
+	return PackedVector2Array([Vector2(a.x + cut, a.y), Vector2(b.x - cut, a.y), Vector2(b.x, a.y + cut),
+		Vector2(b.x, b.y - cut), Vector2(b.x - cut, b.y), Vector2(a.x + cut, b.y), Vector2(a.x, b.y - cut),
+		Vector2(a.x, a.y + cut)])
+
+
+## Камень в оправе: ромб цвета col с бликом, золотая кайма.
+func _gem(c: Vector2, r: float, col: Color) -> void:
+	draw_colored_polygon(_diamond(c, r + 2.5), GOLD_LO)
+	draw_colored_polygon(_diamond(c, r + 1.2), GOLD)
+	draw_colored_polygon(_diamond(c, r), col.darkened(0.45))
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r * 0.5, -r * 0.1), c,
+		c + Vector2(-r * 0.5, -r * 0.1)]), col.lightened(0.15))
+	draw_circle(c + Vector2(-r * 0.2, -r * 0.45), r * 0.18, Color(1, 1, 1, 0.75))
+
+
+## Завиток-филигрань: дуга от угла a0 на span с шариком на конце.
+func _curl(c: Vector2, r: float, a0: float, span: float, w: float) -> void:
+	draw_arc(c, r, a0, a0 + span, 18, GOLD_LO, w + 1.5, true)
+	draw_arc(c, r, a0, a0 + span, 18, GOLD, w, true)
+	var e := c + Vector2(cos(a0 + span), sin(a0 + span)) * r
+	draw_circle(e, w * 1.3, GOLD)
+	draw_circle(e - Vector2(w * 0.3, w * 0.3), w * 0.5, GOLD_HI)
+
+
+## Плашка: лак плиткой, срезанные углы, тройная кованая рамка (тёмная бронза, золото, тонкая внутренняя линия),
+## на углах — накладки с завитками и камнем. gem — цвет камней (прозрачный — золотой ромбик).
+func _plate(r: Rect2, cut := 14.0, gem := Color(0, 0, 0, 0), alpha := 0.92) -> void:
+	var tex := _lacquer()
+	var o := _octa(r, cut)
+	var uv := PackedVector2Array()
+	for q: Vector2 in o:
+		uv.append(q / 256.0)
+	draw_colored_polygon(o, Color(1, 1, 1, alpha), uv, tex)
+	var hi := _octa(Rect2(r.position + Vector2(4, 4), Vector2(r.size.x - 8, r.size.y * 0.35)), cut * 0.7)
+	draw_colored_polygon(hi, Color(0.5, 0.6, 1.0, 0.035))     # блик лака сверху
+	_outline(o, Color(0.02, 0.015, 0.03, 0.9), 5.0)
+	_outline(o, BRONZE, 3.5)
+	_outline(o, GOLD, 1.6)
+	_outline(_octa(r.grow(-6.0), maxf(cut - 4.0, 2.0)), Color(GOLD, 0.35), 1.0)
+	for k: int in 4:                                        # угловые накладки
+		var sx := 1.0 if k % 2 == 0 else -1.0
+		var sy := 1.0 if k < 2 else -1.0
+		var cx := r.position.x if k % 2 == 0 else r.end.x
+		var cy := r.position.y if k < 2 else r.end.y
+		var cc := Vector2(cx + sx * cut * 0.5, cy + sy * cut * 0.5)
+		var base := atan2(sy, sx)
+		_curl(cc + Vector2(sx * 10.0, 0), 6.0, base - PI * 0.9, PI * 1.1, 1.4)
+		_curl(cc + Vector2(0, sy * 10.0), 6.0, base + PI * 0.9, -PI * 1.1, 1.4)
+		if gem.a > 0.0:
+			_gem(cc, 4.5, gem)
+		else:
+			draw_colored_polygon(_diamond(cc, 4.0), GOLD)
+
+
+## Кованый ободок круга радиуса r: тёмная бронза, по краям золото, блик сверху, заклёпки.
+func _bezel(c: Vector2, r: float, width := 9.0, rivets := 8) -> void:
+	draw_arc(c, r, 0.0, TAU, 128, Color(0.02, 0.015, 0.03, 0.9), width + 4.0, true)
+	draw_arc(c, r, 0.0, TAU, 128, BRONZE, width, true)
+	draw_arc(c, r + width * 0.5 - 1.0, 0.0, TAU, 128, GOLD, 1.6, true)
+	draw_arc(c, r - width * 0.5 + 1.0, 0.0, TAU, 128, GOLD_LO, 1.4, true)
+	draw_arc(c, r, -PI * 0.85, -PI * 0.15, 48, Color(GOLD_HI, 0.35), width * 0.45, true)
+	for i: int in rivets:
+		var a := TAU * i / rivets - PI * 0.5 + PI / rivets
+		var p := c + Vector2(cos(a), sin(a)) * r
+		draw_circle(p, width * 0.32, GOLD_LO)
+		draw_circle(p, width * 0.24, GOLD)
+		draw_circle(p - Vector2(1, 1), width * 0.1, GOLD_HI)
+
+
+## Навершие над кругом: кованый шпиль с камнем и завитками по бокам (top — точка на ободке, h — высота).
+func _crest(top: Vector2, h: float, gem: Color) -> void:
+	var w := h * 0.55
+	var spire := PackedVector2Array([top + Vector2(0, -h), top + Vector2(w * 0.55, -h * 0.35), top + Vector2(w, 0),
+		top + Vector2(w * 0.4, h * 0.18), top + Vector2(0, h * 0.05), top + Vector2(-w * 0.4, h * 0.18), top + Vector2(-w, 0),
+		top + Vector2(-w * 0.55, -h * 0.35)])
+	draw_colored_polygon(spire, BRONZE)
+	_outline(spire, GOLD, 1.6)
+	draw_line(top + Vector2(0, -h + 3), top + Vector2(0, -h * 0.55), Color(GOLD_HI, 0.7), 1.2, true)
+	_curl(top + Vector2(w * 1.25, -h * 0.05), h * 0.28, PI * 0.9, PI * 1.2, 1.6)
+	_curl(top + Vector2(-w * 1.25, -h * 0.05), h * 0.28, PI * 0.1, -PI * 1.2, 1.6)
+	_gem(top + Vector2(0, -h * 0.33), h * 0.17, gem)
+
+
+## Нижняя панель под кольцом героя, эликсиром и приёмами: широкая лаковая плашка с кованой рамкой и гравировкой;
+## от кольца по верхней кромке расходятся золотые завитки-«крылья».
+func _draw_bar() -> void:
+	var cc := _core_c()
+	var half_w := minf(660.0, _w * 0.5 - 250.0)
+	var top := cc.y - 52.0
+	var r := Rect2(cc.x - half_w, top, half_w * 2.0, 1080.0 - top - 6.0)
+	_plate(r, 22.0, BLUE)
+	var gy := r.position.y + 14.0
+	var gy2 := r.end.y - 12.0
+	draw_line(Vector2(r.position.x + 40, gy), Vector2(r.end.x - 40, gy), Color(GOLD, 0.28), 1.0, true)
+	draw_line(Vector2(r.position.x + 40, gy2), Vector2(r.end.x - 40, gy2), Color(GOLD, 0.28), 1.0, true)
+	var x := r.position.x + 56.0
+	while x < r.end.x - 40.0:
+		if absf(x - cc.x) > 150.0:
+			draw_colored_polygon(_diamond(Vector2(x, gy2), 3.0), Color(GOLD, 0.6))
+		x += 56.0
+	for sgn: float in [-1.0, 1.0]:                          # крылья от кольца
+		for j: int in 3:
+			var rr := 30.0 + j * 18.0
+			var cen := cc + Vector2(sgn * (140.0 + rr * 0.2), -52.0 + rr)
+			var a0 := -PI * 0.5 - sgn * 0.15
+			_curl(cen, rr, a0, sgn * (1.1 - j * 0.2), 1.8 - j * 0.35)
 
 
 func _text(pos: Vector2, s: String, font: Font, fs: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT,
@@ -142,10 +286,17 @@ func _core_c() -> Vector2:
 
 func _draw_core() -> void:
 	var c := _core_c()
-	draw_circle(c, 132.0, Color(0.04, 0.06, 0.14, 0.82))
-	# оправа «лак и золото»: внешний золотой ободок, засечки как на гарде, тонкое внутреннее кольцо
-	draw_arc(c, 132.0, 0.0, TAU, 128, Color(GOLD, 0.75), 2.0, true)
-	draw_arc(c, 127.0, 0.0, TAU, 128, Color(GOLD, 0.25), 1.0, true)
+	var disc := PackedVector2Array()
+	var duv := PackedVector2Array()
+	for i: int in 96:
+		var q := c + Vector2(cos(TAU * i / 96.0), sin(TAU * i / 96.0)) * 134.0
+		disc.append(q)
+		duv.append(q / 256.0)
+	draw_colored_polygon(disc, Color(1, 1, 1, 0.95), duv, _lacquer())
+	# оправа: кованый ободок с заклёпками, навершие с камнем сверху, засечки как на гарде
+	_bezel(c, 139.0, 11.0, 12)
+	_crest(c + Vector2(0, -146.0), 34.0, PINK)
+	draw_arc(c, 127.0, 0.0, TAU, 128, Color(GOLD, 0.3), 1.0, true)
 	for i: int in 24:
 		var a := TAU * i / 24.0
 		var d := Vector2(cos(a), sin(a))
@@ -166,6 +317,7 @@ func _draw_core() -> void:
 	if hp > 0.003:
 		draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN * hp, 96, PINK if hp > 0.3 else RED, 17.0, true)
 	# портрет
+	draw_circle(c, 80.0, BRONZE)
 	draw_circle(c, 76.0, INK2)
 	if hero_portrait != null:
 		var pts := PackedVector2Array()
@@ -178,12 +330,16 @@ func _draw_core() -> void:
 		draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, hero_portrait)
 	else:
 		_center(c, "騎", cjk, 60, TEXT)
-	draw_arc(c, 76.0, 0.0, TAU, 72, BLUE, 2.0, true)
+	draw_arc(c, 79.0, 0.0, TAU, 72, GOLD, 2.0, true)
+	draw_arc(c, 75.0, 0.0, TAU, 72, Color(BLUE, 0.7), 1.2, true)
+	draw_arc(c, 70.0, PI * 1.1, PI * 1.9, 32, Color(1, 1, 1, 0.12), 6.0, true)   # стеклянный блик на портрете
 	# в разрыве колец под портретом: уровень, под ним — полоска опыта (числа — в инвентаре)
 	var lv := c + Vector2(0, 100)
 	var dm := _diamond(lv, 15.0)
+	draw_colored_polygon(_diamond(lv, 19.0), BRONZE)
+	_outline(_diamond(lv, 19.0), GOLD, 1.6)
 	draw_colored_polygon(dm, Color(0.04, 0.06, 0.14))
-	_outline(dm, BLUE, 2.0)
+	_outline(dm, BLUE, 1.5)
 	_center(lv, str(int(_g("level", 1))), sans, 14, BLUE)
 	var fl := float(_g("lvl_flash", 0.0))
 	if fl > 0.0:                                         # новый уровень: свет вокруг кольца
@@ -302,6 +458,9 @@ func _draw_compass() -> void:
 	var cx := _w * 0.5
 	var yaw := float(_g("yaw", 0.0))
 	var line_y := 52.0
+	_plate(Rect2(cx - 330.0, 18.0, 660.0, 52.0), 16.0, Color(0, 0, 0, 0), 0.78)
+	for sgn: float in [-1.0, 1.0]:                          # торцы — камни в оправе
+		_gem(Vector2(cx + sgn * 342.0, 44.0), 7.0, PINK)
 	for i: int in 24:
 		var a := float(i) / 24.0
 		draw_rect(Rect2(cx - 300 + 600 * a, line_y, 600.0 / 24.0, 1), Color(TEXT, 0.7 * sin(a * PI)))
@@ -330,14 +489,19 @@ func _draw_compass() -> void:
 			draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
 		var ly := line_y + (38.0 if bool(td.get("ring", false)) else 22.0)   # ворота — ниже, не налезают на врага
 		_center(Vector2(x, ly), "%d м" % int(td.dist), sans, 13, col, 3)
-	draw_rect(Rect2(cx - 1, 40, 2, 24), TEXT)
+	draw_colored_polygon(PackedVector2Array([Vector2(cx - 7, 70), Vector2(cx + 7, 70), Vector2(cx, 60)]), GOLD)   # указатель
+	draw_rect(Rect2(cx - 1, 40, 2, 22), GOLD_HI)
 
 
 func _draw_map_frame() -> void:
 	var c := Vector2(_w - 40.0 - MAP_R, 30.0 + MAP_R)
-	draw_arc(c, MAP_R + 9.0, 0.0, TAU, 96, Color(PINK, 0.12), 8.0, true)
-	draw_arc(c, MAP_R + 13.0, 0.0, TAU, 96, Color(PINK, 0.5), 1.5, true)
-	draw_arc(c, MAP_R + 1.0, 0.0, TAU, 96, Color(TEXT, 0.6), 2.0, true)
+	_bezel(c, MAP_R + 7.0, 12.0, 8)
+	for i: int in 32:                                       # шкала румбов по ободку
+		var a := TAU * i / 32.0
+		var d := Vector2(cos(a), sin(a))
+		draw_line(c + d * (MAP_R + 14.0), c + d * (MAP_R + (19.0 if i % 4 == 0 else 16.0)), Color(GOLD, 0.7), 1.0, true)
+	_crest(c + Vector2(0, -MAP_R - 15.0), 26.0, BLUE)
+	_plate(Rect2(c.x - 120.0, c.y + MAP_R + 14.0, 240.0, 56.0), 12.0, PINK, 0.85)
 	# север на кольце: карта вращается с камерой
 	var yaw := float(_g("yaw", 0.0))
 	var n := c + Vector2(sin(yaw), -cos(yaw)) * (MAP_R - 14.0)
@@ -403,6 +567,8 @@ func _draw_map() -> void:
 func _draw_quest() -> void:
 	var rx := _w - 40.0
 	var y := 372.0
+	_plate(Rect2(rx - 336.0, y - 22.0, 344.0, 126.0), 14.0, Color(0, 0, 0, 0), 0.72)
+	draw_line(Vector2(rx - 300, y + 8), Vector2(rx - 8, y + 8), Color(GOLD, 0.45), 1.0, true)
 	_text(Vector2(rx - 320, y), _tr("pax_rpg_hud_quest").to_upper(), sans, 12, PINK, HORIZONTAL_ALIGNMENT_RIGHT, 320)
 	_text(Vector2(rx - 320, y + 32), _tr("pax_rpg_quest_title"), serif, 27, TEXT, HORIZONTAL_ALIGNMENT_RIGHT, 320)
 	_text(Vector2(rx - 320, y + 62), _tr("pax_rpg_quest_kills") % int(_g("kills", 0)), sans, 15, TEXT,
@@ -551,8 +717,7 @@ func _draw_flask() -> void:
 	var n := int(_g("flask", 0))
 	var nmax := int(_g("flask_max", 3))
 	var box := Rect2(_core_c().x - 560.0 - 40.0, 1080.0 - CORE_UP - 46.0, 80, 92)   # слева от навыков у кольца
-	draw_rect(box, INK)
-	draw_rect(box, Color(TEXT, 0.7), false, 2.0)
+	_plate(box, 12.0, PINK)
 	_text(Vector2(box.position.x - 60, box.position.y - 12), _tr("pax_rpg_hud_flask"), sans, 13, MUTED,
 		HORIZONTAL_ALIGNMENT_CENTER, box.size.x + 120)
 	var o := box.position + Vector2(18, 18)
@@ -574,7 +739,9 @@ func _draw_skills() -> void:
 	var ready := bool(_g("ult_ready", false))
 	if ready:
 		draw_circle(uc, 80.0, Color(PINK, 0.18))
-	draw_circle(uc, 68.0, Color(TEXT, 0.15))
+	draw_circle(uc, 68.0, Color(0.04, 0.05, 0.12, 0.9))
+	_bezel(uc, 72.0, 9.0, 6)
+	_crest(uc + Vector2(0, -79.0), 22.0, PINK)
 	if up > 0.0:
 		draw_arc(uc, 63.0, -PI * 0.5, -PI * 0.5 + TAU * clampf(up, 0.0, 1.0), 72, PINK, 10.0, true)
 	draw_circle(uc, 58.0, Color(0.07, 0.06, 0.16))
@@ -592,8 +759,12 @@ func _draw_skills() -> void:
 		var on := bool(sd.get("on", false))
 		var ring: Color = sd.get("color", PINK)
 		var dm := _diamond(c, 42.0)
-		draw_colored_polygon(dm, Color(0.04, 0.06, 0.14, 0.9 if on else 0.7))
-		_outline(_diamond(c, 46.0), Color(GOLD, 0.55), 1.0)          # золотая грань — как оправа кольца
+		var bev := _diamond(c, 50.0)                                   # кованая оправа ромба
+		draw_colored_polygon(bev, BRONZE)
+		draw_colored_polygon(dm, Color(0.04, 0.06, 0.14, 0.95 if on else 0.85))
+		_outline(bev, GOLD, 1.6)
+		_outline(_diamond(c, 46.0), Color(GOLD, 0.45), 1.0)
+		draw_line(c + Vector2(-25, -25), c + Vector2(0, -50), Color(GOLD_HI, 0.5), 1.5, true)   # блик по грани
 		_outline(dm, ring if on else Color(TEXT, 0.35), 2.5 if on else 1.5)
 		if on:
 			draw_colored_polygon(_diamond(c, 36.0), Color(ring, 0.18))
@@ -613,6 +784,7 @@ func _draw_skills() -> void:
 			if top.size() > 0:
 				draw_colored_polygon(top[0], Color(0.02, 0.02, 0.06, 0.7))
 			_center(c + Vector2(0, 10), str(sd.get("cd_s", "")), sans, 22, TEXT, 4)
+		_gem(c + Vector2(0, -50), 4.5, ring if on else Color(0.5, 0.5, 0.6))
 		_center(Vector2(c.x, c.y + 60), "%s · %s" % [sd.key, sd.label], sans, 13, MUTED, 3)
 
 

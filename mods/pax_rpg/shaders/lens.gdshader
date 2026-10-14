@@ -83,7 +83,7 @@ void fragment() {
 	if (sun_vis > 0.001 && flare > 0.0) {
 		vec2 sv = (UV - sun_uv) * asp;
 		float sd = length(sv);
-		vec3 f = sun_col * (exp(-sd * 9.0) * 0.55 + exp(-sd * 40.0) * 0.6);          // ореол у солнца
+		vec3 f = sun_col * (exp(-sd * 15.0) * 0.18 + exp(-sd * 48.0) * 0.35);       // ореол у солнца — плотный, не заливает кадр
 		f += sun_col * exp(-abs(sv.y) * 260.0) * exp(-abs(sv.x) * 2.2) * 0.35 * ghosts;   // горизонтальная полоса
 		vec2 axis = vec2(0.5) - sun_uv;
 		for (int i = 0; i < 4; i++) {                                              // «призраки» линз

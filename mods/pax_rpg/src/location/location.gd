@@ -371,6 +371,8 @@ func build(city: Dictionary) -> void:
 	if not layout.is_empty():                          # заставка: катана с названием места
 		var ct := CityTitle.new()
 		ct.setup(mod, _city_name)
+		if _daynight != null:
+			ct.sub = DayNight.label(mod, _daynight.hour)   # под названием — время суток (в городе оно стоит)
 		add_child(ct)
 		ct.play(3.4)                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
 	_zoom = 0.0
@@ -489,16 +491,16 @@ func _make_sky() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 0.92
 	var fplus := RenderingServer.get_current_rendering_method() == "forward_plus"   # SSAO и SSR — только в Forward+
 	env.ssao_enabled = fplus                         # тени в углах и под крышами
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 2.2
 	env.glow_enabled = true                          # фонари, мана, вода фонтана светятся
-	env.glow_intensity = 0.8
+	env.glow_intensity = 0.4
 	env.glow_bloom = 0.0
 	env.glow_hdr_threshold = 0.95                    # светится только по-настоящему яркое: огонь, ореолы, мана
-	env.glow_hdr_scale = 2.4
+	env.glow_hdr_scale = 1.0
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	env.fog_enabled = true                           # розовая дымка маны вдали
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
@@ -519,7 +521,7 @@ func _make_sky() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-30.0, 145.0, 0.0)   # низкое тёплое солнце — длинные тени по улицам
 	sun.light_color = Color(1.0, 0.86, 0.72)
-	sun.light_energy = 1.35
+	sun.light_energy = 1.1
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.5
 	sun.directional_shadow_max_distance = 90.0       # дальше тени не видны за дымкой, а каждый метр — лишняя отрисовка
@@ -753,7 +755,11 @@ func paused() -> bool:
 ## Инвентарь (TAB): мир на паузе, мышь — интерфейсу; закрыть — TAB или Esc.
 func _set_inventory(on: bool) -> void:
 	if not is_instance_valid(_inv):
+		mod.log_error("Pax RPG: inventory is missing")
 		return
+	if on and _inv.visible:
+		return
+	mod.log_info("Pax RPG: inventory %s" % ("open" if on else "closed"))
 	if on:
 		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
 			"xp_abs": _prog.xp, "xp_need": _prog.need()}
@@ -1095,7 +1101,6 @@ func _physics_body(delta: float) -> void:
 	if is_instance_valid(_arena):
 		_arena.tick()
 		if _daynight != null and is_instance_valid(_daynight):
-			_daynight.frozen = _arena.fighting           # бой на арене — время суток на паузе
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
@@ -1643,7 +1648,15 @@ func _drink() -> void:
 var _stream_t := 0.0
 
 
+var _tab_was := false
+
+
 func _process(delta: float) -> void:
+	# TAB — ещё и опросом: если событие клавиши перехватил кто-то из игры раньше _input, инвентарь всё равно откроется
+	var tab := active and Input.is_physical_key_pressed(KEY_TAB) and not _typing()
+	if tab and not _tab_was and not (is_instance_valid(_pause) and _pause.visible):
+		_set_inventory(not (is_instance_valid(_inv) and _inv.visible))
+	_tab_was = tab
 	_stream_t -= delta
 	if active and _stream_t <= 0.0 and is_instance_valid(_cam):
 		_stream_t = 0.5
@@ -1821,7 +1834,7 @@ func _input(event: InputEvent) -> void:
 	if paused():
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
-			if is_instance_valid(_inv) and _inv.visible and (pk == KEY_TAB or pk == KEY_ESCAPE):
+			if is_instance_valid(_inv) and _inv.visible and pk == KEY_ESCAPE:
 				_set_inventory(false)
 				get_viewport().set_input_as_handled()
 			elif pk == KEY_ESCAPE:
@@ -1870,8 +1883,6 @@ func _input(event: InputEvent) -> void:
 			_arena.leave()                           # покинуть арену
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
-		if key.pressed and not key.echo and key.physical_keycode == KEY_TAB and is_instance_valid(_inv):
-			_set_inventory(true)                     # инвентарь
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Z:
 			_shoulder = -_shoulder                   # плечо камеры в захвате
 			_toast = {"text": mod.tr_key("pax_rpg_hud_shoulder_left" if _shoulder < 0.0 else "pax_rpg_hud_shoulder_right"),

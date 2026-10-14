@@ -25,9 +25,34 @@ func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dicti
 	env = e
 	sun = s
 	sky_mat = sm
-	hour = float(cfg.get("start_hour", 17.0))
+	hour = world_hour(cfg)
 	day_minutes = maxf(1.0, float(cfg.get("day_minutes", 20.0)))
+	frozen = true                                     # пока игрок в городе, время стоит: тени не перерисовываются
 	apply()
+
+
+## Часы мира: час суток по системному времени (start_hour в полночь по UTC 1970, сутки — day_minutes минут);
+## одни и те же для глобуса (подсказка над городом, planet.gd) и для города при входе.
+static func world_hour(cfg: Dictionary) -> float:
+	var dm := maxf(1.0, float(cfg.get("day_minutes", 20.0)))
+	var days := Time.get_unix_time_from_system() / (dm * 60.0)
+	return fmod(float(cfg.get("start_hour", 17.0)) + fmod(days, 1.0) * 24.0, 24.0)
+
+
+## Ключ перевода части суток: pax_rpg_tod_night / morning / day / evening.
+static func phase_key(h: float) -> String:
+	if h >= 5.0 and h < 10.0:
+		return "pax_rpg_tod_morning"
+	if h >= 10.0 and h < 17.0:
+		return "pax_rpg_tod_day"
+	if h >= 17.0 and h < 21.0:
+		return "pax_rpg_tod_evening"
+	return "pax_rpg_tod_night"
+
+
+## «Утро · 07:40».
+static func label(mod: PaxMod, h: float) -> String:
+	return "%s · %02d:%02d" % [mod.tr_key(phase_key(h)), int(h), int(fmod(h, 1.0) * 60.0)]
 
 
 var _since := 0.0
@@ -44,7 +69,7 @@ func _process(delta: float) -> void:
 	Prof.add("день/ночь", t0)
 
 
-var frozen := false                # бой на арене — время суток стоит (location.gd)
+var frozen := true                 # время суток стоит, пока игрок в городе (часы мира идут на глобусе)
 
 
 func _proc(delta: float) -> void:
@@ -78,8 +103,8 @@ func apply() -> void:
 			_sun_tw = create_tween()
 			_sun_tw.tween_property(sun, "rotation", want, 1.0).set_trans(Tween.TRANS_SINE)
 		if up:
-			sun.light_color = Color(1.0, 0.86, 0.72).lerp(Color(1.0, 0.55, 0.35), dusk)
-			sun.light_energy = lerpf(0.0, 1.35, smoothstep(-0.05, 0.25, elev))
+			sun.light_color = Color(1.0, 0.92, 0.82).lerp(Color(1.0, 0.68, 0.48), dusk)
+			sun.light_energy = lerpf(0.0, 1.1, smoothstep(-0.05, 0.45, elev)) * lerpf(1.0, 0.8, dusk)   # утром и вечером мягче
 		else:
 			sun.light_color = Color(0.5, 0.58, 0.95)
 			sun.light_energy = 0.16 * smoothstep(0.05, 0.35, -elev)
@@ -87,15 +112,15 @@ func apply() -> void:
 		sky_mat.set_shader_parameter("day", day)
 		sky_mat.set_shader_parameter("dusk", dusk)
 	if env != null:
-		env.ambient_light_energy = lerpf(0.07, 0.55, day)
+		env.ambient_light_energy = lerpf(0.06, 0.42, day)
 		var fog_night := Color(0.18, 0.14, 0.32)
 		env.fog_light_color = fog_night.lerp(fog_day, day).lerp(Color(1.0, 0.56, 0.46), dusk * 0.4)
-		env.tonemap_exposure = lerpf(1.0, 1.05, day)
+		env.tonemap_exposure = lerpf(0.95, 0.9, day)
 	var night := 1.0 - day
 	for l: Array in lights:
 		var ol: OmniLight3D = l[0]
 		if is_instance_valid(ol):
-			var e := float(l[1]) * lerpf(0.2, 1.0, night)
+			var e := float(l[1]) * lerpf(0.0, 0.6, night)   # днём огни не светят — их не видно на солнце
 			if ol is Vfx.Flicker:
 				(ol as Vfx.Flicker).base = e                  # огонь мерцает вокруг этой энергии
 			else:
@@ -103,8 +128,8 @@ func apply() -> void:
 	for pm: Variant in paper:
 		var m2 := pm as BaseMaterial3D
 		if m2 != null:
-			m2.emission_energy_multiplier = lerpf(0.35, 1.6, night)
+			m2.emission_energy_multiplier = lerpf(0.15, 0.9, night)
 	for g: Variant in glass:
 		var m := g as BaseMaterial3D
 		if m != null:
-			m.emission_energy_multiplier = lerpf(0.3, 2.6, night)
+			m.emission_energy_multiplier = lerpf(0.1, 1.3, night)

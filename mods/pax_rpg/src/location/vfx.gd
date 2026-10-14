@@ -183,7 +183,7 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 		smoke(parent, pos + Vector3(0, size * 1.1, 0), size * 0.8, Color(0.22, 0.2, 0.22, 0.3), 8, 0.7)
 	var l := Flicker.new()
 	l.light_color = Color(1.0, 0.52, 0.22)
-	l.light_energy = 1.8
+	l.light_energy = 1.1
 	l.omni_range = 7.0 + size * 3.0
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 45.0

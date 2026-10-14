@@ -140,5 +140,9 @@
 	"pax_rpg_inv_xp": "Опыт",
 	"pax_rpg_inv_damage": "Урон",
 	"pax_rpg_inv_defense": "Защита",
-	"pax_rpg_inv_hint": "ЛКМ — надеть / снять   ·   Мышь на герое — повернуть   ·   TAB — закрыть"
+	"pax_rpg_inv_hint": "ЛКМ — надеть / снять   ·   Мышь на герое — повернуть   ·   TAB — закрыть",
+	"pax_rpg_tod_night": "Ночь",
+	"pax_rpg_tod_morning": "Утро",
+	"pax_rpg_tod_day": "День",
+	"pax_rpg_tod_evening": "Вечер"
 }

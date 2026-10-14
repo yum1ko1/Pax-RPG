@@ -32,10 +32,10 @@
 		"lamp_shadow_atlas": 4096,
 		"fog_anisotropy": 0.6,
 		"auto_exposure": true,
-		"exposure_scale": 0.4,
-		"exposure_speed": 0.25,
-		"exposure_min_iso": 60.0,
-		"exposure_max_iso": 180.0,
+		"exposure_scale": 0.3,
+		"exposure_speed": 1.2,
+		"exposure_min_iso": 80.0,
+		"exposure_max_iso": 130.0,
 		"dof_far": 0.0,
 		"dof_far_transition": 70.0,
 		"dof_amount": 0.04,
@@ -62,8 +62,8 @@
 		"fog_max": 0.85,
 		"fog_aerial": 0.75,
 		"fog_sky": 0.15,
-		"glow": 0.8,
-		"glow_scale": 1.6,
+		"glow": 0.4,
+		"glow_scale": 0.9,
 		"camera_fx": true,
 		"lens_distortion": 0.0,
 		"lens_ca": 0.0012,
@@ -71,10 +71,10 @@
 		"lens_grain": 0.0,
 		"lens_vignette": 0.0,
 		"lens_dirt": 0.0,
-		"flare": 1.0,
+		"flare": 0.6,
 		"cam_blur": 0.35,
 		"lens_ghosts": 0.0,
-		"bloom": 0.04
+		"bloom": 0.0
 	},
 	"camera_sway": 0.0
 }

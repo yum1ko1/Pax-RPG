@@ -202,20 +202,20 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 	env.volumetric_fog_anisotropy = _f("fog_anisotropy", 0.6)   # против солнца — видимые лучи
 	# ореол: яркое (огонь, фонари, мана, блик солнца на металле) светится мягким ореолом, плюс лёгкий общий bloom
 	env.glow_enabled = true
-	env.glow_intensity = _f("glow", 0.8)
+	env.glow_intensity = _f("glow", 0.4)
 	env.glow_strength = 1.0
-	env.glow_bloom = _f("bloom", 0.04)
-	env.glow_hdr_threshold = 0.9
-	env.glow_hdr_scale = _f("glow_scale", 1.6)
-	var levels := [0.0, 1.0, 0.85, 0.6, 0.35, 0.15, 0.0]
+	env.glow_bloom = _f("bloom", 0.0)
+	env.glow_hdr_threshold = 1.15                   # светится только огонь, мана и блики, не освещённые стены
+	env.glow_hdr_scale = _f("glow_scale", 0.9)
+	var levels := [0.0, 1.0, 0.7, 0.35, 0.12, 0.0, 0.0]   # ореол близко к источнику, без широкой засветки
 	for i: int in 7:
 		env.set_glow_level(i, float(levels[i]))
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = _b("auto_exposure", true)
-	ca.auto_exposure_scale = _f("exposure_scale", 0.4)
-	ca.auto_exposure_speed = _f("exposure_speed", 0.25)   # медленно: яркость не «дышит» от каждого фонаря в кадре
-	ca.auto_exposure_min_sensitivity = _f("exposure_min_iso", 60.0)     # узкий диапазон: не больше ±1 ступени
-	ca.auto_exposure_max_sensitivity = _f("exposure_max_iso", 180.0)
+	ca.auto_exposure_scale = _f("exposure_scale", 0.3)
+	ca.auto_exposure_speed = _f("exposure_speed", 1.2)    # глаз привыкает за секунду: на входе нет долгой засветки
+	ca.auto_exposure_min_sensitivity = _f("exposure_min_iso", 80.0)     # узкий диапазон: не больше ±1 ступени
+	ca.auto_exposure_max_sensitivity = _f("exposure_max_iso", 130.0)
 	var far := _f("dof_far", 0.0)                        # по умолчанию без размытия дали — дымка сама отделяет планы
 	if far > 0.0:
 		ca.dof_blur_far_enabled = true
@@ -437,7 +437,7 @@ func _rim_follow() -> void:
 	_rim.global_transform = Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3.ZERO)
 	var night := 1.0
 	if is_instance_valid(sun):
-		night = 1.0 - clampf(sun.light_energy / 1.35, 0.0, 1.0) * 0.6
+		night = 1.0 - clampf(sun.light_energy / 1.1, 0.0, 1.0) * 0.6
 	_rim.light_energy = energy * night
 
 
@@ -540,7 +540,7 @@ func _camera_lens(delta: float) -> void:
 			mb = mb.normalized() * 0.035
 	_prev_fwd = fwd
 	lens_mat.set_shader_parameter("mblur", mb)
-	var fl := _f("flare", 1.0)
+	var fl := _f("flare", 0.6)
 	if fl <= 0.0 or not is_instance_valid(sun):
 		lens_mat.set_shader_parameter("sun_vis", 0.0)
 		return
@@ -551,7 +551,7 @@ func _camera_lens(delta: float) -> void:
 		var uv := cam.unproject_position(p) / vs
 		if uv.x > -0.2 and uv.x < 1.2 and uv.y > -0.2 and uv.y < 1.2:
 			lens_mat.set_shader_parameter("sun_uv", uv)
-			want = 0.0 if _sun_blocked else clampf(sun.light_energy / 1.35, 0.0, 1.0)   # за домом — нет
+			want = 0.0 if _sun_blocked else clampf(sun.light_energy / 1.1, 0.0, 1.0)   # за домом — нет
 	_sun_vis = move_toward(_sun_vis, want, delta * 4.0)
 	lens_mat.set_shader_parameter("sun_vis", _sun_vis * fl)
 	lens_mat.set_shader_parameter("sun_col", Vector3(sun.light_color.r, sun.light_color.g, sun.light_color.b))

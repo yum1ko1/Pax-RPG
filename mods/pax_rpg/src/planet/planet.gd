@@ -7,6 +7,8 @@ extends Node
 
 signal city_chosen(city: Dictionary)
 
+const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
+
 const CHECK_EVERY := 1.0           # с. Игра может заново выдать планете материал — проверяем и ставим свой снова
 const CLICK_PX := 18.0             # насколько близко к значку надо щёлкнуть, пикселей
 const MARKER_LIFT := 1.004         # якорь чуть над поверхностью (радиус узла — 1)
@@ -36,6 +38,8 @@ var _water_img: Image                 # готовая маска: белое �
 var _albedo_img: Image
 var _ocean_tex: Texture2D
 var _albedo_tex: Texture2D
+var _loc_cfg: Dictionary = {}         # config/location.json — часы мира (start_hour, day_minutes)
+var _tip: Label                       # подсказка над городом под курсором: часть суток и час в нём
 
 
 func setup(m: PaxMod) -> void:
@@ -49,6 +53,8 @@ func setup(m: PaxMod) -> void:
 	cities = list if list is Array else []
 	var cols: Variant = cfg.get("empire_colors", {})
 	colors = cols if cols is Dictionary else {}
+	var lp: Variant = JSON.parse_string(m.read_text("config/location.json"))
+	_loc_cfg = lp if lp is Dictionary else {}
 	if _shader == null or _surface == null:
 		m.log_error("Pax RPG: shaders/yuruma.gdshader or textures/yuruma_surface.png did not load")
 
@@ -72,6 +78,36 @@ func _process(delta: float) -> void:
 		_map_feed = 0.25
 		_feed_flat_map()
 	_show_markers(enabled and game.focused_body() == game.home_body() and not _flat_map_open())
+	_update_tip()
+
+
+## Навёл мышь на город — рядом табличка «Утро · 07:40»: какое время суток застанешь, войдя в него.
+func _update_tip() -> void:
+	var mk: Node3D = null
+	if enabled and is_instance_valid(_layer):
+		mk = _city_at(get_viewport().get_mouse_position())
+	if mk == null:
+		if is_instance_valid(_tip):
+			_tip.visible = false
+		return
+	if not is_instance_valid(_tip):
+		_tip = Label.new()
+		_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.05, 0.06, 0.14, 0.92)
+		sb.border_color = Color(0.86, 0.66, 0.34, 0.9)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		sb.set_content_margin_all(7)
+		_tip.add_theme_stylebox_override("normal", sb)
+		_tip.add_theme_color_override("font_color", Color(0.96, 0.9, 0.78))
+		_tip.add_theme_font_size_override("font_size", 14)
+		_layer.add_child(_tip)
+	var city: Dictionary = mk.get_meta(&"pax_rpg_city", {})
+	_tip.text = "%s\n%s" % [mod.tr_key("pax_rpg_city_" + str(city.get("id", ""))), DayNight.label(mod, DayNight.world_hour(_loc_cfg))]
+	_tip.reset_size()
+	_tip.position = (get_viewport().get_mouse_position() + Vector2(16, 18)).round()
+	_tip.visible = true
 
 
 # ---------- планета ----------
