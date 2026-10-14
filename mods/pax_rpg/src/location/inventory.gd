@@ -38,6 +38,8 @@ var _pivot: Node3D                   # студия превью: шарнир �
 var _copy: Node3D
 var _bg_tex: Texture2D               # textures/inventory_bg.jpg (если есть)
 var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
+var _main_b: Button
+var _iai_b: Button
 var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
 
 
@@ -74,6 +76,8 @@ func setup(m: PaxMod) -> void:
 	_wv = WeaponView.new()
 	_wv.setup(m, _panel_sh, _serif, _sans, _cjk)
 	_frame.add_child(_wv)
+	_slot_icon(_main_b, "cleaver")                       # картинки оружия вместо иероглифов
+	_slot_icon(_iai_b, "katana")
 	resized.connect(_fit)
 
 
@@ -117,6 +121,23 @@ func _hero_layer(root: Node) -> void:
 		stack.append_array(n.get_children())
 		if n is VisualInstance3D:
 			(n as VisualInstance3D).layers |= HERO_LAYER
+
+
+## Иконка оружия (снимок его 3D-модели, weapon_view.gd → icon) в квадрат слота вместо знака.
+func _slot_icon(b: Button, id: String) -> void:
+	if not is_instance_valid(b) or not b.has_meta(&"box"):
+		return
+	var box := b.get_meta(&"box") as Control
+	for c: Node in box.get_children():
+		if c is Label:
+			c.queue_free()                               # иероглиф — убрать
+	var tr := TextureRect.new()
+	tr.texture = _wv.icon(id)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.size = box.size
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(tr)
 
 
 ## Окно оружия для слота: модель, урон, масштабирование, способности, выбор внизу.
@@ -208,9 +229,14 @@ func _ensure_model(path: String) -> void:
 	if ap != null and ap.has_animation("Idle"):
 		ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
 		ap.play("Idle")
-	var hand := _copy.find_child("Sword_Hand", true, false) as Node3D
-	if hand != null:
-		hand.visible = false                              # меч — за спиной, как в покое
+	# как у героя (hero.gd): плащ модели снят, меч в руке и «волочащийся» меч спрятаны — остаётся меч за спиной
+	var old_cape := _copy.find_child("Knight_cape", true, false)
+	if old_cape != null:
+		old_cape.free()
+	for nm: String in ["Sword_Hand", "Sword_Drag"]:
+		var n := _copy.find_child(nm, true, false) as Node3D
+		if n != null:
+			n.visible = false
 
 
 static func _find_player(n: Node) -> AnimationPlayer:
@@ -328,6 +354,7 @@ func _slot(rect: Rect2, glyph: String, glyph_color: Color, kicker: String, title
 		return b
 	var gs := rect.size.y - 28.0
 	var box := _panel(Rect2(Vector2(14, 14), Vector2(gs, gs)), b, false, empty)
+	b.set_meta(&"box", box)
 	if glyph != "":
 		var g := _label(glyph, Vector2(0, gs * 0.12), _cjk, int(gs * 0.5), glyph_color, box, gs)
 		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -362,11 +389,11 @@ func _build_left() -> void:
 	_label(_tr("pax_rpg_hero_name"), Vector2(90, 130), _serif, 40, Hud.TEXT, _frame)
 	_label(_tr("pax_rpg_hero_title").to_upper(), Vector2(92, 182), _sans, 14, Hud.MUTED, _frame)
 	_label(_tr("pax_rpg_inv_weapons").to_upper(), Vector2(90, 300), _sans, 13, Hud.DIM, _frame)
-	var main_b := _slot(Rect2(90, 330, 440, 124), "斬", Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
+	_main_b = _slot(Rect2(90, 330, 440, 124), "斬", Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
 		_tr("pax_rpg_weapon_greatsword"), _tr("pax_rpg_inv_greatsword_sub"), true, false)
-	main_b.pressed.connect(_open_weapon.bind("main"))
-	var iai_b := _slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
-	iai_b.pressed.connect(_open_weapon.bind("iai"))
+	_main_b.pressed.connect(_open_weapon.bind("main"))
+	_iai_b = _slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
+	_iai_b.pressed.connect(_open_weapon.bind("iai"))
 	_slot(Rect2(90, 590, 440, 96), "", Hud.DIM, "", _tr("pax_rpg_inv_talisman_empty"), "", false, true)
 	_panel(Rect2(90, 706, 440, 298), _frame)
 	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(114, 718), _sans, 13, Hud.DIM, _frame)

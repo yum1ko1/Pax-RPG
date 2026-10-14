@@ -384,7 +384,7 @@ func _knight_emblem(c: Vector2) -> void:
 		var t := float(i) / 20.0
 		var a := lerpf(0.0, PI * 0.5, t)
 		sh.append(c + Vector2(150.0 * cos(a), 10.0 + 185.0 * sin(a) * (0.6 + 0.4 * t)))
-	for i: int in range(20, -1, -1):
+	for i: int in range(19, -1, -1):                       # без нижней точки — она уже есть (иначе щит не триангулируется)
 		var t := float(i) / 20.0
 		var a := lerpf(0.0, PI * 0.5, t)
 		sh.append(c + Vector2(-150.0 * cos(a), 10.0 + 185.0 * sin(a) * (0.6 + 0.4 * t)))

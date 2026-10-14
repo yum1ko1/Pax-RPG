@@ -1118,7 +1118,9 @@ func _physics_body(delta: float) -> void:
 		var br := Vector3(cos(by), 0.0, -sin(by))
 		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
 	if _hero != null:
+		var th := Time.get_ticks_usec()
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
+		Prof.add("герой (с плащом)", th)
 		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
 			_face_now(_aim_yaw())                    # каждый удар серии — заново туда, куда смотрит камера
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
@@ -1140,7 +1142,9 @@ func _physics_body(delta: float) -> void:
 			vel = _magnet_pull(vel, mag, delta)
 	_player.velocity = vel
 	var was := _player.global_position
+	var tm := Time.get_ticks_usec()
 	_player.move_and_slide()
+	Prof.add("движение героя", tm)
 	if is_instance_valid(_sfx):
 		var d := _player.global_position - was
 		d.y = 0.0
@@ -1159,7 +1163,9 @@ func _physics_body(delta: float) -> void:
 	if _player.position.y < FALL_Y:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
+	var tc := Time.get_ticks_usec()
 	_follow_camera(delta)
+	Prof.add("камера", tc)
 	if is_instance_valid(_arena):
 		_arena.tick()
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius

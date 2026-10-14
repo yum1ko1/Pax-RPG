@@ -667,7 +667,6 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 
 
 func _cape_tick(w: Dictionary, delta: float) -> void:
-	_cache_colliders()
 	var c: Dictionary = w.cape
 	var it: Dictionary = w.item
 	var cx: int = c.cx
@@ -734,20 +733,27 @@ var _cap_half := PackedFloat32Array()
 var _cap_r := PackedFloat32Array()
 
 
-## Капсулы тела — один раз за такт плаща, а не на каждую из сотен точек ткани (узел, форма, оси — дорого из скрипта).
-func _cache_colliders() -> void:
+var _phys_on := true                     # формы капсул включены (нужны только SoftBody3D)
+
+
+## Размеры капсул — один раз (и когда меняется их набор); формы — вкл./выкл. под мягкую ткань.
+func _cache_dims(phys: bool) -> void:
 	var n := _colliders.size()
-	_cap_pos.resize(n)
-	_cap_axis.resize(n)
-	_cap_half.resize(n)
-	_cap_r.resize(n)
-	for i: int in n:
-		var body: AnimatableBody3D = _colliders[i][0]
-		var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
-		_cap_pos[i] = body.global_position
-		_cap_axis[i] = body.global_transform.basis.y
-		_cap_half[i] = cap.height * 0.5 - cap.radius
-		_cap_r[i] = cap.radius + 0.03
+	if _cap_half.size() != n:
+		_cap_pos.resize(n)
+		_cap_axis.resize(n)
+		_cap_half.resize(n)
+		_cap_r.resize(n)
+		for i: int in n:
+			var body: AnimatableBody3D = _colliders[i][0]
+			var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
+			_cap_half[i] = cap.height * 0.5 - cap.radius
+			_cap_r[i] = cap.radius + 0.03
+		_phys_on = not phys                           # набор сменился — формы выставить заново
+	if _phys_on != phys:
+		_phys_on = phys
+		for c: Array in _colliders:
+			((c[0] as Node).get_child(0) as CollisionShape3D).set_deferred("disabled", not phys)
 
 
 func _push_out(p: Vector3, ref := Vector3.INF) -> Vector3:
@@ -862,10 +868,11 @@ func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
 	arr[Mesh.ARRAY_INDEX] = c.idx
 	var mesh: ArrayMesh = c.mesh
 	mesh.clear_surfaces()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # лицевая сторона — ткань
-	mesh.surface_set_material(0, c.mat)
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # изнанка — подкладка (cull front)
-	mesh.surface_set_material(1, c.lining)
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # одна поверхность: лицо — ткань, изнанка — next_pass
+	var mat: Material = c.mat
+	if mat.next_pass != c.lining:
+		mat.next_pass = c.lining                                  # подкладка (cull front) — тем же буфером, без второй загрузки
+	mesh.surface_set_material(0, mat)
 
 
 ## Catmull-Rom по сетке: along_j — вдоль колонки i (параметр t в рядах), иначе вдоль ряда (строка = i).
@@ -938,7 +945,7 @@ func _make_body_colliders() -> void:
 		body.add_child(sh)
 		model.add_child(body)
 		_colliders.append([body, ia, ib])
-	_move_colliders()
+	_move_colliders(true)
 
 
 ## Меч за спиной — тоже капсула для ткани: плащ ложится поверх клинка, а не проходит сквозь.
@@ -1025,34 +1032,45 @@ func _pin_cloth(w: Dictionary) -> bool:
 	return true
 
 
-func _move_colliders() -> void:
-	for c: Array in _colliders:
+## Капсулы тела за костями. Физическим телам они нужны только мягкой ткани (SoftBody3D): без неё формы выключены
+## и тела не двигаются в мире физики — капсулы живут числами в _cap_* (их читает _push_out плаща).
+func _move_colliders(phys: bool) -> void:
+	_cache_dims(phys)
+	for i: int in _colliders.size():
+		var c: Array = _colliders[i]
 		var body: AnimatableBody3D = c[0]
+		var xf := Transform3D.IDENTITY
 		if int(c[1]) < 0:                              # меч за спиной: по его узлу; в руке — капсула убрана
 			if _sword_cap.is_empty() or not _sword_back.is_visible_in_tree():
-				body.global_position = Vector3(0, -1000, 0)
+				xf.origin = Vector3(0, -1000, 0)
+			else:
+				var sx := _sword_back.global_transform
+				var ax := (sx.basis * (_sword_cap[2] as Vector3)).normalized()
+				xf = Transform3D(Basis(Quaternion(Vector3.UP, ax)), sx * (_sword_cap[1] as Vector3))
+		else:
+			var a := _bone_world(int(c[1])).origin
+			var b := _bone_world(int(c[2])).origin
+			var dir := b - a
+			if dir.length() < 0.001:
 				continue
-			var sx := _sword_back.global_transform
-			var ax := (sx.basis * (_sword_cap[2] as Vector3)).normalized()
-			body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, ax)), sx * (_sword_cap[1] as Vector3))
-			continue
-		var a := _bone_world(int(c[1])).origin
-		var b := _bone_world(int(c[2])).origin
-		var dir := b - a
-		if dir.length() < 0.001:
-			continue
-		body.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
+			xf = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
+		_cap_pos[i] = xf.origin
+		_cap_axis[i] = xf.basis.y
+		if phys:
+			body.global_transform = xf
 
 
 func _items_tick(delta: float) -> void:
 	if _skel == null or not model.is_inside_tree():
 		return
 	var any_cloth := false
+	var soft := false                                   # мягкая ткань SoftBody3D — ей нужны капсулы в мире физики
 	for w: Dictionary in _worn.values():
 		if w.has("cape"):
 			any_cloth = true
 		elif w.cloth != null:
 			any_cloth = true
+			soft = true
 			if int(w.pin_left) > 0:
 				w.pin_left = int(w.pin_left) - 1
 				if int(w.pin_left) == 0 and not _pin_cloth(w):
@@ -1063,7 +1081,7 @@ func _items_tick(delta: float) -> void:
 		elif w.has("follow"):
 			(w.follow as Node3D).global_transform = _bone_world(int(w.bone)) * (w.rel as Transform3D)
 	if any_cloth:
-		_move_colliders()
+		_move_colliders(soft)
 	for w: Dictionary in _worn.values():
 		if w.has("cape"):
 			_cape_tick(w, delta)

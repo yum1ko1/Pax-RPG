@@ -145,6 +145,35 @@ func _step(d: int) -> void:
 func _model(id: String) -> Node3D:
 	if _models.has(id):
 		return _models[id]
+	_models[id] = _build_model(id)
+	return _models[id]
+
+
+## Иконка оружия: модель один раз снята на маленькую сцену (клинок по диагонали, свет студии) — картинка для слотов
+## инвентаря и кругов выбора. Сцена живёт дальше (её текстура и есть иконка), но больше не рисуется.
+var _icons: Dictionary = {}
+
+
+func icon(id: String) -> Texture2D:
+	if _icons.has(id):
+		return _icons[id]
+	var st := Katana3D.new()
+	st.setup(mod, Vector2i(256, 256), 1.0)
+	st.pivot.visible = false
+	add_child(st)
+	var root := _build_model(id)
+	var pv := Node3D.new()
+	st.add_child(pv)
+	pv.add_child(root)
+	_fit(root)
+	root.scale = Vector3.ONE * 0.75
+	pv.rotation = Vector3(0.35, 0.25, deg_to_rad(40.0))   # остриём вверх-вправо, чуть к зрителю
+	st.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_icons[id] = st.get_texture()
+	return _icons[id]
+
+
+func _build_model(id: String) -> Node3D:
 	var w := _w(id)
 	var root := Node3D.new()
 	var m := Assets.model(mod, str(w.get("model", "")))
@@ -160,19 +189,22 @@ func _model(id: String) -> Node3D:
 			(mi as MeshInstance3D).skeleton = NodePath("")      # вне героя — без скелета, в позе модели
 	if m != null:
 		m.free()
-	_models[id] = root
 	return root
 
 
 func _fit(root: Node3D) -> void:
 	var box := AABB()
 	var first := true
-	var inv := root.global_transform.affine_inverse()
 	for mi: Node in root.find_children("*", "MeshInstance3D", true, false):
 		var g := mi as MeshInstance3D
 		if g.mesh == null:
 			continue
-		var b := (inv * g.global_transform) * g.mesh.get_aabb()
+		var rel := Transform3D.IDENTITY                 # до корня по родителям: окно может быть ещё вне дерева
+		var n: Node = g
+		while n != root and n is Node3D:
+			rel = (n as Node3D).transform * rel
+			n = n.get_parent()
+		var b := rel * g.mesh.get_aabb()
 		box = b if first else box.merge(b)
 		first = false
 	if first:
@@ -328,6 +360,7 @@ func _show() -> void:
 		disc.on = on
 		disc.worn = str(_equipped.get(str(wi.get("slot", "")), "")) == str(_order[i])
 		disc.glyph = str(wi.get("glyph", "?"))
+		disc.tex = icon(str(_order[i]))
 		disc.font = _cjk
 		disc.size = b.size
 		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -361,6 +394,7 @@ class _Disc extends Control:
 	var on := false
 	var worn := false
 	var glyph := ""
+	var tex: Texture2D                       # иконка оружия (вместо знака)
 	var font: Font
 
 	func _draw() -> void:
@@ -370,7 +404,11 @@ class _Disc extends Control:
 		draw_circle(c, r - 4.0, Color(0.06, 0.07, 0.16))
 		draw_arc(c, r - 4.0, 0.0, TAU, 64, Color(0.32, 0.22, 0.12), 6.0, true)
 		draw_arc(c, r - 1.5, 0.0, TAU, 64, Color(0.88, 0.68, 0.32), 2.5 if on else 1.5, true)
-		if font != null:
+		if tex != null:
+			var s2 := (r - 6.0) * 1.6
+			draw_texture_rect(tex, Rect2(c - Vector2(s2, s2) * 0.5, Vector2(s2, s2)), false,
+				Color(1, 1, 1) if on else Color(0.75, 0.75, 0.8))
+		elif font != null:
 			var fs := int(r * 0.9)
 			draw_string(font, Vector2(0, c.y + fs * 0.36), glyph, HORIZONTAL_ALIGNMENT_CENTER, r * 2.0, fs,
 				Color(1, 0.9, 0.95) if on else Color(0.7, 0.68, 0.8))
