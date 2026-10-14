@@ -3,6 +3,7 @@
 // (pax_rpg_wind, ведёт wind.gd) с порывами; листва дрожит мелко; на просвет против солнца — светится (BACKLIGHT).
 // y_min / y_max — низ и верх сетки в её осях (по ним высота точки 0..1); amp — наклон верха в метрах.
 shader_type spatial;
+render_mode cull_disabled;           // листья-карточки (дубы, трава из наборов) видны с обеих сторон
 
 global uniform vec4 pax_rpg_wind;
 global uniform float pax_rpg_time;
@@ -16,7 +17,8 @@ uniform float y_min = 0.0;
 uniform float y_max = 1.0;
 uniform float amp = 0.15;
 uniform float backlight = 0.45;
-uniform float canopy = 0.0;          // 1 — дерево: ствол стоит, качаются только крона и листва (верх сетки)
+uniform float canopy = 0.0;
+uniform bool use_alpha = false;      // карточки листьев и травы: прозрачное — вырезается по альфе текстуры          // 1 — дерево: ствол стоит, качаются только крона и листва (верх сетки)
 
 void vertex() {
 	float h0 = clamp((VERTEX.y - y_min) / max(y_max - y_min, 0.001), 0.0, 1.0);
@@ -38,6 +40,8 @@ void vertex() {
 void fragment() {
 	vec4 a = texture(albedo_tex, UV) * albedo_col;
 	ALBEDO = a.rgb;
+	ALPHA = use_alpha ? a.a : 1.0;
+	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = use_rough_tex ? texture(rough_tex, UV).g * roughness : roughness;
 	SPECULAR = 0.35;
 	BACKLIGHT = a.rgb * backlight;

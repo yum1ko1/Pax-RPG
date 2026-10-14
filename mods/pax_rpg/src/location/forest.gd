@@ -53,26 +53,47 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 			if p.distance_to(c[0]) < float(c[1]) + r:
 				return false
 		return true
-	# деревья — рощами: центры рощ, вокруг — стволы
-	for g: int in 22:
+	# деревья — рощами (дубы из models/nature: молодые, средние, большие), между рощами — подлесок
+	var oaks := [["oak_small_1", 0.9, 1.3, 0.35], ["oak_small_2", 0.9, 1.3, 0.35], ["oak_medium_1", 0.8, 1.2, 0.5],
+		["oak_medium_2", 0.8, 1.2, 0.5], ["oak_medium_3", 0.8, 1.1, 0.55], ["oak_big_1", 0.55, 0.75, 0.8], ["oak_big_2", 0.55, 0.75, 0.8]]
+	var trunks: Array = []
+	for g: int in 26:
 		var gc := Vector2(rng.randf_range(-half + 8.0, half - 8.0), rng.randf_range(-half + 8.0, half - 8.0))
-		for k: int in rng.randi_range(3, 8):
-			var p := gc + Vector2(rng.randf_range(-9.0, 9.0), rng.randf_range(-9.0, 9.0))
-			if absf(p.x) > half - 4.0 or absf(p.y) > half - 4.0 or not free.call(p, 2.0):
+		for k: int in rng.randi_range(3, 7):
+			var p := gc + Vector2(rng.randf_range(-10.0, 10.0), rng.randf_range(-10.0, 10.0))
+			if absf(p.x) > half - 4.0 or absf(p.y) > half - 4.0 or not free.call(p, 2.5):
 				continue
-			var s := rng.randf_range(1.4, 2.4)
-			# у огненного дерева Гхарна в модели запечена кадка (нижние ~2 м при масштабе 1) — в лесу она уходит в землю:
-			# над рельефом — только ствол и крона
-			items.append({"m": "models/gharn/flame_tree.glb", "p": [p.x, height(n, p.x, p.y, t) - POT_H * s, p.y],
-				"r": rng.randf_range(0.0, 360.0), "s": s, "c": true, "col": [0.5 * s, 3.0, 0.5 * s]})
-	var scatter := [["models/gharn/props/bush_dry.glb", 90, 0.8, 1.5, false], ["models/gharn/props/rock_small.glb", 45, 0.8, 2.6, true],
-		["models/gharn/props/wood_pile.glb", 14, 0.9, 1.4, true], ["models/gharn/props/grass_tuft.glb", 260, 0.8, 1.6, false]]
+			var o: Array = oaks[rng.randi() % oaks.size()]
+			var s := rng.randf_range(float(o[1]), float(o[2]))
+			var w := float(o[3]) * s
+			items.append({"m": "models/nature/%s.glb" % str(o[0]), "p": [p.x, height(n, p.x, p.y, t) - 0.1, p.y],
+				"r": rng.randf_range(0.0, 360.0), "s": s, "c": true, "col": [w, 4.0, w]})
+			trunks.append(p)
+			clear.append([p, 1.2])
+	# что лежит и растёт: [модель, сколько, масштаб от, до, коллизия, у стволов]
+	var scatter := [
+		["models/nature/rock_mossy_%s.glb", 70, 0.9, 2.6, true, false, ["6", "10", "12", "16", "17", "18", "27"]],
+		["models/nature/stone_%s.glb", 26, 0.5, 1.0, true, false, ["small_1", "small_3", "small_6", "mid_1", "mid_3", "big_2", "big_4"]],
+		["models/nature/%s.glb", 14, 0.9, 1.3, true, false, ["log_trunk", "snag_mossy"]],
+		["models/nature/%s.glb", 16, 0.8, 1.3, true, true, ["stump_1", "stump_2"]],
+		["models/nature/mushrooms.glb", 30, 0.6, 1.4, false, true, [""]],
+		["models/nature/%s.glb", 120, 0.25, 0.5, false, false, ["plant_cover_1", "plant_cover_2", "plant_flower", "plant_leaf"]],
+		["models/nature/%s.glb", 520, 1.2, 2.4, false, false, ["grass_fresh", "grass_dry", "grass_aged", "grass_tall", "grass_tall_low"]],
+		["models/gharn/props/bush_dry.glb", 40, 0.8, 1.4, false, false, [""]],
+	]
 	for sc: Array in scatter:
+		var names: Array = sc[6]
 		for k: int in int(sc[1]):
 			var p := Vector2(rng.randf_range(-half + 4.0, half - 4.0), rng.randf_range(-half + 4.0, half - 4.0))
-			if not free.call(p, 1.0):
+			if bool(sc[5]) and not trunks.is_empty():         # грибы и пни — у стволов
+				var tp: Vector2 = trunks[rng.randi() % trunks.size()]
+				p = tp + Vector2(rng.randf_range(-3.0, 3.0), rng.randf_range(-3.0, 3.0))
+			if not free.call(p, 0.8):
 				continue
-			var e := {"m": str(sc[0]), "p": [p.x, height(n, p.x, p.y, t) - 0.05, p.y], "r": rng.randf_range(0.0, 360.0),
+			var path := str(sc[0])
+			if path.contains("%s"):
+				path = path % str(names[rng.randi() % names.size()])
+			var e := {"m": path, "p": [p.x, height(n, p.x, p.y, t) - 0.08, p.y], "r": rng.randf_range(0.0, 360.0),
 				"s": rng.randf_range(float(sc[2]), float(sc[3]))}
 			if bool(sc[4]):
 				e["c"] = true

@@ -8,7 +8,8 @@ signal picked(id: String)
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const W := 1920.0
 const H := 1080.0
-const SLOTS := 3                     # карточек на экране: 1 герой + места под будущих
+const SLOTS := 3                     # карточек на экране: 1 герой + будущие (портреты есть, подписи — позже)
+const FUTURE := ["textures/chars/swordswoman.png", "textures/chars/hooded.png"]
 
 var mod: PaxMod
 var _root: Control
@@ -55,6 +56,8 @@ func setup(m: PaxMod, character: Dictionary) -> void:
 		var r := Rect2(x0 + i * (cw + gap), 250, cw, 680)
 		if i == 0:
 			_hero_card(r, character)
+		elif i - 1 < FUTURE.size():
+			_portrait_card(r, str(FUTURE[i - 1]))
 		else:
 			_empty_card(r)
 	_fit()
@@ -152,6 +155,23 @@ func _hero_card(r: Rect2, ch: Dictionary) -> void:
 	btn.add_theme_stylebox_override("pressed", sbh)
 	btn.pressed.connect(func() -> void: picked.emit(id))
 	_frame.add_child(btn)
+
+
+## Будущий герой: портрет во всю карточку, подпись — позже; выбрать пока нельзя («Скоро»).
+func _portrait_card(r: Rect2, tex_path: String) -> void:
+	var p := _panel(r, false, false)
+	var tex := mod.texture(tex_path)
+	if tex != null:
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.position = Vector2(20, 20)
+		tr.size = Vector2(r.size.x - 40, r.size.y - 120)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(tr)
+	var s := _label(mod.tr_key("pax_rpg_char_soon"), Vector2(0, r.size.y - 76), _sans, 22, Hud.DIM, p, r.size.x)
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _empty_card(r: Rect2) -> void:

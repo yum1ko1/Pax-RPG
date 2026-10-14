@@ -69,7 +69,10 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	else:
 		_ground(Vector2(float(g[0]), float(g[1])), Vector2(float(g[2]), float(g[3])), gm)
 	var groups := {}
-	for it: Variant in data.get("items", []):
+	var all_items: Array = (data.get("items", []) as Array).duplicate()
+	if data.has("decor"):
+		all_items.append_array(_decor(data))
+	for it: Variant in all_items:
 		if not await _slice():
 			return
 		var d: Dictionary = it
@@ -872,24 +875,50 @@ func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
 
 
 ## Растительность → наклон верха на ветру, м (shaders/foliage.gdshader). Нет в списке — модель стоит.
-const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.16}
-const CANOPY := ["flame_tree"]       # деревья: ствол стоит, качаются крона и листва
+const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.16, "oak_": 0.2, "grass_": 0.1, "plant_": 0.06,
+	"mushrooms": 0.0}
+const CANOPY := ["flame_tree", "oak_"]  # деревья: ствол стоит, качаются крона и листва
 var _fol_mats := {}
 
 
 ## Материал ветра для сетки растения: текстура и цвет — из её материала, высоты — из её рамки.
+## Сетка из нескольких поверхностей (дуб: кора и крона) — своя копия с материалом ветра на каждой поверхности;
+## одна поверхность — null (тогда material_override, как раньше).
+func _foliage_mesh(path: String, mesh: Mesh) -> Mesh:
+	if mesh.get_surface_count() < 2 or not (mesh is ArrayMesh):
+		return null
+	var key := "multi" + path + str(mesh.get_rid())
+	if _fol_mats.has(key):
+		return _fol_mats[key]
+	var copy := (mesh as ArrayMesh).duplicate() as ArrayMesh
+	var any := false
+	for si: int in copy.get_surface_count():
+		var m := _foliage_surface(path, mesh, si)
+		if m != null:
+			copy.surface_set_material(si, m)
+			any = true
+	_fol_mats[key] = copy if any else null
+	return _fol_mats[key]
+
+
 func _foliage_mat(path: String, mesh: Mesh) -> Material:
+	if mesh.get_surface_count() > 1:
+		return null                                       # несколько поверхностей — _foliage_mesh
+	return _foliage_surface(path, mesh, 0)
+
+
+func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 	var amp := 0.0
 	for k: String in FOLIAGE:
 		if path.get_file().begins_with(k):
 			amp = float(FOLIAGE[k])
 	if amp <= 0.0 or mesh.get_surface_count() == 0:
 		return null
-	var key := path + str(mesh.get_rid())
+	var key := path + str(mesh.get_rid()) + ":" + str(si)
 	if _fol_mats.has(key):
 		return _fol_mats[key]
 	var sh: Shader = mod.shader("shaders/foliage.gdshader")
-	var src := mesh.surface_get_material(0) as BaseMaterial3D
+	var src := mesh.surface_get_material(si) as BaseMaterial3D
 	if sh == null or src == null:
 		return null
 	var m := ShaderMaterial.new()
@@ -897,6 +926,7 @@ func _foliage_mat(path: String, mesh: Mesh) -> Material:
 	if src.albedo_texture != null:
 		m.set_shader_parameter("albedo_tex", src.albedo_texture)
 	m.set_shader_parameter("albedo_col", src.albedo_color)
+	m.set_shader_parameter("use_alpha", src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED)
 	m.set_shader_parameter("roughness", src.roughness)
 	if src.roughness_texture != null:
 		m.set_shader_parameter("rough_tex", src.roughness_texture)
@@ -914,7 +944,8 @@ func _foliage_mat(path: String, mesh: Mesh) -> Material:
 
 ## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
 func _small_prop(path: String) -> float:
-	for k: Array in [["grass_tuft", 40.0], ["rock_small", 60.0], ["bush_dry", 70.0], ["fence_wood", 80.0],
+	for k: Array in [["grass_tuft", 40.0], ["grass_", 35.0], ["plant_", 40.0], ["mushrooms", 35.0], ["stone_small", 60.0],
+			["rock_mossy", 70.0], ["rock_small", 60.0], ["bush_dry", 70.0], ["fence_wood", 80.0],
 			["barrel", 60.0], ["crate", 60.0], ["sack", 50.0], ["pot", 45.0], ["bucket", 45.0], ["wall_rubble", 70.0]]:
 		if path.get_file().begins_with(str(k[0])):
 			return float(k[1])
@@ -956,11 +987,12 @@ func _place(path: String, list: Array) -> void:
 			(cells[key] as Array).append(i)
 		var small := _small_prop(path)
 		var fol := _foliage_mat(path, mesh)               # деревья, кусты, трава — качаются на ветру
+		var fol_mesh := _foliage_mesh(path, mesh)         # дуб: кора и крона — каждая со своим материалом ветра
 		for key: Vector2i in cells:
 			var ids: Array = cells[key]
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = pr[0]
+			mm.mesh = fol_mesh if fol_mesh != null else pr[0]
 			mm.instance_count = ids.size()
 			for j: int in ids.size():
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
@@ -1060,6 +1092,63 @@ func _road_at(p: Vector3) -> float:
 
 
 ## Точка на дороге (маска дорог, R) — ближайшее место у её края, где уже не дорога (ищем кругами до 5 м).
+## Природа в столице (layout «decor»: seed, count): замшелые камни, высокая трава, цветы, листовые растения,
+## грибы, молодые дубы — мимо дорог (маска дорог) и не ближе 5 м к постройкам и крупным предметам планировки.
+func _decor(data: Dictionary) -> Array:
+	var d: Dictionary = data.decor
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(d.get("seed", 1))
+	var g: Array = data.get("ground", [190, 186, 0, 0])
+	var half := Vector2(float(g[0]), float(g[1])) * 0.5 - Vector2(6, 6)
+	var ctr := Vector2(float(g[2]), float(g[3]))
+	var solid: Array = []
+	for it: Variant in data.get("items", []):
+		var di: Dictionary = it
+		if bool(di.get("c", false)) or di.has("box"):
+			var pp: Array = di.get("p", [0, 0, 0])
+			solid.append(Vector2(float(pp[0]), float(pp[2])))
+	var kinds := [["rock_mossy_%s", ["6", "10", "12", "16", "17", "18", "27"], 0.8, 2.0, 3],
+		["grass_%s", ["tall", "tall_low", "fresh", "dry"], 1.4, 2.4, 14], ["plant_%s", ["flower", "leaf", "cover_1"], 0.25, 0.45, 4],
+		["mushrooms", [""], 0.6, 1.1, 1], ["oak_small_%s", ["1", "2"], 0.8, 1.1, 1], ["stone_%s", ["small_1", "small_3", "runic_5"], 0.4, 0.8, 1]]
+	var weight := 0
+	for k: Array in kinds:
+		weight += int(k[4])
+	var out: Array = []
+	var tries := int(d.get("count", 400)) * 3
+	while out.size() < int(d.get("count", 400)) and tries > 0:
+		tries -= 1
+		var p := ctr + Vector2(rng.randf_range(-half.x, half.x), rng.randf_range(-half.y, half.y))
+		if _road != null and _road_at(Vector3(p.x, 0.0, p.y)) > 0.08:
+			continue
+		var near := false
+		for q: Vector2 in solid:
+			if p.distance_squared_to(q) < 25.0:
+				near = true
+				break
+		if near:
+			continue
+		var pick := rng.randi() % weight
+		var kind: Array = kinds[0]
+		for k: Array in kinds:
+			pick -= int(k[4])
+			if pick < 0:
+				kind = k
+				break
+		var names: Array = kind[1]
+		var nm := str(kind[0])
+		if nm.contains("%s"):
+			nm = nm % str(names[rng.randi() % names.size()])
+		var e := {"m": "models/nature/%s.glb" % nm, "p": [p.x, 0.0, p.y], "r": rng.randf_range(0.0, 360.0),
+			"s": rng.randf_range(float(kind[2]), float(kind[3]))}
+		if nm.begins_with("oak_"):
+			e["c"] = true
+			e["col"] = [0.35, 4.0, 0.35]
+		elif nm.begins_with("rock_") or nm.begins_with("stone_"):
+			e["c"] = true
+		out.append(e)
+	return out
+
+
 func _off_road(p: Vector3) -> Vector3:
 	if _road_at(p) < 0.3:
 		return p

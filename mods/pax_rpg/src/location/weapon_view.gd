@@ -302,7 +302,7 @@ func _show() -> void:
 	var id := str(_order[_sel])
 	var w := _w(id)
 	_show_model(id)
-	var t := _label(_tr(str(w.get("name", id))), Vector2(0, 64), _serif, 52, Hud.TEXT, W, HORIZONTAL_ALIGNMENT_CENTER)
+	var t := _label(_wname(w), Vector2(0, 64), _serif, 52, Hud.TEXT, W, HORIZONTAL_ALIGNMENT_CENTER)
 	t.size.x = W
 	var slot := str(w.get("slot", ""))
 	_label(_tr("pax_rpg_wslot_" + slot).to_upper(), Vector2(0, 128), _sans, 14, Hud.PINK, W, HORIZONTAL_ALIGNMENT_CENTER)
@@ -349,7 +349,7 @@ func _show() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.position = c - Vector2(r, r)
 		b.size = Vector2(r, r) * 2.0
-		b.tooltip_text = _tr(str(wi.get("name", "")))
+		b.tooltip_text = _wname(wi)
 		var idx := i
 		b.pressed.connect(func() -> void:
 			_sel = idx
@@ -381,6 +381,12 @@ func _show() -> void:
 		_label(_tr("pax_rpg_wother_slot") % _tr("pax_rpg_wslot_" + slot), Vector2(0, 994), _sans, 16, Hud.DIM, W,
 			HORIZONTAL_ALIGNMENT_CENTER)
 	_button("✕", Rect2(W - 120, 50, 56, 56), close, Hud.PINK)
+
+
+## Название оружия; пусто — подпись появится позже (пока без текста, не ключ перевода).
+func _wname(w: Dictionary) -> String:
+	var k := str(w.get("name", ""))
+	return _tr(k) if k != "" else ""
 
 
 func _tr(k: String) -> String:

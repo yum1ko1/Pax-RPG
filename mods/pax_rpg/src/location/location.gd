@@ -255,6 +255,8 @@ func build(city: Dictionary) -> void:
 	city_data = city
 	var layout := Forest.generate(int(city.get("seed", 0)), Quest.get_q(mod)) if str(city.get("id", "")) == "forest" \
 		else _city_layout(str(city.get("id", "")))
+	if not layout.is_empty() and not layout.has("forest") and not layout.has("decor"):
+		layout["decor"] = {"seed": 4242, "count": 420}    # природа в городе: камни, трава, цветы (city.gd → _decor)
 	START = ARENA_START
 	_gate_radius = GATE_RADIUS
 	var goblins := int(cfg.get("goblins", 1))
