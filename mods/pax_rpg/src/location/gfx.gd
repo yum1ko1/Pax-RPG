@@ -68,6 +68,8 @@ static func ensure_globals() -> void:
 	RenderingServer.global_shader_parameter_add(&"pax_rpg_time", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 	RenderingServer.global_shader_parameter_add(&"pax_rpg_player", RenderingServer.GLOBAL_VAR_TYPE_VEC4,
 		Vector4(0.0, -1000.0, 0.0, 0.0))
+	# погода (weather.gd): x — мокрость, y — дождь, z — пасмурность, w — туман низин
+	RenderingServer.global_shader_parameter_add(&"pax_rpg_weather", RenderingServer.GLOBAL_VAR_TYPE_VEC4, Vector4.ZERO)
 
 
 ## Значение настройки: своё у игрока (меню «Графика», настройки мода gfx_<ключ>) главнее config/location.json.
@@ -84,7 +86,7 @@ func _f(key: String, fallback: float) -> float:
 
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
-const MENU_KEYS := ["resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
+const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
 	"flare", "auto_exposure", "grass_density"]
 var _ovr := {}
 var _env: Environment
@@ -105,7 +107,7 @@ func load_overrides() -> void:
 func set_option(key: String, value: Variant) -> void:
 	_ovr[key] = value
 	match key:
-		"aa", "fsr_scale", "resolution":
+		"aa", "fsr_scale", "resolution", "upscale":
 			if is_instance_valid(view):
 				_apply_aa(view)
 		"fps_limit", "vsync":
@@ -139,6 +141,20 @@ func apply_viewport(v: SubViewport) -> void:
 	# разного размера по мере того, как огни растут и уменьшаются на экране, — тени не скачут по чёткости
 	for q: int in 4:
 		v.set_positional_shadow_atlas_quadrant_subdiv(q, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4)
+
+
+## Апскейл FSR 2 режимами, как у DLSS (DLSS в Godot недоступен — закрытая библиотека NVIDIA, нужен C++-модуль движка):
+## «Качество» 67 %, «Баланс» 58 %, «Производительность» 50 % разрешения, резкость под каждый режим.
+func _apply_upscale(v: SubViewport) -> void:
+	var mode := str(_v("upscale", "native"))
+	var k: float = {"quality": 0.67, "balanced": 0.58, "performance": 0.5}.get(mode, 0.0)
+	if k <= 0.0:
+		return
+	v.use_taa = false
+	v.msaa_3d = Viewport.MSAA_DISABLED
+	v.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+	v.scaling_3d_scale = k
+	v.fsr_sharpness = {"quality": 0.2, "balanced": 0.1, "performance": 0.0}.get(mode, 0.2)
 
 
 ## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте окна.
@@ -204,6 +220,7 @@ func _apply_aa(v: SubViewport) -> void:
 			v.fsr_sharpness = _f("fsr_sharpness", 0.15)    # 0 — резче всего, 2 — без повышения резкости
 		"msaa":
 			v.msaa_3d = Viewport.MSAA_2X
+	_apply_upscale(v)
 	_apply_resolution(v)
 
 

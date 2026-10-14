@@ -137,6 +137,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 				_fountain_water(e[0])
 		if k.ends_with("flame_tree.glb"):
 			_leaves(groups[k])
+		if k.get_file().begins_with("oak_"):
+			_leaves(groups[k], [Color(0.42, 0.5, 0.2), Color(0.55, 0.5, 0.22), Color(0.36, 0.42, 0.18)], 1.6)   # листья дубов
+		_grime(k, groups[k])
 		if k.ends_with("banner_clan.glb"):
 			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
 			continue
@@ -680,7 +683,7 @@ func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
 
 
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
-func _leaves(list: Array) -> void:
+func _leaves(list: Array, cols: Array = [], height_k := 1.0) -> void:
 	var leaf := QuadMesh.new()
 	leaf.size = Vector2(0.11, 0.07)
 	var m := StandardMaterial3D.new()                 # освещённые — ночью и в тени темнеют вместе с городом
@@ -690,9 +693,9 @@ func _leaves(list: Array) -> void:
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	leaf.material = m
 	var ramp := Gradient.new()
-	ramp.set_color(0, Color(0.55, 0.22, 0.2))         # приглушённые: пыльно-красный, ржавый, бурый
-	ramp.set_color(1, Color(0.6, 0.42, 0.28))
-	ramp.add_point(0.5, Color(0.48, 0.18, 0.16))
+	ramp.set_color(0, Color(0.55, 0.22, 0.2) if cols.is_empty() else cols[0])   # приглушённые: пыльно-красный, ржавый, бурый
+	ramp.set_color(1, Color(0.6, 0.42, 0.28) if cols.is_empty() else cols[1])
+	ramp.add_point(0.5, Color(0.48, 0.18, 0.16) if cols.is_empty() else cols[2])
 	for e: Array in list:
 		var t: Transform3D = e[0]
 		var sc := t.basis.get_scale().x
@@ -719,7 +722,7 @@ func _leaves(list: Array) -> void:
 		p.scale_amount_min = 0.8
 		p.scale_amount_max = 1.5
 		p.color_initial_ramp = ramp
-		p.position = t.origin + Vector3(0, 5.6 * sc, 0)
+		p.position = t.origin + Vector3(0, 5.6 * sc * height_k, 0)
 		root.add_child(p)
 		leaves.append(p)
 
@@ -1203,6 +1206,78 @@ func _decor(data: Dictionary) -> Array:
 			e["c"] = true
 		out.append(e)
 	return out
+
+
+## Грязь и мох у основания: декаль на земле вокруг зданий и валунов (дома «врастают» в землю, а не стоят пластиком).
+static var _grime_tex: ImageTexture
+static var _moss_tex: ImageTexture
+
+
+func _grime(path: String, list: Array) -> void:
+	var f := path.get_file()
+	var moss := f.begins_with("rock_mossy") or f.begins_with("stone_") or f.begins_with("oak_")
+	var house := f.begins_with("house") or f.begins_with("yurt") or f.begins_with("tavern") or f.begins_with("guild") \
+		or f.begins_with("khan") or f.begins_with("palisade") or f.begins_with("wall_")
+	if not (moss or house):
+		return
+	if _grime_tex == null:
+		_grime_tex = _blot(Color(0.16, 0.12, 0.09), 11)
+		_moss_tex = _blot(Color(0.16, 0.22, 0.09), 23)
+	var src := Assets.model(mod, path)
+	var box := AABB()
+	if src != null:
+		var parts: Array = []
+		_collect(src, Transform3D.IDENTITY, parts)
+		var first := true
+		for pr: Array in parts:
+			var a: AABB = (pr[1] as Transform3D) * (pr[0] as Mesh).get_aabb()
+			box = a if first else box.merge(a)
+			first = false
+		src.free()
+	for e: Array in list:
+		var t: Transform3D = e[0]
+		var sc := t.basis.get_scale().x
+		var d := Decal.new()
+		d.texture_albedo = _moss_tex if moss else _grime_tex
+		var w := maxf(box.size.x, box.size.z) * sc
+		d.size = Vector3(w * 1.35 + 1.0, 1.4, w * 1.35 + 1.0) if not f.begins_with("oak_") else Vector3(4.0, 1.4, 4.0)
+		d.albedo_mix = 1.0
+		d.normal_fade = 0.3
+		d.upper_fade = 0.6
+		d.lower_fade = 0.3
+		d.cull_mask = 0xFFFFF & ~(1 << 19)
+		d.modulate = Color(1, 1, 1, 0.75)
+		d.visibility_range_end = 70.0
+		root.add_child(d)
+		d.global_position = t.origin + Vector3(0, 0.2, 0)
+		d.rotation.y = randf() * TAU
+
+
+## Пятно грязи/мха: рваный край, темнее к центру (основание), прозрачное снаружи.
+static func _blot(col: Color, seed_v: int) -> ImageTexture:
+	var n := FastNoiseLite.new()
+	n.seed = seed_v
+	n.frequency = 0.05
+	var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	for y: int in 128:
+		for x: int in 128:
+			var r := Vector2(x - 63.5, y - 63.5).length() / 63.5
+			var a := clampf(1.0 - r + n.get_noise_2d(x, y) * 0.35, 0.0, 1.0)
+			img.set_pixel(x, y, Color(col.r, col.g, col.b, smoothstep(0.05, 0.5, a) * 0.7))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+
+## Мокрая погода: материалы предметов темнее и глаже (вода на дереве и камне).
+func wet_materials(wet: float) -> void:
+	if wet <= 0.01:
+		return
+	for m: Variant in _mats:
+		var bm := m as BaseMaterial3D
+		if bm == null:
+			continue
+		bm.albedo_color = bm.albedo_color * Color(1.0 - 0.3 * wet, 1.0 - 0.3 * wet, 1.0 - 0.28 * wet)
+		bm.roughness = lerpf(bm.roughness, bm.roughness * 0.45, wet)
 
 
 func _off_road(p: Vector3) -> Vector3:

@@ -108,6 +108,11 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 			if not (mat is BaseMaterial3D):
 				continue
 			_pbr(mat as BaseMaterial3D)
+			if path.contains("goblin") or path.contains("orc"):    # кожа — свет просвечивает (уши, пальцы)
+				var bm3 := mat as BaseMaterial3D
+				bm3.subsurf_scatter_enabled = true
+				bm3.subsurf_scatter_strength = 0.25
+				bm3.subsurf_scatter_skin_mode = true
 			for slot: int in SLOTS:
 				var t: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
 				if t == null or seen.has(t):

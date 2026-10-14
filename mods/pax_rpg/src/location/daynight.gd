@@ -90,6 +90,11 @@ func _proc(delta: float) -> void:
 		apply()
 
 
+## Насколько сейчас день (0 — ночь, 1 — день): погоде — пылинки днём, светлячки ночью.
+func day_amount() -> float:
+	return smoothstep(-0.12, 0.3, sin((hour - 6.0) / 12.0 * PI))
+
+
 func apply() -> void:
 	var a := (hour - 6.0) / 12.0 * PI                     # 0 — восход, PI — закат
 	var elev := sin(a)                                    # > 0 — солнце над горизонтом

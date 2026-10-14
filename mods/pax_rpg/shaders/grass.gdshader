@@ -7,7 +7,8 @@ render_mode cull_disabled, specular_schlick_ggx;
 
 global uniform vec4 pax_rpg_wind;
 global uniform vec4 pax_rpg_player;
-global uniform float pax_rpg_time;      // время ветра (gfx.gd): в остановке времени (иай) стоит и трава
+global uniform float pax_rpg_time;
+global uniform vec4 pax_rpg_weather;      // время ветра (gfx.gd): в остановке времени (иай) стоит и трава
 
 uniform vec3 root_col : source_color = vec3(0.16, 0.15, 0.07);
 uniform vec3 green_col : source_color = vec3(0.47, 0.5, 0.24);
@@ -54,7 +55,7 @@ void fragment() {
 	vec3 tip = mix(green_col, dry_col, patch) * COLOR.rgb;
 	vec3 c = mix(root_col, tip, smoothstep(0.0, 0.7, h));
 	c += vec3(0.08, 0.07, 0.03) * smoothstep(0.75, 1.0, h);         // выгоревшие кончики
-	ALBEDO = c;
+	ALBEDO = (c) * mix(vec3(0.85, 0.95, 0.75), vec3(1.15, 1.05, 0.8), noise(wp.xz * 0.06)) * mix(1.0, 0.72, pax_rpg_weather.x);   // пятнами, как земля; мокрая — темнее
 	ROUGHNESS = 0.82;
 	SPECULAR = 0.3;
 	BACKLIGHT = c * 0.55;                                          // на просвет против солнца — светится

@@ -20,13 +20,19 @@ uniform float amp = 0.15;
 uniform float backlight = 0.45;
 uniform float canopy = 0.0;
 uniform bool use_alpha = false;
-uniform float push = 0.0;            // трава и цветы: герой раздвигает их вокруг себя (м)      // карточки листьев и травы: прозрачное — вырезается по альфе текстуры          // 1 — дерево: ствол стоит, качаются только крона и листва (верх сетки)
+uniform float push = 0.0;
+global uniform vec4 pax_rpg_weather;
+varying vec3 tint;                   // у каждой копии свой оттенок кроны/травы (по её месту), мокрое — темнее            // трава и цветы: герой раздвигает их вокруг себя (м)      // карточки листьев и травы: прозрачное — вырезается по альфе текстуры          // 1 — дерево: ствол стоит, качаются только крона и листва (верх сетки)
 
 void vertex() {
 	float h0 = clamp((VERTEX.y - y_min) / max(y_max - y_min, 0.001), 0.0, 1.0);
 	float h = mix(h0, smoothstep(0.42, 1.0, h0), canopy);    // у дерева гнётся только верх
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 org = MODEL_MATRIX[3].xyz;                               // у всех точек одной копии — общая фаза качания
+	float hv = fract(sin(dot(org.xz, vec2(12.9898, 78.233))) * 43758.5453);
+	float hv2 = fract(sin(dot(org.xz, vec2(39.346, 11.135))) * 24634.6345);
+	tint = mix(vec3(0.82, 0.9, 0.7), vec3(1.12, 1.05, 0.82), hv) * mix(0.88, 1.1, hv2);   // от свежей зелени к желтизне
+	tint *= mix(1.0, 0.75, pax_rpg_weather.x);
 	vec2 wd = normalize(pax_rpg_wind.xy + vec2(1e-4));
 	float s = pax_rpg_wind.z;
 	float g = pax_rpg_wind.w;
@@ -47,7 +53,7 @@ void vertex() {
 
 void fragment() {
 	vec4 a = texture(albedo_tex, UV) * albedo_col;
-	ALBEDO = a.rgb;
+	ALBEDO = a.rgb * tint;
 	ALPHA = use_alpha ? a.a : 1.0;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = use_rough_tex ? texture(rough_tex, UV).g * roughness : roughness;

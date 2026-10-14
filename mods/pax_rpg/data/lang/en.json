@@ -257,5 +257,10 @@
 	"pax_rpg_talk_silent": "%s stays silent, looking past you. (The AI did not answer — try again.)",
 	"pax_rpg_talk_city_about": "Gharn is the capital of a goblin khanate in the steppe: yurts and wooden houses around the khan's stone palace, a market by the dragon fountain, an arena where warriors fight for glory on feast days, a palisade and the Fang gate. It smells of smoke, kumis and dung; the khan's guards are hard on strangers.",
 	"pax_rpg_talk_hero_looks": "a foreigner in black plate with a huge two-handed sword on the back and a katana at the hip; speaks little, carries himself like a warrior",
-	"pax_rpg_arena_way_down": "Arena · stairs down on the east and west (gaps in the fence by the lanterns)"
+	"pax_rpg_arena_way_down": "Arena · stairs down on the east and west (gaps in the fence by the lanterns)",
+	"pax_rpg_gfx_upscale": "Upscaling (FSR 2)",
+	"pax_rpg_gfx_up_native": "Native",
+	"pax_rpg_gfx_up_quality": "Quality (67%)",
+	"pax_rpg_gfx_up_balanced": "Balanced (58%)",
+	"pax_rpg_gfx_up_performance": "Performance (50%)"
 }

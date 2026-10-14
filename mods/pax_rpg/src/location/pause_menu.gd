@@ -260,6 +260,8 @@ func _fill_gfx() -> void:
 	_toggle("pax_rpg_gfx_ssr", "ssr", bool(_gfx_cfg.get("ssr", true)))
 	_choice("pax_rpg_gfx_aa", "aa", [["taa", "pax_rpg_gfx_aa_taa"], ["fsr2", "pax_rpg_gfx_aa_fsr2"],
 		["msaa", "pax_rpg_gfx_aa_msaa"], ["off", "pax_rpg_gfx_aa_off"]], str(_gfx_cfg.get("aa", "taa")))
+	_choice("pax_rpg_gfx_upscale", "upscale", [["native", "pax_rpg_gfx_up_native"], ["quality", "pax_rpg_gfx_up_quality"],
+		["balanced", "pax_rpg_gfx_up_balanced"], ["performance", "pax_rpg_gfx_up_performance"]], str(_gfx_cfg.get("upscale", "native")))
 	_gslider("pax_rpg_gfx_scale", "fsr_scale", float(_gfx_cfg.get("fsr_scale", 1.0)), 0.5, 1.0, 0.01)
 	_gslider("pax_rpg_gfx_lamps", "lamp_shadows", float(_gfx_cfg.get("lamp_shadows", 6.0)), 0.0, 8.0, 1.0)
 	_slider(_mod.tr_key("pax_rpg_set_volfog"), "vol_fog", 0.5, 0.0, 1.0, func(v: float) -> void:

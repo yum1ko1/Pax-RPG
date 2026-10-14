@@ -18,6 +18,7 @@ uniform float c_depth = 0.05;        // м, глубина рельефа кла
 uniform float normal_strength = 1.0;
 
 varying vec3 wpos;
+global uniform vec4 pax_rpg_weather;   // x — мокрость (weather.gd)
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -64,11 +65,24 @@ void fragment() {
 	cc = mix(cc, cc * vec3(0.62, 0.56, 0.5), edge * (1.0 - h) * 0.9);     // грязь у края забивает щели
 	cr = mix(cr, 0.5, edge * (1.0 - h) * 0.5);
 
-	ALBEDO = mix(gc, cc, w);
+	vec3 alb = mix(gc, cc, w);
 	vec3 nm = mix(gn, cn, w);
+	float rgh = mix(gr, cr, w);
+	// мокро: темнее и глаже; в низинах шума и в швах кладки — лужи (зеркальные, рельеф сглажен)
+	float wet = pax_rpg_weather.x;
+	if (wet > 0.001) {
+		float seam = mix(0.0, 1.0 - h, w);
+		float pud = smoothstep(0.62, 0.78, noise(p * 0.18) * 0.7 + seam * 0.5) * wet;
+		alb *= mix(1.0, 0.62, wet);
+		alb = mix(alb, alb * vec3(0.55, 0.6, 0.7), pud * 0.6);
+		rgh = mix(rgh, rgh * 0.35, wet);
+		rgh = mix(rgh, 0.03, pud);
+		nm = mix(nm, vec3(0.5, 0.5, 1.0), pud);
+	}
+	ALBEDO = alb;
 	NORMAL_MAP = nm;
 	NORMAL_MAP_DEPTH = normal_strength;
-	ROUGHNESS = mix(gr, cr, w);
+	ROUGHNESS = rgh;
 	SPECULAR = 0.35;
 	AO = mix(1.0, 0.55 + 0.45 * h, w);
 	AO_LIGHT_AFFECT = 0.3;

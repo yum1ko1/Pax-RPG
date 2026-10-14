@@ -36,6 +36,7 @@ const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const Journal := preload("res://mods/pax_rpg/src/location/journal.gd")
+const Weather := preload("res://mods/pax_rpg/src/location/weather.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -133,7 +134,11 @@ var _npcs: Array = []
 var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
 var _journal: Journal              # журнал заданий (J)
-var _gold_flash := 0.0             # монеты пришли — счётчик золота вспыхивает
+var _gold_flash := 0.0
+var _weather: Weather
+var weather_kind := "clear"        # погода этого захода (решена до стройки: мокрые материалы — в city.gd)
+var _step_acc := 0.0
+var _step_left := false             # монеты пришли — счётчик золота вспыхивает
 var _quest_item: Node3D            # находка задания в лесу (светится; вошёл в зону — взял)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
@@ -269,9 +274,12 @@ func build(city: Dictionary) -> void:
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
+		var wh := DayNight.world_hour(cfg)
+		weather_kind = Weather.pick(wh, int(Time.get_unix_time_from_system() / 86400.0))   # погода дня мира
 		_mark("city…")
 		await c.build(mod, _view, layout)              # по кадрам, горы и степь — из потока
 		_mark("city done (%d items)" % c.count)
+		c.wet_materials({"rain": 1.0, "fog": 0.35, "cloudy": 0.15}.get(weather_kind, 0.0))
 		if gen != _build_gen or c.cancelled or not is_instance_valid(_view):
 			return                                     # локацию убрали посреди стройки
 		_arena_cfg = layout.get("arena", [])
@@ -315,6 +323,11 @@ func build(city: Dictionary) -> void:
 	_daynight.paper = _city_paper
 	_daynight.setup(_env, _sun, _sky_mat, cfg)
 	_view.add_child(_daynight)
+	if not layout.is_empty():
+		_weather = Weather.new()
+		_view.add_child(_weather)
+		_weather.setup.call_deferred(mod, weather_kind, _env, _sky_mat, _cam, _daynight.day_amount() if _daynight.has_method("day_amount") else 1.0,
+			_city_lights)
 	_make_player()
 	if not layout.is_empty():                          # ветер с порывами и листопад — в городе
 		var wind := Wind.new()
@@ -1417,6 +1430,12 @@ func _physics_body(delta: float) -> void:
 			_sfx.land()
 		_was_floor = fl
 		_sfx.walk(d.length(), running, _hero != null and _hero.armed, fl)
+		if fl and is_instance_valid(_weather):              # следы: шаг ~0.8 м (бег — реже)
+			_step_acc += d.length()
+			if _step_acc > (1.1 if running else 0.8):
+				_step_acc = 0.0
+				_step_left = not _step_left
+				_weather.footprint(_player.global_position, _body_mesh.rotation.y, _step_left)
 	if _hero != null:
 		_hero.cape_wind(_player.velocity)
 	if _lock != null:
