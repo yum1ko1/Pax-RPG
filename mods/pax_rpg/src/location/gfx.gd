@@ -129,6 +129,7 @@ func apply_viewport(v: SubViewport) -> void:
 	_lens_layer(v)
 	v.use_occlusion_culling = _b("occlusion", false)     # выкл.: на краях стен модели пропадали и появлялись
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
+	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
 
 
@@ -156,6 +157,20 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 	env.ssil_enabled = _fplus and _b("ssil", true)
 	env.ssao_enabled = _fplus and _b("ssao", true)
 	env.ssr_enabled = _fplus and _b("ssr", true)
+	if env.ssr_enabled:                                   # отражения: стёкла, вода, мокрый камень, металл доспеха
+		env.ssr_max_steps = 64
+		env.ssr_fade_in = 0.15
+		env.ssr_fade_out = 2.0
+		env.ssr_depth_tolerance = 0.2
+	if env.ssao_enabled:                                  # затенение углов, стыков, под навесами
+		env.ssao_radius = 1.1
+		env.ssao_intensity = 2.0
+		env.ssao_power = 1.6
+		env.ssao_detail = 0.6
+		env.ssao_horizon = 0.06
+		env.ssao_sharpness = 0.98
+		env.ssao_light_affect = 0.15                     # чуть и на прямом свете — предметы «садятся» на землю
+		env.ssao_ao_channel_affect = 0.5                 # и AO из материалов моделей
 	if env.sdfgi_enabled:
 		env.sdfgi_use_occlusion = true                   # меньше протеканий света сквозь стены
 		env.sdfgi_read_sky_light = true
@@ -164,9 +179,13 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 		env.sdfgi_y_scale = Environment.SDFGI_Y_SCALE_75_PERCENT
 		env.sdfgi_bounce_feedback = _f("gi_bounce", 0.5)
 		env.sdfgi_energy = _f("gi_energy", 1.0)
+	if env.sdfgi_enabled:
+		env.sdfgi_probe_bias = 1.1
+		env.sdfgi_normal_bias = 1.1
 	if env.ssil_enabled:
-		env.ssil_radius = 4.0
+		env.ssil_radius = 5.0
 		env.ssil_intensity = _f("ssil_intensity", 1.0)
+		env.ssil_sharpness = 0.98
 		env.ssil_normal_rejection = 1.0
 	# Туман как в The Witcher 3 / Sekiro / Arc Raiders: вблизи (до fog_begin) чисто, дальше дымка растёт,
 	# горы уходят в цвет неба, но силуэт читается. Глубинный туман (начало и конец в метрах), а не экспонента от
@@ -181,11 +200,14 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 	env.fog_height = _f("fog_height", -2.0)              # лёгкая дымка только в низинах степи
 	env.fog_height_density = _f("fog_height_density", 0.0)
 	env.volumetric_fog_anisotropy = _f("fog_anisotropy", 0.6)   # против солнца — видимые лучи
-	# свечение: узкие ореолы (ближние уровни), только яркое — огонь, мана, солнце в металле
-	env.glow_intensity = _f("glow", 0.55)
-	env.glow_hdr_threshold = 1.0
-	env.glow_hdr_scale = _f("glow_scale", 1.4)
-	var levels := [0.0, 1.0, 0.8, 0.45, 0.15, 0.0, 0.0]
+	# ореол: яркое (огонь, фонари, мана, блик солнца на металле) светится мягким ореолом, плюс лёгкий общий bloom
+	env.glow_enabled = true
+	env.glow_intensity = _f("glow", 0.8)
+	env.glow_strength = 1.0
+	env.glow_bloom = _f("bloom", 0.04)
+	env.glow_hdr_threshold = 0.9
+	env.glow_hdr_scale = _f("glow_scale", 1.6)
+	var levels := [0.0, 1.0, 0.85, 0.6, 0.35, 0.15, 0.0]
 	for i: int in 7:
 		env.set_glow_level(i, float(levels[i]))
 	var ca := CameraAttributesPractical.new()
@@ -269,6 +291,18 @@ func push_globals() -> void:
 		"pq": int(ProjectSettings.get_setting("rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality", 2)),
 	}
 	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)), true)
+	# качество эффектов движка (рендер Godot): полное разрешение SSAO/SSIL, гладкие шероховатые отражения, больше лучей
+	# SDFGI, бикубический ореол, сглаженный объёмный туман, SSS кожи, анизотропные декали
+	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, false, 0.5, 2, 50.0, 300.0)
+	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, false, 0.5, 4, 50.0, 300.0)
+	RenderingServer.environment_set_ssr_roughness_quality(RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_HIGH)
+	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_96)
+	RenderingServer.environment_glow_set_use_bicubic_upscale(true)
+	RenderingServer.environment_set_volumetric_fog_filter_active(true)
+	RenderingServer.environment_set_volumetric_fog_volume_size(96, 96)
+	RenderingServer.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_HIGH)
+	RenderingServer.decals_set_filter(RenderingServer.DECAL_FILTER_LINEAR_MIPMAPS_ANISOTROPIC)
+	RenderingServer.light_projectors_set_filter(RenderingServer.LIGHT_PROJECTOR_FILTER_LINEAR_MIPMAPS_ANISOTROPIC)
 	# отражённый свет сходится за 30 кадров и обновляет свет за 16: без ступенек и мерцания при движении камеры
 	RenderingServer.environment_set_sdfgi_frames_to_converge(RenderingServer.ENV_SDFGI_CONVERGE_IN_30_FRAMES)
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES)
@@ -334,7 +368,8 @@ func _lamp_shadows() -> void:
 		var d := ol.global_position.distance_to(cp)
 		if ol.shadow_enabled:
 			d -= 6.0                                     # запас: огонь с тенью держит её, пока не станет заметно дальше
-		if ol.visible and ol.light_energy > 0.1 and d < 35.0:
+		var seen := cam.is_position_in_frustum(ol.global_position) or ol.global_position.distance_to(cp) < ol.omni_range
+		if ol.visible and ol.light_energy > 0.1 and d < 35.0 and seen:   # тень — только у огней, что в кадре
 			near.append([d, ol])
 		elif ol.shadow_enabled:
 			ol.shadow_enabled = false
@@ -449,7 +484,7 @@ func _lens_layer(v: SubViewport) -> void:
 	lens_mat = ShaderMaterial.new()
 	lens_mat.shader = sh
 	lens_mat.set_meta("pax_rpg_lens", true)
-	for kv: Array in [["distortion", 0.0], ["ca", 0.0], ["sharpen", 0.3], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
+	for kv: Array in [["distortion", 0.0], ["ca", 0.0012], ["sharpen", 0.3], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
 		lens_mat.set_shader_parameter(str(kv[0]), _f("lens_" + str(kv[0]), float(kv[1])))
 	box.material = lens_mat
 

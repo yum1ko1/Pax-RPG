@@ -115,5 +115,7 @@
 	"pax_rpg_gfx_exposure": "Адаптация глаза",
 	"pax_rpg_gfx_grass": "Трава (со след. входа)",
 	"pax_rpg_weapon_greatsword": "Разрубатель",
-	"pax_rpg_hud_posture_label": "Концентрация"
+	"pax_rpg_hud_posture_label": "Концентрация",
+	"pax_rpg_hud_shoulder_left": "Камера — за левым плечом (Z)",
+	"pax_rpg_hud_shoulder_right": "Камера — за правым плечом (Z)"
 }

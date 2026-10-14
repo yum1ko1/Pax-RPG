@@ -62,18 +62,19 @@
 		"fog_max": 0.85,
 		"fog_aerial": 0.75,
 		"fog_sky": 0.15,
-		"glow": 0.55,
-		"glow_scale": 1.4,
+		"glow": 0.8,
+		"glow_scale": 1.6,
 		"camera_fx": true,
 		"lens_distortion": 0.0,
-		"lens_ca": 0.0,
+		"lens_ca": 0.0012,
 		"lens_sharpen": 0.3,
 		"lens_grain": 0.0,
 		"lens_vignette": 0.0,
 		"lens_dirt": 0.0,
 		"flare": 1.0,
 		"cam_blur": 0.35,
-		"lens_ghosts": 0.0
+		"lens_ghosts": 0.0,
+		"bloom": 0.04
 	},
 	"camera_sway": 0.0
 }

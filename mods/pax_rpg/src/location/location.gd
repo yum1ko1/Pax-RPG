@@ -118,6 +118,7 @@ var _sun: DirectionalLight3D
 var _sky_mat: ShaderMaterial
 var _daynight: DayNight            # тело доворачивается к цели (голова уже не достаёт)
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
+var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
 var _build_finished := false
@@ -429,7 +430,7 @@ func _warmup() -> void:
 	var at := _cam.global_position - _cam.global_transform.basis.z * 3.0
 	_sparks(at, Color(1.0, 0.8, 0.35), 4, 1.0)
 	Goblin.blood_decal(_view, at - Vector3(0.0, 1.0, 0.0))
-	Rift.prepare()                                   # рисунок трещин «Разлома» — сейчас, а не рывком в бою
+	Rift.warm(mod, _view, at - Vector3(0.0, 1.0, 0.0))   # «Разлом»: трещины, шипы, их шейдеры — сейчас, а не рывком в бою
 	if is_instance_valid(_iai):
 		_iai.warmup(at)
 
@@ -862,36 +863,18 @@ func _quake_wave(radius: float, dmg: float, i: int) -> void:
 		if d <= radius:
 			gob.take_damage(dmg * _prog.damage_mult(), c, i == 2)          # последняя волна — отбрасывает
 			gob.posture = minf(gob.max_posture, gob.posture + dmg * 0.8)
+			if d >= maxf(0.0, radius - 3.0):                               # шипы на кольце волны — подбрасывают
+				var away := Vector3(gob.global_position.x - c.x, 0.0, gob.global_position.z - c.z).normalized()
+				gob.launch(away * 2.5 + Vector3(0.0, 7.5 if not gob.boss else 3.5, 0.0))
 			_numbers.append({"pos": gob.global_position + Vector3(0, 1.3, 0), "v": int(dmg), "crit": i == 2, "t": 0.0})
 	if _sfx != null:
 		_sfx.impact()
-	# «Разлом» Разрубателя: земля раскалывается (декаль трещин со светящейся маной), по кольцу волны — шипы из-под земли
+	# «Разлом» Разрубателя: земля раскалывается (декаль трещин с глубиной), по кольцу волны — земляные шипы
 	var waves: Array = hero_cfg.get("quake_waves", [[3.0, 22.0], [5.5, 18.0], [8.0, 15.0]])
 	if i == 0:
 		Rift.crack(mod, _view, c, float((waves[waves.size() - 1] as Array)[0]) + 1.5, 7.0)
 	Rift.spikes(mod, _view, c, maxf(0.9, radius - 2.5), radius, int(radius * 2.2), 0.35)
-	# кольцо волны: светящийся тор от прошлого радиуса до этого, пыль по кругу
-	var ring := MeshInstance3D.new()
-	var tor := TorusMesh.new()
-	tor.inner_radius = 0.92
-	tor.outer_radius = 1.0
-	tor.rings = 64
-	ring.mesh = tor
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	rm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	rm.albedo_color = Color(2.2, 0.9, 1.6, 0.9)
-	ring.material_override = rm
-	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_view.add_child(ring)
-	ring.global_position = c + Vector3(0, 0.08, 0)
-	var r0 := maxf(0.5, radius - 2.5)
-	ring.scale = Vector3(r0, 0.6, r0)
-	var tw := ring.create_tween()
-	tw.tween_property(ring, "scale", Vector3(radius, 0.6, radius), 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.parallel().tween_property(rm, "albedo_color:a", 0.0, 0.6)
-	tw.tween_callback(ring.queue_free)
+	# волна: пыль по кругу (без светящегося кольца — земля трескается, а не светится)
 	if _vfx == null:
 		_vfx = Vfx.new(mod)
 	var dust := _vfx.smoke(_view, c + Vector3(0, 0.2, 0), 0.9 + i * 0.3, Color(0.7, 0.58, 0.5, 0.5), 18, 1.4)
@@ -905,7 +888,7 @@ func _quake_wave(radius: float, dmg: float, i: int) -> void:
 	dust.emission_ring_height = 0.1
 	dust.emitting = true
 	dust.finished.connect(dust.queue_free)
-	_sparks(c + Vector3(0, 0.3, 0), Color(1.0, 0.6, 0.85), 30 + i * 10, 6.0)
+	_sparks(c + Vector3(0, 0.3, 0), Color(0.62, 0.48, 0.36), 30 + i * 10, 6.0)   # каменная крошка, не мана
 
 
 func _physics_body(delta: float) -> void:
@@ -1168,9 +1151,9 @@ func _follow_camera(delta := 0.0) -> void:
 	if k > 0.0:
 		var back := Vector3(0.0, 0.0, 1.0).rotated(Vector3.UP, _yaw)
 		var right := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw)
-		# сбоку справа, а не за спиной: герой — в левой части кадра, враг открыт (спина не закрывает обзор)
-		var shoulder := _player.position + Vector3(0.0, _f("lock_camera_height", 1.65), 0.0) \
-			+ right * _f("lock_camera_side", 2.0) + back * _f("lock_camera_distance", 2.9)
+		# за плечом (Z — сменить плечо): чуть сбоку и позади — враг открыт, спина не закрывает обзор
+		var shoulder := _player.position + Vector3(0.0, _f("lock_camera_height", 1.7), 0.0) \
+			+ right * _f("lock_camera_side", 1.05) * _shoulder + back * _f("lock_camera_distance", 3.2)
 		var enemy := _lock_point if want == 0.0 else _lock.global_position + Vector3(0.0, 0.9, 0.0)
 		if want > 0.0:
 			_lock_point = enemy
@@ -1803,7 +1786,8 @@ func _hud_tick(delta: float) -> void:
 	_hud.refresh()
 
 
-const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V]
+const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V,
+	KEY_Z]
 
 
 func _input(event: InputEvent) -> void:
@@ -1857,6 +1841,10 @@ func _input(event: InputEvent) -> void:
 			_arena.leave()                           # покинуть арену
 		if key.pressed and not key.echo and key.physical_keycode == KEY_Q:
 			_toggle_lock()                           # захват цели (как в Sekiro)
+		if key.pressed and not key.echo and key.physical_keycode == KEY_Z:
+			_shoulder = -_shoulder                   # плечо камеры в захвате
+			_toast = {"text": mod.tr_key("pax_rpg_hud_shoulder_left" if _shoulder < 0.0 else "pax_rpg_hud_shoulder_right"),
+				"t": 0.0}
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):
 			_city_map.toggle()                       # карта города
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE and is_instance_valid(_city_map) \

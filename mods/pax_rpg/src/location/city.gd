@@ -49,6 +49,14 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	root.name = "City"
 	parent.add_child(root)
 	_t0 = Time.get_ticks_usec()
+	var gmask: Dictionary = data.get("ground_mask", {})
+	var mt: Texture2D = m.texture(str(gmask.get("tex", ""))) if not gmask.is_empty() else null
+	if mt != null:                                       # маска дорог — чтобы сдвигать реквизит с проезда
+		_road = mt.get_image()
+		if _road != null and _road.is_compressed():
+			_road.decompress()
+		var rr: Array = gmask.get("rect", [0, 0, 1, 1])
+		_road_rect = Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3]))
 	if bool(data.get("landscape", true)):
 		Landscape.request(Landscape.area_of(data))         # горы и степь считаются в потоке, пока ставим город
 	var g: Array = data.get("ground", [190, 186, 0, 0])
@@ -79,6 +87,7 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			_merchant(pos, float(d.get("r", 0.0)), int(d.get("seed", 0)))
 			continue
 		if d.has("brazier"):                              # жаровня: каменная тумба, чаша, огонь
+			pos = _off_road(pos)                         # не посреди дороги — к её краю
 			_block(Vector3(0.7, 0.9, 0.7), pos + Vector3(0, 0.45, 0), "stone_dark", 0.0, 0.0, true)
 			_block(Vector3(0.95, 0.18, 0.95), pos + Vector3(0, 0.99, 0), "stone_cut", 45.0, 0.0, false)
 			lights.append([vfx.fire(root, pos + Vector3(0, 1.08, 0), 0.75), 2.6])
@@ -96,6 +105,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if d.has("sv"):                                   # своя форма (стекло окна — по размеру окна)
 			var sv: Array = d.sv
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
+		if _movable(k):
+			pos = _off_road(pos)                         # реквизит не загораживает дорогу — к её краю
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
 	print("[pax_rpg] load: city items placed, %d model groups" % groups.size())
 	for k: String in groups:
@@ -858,7 +869,8 @@ func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
 
 
 ## Растительность → наклон верха на ветру, м (shaders/foliage.gdshader). Нет в списке — модель стоит.
-const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.4}
+const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.16}
+const CANOPY := ["flame_tree"]       # деревья: ствол стоит, качаются крона и листва
 var _fol_mats := {}
 
 
@@ -890,6 +902,9 @@ func _foliage_mat(path: String, mesh: Mesh) -> Material:
 	m.set_shader_parameter("y_min", bb.position.y)
 	m.set_shader_parameter("y_max", bb.end.y)
 	m.set_shader_parameter("amp", amp)
+	for k: String in CANOPY:
+		if path.get_file().begins_with(k):
+			m.set_shader_parameter("canopy", 1.0)
 	_fol_mats[key] = m
 	return m
 
@@ -974,7 +989,11 @@ func _place(path: String, list: Array) -> void:
 			var bs := BoxShape3D.new()
 			var col: Array = e[2]
 			var sc := t.basis.get_scale().x
-			if col.size() == 3:                          # своя коробка (ствол дерева): от земли вверх
+			var base := _base_box(parts) if path.get_file().begins_with("flame_tree") else AABB()
+			if col.size() == 3 and base.size != Vector3.ZERO:
+				bs.size = base.size * sc                  # дерево в кадке: коробка — по основанию модели (кадка), не по стволу
+				sh.position = base.get_center() * sc
+			elif col.size() == 3:                        # своя коробка (ствол дерева): от земли вверх
 				bs.size = Vector3(float(col[0]), float(col[1]), float(col[2])) * sc
 				sh.position = Vector3(0, bs.size.y / 2, 0)
 			else:
@@ -1012,6 +1031,76 @@ func _boxes(t: Transform3D, list: Array) -> void:
 		rects.append([Vector2(g.x, g.z), Vector2(bs.size.x, bs.size.z), Color(0.22, 0.27, 0.5)])
 	body.transform = Transform3D(t.basis.orthonormalized(), t.origin)
 	root.add_child(body)
+
+
+## Реквизит, который можно сдвинуть с дороги (не постройки, не заборы, не дороги).
+const MOVABLE := ["lantern_post", "stone_lantern", "barrel", "crate", "sack", "basket", "hay_bale", "cart", "merchant_cart",
+	"bench_long", "table_long", "wood_pile", "trough", "hitching_post", "weapon_rack", "firepit", "cauldron", "quest_board",
+	"training_dummy", "rock_small", "ovoo_cairn"]
+var _road: Image
+var _road_rect := Rect2()
+
+
+func _movable(path: String) -> bool:
+	for k: String in MOVABLE:
+		if path.get_file().begins_with(k):
+			return true
+	return false
+
+
+func _road_at(p: Vector3) -> float:
+	if _road == null:
+		return 0.0
+	var u := clampi(int((p.x - _road_rect.position.x) / _road_rect.size.x * _road.get_width()), 0, _road.get_width() - 1)
+	var v := clampi(int((p.z - _road_rect.position.y) / _road_rect.size.y * _road.get_height()), 0, _road.get_height() - 1)
+	return _road.get_pixel(u, v).r
+
+
+## Точка на дороге (маска дорог, R) — ближайшее место у её края, где уже не дорога (ищем кругами до 5 м).
+func _off_road(p: Vector3) -> Vector3:
+	if _road_at(p) < 0.3:
+		return p
+	for r: float in [0.6, 1.2, 1.8, 2.4, 3.0, 3.8, 4.6]:
+		for i: int in 16:
+			var a := TAU * i / 16.0
+			var q := p + Vector3(cos(a), 0.0, sin(a)) * r
+			if _road_at(q) < 0.12:
+				return q + Vector3(cos(a), 0.0, sin(a)) * 0.4   # с запасом от края
+	return p
+
+
+## Рамка нижнего метра модели (кадка у дерева): по вершинам сеток, в осях модели. Пусто — если не вышло.
+var _base_cache := {}
+
+
+func _base_box(parts: Array) -> AABB:
+	if parts.is_empty():
+		return AABB()
+	var key := str((parts[0] as Array)[0])
+	if _base_cache.has(key):
+		return _base_cache[key]
+	var lo := INF
+	for pr: Array in parts:
+		lo = minf(lo, ((pr[1] as Transform3D) * (pr[0] as Mesh).get_aabb()).position.y)
+	var box := AABB()
+	var got := false
+	for pr: Array in parts:
+		var mesh: Mesh = pr[0]
+		var xf: Transform3D = pr[1]
+		for si: int in mesh.get_surface_count():
+			var verts: PackedVector3Array = mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]
+			for v: Vector3 in verts:
+				var w := xf * v
+				if w.y <= lo + 1.0:
+					if not got:
+						box = AABB(w, Vector3.ZERO)
+						got = true
+					else:
+						box = box.expand(w)
+	if got:
+		box = AABB(box.position + Vector3(box.size.x * 0.05, 0.0, box.size.z * 0.05), box.size * Vector3(0.9, 1.0, 0.9))
+	_base_cache[key] = box
+	return box
 
 
 func _collect(n: Node, xf: Transform3D, out: Array) -> void:

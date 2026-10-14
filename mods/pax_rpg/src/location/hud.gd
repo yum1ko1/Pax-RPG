@@ -148,8 +148,6 @@ func _draw_core() -> void:
 	draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN, 96, Color(TEXT, 0.14), 6.0, true)
 	if p > 0.005:
 		draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN * p, 96, AMBER.lerp(RED, p * p), 6.0, true)
-		_center(c + Vector2(0, -142), "%s %d%%" % [_tr("pax_rpg_hud_posture_label"), int(p * 100.0)], sans, 13,
-			AMBER.lerp(RED, p * p), 3)
 	# здоровье: толстое кольцо; светлый «след» недавней потери, поверх — текущее
 	draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN, 96, Color(0.1, 0.1, 0.24), 17.0, true)
 	var ghost := clampf(float(_g("hp_ghost", 1.0)), 0.0, 1.0)
@@ -172,14 +170,12 @@ func _draw_core() -> void:
 	else:
 		_center(c, "騎", cjk, 60, TEXT)
 	draw_arc(c, 76.0, 0.0, TAU, 72, BLUE, 2.0, true)
-	# числа здоровья — в разрыве колец внизу
-	_center(c + Vector2(0, 112), "%d / %d" % [int(_g("hp_abs", 100)), int(_g("hp_max", 100))], serif, 22, TEXT, 4)
-	# уровень — ромб справа сверху у портрета
-	var lv := c + Vector2(70, -70)
-	var dm := _diamond(lv, 20.0)
+	# в разрыве колец под портретом: уровень, под ним — полоска опыта (числа — в инвентаре)
+	var lv := c + Vector2(0, 100)
+	var dm := _diamond(lv, 15.0)
 	draw_colored_polygon(dm, Color(0.04, 0.06, 0.14))
 	_outline(dm, BLUE, 2.0)
-	_center(lv, str(int(_g("level", 1))), sans, 15, BLUE)
+	_center(lv, str(int(_g("level", 1))), sans, 14, BLUE)
 	var fl := float(_g("lvl_flash", 0.0))
 	if fl > 0.0:                                         # новый уровень: свет вокруг кольца
 		var k := clampf(fl / 1.6, 0.0, 1.0)
@@ -188,28 +184,24 @@ func _draw_core() -> void:
 	_draw_xp_line()
 
 
-## Опыт — тонкая полоса во всю ширину по низу экрана; сюда летит мана повергнутых (xp_target).
+## Опыт — короткая полоска под ромбом уровня (в разрыве колец); сюда летит мана повергнутых (xp_target).
 func _xp_rect() -> Rect2:
-	return Rect2(0.0, 1080.0 - 5.0, _w, 5.0)
+	var c := _core_c()
+	return Rect2(c.x - 54.0, c.y + 121.0, 108.0, 4.0)
 
 
 func _draw_xp_line() -> void:
 	var r := _xp_rect()
-	draw_rect(r, Color(0.1, 0.1, 0.24, 0.9))
+	draw_rect(r, Color(0.1, 0.1, 0.24, 0.95))
 	var xp := clampf(float(_g("xp", 0.0)), 0.0, 1.0)
 	if xp > 0.002:
 		var f := r.size.x * xp
 		draw_polygon(PackedVector2Array([r.position, r.position + Vector2(f, 0), r.position + Vector2(f, r.size.y),
 			r.position + Vector2(0, r.size.y)]), PackedColorArray([BLUE, PINK, PINK, BLUE]))
-		draw_circle(r.position + Vector2(f, r.size.y * 0.5), 4.0, Color(1, 0.9, 0.97, 0.9))
-	var txt := "%s %d · %d / %d" % [_tr("pax_rpg_hud_level"), int(_g("level", 1)), int(_g("xp_abs", 0)),
-		int(_g("xp_need", 100))]
-	_text(Vector2(40, r.position.y - 10), txt, sans, 13, MUTED, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
-	var sp := int(_g("skill_points", 0))
-	if sp > 0:
-		var tw := sans.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-		_text(Vector2(40 + tw + 20, r.position.y - 10), "◆ %s: %d" % [_tr("pax_rpg_hud_skill_points"), sp], sans, 13,
-			AMBER, HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+		draw_circle(r.position + Vector2(f, r.size.y * 0.5), 3.0, Color(1, 0.9, 0.97, 0.9))
+	draw_rect(r, Color(TEXT, 0.25), false, 1.0)
+	if int(_g("skill_points", 0)) > 0:                    # очки умений есть — ромбик у полоски
+		draw_colored_polygon(_diamond(r.position + Vector2(r.size.x + 10.0, 2.0), 4.0), AMBER)
 
 
 func _draw_player() -> void:

@@ -76,6 +76,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	shape.shape = cap
 	shape.position = Vector3(0.0, 1.15, 0.0)
 	add_child(shape)
+	voiced = false                                       # голос гоблина орку не подходит
 	_model = Assets.model(mod, ORC_MODEL)
 	if _model == null:
 		mod.log_warning("Pax RPG: orc model did not load")

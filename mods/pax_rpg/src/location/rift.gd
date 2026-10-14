@@ -1,19 +1,27 @@
 extends RefCounted
 ## «Разлом» — ультимейт большого меча Разрубателя (location.gd → _quake_wave): земля как после землетрясения.
-##  • crack — декаль расколотой земли: радиальные трещины с ветками, вокруг — потемневшая разбитая корка; из трещин
-##    светится мана (текстура свечения декали); держится, потом тает. Рисунок — свой, без файла (один раз за сессию);
-##  • spikes — каменные шипы вырываются из-под земли по кольцу волны (гранёные, с наклоном наружу, пыль), миг стоят и
-##    уходят обратно в землю.
+##  • crack — декаль расколотой земли: радиальные разломы и рваные кольца вокруг удара, щели с глубиной (карта
+##    нормалей из рисунка трещин), вокруг — растрескавшаяся корка; без свечения. Держится, потом тает;
+##  • spikes — земляные шипы (неровные конусы с текстурой глины) вырываются по кольцу волны, миг стоят и уходят обратно;
+##    врагов на кольце подбрасывает (location.gd).
+## Текстуры трещин и сетки шипов делаются один раз за сессию; warm() под экраном загрузки компилирует шейдеры декали и
+## шипа — на первом «Разломе» нет рывка.
 
 static var _crack_alb: ImageTexture
-static var _crack_emi: ImageTexture
-static var _rock: StandardMaterial3D
+static var _crack_nrm: ImageTexture
+static var _earth: StandardMaterial3D
+static var _spike_meshes: Array = []
 
 
-## Нарисовать трещины заранее (прогрев под экраном загрузки) — на первом «Разломе» не будет рывка.
-static func prepare() -> void:
+## Всё, что «Разлом» создаёт впервые, — заранее: рисунок трещин, материал, сетки шипов; и по одному в кадр (parent,
+## at — перед камерой под экраном загрузки), чтобы скомпилировались шейдеры.
+static func warm(mod: PaxMod, parent: Node, at: Vector3) -> void:
 	if _crack_alb == null:
 		_make_crack_textures()
+	_material(mod)
+	_meshes()
+	crack(mod, parent, at, 1.0, 0.3)
+	spikes(mod, parent, at, 0.0, 0.5, 1, 0.1)
 
 
 static func crack(mod: PaxMod, parent: Node, at: Vector3, radius: float, stay: float) -> void:
@@ -23,8 +31,7 @@ static func crack(mod: PaxMod, parent: Node, at: Vector3, radius: float, stay: f
 		_make_crack_textures()
 	var d := Decal.new()
 	d.texture_albedo = _crack_alb
-	d.texture_emission = _crack_emi
-	d.emission_energy = 2.2
+	d.texture_normal = _crack_nrm
 	d.size = Vector3(radius * 2.0, 2.0, radius * 2.0)
 	d.albedo_mix = 1.0
 	d.upper_fade = 0.2
@@ -33,18 +40,17 @@ static func crack(mod: PaxMod, parent: Node, at: Vector3, radius: float, stay: f
 	parent.add_child(d)
 	d.global_position = at + Vector3(0.0, 0.4, 0.0)
 	d.rotation.y = randf() * TAU
-	d.scale = Vector3(0.3, 1.0, 0.3)
+	d.scale = Vector3(0.25, 1.0, 0.25)
 	var tw := d.create_tween()
-	tw.tween_property(d, "modulate:a", 1.0, 0.12)
-	tw.parallel().tween_property(d, "scale", Vector3.ONE, 0.35).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
-	tw.tween_property(d, "emission_energy", 0.6, 1.5)        # мана в трещинах остывает, трещины остаются
-	tw.tween_interval(maxf(0.0, stay - 1.5))
-	tw.tween_property(d, "modulate:a", 0.0, 2.0)
+	tw.tween_property(d, "modulate:a", 1.0, 0.08)
+	tw.parallel().tween_property(d, "scale", Vector3.ONE, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	tw.tween_interval(stay)
+	tw.tween_property(d, "modulate:a", 0.0, 2.5)
 	tw.tween_callback(d.queue_free)
 
 
-## Трещины: из центра 11 кривых лучей, у каждого ветки; маска толщины → альбедо (тёмные щели, корка вокруг) и
-## свечение (только сердцевина щели).
+## Рисунок: 11 радиальных разломов с ветками и 3 рваных кольца. Маска глубины → альбедо (тёмные щели, растрескавшаяся
+## корка вокруг) и карта нормалей (края щелей — скосы внутрь).
 static func _make_crack_textures() -> void:
 	var n := 256
 	var mask := PackedFloat32Array()
@@ -54,26 +60,42 @@ static func _make_crack_textures() -> void:
 	var c := Vector2(n, n) * 0.5
 	for k: int in 11:
 		var ang := TAU * k / 11.0 + rng.randf_range(-0.2, 0.2)
-		_crack_line(mask, n, c + Vector2(cos(ang), sin(ang)) * 5.0, ang, n * 0.46, 3.0, rng, 2)
+		_crack_line(mask, n, c + Vector2(cos(ang), sin(ang)) * 4.0, ang, n * 0.47, 3.2, rng, 2)
+	for ring: float in [0.18, 0.31, 0.42]:                   # кольцевые разломы — рваные, с разрывами
+		var r := ring * n
+		var a := 0.0
+		while a < TAU:
+			var seg := rng.randf_range(0.25, 0.6)
+			if rng.randf() < 0.75:
+				var p0 := c + Vector2(cos(a), sin(a)) * r * rng.randf_range(0.95, 1.05)
+				var steps := int(seg * r / 3.0)
+				_stamp(mask, n, p0, 2.0 * (1.0 - ring * 0.6))
+				for s: int in steps:
+					var aa := a + seg * float(s + 1) / steps
+					var pb := c + Vector2(cos(aa), sin(aa)) * r * rng.randf_range(0.96, 1.04)
+					_stamp(mask, n, pb, 2.0 * (1.0 - ring * 0.6))
+			a += seg + rng.randf_range(0.05, 0.25)
 	var alb := Image.create(n, n, true, Image.FORMAT_RGBA8)
-	var emi := Image.create(n, n, true, Image.FORMAT_RGBA8)
+	var nrm := Image.create(n, n, true, Image.FORMAT_RGBA8)
 	var noise := FastNoiseLite.new()
 	noise.seed = 3
-	noise.frequency = 0.04
+	noise.frequency = 0.05
 	for y: int in n:
 		for x: int in n:
 			var m := mask[y * n + x]
 			var r := Vector2(x, y).distance_to(c) / (n * 0.5)
-			var crust := (1.0 - smoothstep(0.35, 1.0, r)) * (0.35 + 0.25 * noise.get_noise_2d(x, y))   # разбитая корка
-			var a := clampf(maxf(m, crust), 0.0, 1.0)
-			var dark := lerpf(0.42, 0.04, clampf(m * 1.4, 0.0, 1.0))
-			alb.set_pixel(x, y, Color(dark * 1.05, dark * 0.9, dark * 0.85, a))
-			var core := smoothstep(0.55, 1.0, m)
-			emi.set_pixel(x, y, Color(1.0 * core, 0.45 * core, 0.95 * core, 1.0))
+			var crust := (1.0 - smoothstep(0.3, 1.0, r)) * (0.4 + 0.3 * noise.get_noise_2d(x, y))   # корка вокруг
+			var a := clampf(maxf(m * 1.2, crust), 0.0, 1.0)
+			var dark := lerpf(0.36, 0.03, clampf(m * 1.5, 0.0, 1.0))
+			alb.set_pixel(x, y, Color(dark * 1.1, dark * 0.95, dark * 0.85, a))
+			var mx := mask[y * n + mini(x + 1, n - 1)] - mask[y * n + maxi(x - 1, 0)]
+			var my := mask[mini(y + 1, n - 1) * n + x] - mask[maxi(y - 1, 0) * n + x]
+			var nv := Vector3(mx * 2.5, my * 2.5, 1.0).normalized()       # щель — впадина: края скошены внутрь
+			nrm.set_pixel(x, y, Color(nv.x * 0.5 + 0.5, nv.y * 0.5 + 0.5, nv.z * 0.5 + 0.5, 1.0))
 	alb.generate_mipmaps()
-	emi.generate_mipmaps()
+	nrm.generate_mipmaps(true)
 	_crack_alb = ImageTexture.create_from_image(alb)
-	_crack_emi = ImageTexture.create_from_image(emi)
+	_crack_nrm = ImageTexture.create_from_image(nrm)
 
 
 ## Кривая трещина: шаги со случайным изломом, толщина убывает к концу; с depth > 0 — ветки в стороны.
@@ -103,47 +125,84 @@ static func _stamp(mask: PackedFloat32Array, n: int, at: Vector2, w: float) -> v
 				mask[y * n + x] = v
 
 
+static func _material(mod: PaxMod) -> StandardMaterial3D:
+	if _earth == null:
+		_earth = StandardMaterial3D.new()
+		_earth.albedo_color = Color(0.62, 0.5, 0.4)      # глина под цвет земли Гхарна
+		_earth.roughness = 0.97
+		var tex := mod.texture("models/gharn/tex/ground.jpg")
+		if tex != null:
+			_earth.albedo_texture = tex
+			_earth.uv1_triplanar = true
+			_earth.uv1_world_triplanar = true
+			_earth.uv1_scale = Vector3.ONE * 0.9
+		var nt := mod.texture("models/gharn/tex/ground_n.jpg")
+		if nt != null:
+			_earth.normal_enabled = true
+			_earth.normal_texture = nt
+			_earth.normal_scale = 1.4
+	return _earth
+
+
+## Сетки шипов: неровный гранёный конус (вершины сдвинуты шумом, верх чуть сбит) — 4 варианта формы.
+static func _meshes() -> void:
+	if not _spike_meshes.is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 404
+	for v: int in 4:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var seg := 7
+		var rings := 4
+		var top := Vector3(rng.randf_range(-0.08, 0.08), 1.0, rng.randf_range(-0.08, 0.08))
+		var rows: Array = []
+		for k: int in rings:
+			var f := float(k) / rings
+			var row: Array = []
+			for i: int in seg:
+				var a := TAU * i / seg + rng.randf_range(-0.15, 0.15)
+				var r := (1.0 - f) * rng.randf_range(0.8, 1.15)
+				row.append(Vector3(cos(a) * r, f, sin(a) * r).lerp(top, f * f * 0.4))
+			rows.append(row)
+		for k: int in rings:
+			for i: int in seg:
+				var j := (i + 1) % seg
+				var a0: Vector3 = rows[k][i]
+				var a1: Vector3 = rows[k][j]
+				var b0: Vector3 = rows[k + 1][i] if k + 1 < rings else top
+				var b1: Vector3 = rows[k + 1][j] if k + 1 < rings else top
+				for p: Vector3 in [a0, a1, b0, a1, b1, b0]:          # грани — лицом наружу
+					st.add_vertex(p)
+		st.generate_normals()
+		_spike_meshes.append(st.commit())
+
+
 ## Шипы по кольцу r_in..r_out вокруг at: вырываются из-под земли, стоят hold секунд и уходят обратно.
 static func spikes(mod: PaxMod, parent: Node, at: Vector3, r_in: float, r_out: float, count: int, hold: float) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	if _rock == null:
-		_rock = StandardMaterial3D.new()
-		_rock.albedo_color = Color(0.36, 0.31, 0.32)
-		_rock.roughness = 0.92
-		var tex := mod.texture("models/gharn/tex/cobble.jpg")
-		if tex != null:
-			_rock.albedo_texture = tex
-			_rock.uv1_triplanar = true
-			_rock.uv1_world_triplanar = true
-			_rock.uv1_scale = Vector3.ONE * 0.6
-		_rock.emission_enabled = true                      # по граням — отсвет маны из глубины
-		_rock.emission = Color(0.55, 0.2, 0.6)
-		_rock.emission_energy_multiplier = 0.25
+	var mat := _material(mod)
+	_meshes()
 	for i: int in count:
 		var ang := randf() * TAU
 		var r := randf_range(r_in, r_out)
-		var h := randf_range(0.9, 2.4) * (0.7 + 0.3 * r / maxf(r_out, 0.1))
+		var h := randf_range(0.9, 2.2) * (0.7 + 0.3 * r / maxf(r_out, 0.1))
+		var w := randf_range(0.22, 0.45)
 		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.0
-		cm.bottom_radius = randf_range(0.18, 0.42)
-		cm.height = h
-		cm.radial_segments = 5                             # гранёный камень, а не гладкий конус
-		cm.rings = 1
-		cm.material = _rock
-		mi.mesh = cm
+		mi.mesh = _spike_meshes[randi() % _spike_meshes.size()]
+		mi.material_override = mat
 		parent.add_child(mi)
 		var out := Vector3(cos(ang), 0.0, sin(ang))
 		var base := at + out * r
 		var tilt := Basis(out.cross(Vector3.UP).normalized(), -deg_to_rad(randf_range(8.0, 28.0)))   # наклон наружу
-		var b := tilt * Basis(Vector3.UP, randf() * TAU)
-		var up_pos := base + b.y * (h * 0.5 - 0.15)
-		var down_pos := base - b.y * (h * 0.55)
+		var b := tilt * Basis(Vector3.UP, randf() * TAU) * Basis.from_scale(Vector3(w, h, w))   # масштаб — вдоль шипа
+		var up_pos := base - Vector3(0.0, 0.15, 0.0)
+		var down_pos := base - tilt.y * h * 1.05
 		mi.global_transform = Transform3D(b, down_pos)
 		var tw := mi.create_tween()
 		tw.tween_interval(randf_range(0.0, 0.12))
-		tw.tween_property(mi, "global_position", up_pos, 0.11).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		tw.tween_property(mi, "global_position", up_pos, 0.12).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
 		tw.tween_interval(hold + randf_range(0.0, 0.4))
 		tw.tween_property(mi, "global_position", down_pos, 0.5).set_ease(Tween.EASE_IN)
 		tw.tween_callback(mi.queue_free)

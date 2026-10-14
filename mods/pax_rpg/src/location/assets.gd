@@ -107,6 +107,7 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				mat = inst.mesh.surface_get_material(si)
 			if not (mat is BaseMaterial3D):
 				continue
+			_pbr(mat as BaseMaterial3D)
 			for slot: int in SLOTS:
 				var t: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
 				if t == null or seen.has(t):
@@ -132,6 +133,18 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 					idx.append(_streams.size())
 					_by_path[path] = idx
 					_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+
+
+## PBR моделей Meshy: рассеяние Burley (мягче Lambert на камне, ткани, коже), отражения GGX, нормальная доля зеркальности
+## у неметаллов, анизотропная фильтрация. Металличность — из текстуры модели; без текстуры у неметалла — 0.
+static func _pbr(m: BaseMaterial3D) -> void:
+	m.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	m.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	m.metallic_specular = 0.5
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if m.metallic_texture == null and m.metallic > 0.0 and not m.resource_name.to_lower().contains("metal"):
+		m.metallic = 0.0                                   # Meshy ставит металличность 1 и без карты — всё «пластиковое»
+	m.roughness = clampf(m.roughness, 0.25, 1.0)
 
 
 ## LOD для неподвижных сеток (у скинованных — нет: их меньше и они близко).

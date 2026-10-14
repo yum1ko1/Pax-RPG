@@ -14,6 +14,9 @@ var sky_mat: ShaderMaterial
 var lights: Array = []             # [OmniLight3D, энергия ночью]
 var glass: Array = []              # материалы окон
 var paper: Array = []              # бумажные фонари — свечение мягче окон
+const SUN_STEP := 5.0               # градусов: на столько солнце уходит, прежде чем тени пересчитаются
+var _sun_set := false
+var _sun_tw: Tween
 var fog_day := Color(0.9, 0.7, 0.84)          # мана в дымке — розовая, но не заливает весь кадр
 
 
@@ -63,7 +66,17 @@ func apply() -> void:
 		var up := elev >= -0.05
 		var ang := a if up else a - PI                    # ночью — луна по той же дуге
 		var e := maxf(sin(ang), 0.06)
-		sun.rotation = Vector3(-asin(clampf(e, 0.06, 1.0)), deg_to_rad(90.0) + ang, 0.0)
+		var want := Vector3(-asin(clampf(e, 0.06, 1.0)), deg_to_rad(90.0) + ang, 0.0)
+		# тени перерисовываются, только когда солнце ушло на SUN_STEP (а не каждые 2 с), и плавно за секунду
+		var jump := absf(angle_difference(sun.rotation.y, want.y)) > PI * 0.5 or not _sun_set
+		if jump:
+			sun.rotation = want
+			_sun_set = true
+		elif absf(angle_difference(sun.rotation.y, want.y)) + absf(sun.rotation.x - want.x) > deg_to_rad(SUN_STEP):
+			if _sun_tw != null and _sun_tw.is_valid():
+				_sun_tw.kill()
+			_sun_tw = create_tween()
+			_sun_tw.tween_property(sun, "rotation", want, 1.0).set_trans(Tween.TRANS_SINE)
 		if up:
 			sun.light_color = Color(1.0, 0.86, 0.72).lerp(Color(1.0, 0.55, 0.35), dusk)
 			sun.light_energy = lerpf(0.0, 1.35, smoothstep(-0.05, 0.25, elev))

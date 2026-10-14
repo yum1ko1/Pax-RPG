@@ -43,8 +43,8 @@ void vertex() {
 	vec2 away = wp.xz - pax_rpg_player.xz;
 	float pd = length(away);
 	float push = (1.0 - smoothstep(0.25, 0.9, pd)) * step(abs(wp.y - pax_rpg_player.y), 1.5);
-	off.xz += normalize(away + vec2(1e-4)) * push * 0.45 * h;
-	off.y -= (b * b * 0.8 + push * 0.25) * h;
+	off.xz += normalize(away + vec2(1e-4)) * push * 0.22 * h;   // только расступается — высота травы не меняется
+	off.y -= b * b * 0.5 * h;
 	VERTEX += inverse(mat3(MODEL_MATRIX)) * off;
 	NORMAL = normalize(mix(NORMAL, vec3(0.0, 1.0, 0.0), 0.65));     // мягкий свет по пучку, без «полосатости»
 }

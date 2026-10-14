@@ -16,9 +16,11 @@ uniform float y_min = 0.0;
 uniform float y_max = 1.0;
 uniform float amp = 0.15;
 uniform float backlight = 0.45;
+uniform float canopy = 0.0;          // 1 — дерево: ствол стоит, качаются только крона и листва (верх сетки)
 
 void vertex() {
-	float h = clamp((VERTEX.y - y_min) / max(y_max - y_min, 0.001), 0.0, 1.0);
+	float h0 = clamp((VERTEX.y - y_min) / max(y_max - y_min, 0.001), 0.0, 1.0);
+	float h = mix(h0, smoothstep(0.42, 1.0, h0), canopy);    // у дерева гнётся только верх
 	vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 org = MODEL_MATRIX[3].xyz;                               // у всех точек одной копии — общая фаза качания
 	vec2 wd = normalize(pax_rpg_wind.xy + vec2(1e-4));
@@ -27,7 +29,7 @@ void vertex() {
 	float t = pax_rpg_time;
 	float sway = sin(t * 1.1 + org.x * 0.21 + org.z * 0.17) * 0.6 + sin(t * 2.3 + org.x * 0.5) * 0.25;
 	float lean = (0.25 + 0.45 * s + 1.1 * g) + sway * (0.35 + 0.5 * s);
-	float leaf = sin(t * 8.0 + wp.x * 4.1 + wp.y * 3.3 + wp.z * 2.7) * 0.025 * (0.4 + s + g) * h;   // дрожь листвы
+	float leaf = sin(t * 8.0 + wp.x * 4.1 + wp.y * 3.3 + wp.z * 2.7) * (0.025 + 0.02 * canopy) * (0.4 + s + g) * h;   // дрожь листвы
 	vec3 off = vec3(wd.x, 0.0, wd.y) * lean * amp * h * h + vec3(leaf, leaf * 0.5, -leaf);
 	off.y -= dot(off.xz, off.xz) * 0.25 * h;                      // клонится — чуть ниже, не тянется
 	VERTEX += inverse(mat3(MODEL_MATRIX)) * off;

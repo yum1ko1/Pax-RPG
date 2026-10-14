@@ -83,6 +83,43 @@ var _lethal := false
 var _last_away := Vector3.FORWARD   # куда отбросил последний удар — туда и падает тело
 var _slice_n := Vector3.ZERO         # иай: плоскость разреза (нормаль в мире) — тело рубится пополам
 var _layer_saved := -1
+var voiced := true                   # свои звуки гоблина (орк-чемпион — без них)
+var _bark_t := randf_range(4.0, 9.0)  # с до следующего боевого выкрика
+var _hurt_cd := 0.0
+var _voice: AudioStreamPlayer
+static var _streams := {}
+
+
+## Голос гоблина: kind "hurt" (урон) или "bark" (выкрик в бою). Громкость — по расстоянию до героя (у вида локации
+## нет своего слушателя 3D-звука, поэтому без AudioStreamPlayer3D).
+func _say(kind: String, n: int) -> void:
+	if not voiced or mod == null:
+		return
+	var path := "sounds/goblin_%s_%d.mp3" % [kind, randi_range(1, n)]
+	if not _streams.has(path):
+		_streams[path] = mod.sound(path)
+	var st: AudioStream = _streams[path]
+	if st == null:
+		return
+	if _voice == null:
+		_voice = AudioStreamPlayer.new()
+		_voice.bus = "PaxRpgSfx"
+		add_child(_voice)
+	var d := global_position.distance_to(_target.global_position) if is_instance_valid(_target) else 0.0
+	var k := clampf(1.0 - d / 26.0, 0.0, 1.0)
+	if k <= 0.02:
+		return
+	_voice.stream = st
+	_voice.volume_db = linear_to_db(k) - (2.0 if kind == "bark" else 0.0)
+	_voice.pitch_scale = randf_range(0.92, 1.1)
+	_voice.play()
+
+
+## Подбросить (шипы «Разлома»): скорость v; падает сам — гравитация капсулы.
+func launch(v: Vector3) -> void:
+	if dead:
+		return
+	velocity = v
 
 
 ## Иай: следующая гибель — разрубить по плоскости с нормалью n (location.gd → _iai_cut).
@@ -212,6 +249,9 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	hp = maxf(0.0, hp - amount)
 	posture = minf(max_posture, posture + amount * 0.7)
 	_since_hit = 0.0
+	if _hurt_cd <= 0.0:
+		_hurt_cd = 0.3
+		_say("hurt", 2)
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
@@ -280,16 +320,14 @@ func _die() -> void:
 				_last_away * 1.5, 2.2)
 		if cut:
 			_model.visible = false
-		else:                                            # физика: тело падает рэгдоллом от удара, лежит, тает в ману
-			if _anim != null:
-				_anim.stop()
-				_anim.active = false
-			BodyFx.ragdoll(BodyFx.find_skeleton(_model), _last_away * 3.0 + Vector3(0.0, 1.5, 0.0))
-			velocity = Vector3.ZERO
+		else:
+			# падение — клип смерти модели (knockdown / Death); тело отлетает от удара по физике капсулы, лежит и
+			# плавно тает в ману. Рэгдолл (BodyFx.ragdoll) выключен: на скелетах Meshy с масштабом 0.01 тела улетали.
+			velocity = _last_away * 2.5 + Vector3(0.0, 2.0, 0.0)
 			var t := create_tween()
-			t.tween_interval(BODY_STAY * 0.6)
+			t.tween_interval(BODY_STAY * 0.55)
 			t.tween_callback(func() -> void:
-				BodyFx.dissolve(mod, _model, 2.4, func() -> void: _model.visible = false))
+				BodyFx.dissolve(mod, _model, 3.0, func() -> void: _model.visible = false))
 	if respawns:
 		get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 	else:
@@ -507,6 +545,12 @@ func hitstop(t: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_hurt_cd -= delta
+	if in_combat() and not dead:                          # в бою время от времени выкрикивает
+		_bark_t -= delta
+		if _bark_t <= 0.0:
+			_bark_t = randf_range(5.0, 11.0)
+			_say("bark", 3)
 	if _hitstop > 0.0:
 		_hitstop -= delta
 		if _hitstop <= 0.0 and _anim != null:
@@ -687,9 +731,9 @@ func _phys(delta: float) -> void:
 					posture = max_posture * 0.5
 					_update_bars()
 					_set_state("circle")
-		"dead":
-			velocity.x = 0.0
-			velocity.z = 0.0
+		"dead":                                          # отлёт от удара гаснет трением о землю
+			velocity.x = move_toward(velocity.x, 0.0, delta * 7.0)
+			velocity.z = move_toward(velocity.z, 0.0, delta * 7.0)
 	if new_swing:
 		_swing_seen = true
 	elif not swinging:
