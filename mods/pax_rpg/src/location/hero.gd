@@ -1429,6 +1429,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	_running = running and moving and on_floor and action == ""
 	if action == "Quake":
 		_quake_tick(delta)
+	elif action == "Ultimate":
+		_ult_tick(delta)
 	elif action == "Iai":
 		_iai_tick()
 	_combo_left = maxf(0.0, _combo_left - delta)
@@ -1436,7 +1438,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_block_t += delta
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
-	if action != "" and action != "Iai" and not anim.is_playing():
+	if action != "" and action != "Iai" and action != "Ultimate" and not anim.is_playing():
 		_end_action()                        # сигнал конца не пришёл — не застрять (Иай ведёт стадии сам)
 	if action in ATTACKS:
 		var i := ATTACKS.find(action)
@@ -1599,7 +1601,84 @@ func _cancel_recovery() -> void:
 
 ## Спецприём «Земной разлом» (震): клип Deathblow — меч над головой и вонзить в землю, герой на колене; в миг
 ## удара клип замирает на quake_hold с, пока по земле идут волны (их бьёт location.gd), потом встаёт.
-var quake_since := -1.0               # с от удара меча о землю (−1 — ещё не ударил / приём не идёт)
+var quake_since := -1.0
+# ультимейт Разрубателя «Сокрушение» (G): разбег → удар сверху в землю → встаёт, держась за рукоять → кувырок → выпад.
+# Стадии ведёт _ult_tick; ult_dash — разбег (location.gd толкает героя вперёд); ult_hit — 1/2: удар о землю (волна).
+var ult_dash := false
+var ult_hit := 0
+var _ult_stage := -1
+var _ult_t := 0.0
+const ULT_DASH := 0.55               # с от удара меча о землю (−1 — ещё не ударил / приём не идёт)
+
+
+func ult_begin(on_floor: bool) -> bool:
+	_cancel_hurt()
+	_cancel_recovery()
+	if anim == null or not armed or not on_floor or action != "" or not has("HeavySlash") or not has("Attack3"):
+		return false
+	blocking = false
+	action = "Ultimate"
+	_clip = ""                                        # конец промежуточного клипа не обрывает приём (_on_finished)
+	_ult_stage = 0
+	_ult_t = 0.0
+	ult_hit = 0
+	ult_dash = true
+	_prev_off = Vector2.ZERO
+	anim.speed_scale = 1.0
+	anim.play("Sprint" if has("Sprint") else "RunArmed", 0.1)
+	return true
+
+
+func _ult_play(clip: String, skip := 0.0, speed := 1.0) -> void:
+	anim.speed_scale = speed
+	anim.play(clip, 0.1)
+	if skip > 0.0:
+		anim.seek(skip, true)
+	_prev_off = _root_at(skip)
+
+
+func _ult_tick(delta: float) -> void:
+	_ult_t += delta
+	var length := anim.current_animation_length
+	match _ult_stage:
+		0:                                            # разбег
+			if _ult_t >= ULT_DASH:
+				ult_dash = false
+				_ult_stage = 1
+				_ult_t = 0.0
+				_ult_play("HeavySlash", 0.15, 1.15)
+		1:                                            # удар сверху — меч в землю
+			if _pos() >= length * _f("ult_slam_at", 0.52) and ult_hit == 0 and _ult_t > 0.1:
+				ult_hit = 1
+				anim.speed_scale = 0.0                # меч в земле, вес на рукояти
+				_ult_stage = 2
+				_ult_t = 0.0
+		2:                                            # миг на мече
+			if _ult_t >= 0.4:
+				_ult_stage = 3
+				_ult_t = 0.0
+				if has("Deathblow"):                  # встаёт, держась за рукоять (вторая половина добивания)
+					_ult_play("Deathblow", anim.get_animation("Deathblow").length * _f("quake_plunge", 0.43) + 0.05, 1.3)
+				else:
+					_ult_stage = 4
+		3:
+			if _pos() >= length - 0.08 or _ult_t > 2.2:
+				_ult_stage = 4
+				_ult_t = 0.0
+				_ult_play("DodgeArmed" if has("DodgeArmed") else "Dodge", 0.0, 1.0)   # кувырок вперёд с мечом
+		4:
+			if _pos() >= length - 0.05 or _ult_t > 1.2:
+				_ult_stage = 5
+				_ult_t = 0.0
+				_ult_play("Attack3", 0.35, 1.2)        # резкий выпад: без долгого замаха
+		5:
+			var imp := float((meta.get("impact", {}) as Dictionary).get("Attack3", 1.03))
+			if ult_hit < 2 and _pos() >= imp:
+				ult_hit = 2
+			if _pos() >= length - 0.05 or _ult_t > 2.5:
+				_ult_stage = -1
+				ult_dash = false
+				_end_action()
 
 
 func quake(on_floor: bool) -> bool:
@@ -1812,7 +1891,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
 	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
-	elif action in ATTACKS:
+	elif action in ATTACKS or action == "Ultimate":
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai"
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)

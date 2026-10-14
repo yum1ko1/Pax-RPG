@@ -20,6 +20,10 @@
 			[
 				"pax_rpg_wskill_rift",
 				"pax_rpg_wskill_rift_desc"
+			],
+			[
+				"pax_rpg_wskill_ult",
+				"pax_rpg_wskill_ult_desc"
 			]
 		]
 	},

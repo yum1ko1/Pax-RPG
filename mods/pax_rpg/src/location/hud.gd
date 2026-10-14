@@ -928,7 +928,8 @@ func _draw_skills() -> void:
 	for i: int in skills.size():
 		var sd: Dictionary = skills[i]
 		# первая половина — слева от кольца (дальняя — первая), вторая — справа (ближняя — первая)
-		var x := cc.x + (-200.0 - (half - 1 - i) * 112.0 if i < half else 200.0 + (i - half) * 112.0)
+		var gap := 112.0 if skills.size() <= 6 else 98.0      # 7 приёмов — плотнее (кольцо добивания и эликсир по краям)
+		var x := cc.x + (-200.0 - (half - 1 - i) * gap if i < half else 200.0 + (i - half) * gap)
 		var c := Vector2(x, cc.y + 20.0)
 		var on := bool(sd.get("on", false))
 		var ring: Color = sd.get("color", c_pink)

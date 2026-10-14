@@ -1125,6 +1125,7 @@ func _physics_process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
 	_quake_cd = maxf(0.0, _quake_cd - delta)
+	_ult_cd = maxf(0.0, _ult_cd - delta)
 	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
@@ -1199,6 +1200,33 @@ func _quake_tex() -> Texture2D:
 	return _quake_icon
 
 
+## Ультимейт «Сокрушение» (G): своя перезарядка, стоит концентрации; удары — волны землетрясения (_ult_wave).
+var _ult_cd := 0.0
+var _ult_done := 0
+
+
+func _ult_try() -> void:
+	if _hero == null or _ult_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+		return
+	if not _hero.ult_begin(true):
+		return
+	_ult_cd = _hf("ult_cooldown", 45.0)
+	_posture = minf(_pos_max(), _posture + _hf("ult_posture", 25.0))
+	_since_hit = 0.0
+
+
+## Удар ультимейта о землю: перед героем; 1 — первая волна, 2 — выпад: урон вдвое, площадь шире.
+func _ult_wave(i: int) -> void:
+	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+	var at := _player.global_position + fwd * (1.8 if i == 1 else 2.4)
+	var rings: Array = [[3.0, 30.0], [5.0, 22.0]] if i == 1 else [[3.5, 60.0], [6.5, 45.0], [9.5, 35.0]]
+	for k: int in rings.size():
+		var r: Array = rings[k]
+		var tw := get_tree().create_timer(0.12 * k)
+		tw.timeout.connect(_quake_wave.bind(float(r[0]), float(r[1]), 2 if (i == 2 and k == rings.size() - 1) else k, at))
+	_shake = maxf(_shake, 0.6 if i == 1 else 1.0)
+
+
 func _quake_try() -> void:
 	if _hero == null or _quake_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
 		return
@@ -1223,8 +1251,8 @@ func _quake_step() -> void:
 		_quake_waves_done += 1
 
 
-func _quake_wave(radius: float, dmg: float, i: int) -> void:
-	var c := _player.global_position - Vector3(0, 0.9, 0)
+func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
+	var c := (_player.global_position if at == Vector3.INF else at) - Vector3(0, 0.9, 0)
 	for g: Variant in _goblins:
 		if not is_instance_valid(g) or not (g as Goblin).is_alive():
 			continue
@@ -1405,6 +1433,11 @@ func _physics_body(delta: float) -> void:
 		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
 		_quake_step()
+		if _hero.ult_hit > _ult_done:                   # ультимейт: удар о землю — волна
+			_ult_done = _hero.ult_hit
+			_ult_wave(_ult_done)
+		if _hero.action != "Ultimate":
+			_ult_done = 0
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)
@@ -1417,6 +1450,10 @@ func _physics_body(delta: float) -> void:
 			vel.z = w.z / delta
 		if mag != null:
 			vel = _magnet_pull(vel, mag, delta)
+	if _hero != null and _hero.ult_dash:               # разбег ультимейта — рывком по взгляду
+		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+		vel.x = f2.x * _hf("ult_dash_speed", 9.0)
+		vel.z = f2.z * _hf("ult_dash_speed", 9.0)
 	_player.velocity = vel
 	var was := _player.global_position
 	var tm := Time.get_ticks_usec()
@@ -2177,6 +2214,9 @@ func _hud_tick(delta: float) -> void:
 		{"k": "震", "key": "T", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
 			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
 			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
+		{"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
+			"color": Color(1.0, 0.45, 0.25), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
+			"ready": _ult_cd <= 0.0},
 		{"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
 			"color": Color(0.75, 0.6, 1.0), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 			"ready": _iai_cd <= 0.0}]
@@ -2187,7 +2227,7 @@ func _hud_tick(delta: float) -> void:
 
 
 const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_SHIFT, KEY_ALT, KEY_C, KEY_R, KEY_H, KEY_M, KEY_X, KEY_T, KEY_V,
-	KEY_Z, KEY_TAB, KEY_J]
+	KEY_Z, KEY_TAB, KEY_J, KEY_G]
 
 
 func _input(event: InputEvent) -> void:
@@ -2251,6 +2291,8 @@ func _input(event: InputEvent) -> void:
 			_arena.start()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_V:
 			_iai_try()                               # «Иай: остановка времени»
+		if key.pressed and not key.echo and key.physical_keycode == KEY_G:
+			_ult_try()                               # ультимейт Разрубателя «Сокрушение»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_T:
 			_quake_try()                             # «Земной разлом»
 		if key.pressed and not key.echo and key.physical_keycode == KEY_X and is_instance_valid(_arena):
