@@ -52,6 +52,7 @@ var _lines: Array = []          # {a, b, t0}
 var _victims: Array = []
 var _targets: Array = []        # враги в досягаемости в миг остановки — камера держит их в кадре
 var _frozen: Array = []         # [узел, свойство, значение]
+var _frozen_foes: Array = []    # то же для врагов: стоят и после перемотки — оживают, только когда придёт урон (_click)
 var _cam0: Transform3D
 var _fov0 := 65.0
 var _snd := {}
@@ -268,11 +269,16 @@ func _freeze(on: bool) -> void:
 	if not on:
 		return
 	_frozen = []
+	_frozen_foes = []
 	var stack: Array = [_view]
+	var foe_of := {}                                   # узел → он сам враг или внутри врага
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
 		if n == _player or (n is Node3D and _player.is_ancestor_of(n)):
 			continue
+		var in_foe := n is Goblin or bool(foe_of.get(n.get_parent(), false))
+		foe_of[n] = in_foe
+		var before := _frozen.size()
 		stack.append_array(n.get_children())
 		if n is AnimationPlayer:
 			_frozen.append([n, "speed_scale", (n as AnimationPlayer).speed_scale])
@@ -288,6 +294,9 @@ func _freeze(on: bool) -> void:
 				_frozen.append([n, "proc", [n.is_processing(), n.is_physics_processing()]])
 				n.set_process(false)
 				n.set_physics_process(false)
+		if in_foe and _frozen.size() > before:            # враг — в свой список: перемотка его не отпускает
+			_frozen_foes.append_array(_frozen.slice(before))
+			_frozen.resize(before)
 
 
 func _unfreeze_start() -> void:
@@ -309,7 +318,28 @@ func _unfreeze_step(f: float) -> void:
 			n.set_physics_process(bool(pr[1]))
 
 
+## Враги оживают: урон пришёл (щелчок цубы) или приём кончился.
+func _release_foes() -> void:
+	for fr: Array in _frozen_foes:
+		var n: Node = fr[0]
+		if not is_instance_valid(n):
+			continue
+		if str(fr[1]) == "speed_scale":
+			n.set(StringName("speed_scale"), float(fr[2]))
+		else:
+			var pr: Array = fr[2]
+			n.set_process(bool(pr[0]))
+			n.set_physics_process(bool(pr[1]))
+	_frozen_foes = []
+
+
 func _unfreeze_all() -> void:
+	_release_foes()
+	_unfreeze_world()
+
+
+## Мир (огонь, частицы, жители) — снова идёт; враги — нет (их отпускает _release_foes).
+func _unfreeze_world() -> void:
 	for fr: Array in _frozen:
 		var n: Node = fr[0]
 		if not is_instance_valid(n):
@@ -499,7 +529,7 @@ func _draw() -> void:
 func _sheathe() -> void:
 	_play("sheathe")
 	_hero.iai_sheathe()
-	_unfreeze_all()
+	_unfreeze_world()                                   # враги стоят до щелчка цубы — до урона
 	if _set_hud.is_valid():
 		_set_hud.call(true)
 	if _blade != null:
@@ -519,6 +549,7 @@ func _click() -> void:
 			_slash_mark(v as Node3D)
 			if _on_cut.is_valid():
 				_on_cut.call(v)
+	_release_foes()                                     # урон пришёл — уцелевшие снова двигаются
 
 
 func _finish(interrupted: bool) -> void:

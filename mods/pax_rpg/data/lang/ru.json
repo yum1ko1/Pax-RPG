@@ -113,5 +113,6 @@
 	"pax_rpg_gfx_blur": "Размытие поворота",
 	"pax_rpg_gfx_flare": "Сияние солнца",
 	"pax_rpg_gfx_exposure": "Адаптация глаза",
-	"pax_rpg_gfx_grass": "Трава (со след. входа)"
+	"pax_rpg_gfx_grass": "Трава (со след. входа)",
+	"pax_rpg_weapon_greatsword": "Разрубатель"
 }

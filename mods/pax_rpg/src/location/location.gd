@@ -36,6 +36,7 @@ const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
+const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
 const HERO_HP := 100.0
 const HERO_POSTURE := 100.0
 
@@ -428,6 +429,7 @@ func _warmup() -> void:
 	var at := _cam.global_position - _cam.global_transform.basis.z * 3.0
 	_sparks(at, Color(1.0, 0.8, 0.35), 4, 1.0)
 	Goblin.blood_decal(_view, at - Vector3(0.0, 1.0, 0.0))
+	Rift.prepare()                                   # рисунок трещин «Разлома» — сейчас, а не рывком в бою
 	if is_instance_valid(_iai):
 		_iai.warmup(at)
 
@@ -809,6 +811,10 @@ func _iai_cut(v: Node) -> void:
 	if g == null or not g.is_alive():
 		return
 	var dmg := _hf("iai_damage", 60.0) * _prog.damage_mult()
+	if not g.boss and is_instance_valid(_cam):          # разрез — по диагонали кадра: тело рубится пополам
+		var cb := _cam.global_transform.basis
+		var line := cb.x.rotated(-cb.z, randf_range(-1.0, 1.0))
+		g.mark_slice((-cb.z).cross(line))
 	g.take_damage(dmg if g.boss else maxf(dmg, g.hp + 1.0), _player.global_position, not g.boss)
 	g.posture = minf(g.max_posture, g.posture + (g.max_posture * 0.4 if g.boss else g.max_posture))
 	if not g.boss:
@@ -859,6 +865,11 @@ func _quake_wave(radius: float, dmg: float, i: int) -> void:
 			_numbers.append({"pos": gob.global_position + Vector3(0, 1.3, 0), "v": int(dmg), "crit": i == 2, "t": 0.0})
 	if _sfx != null:
 		_sfx.impact()
+	# «Разлом» Разрубателя: земля раскалывается (декаль трещин со светящейся маной), по кольцу волны — шипы из-под земли
+	var waves: Array = hero_cfg.get("quake_waves", [[3.0, 22.0], [5.5, 18.0], [8.0, 15.0]])
+	if i == 0:
+		Rift.crack(mod, _view, c, float((waves[waves.size() - 1] as Array)[0]) + 1.5, 7.0)
+	Rift.spikes(mod, _view, c, maxf(0.9, radius - 2.5), radius, int(radius * 2.2), 0.35)
 	# кольцо волны: светящийся тор от прошлого радиуса до этого, пыль по кругу
 	var ring := MeshInstance3D.new()
 	var tor := TorusMesh.new()
@@ -1157,12 +1168,13 @@ func _follow_camera(delta := 0.0) -> void:
 	if k > 0.0:
 		var back := Vector3(0.0, 0.0, 1.0).rotated(Vector3.UP, _yaw)
 		var right := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw)
-		var shoulder := _player.position + Vector3(0.0, _f("lock_camera_height", 1.75), 0.0) \
-			+ right * _f("lock_camera_side", 0.9) + back * _f("lock_camera_distance", 3.2)
+		# сбоку справа, а не за спиной: герой — в левой части кадра, враг открыт (спина не закрывает обзор)
+		var shoulder := _player.position + Vector3(0.0, _f("lock_camera_height", 1.65), 0.0) \
+			+ right * _f("lock_camera_side", 2.0) + back * _f("lock_camera_distance", 2.9)
 		var enemy := _lock_point if want == 0.0 else _lock.global_position + Vector3(0.0, 0.9, 0.0)
 		if want > 0.0:
 			_lock_point = enemy
-		var lock_look := (_player.position + Vector3(0.0, 1.4, 0.0)).lerp(enemy, 0.55)
+		var lock_look := (_player.position + Vector3(0.0, 1.3, 0.0)).lerp(enemy, 0.65)
 		pos = free_pos.lerp(shoulder, k)
 		look = target.lerp(lock_look, k)
 	if _shake > 0.0 and delta > 0.0:

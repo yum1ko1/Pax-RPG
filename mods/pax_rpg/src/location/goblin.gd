@@ -6,6 +6,7 @@ extends CharacterBody3D
 ## Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const BodyFx := preload("res://mods/pax_rpg/src/location/body_fx.gd")
 
 const DIR := "models/goblin/"
 const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb",
@@ -79,6 +80,14 @@ var _circle_dir := 1.0         # +1 — вправо от героя, −1 — �
 var _switch_t := 2.0
 var _since_hit := 99.0
 var _lethal := false
+var _last_away := Vector3.FORWARD   # куда отбросил последний удар — туда и падает тело
+var _slice_n := Vector3.ZERO         # иай: плоскость разреза (нормаль в мире) — тело рубится пополам
+var _layer_saved := -1
+
+
+## Иай: следующая гибель — разрубить по плоскости с нормалью n (location.gd → _iai_cut).
+func mark_slice(n: Vector3) -> void:
+	_slice_n = n.normalized()
 var _stun_t := 0.0             # с под ударами подряд
 var _swing_seen := false      # замах героя уже замечен (уходить или нет — решает один раз за удар)
 var _feint := false            # этот подход — обманный: подойдёт и отскочит, не ударив
@@ -206,6 +215,7 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	var away := global_position - from
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else Vector3.FORWARD
+	_last_away = away
 	_burst(global_position + Vector3(0.0, 0.75, 0.0) - away * 0.2, away, Color(0.55, 0.02, 0.03), 36, 3.5, 9.0, 0.5,
 		0.06)
 	if hp <= 0.0 or posture >= max_posture:
@@ -261,15 +271,29 @@ func _die() -> void:
 	# тело не исчезает: лежит, потом медленно уходит в землю; мана улетает в шкалу опыта (location.gd)
 	_burst(global_position + Vector3(0.0, 0.5, 0.0), Vector3.UP, MANA, 24, 0.8, -0.6, 0.9, 0.05, true)
 	blood_decal(get_parent(), global_position)
+	_layer_saved = collision_layer
+	collision_layer = 0                                  # павший никому не мешает (и рэгдолл о него не бьётся)
 	if _model != null:
-		var t := create_tween()
-		t.tween_interval(BODY_STAY)
-		t.tween_property(_model, "position:y", _model.position.y - 0.9, 1.6).set_ease(Tween.EASE_IN)
-		t.tween_callback(func() -> void: _model.visible = false)
+		var cut := false
+		if _slice_n != Vector3.ZERO:                     # иай: пополам, половинки падают и тают в ману
+			cut = BodyFx.slice(mod, _model, get_parent(), _slice_n, global_position + Vector3(0.0, 0.75, 0.0),
+				_last_away * 1.5, 2.2)
+		if cut:
+			_model.visible = false
+		else:                                            # физика: тело падает рэгдоллом от удара, лежит, тает в ману
+			if _anim != null:
+				_anim.stop()
+				_anim.active = false
+			BodyFx.ragdoll(BodyFx.find_skeleton(_model), _last_away * 3.0 + Vector3(0.0, 1.5, 0.0))
+			velocity = Vector3.ZERO
+			var t := create_tween()
+			t.tween_interval(BODY_STAY * 0.6)
+			t.tween_callback(func() -> void:
+				BodyFx.dissolve(mod, _model, 2.4, func() -> void: _model.visible = false))
 	if respawns:
 		get_tree().create_timer(RESPAWN).timeout.connect(_respawn)
 	else:
-		get_tree().create_timer(BODY_STAY + 2.0).timeout.connect(queue_free)
+		get_tree().create_timer(BODY_STAY + 3.5).timeout.connect(queue_free)
 
 
 static var _blood_tex: ImageTexture
@@ -332,9 +356,16 @@ func _respawn() -> void:
 	dead = false
 	_lethal = false
 	if _model != null:
+		BodyFx.stop_ragdoll(BodyFx.find_skeleton(_model))
+		BodyFx.clear(_model)
 		_model.scale = Vector3.ONE
 		_model.position.y = _model_y
 		_model.visible = true
+	if _anim != null:
+		_anim.active = true
+	if _layer_saved >= 0:
+		collision_layer = _layer_saved
+	_slice_n = Vector3.ZERO
 	position = _spawn
 	velocity = Vector3.ZERO
 	_update_bars()
