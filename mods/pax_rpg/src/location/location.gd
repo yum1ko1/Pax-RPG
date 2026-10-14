@@ -850,6 +850,8 @@ func _talk_scan(delta: float) -> void:
 func _start_talk() -> void:
 	if not is_instance_valid(_talk_npc) or not is_instance_valid(_talk):
 		return
+	if is_instance_valid(_arena) and _arena.fighting:
+		return                                       # в бою не до разговоров
 	_talk_npc.call("talk", true, _player.global_position)
 	var place := {"city": _city_name, "hero": mod.tr_key("pax_rpg_hero_name"), "hero_title": mod.tr_key("pax_rpg_hero_title")}
 	if _daynight != null and is_instance_valid(_daynight):
