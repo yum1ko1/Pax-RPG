@@ -144,7 +144,15 @@ static func _pbr(m: BaseMaterial3D) -> void:
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	if m.metallic_texture == null and m.metallic > 0.0 and not m.resource_name.to_lower().contains("metal"):
 		m.metallic = 0.0                                   # Meshy ставит металличность 1 и без карты — всё «пластиковое»
-	m.roughness = clampf(m.roughness, 0.25, 1.0)
+	# дерево, камень, ткань — матовые: при шероховатости от 0.25 Meshy-вещи блестели лаком, и отражения (SSR) на их
+	# плоскостях мерцали при каждом движении камеры — у всех ящиков, лавок, столов разом. Металл и стекло — как были
+	var nm := m.resource_name.to_lower()
+	if nm.contains("metal") or nm.contains("glass") or m.metallic > 0.0:
+		m.roughness = clampf(m.roughness, 0.25, 1.0)
+	else:
+		m.roughness_texture = null                         # карта шероховатости умножается — тёмная давала лак и при 0.7
+		m.roughness = clampf(maxf(m.roughness, 0.85), 0.85, 1.0)
+		m.metallic_specular = 0.3
 
 
 ## LOD для неподвижных сеток (у скинованных — нет: их меньше и они близко).
