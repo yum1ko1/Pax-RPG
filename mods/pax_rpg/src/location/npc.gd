@@ -17,6 +17,16 @@ var _dir := 1
 var _wait := 0.0
 var _speed := SPEED
 var _stuck := 0                    # сколько раз подряд упёрся — на третий разворачивается назад по маршруту
+# уровень детализации (как LOD у сеток, только для движения и анимации): рядом и в кадре — каждый кадр, как раньше;
+# дальше FAR м — анимация 15 раз в секунду (с 30+ м глаз разницы не видит); за кадром — не рисуется, анимация стоит, шаг пути —
+# раз в PHYS_SKIP тактов физики с накопленным временем (маршрут тот же, просто реже считается)
+const FAR := 30.0
+const PHYS_SKIP := 4
+var _anim_acc := 0.0
+var _phys_acc := 0.0
+var _tick := 0
+var _seen := true
+var _far := false
 
 
 func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> void:
@@ -45,7 +55,7 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	Assets.track(DIR + "goblin_rigged.glb", _model)
 	_anim = _find(_model)
 	if _anim != null:
-		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # ведёт _process (LOD)
 	if _anim != null:
 		var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 		for clip: String in ["walk", "idle"]:
@@ -81,8 +91,35 @@ func _play(c: String) -> void:
 
 func _physics_process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
-	_phys(delta)
+	_tick += 1
+	_phys_acc += delta
+	if _seen or _tick % PHYS_SKIP == get_instance_id() % PHYS_SKIP:   # за кадром — реже, такты разнесены по жителям
+		_phys(_phys_acc)
+		_phys_acc = 0.0
 	Prof.add("NPC", t0)
+
+
+func _process(delta: float) -> void:
+	if _anim == null:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		var p := global_position + Vector3(0.0, 0.6, 0.0)
+		_seen = true                                    # шар 1 м вокруг жителя хоть краем в кадре — виден
+		for pl: Plane in cam.get_frustum():
+			if pl.distance_to(p) > 1.0:
+				_seen = false
+				break
+		_far = p.distance_to(cam.global_position) > FAR
+		if _model != null and _model.visible != _seen:
+			_model.visible = _seen                      # вне кадра не рисуется совсем (и тень не считается)
+	_anim_acc += delta
+	if not _seen:
+		return                                          # за кадром поза не нужна; время копится — шаг не дёрнется
+	if _far and _anim_acc < 1.0 / 15.0:
+		return
+	_anim.advance(minf(_anim_acc, 0.5))
+	_anim_acc = 0.0
 
 
 func _phys(delta: float) -> void:
@@ -92,7 +129,8 @@ func _phys(delta: float) -> void:
 	if _wait > 0.0:
 		_wait -= delta
 		velocity = Vector3(0.0, fall, 0.0)
-		move_and_slide()
+		if not is_on_floor():                            # стоит на земле — двигать нечего (дорогой расчёт столкновений)
+			move_and_slide()
 		_play("idle")
 		return
 	var target := _path[_i]
