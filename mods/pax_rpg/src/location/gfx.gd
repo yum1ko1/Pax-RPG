@@ -84,7 +84,7 @@ func _f(key: String, fallback: float) -> float:
 
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
-const MENU_KEYS := ["gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
+const MENU_KEYS := ["resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
 	"flare", "auto_exposure", "grass_density"]
 var _ovr := {}
 var _env: Environment
@@ -105,9 +105,11 @@ func load_overrides() -> void:
 func set_option(key: String, value: Variant) -> void:
 	_ovr[key] = value
 	match key:
-		"aa", "fsr_scale":
+		"aa", "fsr_scale", "resolution":
 			if is_instance_valid(view):
 				_apply_aa(view)
+		"fps_limit", "vsync":
+			apply_frame_limits()
 		"lens_sharpen":
 			if lens_mat != null:
 				lens_mat.set_shader_parameter("sharpen", float(value))
@@ -131,6 +133,46 @@ func apply_viewport(v: SubViewport) -> void:
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
+	# все ячейки атласа теней огней одного размера (16 × 1024² в 4096²): Godot не перекладывает тени между ячейками
+	# разного размера по мере того, как огни растут и уменьшаются на экране, — тени не скачут по чёткости
+	for q: int in 4:
+		v.set_positional_shadow_atlas_quadrant_subdiv(q, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4)
+
+
+## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте окна.
+## Выше окна (4K на мониторе 1440p) — суперсэмплинг: рендер больше и сжимается до окна (резче, дороже);
+## ниже — рендер меньше и растягивается (FSR 2, если выбран, иначе билинейно).
+func _apply_resolution(v: SubViewport) -> void:
+	var res := str(_v("resolution", "native")).to_int()
+	if res <= 0:
+		return
+	var win_h := float(maxi(DisplayServer.window_get_size().y, 1))
+	var k := clampf(float(res) / win_h, 0.25, 2.0)
+	if v.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2 and k <= 1.0:
+		v.scaling_3d_scale = k * v.scaling_3d_scale
+	else:
+		v.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		v.scaling_3d_scale = k
+
+
+## Частота кадров (меню «Графика»): fps_limit 0 — без ограничения, vsync — вертикальная синхронизация. На время
+## локации; leave_frame_limits() возвращает то, что стояло в игре.
+var _frame_saved: Array = []
+
+
+func apply_frame_limits() -> void:
+	if _frame_saved.is_empty():
+		_frame_saved = [Engine.max_fps, DisplayServer.window_get_vsync_mode()]
+	Engine.max_fps = int(float(_v("fps_limit", 0.0)))
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if _b("vsync", false) else DisplayServer.VSYNC_DISABLED)
+
+
+func leave_frame_limits() -> void:
+	if _frame_saved.is_empty():
+		return
+	Engine.max_fps = int(_frame_saved[0])
+	DisplayServer.window_set_vsync_mode(int(_frame_saved[1]) as DisplayServer.VSyncMode)
+	_frame_saved = []
 
 
 ## Сглаживание (меню может менять его на ходу).
@@ -148,6 +190,7 @@ func _apply_aa(v: SubViewport) -> void:
 			v.fsr_sharpness = _f("fsr_sharpness", 0.15)    # 0 — резче всего, 2 — без повышения резкости
 		"msaa":
 			v.msaa_3d = Viewport.MSAA_2X
+	_apply_resolution(v)
 
 
 func apply_env(env: Environment, we: WorldEnvironment) -> void:
@@ -324,6 +367,7 @@ func restore_globals() -> void:
 
 func _exit_tree() -> void:
 	restore_globals()
+	leave_frame_limits()
 	_drop_camera_effects()
 
 
@@ -355,7 +399,7 @@ func _lamp_shadows() -> void:
 		return
 	if not _fogs_made:
 		_fire_fog()
-	var cp := cam.global_position
+	var hp := player.global_position if is_instance_valid(player) else cam.global_position
 	var near: Array = []
 	for l: Array in lights:
 		var ol := l[0] as OmniLight3D
@@ -365,11 +409,14 @@ func _lamp_shadows() -> void:
 			ol.set_meta("pax_rpg_lamp", true)
 			ol.light_size = 0.12                         # мягкий край тени фонаря
 			ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # подсвечивает воздух рядом, а не туманный шар
-		var d := ol.global_position.distance_to(cp)
+		# по расстоянию до героя, а не по кадру: тень огня за краем кадра всё равно лежит в кадре, а проверка «в кадре»
+		# от покачивания камеры включала и выключала тени — они прыгали. Яркость — базовая (без мерцания огня)
+		var d := ol.global_position.distance_to(hp)
 		if ol.shadow_enabled:
 			d -= 6.0                                     # запас: огонь с тенью держит её, пока не станет заметно дальше
-		var seen := cam.is_position_in_frustum(ol.global_position) or ol.global_position.distance_to(cp) < ol.omni_range
-		if ol.visible and ol.light_energy > 0.1 and d < 35.0 and seen:   # тень — только у огней, что в кадре
+		var base_e: Variant = ol.get("base")
+		var e := float(base_e) if base_e != null else ol.light_energy
+		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 35.0:
 			near.append([d, ol])
 		elif ol.shadow_enabled:
 			ol.shadow_enabled = false

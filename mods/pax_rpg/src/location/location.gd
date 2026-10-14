@@ -407,12 +407,23 @@ func build(city: Dictionary) -> void:
 	_update_hud()
 	visible = true
 	active = true
+	_game_3d(false)
+	if is_instance_valid(_gfx):
+		_gfx.apply_frame_limits()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED     # камера — мышью, без зажатой кнопки (ПКМ — блок)
 	_build_finished = true
 	_mark("build done")
 	if not layout.is_empty():
 		_warmup()                                    # шейдеры боя — под закрытым экраном загрузки
 	_check_ready(gen)
+
+
+## 3D игры (глобус, космос) под локацией не видно, но оно рисовалось каждый кадр — пока герой в городе, окно игры
+## не рисует свой 3D (свой мир локации — в своём SubViewport и рисуется дальше).
+func _game_3d(on: bool) -> void:
+	var root := get_tree().root
+	if root != null:
+		root.disable_3d = not on
 
 
 ## Всё построено и трава встала — локацию можно показывать.
@@ -453,6 +464,9 @@ func clear() -> void:
 	_grass = null
 	if active:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_game_3d(true)
+		if is_instance_valid(_gfx):
+			_gfx.leave_frame_limits()
 	active = false
 	visible = false
 	_turning = false

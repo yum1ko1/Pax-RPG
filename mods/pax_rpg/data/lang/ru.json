@@ -182,5 +182,17 @@
 	"pax_rpg_wskill_guard_desc": "ПКМ: клинок закрывает корпус. В первые доли секунды — парирование.",
 	"pax_rpg_wskill_iai": "Иай: остановка времени",
 	"pax_rpg_wskill_iai_desc": "V: время замирает, клинок выходит из ножен — враги на экране разрублены, когда цуба щёлкнет о ножны.",
-	"pax_rpg_char_weapon_note": "Особые приёмы — у оружия: Разлом у Разрубателя, Иай у катаны"
+	"pax_rpg_char_weapon_note": "Особые приёмы — у оружия: Разлом у Разрубателя, Иай у катаны",
+	"pax_rpg_gfx_res": "Разрешение",
+	"pax_rpg_gfx_res_native": "Как у окна",
+	"pax_rpg_gfx_res_1080": "1920 × 1080 (Full HD)",
+	"pax_rpg_gfx_res_1440": "2560 × 1440 (2K)",
+	"pax_rpg_gfx_res_2160": "3840 × 2160 (4K)",
+	"pax_rpg_gfx_fps": "Ограничение кадров",
+	"pax_rpg_gfx_fps_off": "Без ограничения",
+	"pax_rpg_gfx_fps_60": "60",
+	"pax_rpg_gfx_fps_144": "144",
+	"pax_rpg_gfx_fps_165": "165",
+	"pax_rpg_gfx_fps_240": "240",
+	"pax_rpg_gfx_vsync": "Вертикальная синхронизация"
 }

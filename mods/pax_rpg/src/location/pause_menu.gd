@@ -248,6 +248,12 @@ func _fill_gfx() -> void:
 		c.queue_free()
 	_choice("pax_rpg_gfx_preset", "preset", [["custom", "pax_rpg_gfx_custom"], ["low", "pax_rpg_gfx_low"],
 		["mid", "pax_rpg_gfx_mid"], ["high", "pax_rpg_gfx_high"], ["ultra", "pax_rpg_gfx_ultra"]], "custom")
+	_choice("pax_rpg_gfx_res", "resolution", [["native", "pax_rpg_gfx_res_native"], ["1080", "pax_rpg_gfx_res_1080"],
+		["1440", "pax_rpg_gfx_res_1440"], ["2160", "pax_rpg_gfx_res_2160"]], str(_gfx_cfg.get("resolution", "native")))
+	_choice("pax_rpg_gfx_fps", "fps_limit", [["0", "pax_rpg_gfx_fps_off"], ["60", "pax_rpg_gfx_fps_60"],
+		["144", "pax_rpg_gfx_fps_144"], ["165", "pax_rpg_gfx_fps_165"], ["240", "pax_rpg_gfx_fps_240"]],
+		str(_gfx_cfg.get("fps_limit", "0")))
+	_toggle("pax_rpg_gfx_vsync", "vsync", bool(_gfx_cfg.get("vsync", false)))
 	_toggle("pax_rpg_gfx_gi", "gi", str(_gfx_cfg.get("gi", "sdfgi")) == "sdfgi")
 	_toggle("pax_rpg_gfx_ssil", "ssil", bool(_gfx_cfg.get("ssil", true)))
 	_toggle("pax_rpg_gfx_ssao", "ssao", bool(_gfx_cfg.get("ssao", true)))

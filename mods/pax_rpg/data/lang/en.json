@@ -182,5 +182,17 @@
 	"pax_rpg_wskill_guard_desc": "RMB: the blade covers the body. The first split second is a parry.",
 	"pax_rpg_wskill_iai": "Iai: time stop",
 	"pax_rpg_wskill_iai_desc": "V: time freezes, the blade is drawn — enemies on screen are cut when the tsuba clicks against the sheath.",
-	"pax_rpg_char_weapon_note": "Special abilities belong to weapons: Rift to the Cleaver, Iai to the katana"
+	"pax_rpg_char_weapon_note": "Special abilities belong to weapons: Rift to the Cleaver, Iai to the katana",
+	"pax_rpg_gfx_res": "Resolution",
+	"pax_rpg_gfx_res_native": "Window",
+	"pax_rpg_gfx_res_1080": "1920 × 1080 (Full HD)",
+	"pax_rpg_gfx_res_1440": "2560 × 1440 (2K)",
+	"pax_rpg_gfx_res_2160": "3840 × 2160 (4K)",
+	"pax_rpg_gfx_fps": "Frame limit",
+	"pax_rpg_gfx_fps_off": "Unlimited",
+	"pax_rpg_gfx_fps_60": "60",
+	"pax_rpg_gfx_fps_144": "144",
+	"pax_rpg_gfx_fps_165": "165",
+	"pax_rpg_gfx_fps_240": "240",
+	"pax_rpg_gfx_vsync": "Vertical sync"
 }
