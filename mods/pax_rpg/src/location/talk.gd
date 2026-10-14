@@ -55,7 +55,12 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_log.add_theme_font_override("normal_font", sans)
 	_log.add_theme_font_size_override("normal_font_size", 17)
 	_panel.add_child(_log)
-	var x := 28.0
+	var manner := _label(sans, 15, Vector2(28, 276))      # подпись: ключи — манера реплики, а не её смысл
+	manner.text = mod.tr_key("pax_rpg_talk_manner")
+	manner.tooltip_text = mod.tr_key("pax_rpg_talk_manner_tip")
+	manner.mouse_filter = Control.MOUSE_FILTER_PASS
+	manner.reset_size()
+	var x := 28.0 + manner.size.x + 10.0
 	for k: String in KEYS:                              # ключи тона
 		var b := Button.new()
 		b.text = mod.tr_key("pax_rpg_talk_key_" + k)
@@ -64,6 +69,7 @@ func setup(m: PaxMod, h: Hud) -> void:
 		b.position = Vector2(x, 270)
 		b.add_theme_font_override("font", sans)
 		b.add_theme_font_size_override("font_size", 14)
+		b.tooltip_text = mod.tr_key("pax_rpg_talk_manner_tip")
 		b.toggled.connect(_on_key.bind(k))
 		_panel.add_child(b)
 		b.reset_size()

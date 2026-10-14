@@ -200,7 +200,7 @@
 	"pax_rpg_wrist_map": "Карта",
 	"pax_rpg_wrist_menu": "Меню",
 	"pax_rpg_talk_placeholder": "Что вы скажете? (Enter — сказать, Esc — уйти)",
-	"pax_rpg_talk_hint": "Напишите реплику. Ключ тона над полем подскажет собеседнику, чего вы хотите.",
+	"pax_rpg_talk_hint": "Напишите реплику. Манера над полем — как вы её произносите (необязательно); что вы говорите, собеседник поймёт по словам.",
 	"pax_rpg_talk_key_question": "Вопрос",
 	"pax_rpg_talk_key_trade": "Торг",
 	"pax_rpg_talk_key_quest": "Задание",
@@ -226,5 +226,7 @@
 	"pax_rpg_npc_role_smith": "Кузнец",
 	"pax_rpg_npc_role_beggar": "Нищий",
 	"pax_rpg_npc_role_cook": "Повар",
-	"pax_rpg_npc_role_porter": "Носильщик"
+	"pax_rpg_npc_role_porter": "Носильщик",
+	"pax_rpg_talk_manner": "Манера:",
+	"pax_rpg_talk_manner_tip": "Как вы это говорите. Смысл берётся из ваших слов: угроза с манерой «Лесть» прозвучит как издёвка."
 }

@@ -200,7 +200,7 @@
 	"pax_rpg_wrist_map": "Map",
 	"pax_rpg_wrist_menu": "Menu",
 	"pax_rpg_talk_placeholder": "What do you say? (Enter — say, Esc — leave)",
-	"pax_rpg_talk_hint": "Type a line. A tone key above the field tells them what you want.",
+	"pax_rpg_talk_hint": "Type a line. The manner above the field is how you say it (optional); what you say they read from your words.",
 	"pax_rpg_talk_key_question": "Question",
 	"pax_rpg_talk_key_trade": "Trade",
 	"pax_rpg_talk_key_quest": "Quest",
@@ -226,5 +226,7 @@
 	"pax_rpg_npc_role_smith": "Smith",
 	"pax_rpg_npc_role_beggar": "Beggar",
 	"pax_rpg_npc_role_cook": "Cook",
-	"pax_rpg_npc_role_porter": "Porter"
+	"pax_rpg_npc_role_porter": "Porter",
+	"pax_rpg_talk_manner": "Manner:",
+	"pax_rpg_talk_manner_tip": "How you say it. The meaning comes from your words: a threat in the «Flatter» manner sounds like mockery."
 }
