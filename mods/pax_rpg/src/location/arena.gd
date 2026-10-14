@@ -1,6 +1,8 @@
 extends Node
 ## Арена города (центр — config/<город>.json → "arena": [x, z, радиус ямы, сторона главного входа]).
-## Лестница боёв: 1 гоблин → 2 → 3 → 5 → Гхаррок, чемпион арены. Между боями — «готов к следующему?» (E).
+## Лестница боёв: 1 гоблин → 2 → 3 → 5 → Гхаррок, чемпион арены. После победы решётки поднимаются — можно уйти
+## пешком или начать следующий бой (E); отошёл от ямы — трибуны пустеют. Пока идёт бой, время суток стоит
+## (location.gd → daynight.frozen).
 ## Вход в бой: затемнение и мини-загрузка, на трибунах зрители, выходы закрыты решётками; герой — у южного
 ## входа, бойцы — напротив. Выход (X) или поражение: затемнение, пустые трибуны, решётки подняты.
 ## Прогресс — в настройке мода arena_stage (сколько ступеней пройдено).
@@ -73,6 +75,9 @@ func tick() -> void:
 		toast.emit(mod.tr_key("pax_rpg_arena_prompt") % _foe_text(stage()))
 	_inside = inside
 	if not fighting:
+		if _crowd != null and not inside and Vector2(_player.global_position.x - center.x,
+				_player.global_position.z - center.z).length() > pit + 4.0:
+			_fill_crowd(false)                         # ушёл после победы — представление окончено
 		return
 	for f: Variant in _foes:
 		if is_instance_valid(f) and not (f as Goblin).dead:
@@ -116,6 +121,7 @@ func _win() -> void:
 	var last := i >= LADDER.size() - 1
 	if not last:
 		mod.set_setting("arena_stage", i + 1)
+	_open(true)                                        # решётки поднимаются: выход свободен, E — следующий бой
 	var txt := mod.tr_key("pax_rpg_arena_champion") if last else (mod.tr_key("pax_rpg_arena_next") % _foe_text(i + 1))
 	toast.emit(txt)
 

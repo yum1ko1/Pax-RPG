@@ -41,7 +41,12 @@ func _process(delta: float) -> void:
 	Prof.add("день/ночь", t0)
 
 
+var frozen := false                # бой на арене — время суток стоит (location.gd)
+
+
 func _proc(delta: float) -> void:
+	if frozen:
+		return
 	hour = fmod(hour + delta * 24.0 / (day_minutes * 60.0), 24.0)
 	_since += delta
 	if _since >= STEP:

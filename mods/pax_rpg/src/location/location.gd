@@ -1075,6 +1075,8 @@ func _physics_body(delta: float) -> void:
 	_follow_camera(delta)
 	if is_instance_valid(_arena):
 		_arena.tick()
+		if _daynight != null and is_instance_valid(_daynight):
+			_daynight.frozen = _arena.fighting           # бой на арене — время суток на паузе
 	var near := Vector2(_player.position.x - _gate_pos.x, _player.position.z - _gate_pos.z).length() < _gate_radius
 	if near != _near_gate:
 		_near_gate = near
