@@ -193,6 +193,7 @@ func _draw() -> void:
 	_draw_enemy()
 	_draw_marks()
 	_draw_toast()
+	_draw_gold()
 	_draw_hint()
 	_draw_orbs()
 
@@ -996,6 +997,60 @@ func _wrap(line: String, width: float, fs: int) -> PackedStringArray:
 	if cur != "":
 		out.append(cur)
 	return out
+
+
+## Золото слева вверху: монета (золото, шлем самурая, розовое переливающееся свечение) и число монет.
+func _draw_gold() -> void:
+	var t := Time.get_ticks_msec() * 0.001
+	var c := Vector2(70, 70)
+	coin(self, c, 30.0, t, float(_g("gold_flash", 0.0)))
+	var fl := float(_g("gold_flash", 0.0))
+	_text(Vector2(112, 82), str(int(_g("gold", 0))), serif, 38, c_gold_hi.lerp(Color.WHITE, fl * 0.6), HORIZONTAL_ALIGNMENT_LEFT, -1, 5)
+	_text(Vector2(114, 104), _tr("pax_rpg_gold_name").to_upper(), sans, 12, Color(c_muted, 0.85), HORIZONTAL_ALIGNMENT_LEFT, -1, 3)
+
+
+## Золотая монета: ореол — мягкое розовое свечение, дышит и переливается; диск — от тёмного золота к светлому, рифлёный
+## ободок, внутренний кант; в центре — чеканный шлем самурая (кабуто с рогами-кувагата); по монете бежит блик.
+## ci — где рисовать (HUD, окна), flash 0..1 — вспышка, когда монеты пришли.
+static func coin(ci: CanvasItem, c: Vector2, r: float, t: float, flash := 0.0) -> void:
+	var pulse := 0.5 + 0.5 * sin(t * 2.2)
+	for k: int in 5:                                         # розоватое свечение
+		var hue := 0.92 + 0.04 * sin(t * 1.3 + k)
+		ci.draw_circle(c, r * (1.25 + k * 0.16), Color.from_hsv(hue, 0.45, 1.0, (0.06 + 0.04 * pulse + 0.1 * flash) * (1.0 - k * 0.18)))
+	ci.draw_circle(c, r, Color(0.45, 0.28, 0.06))
+	for k: int in 6:                                         # объём диска: к центру светлее
+		var f := float(k) / 5.0
+		ci.draw_circle(c + Vector2(-r * 0.08, -r * 0.08) * f, r * (0.97 - f * 0.25), Color(0.62, 0.42, 0.1).lerp(Color(1.0, 0.82, 0.38), f))
+	for i: int in 36:                                        # рифлёный ободок
+		var a := TAU * i / 36.0
+		var d := Vector2(cos(a), sin(a))
+		ci.draw_line(c + d * r * 0.86, c + d * r * 0.99, Color(0.5, 0.32, 0.08, 0.7), 1.2, true)
+	ci.draw_arc(c, r * 0.8, 0.0, TAU, 48, Color(0.55, 0.36, 0.08, 0.9), 1.4, true)
+	ci.draw_arc(c, r * 0.99, 0.0, TAU, 48, Color(1.0, 0.9, 0.6, 0.8), 1.2, true)
+	# кабуто: купол, назатыльник уступами, рога-кувагата, личина
+	var hc := c + Vector2(0, r * 0.08)
+	var dark := Color(0.48, 0.3, 0.06)
+	var lite := Color(1.0, 0.9, 0.55, 0.9)
+	ci.draw_arc(hc, r * 0.32, PI, TAU, 24, dark, r * 0.14, true)                            # купол
+	ci.draw_colored_polygon(PackedVector2Array([hc + Vector2(-r * 0.5, r * 0.02), hc + Vector2(r * 0.5, r * 0.02),
+		hc + Vector2(r * 0.58, r * 0.2), hc + Vector2(-r * 0.58, r * 0.2)]), dark)          # шикоро — назатыльник
+	ci.draw_colored_polygon(PackedVector2Array([hc + Vector2(-r * 0.42, r * 0.22), hc + Vector2(r * 0.42, r * 0.22),
+		hc + Vector2(r * 0.5, r * 0.36), hc + Vector2(-r * 0.5, r * 0.36)]), dark)
+	for sgn: float in [-1.0, 1.0]:                          # кувагата — рога вверх
+		var base := hc + Vector2(sgn * r * 0.1, -r * 0.3)
+		ci.draw_polyline(PackedVector2Array([base, base + Vector2(sgn * r * 0.16, -r * 0.2), base + Vector2(sgn * r * 0.3, -r * 0.42)]),
+			dark, r * 0.07, true)
+	ci.draw_circle(hc + Vector2(0, -r * 0.3), r * 0.06, dark)                              # маэдатэ
+	ci.draw_colored_polygon(PackedVector2Array([hc + Vector2(-r * 0.16, r * 0.05), hc + Vector2(r * 0.16, r * 0.05),
+		hc + Vector2(r * 0.1, r * 0.2), hc + Vector2(-r * 0.1, r * 0.2)]), Color(0.36, 0.22, 0.04))   # личина
+	ci.draw_arc(hc, r * 0.32, PI * 1.15, PI * 1.55, 12, lite, 1.2, true)                    # грань купола на свету
+	var sweep := fmod(t * 0.45, 1.6) - 0.3                  # блик пробегает по монете
+	if sweep > 0.0 and sweep < 1.0:
+		var sx := lerpf(-r, r, sweep)
+		var hw := r * 0.18
+		var yy := sqrt(maxf(0.0, r * r - sx * sx)) * 0.92
+		ci.draw_colored_polygon(PackedVector2Array([c + Vector2(sx - hw, -yy), c + Vector2(sx + hw * 0.4, -yy),
+			c + Vector2(sx + hw, yy), c + Vector2(sx - hw * 0.4, yy)]), Color(1.0, 0.97, 0.9, 0.28))
 
 
 func _draw_hint() -> void:

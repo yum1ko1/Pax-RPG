@@ -104,6 +104,7 @@ func setup(mod: PaxMod) -> void:
 
 func _layout() -> void:
 	var s := maxf(size.y, 1.0) / 1080.0
+	_btn.visible = false                                 # кнопки-подсказки нет: на её месте — золото (hud.gd); окно — по H
 	_btn.position = Vector2(32, 190) * s
 	_btn.scale = Vector2(s, s)
 	_panel.position = Vector2(32, 236) * s

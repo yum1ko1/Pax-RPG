@@ -10,6 +10,7 @@ var mod: PaxMod
 var level := 1
 var xp := 0.0                      # опыт внутри текущего уровня
 var skill_points := 0
+var gold := 0                      # золотые монеты (враги, задания; HUD — слева вверху)
 var stats_added: Dictionary = {}   # очки характеристик, вложенные игроком: ключ характеристики → сколько
 var cfg: Dictionary = {}
 
@@ -22,6 +23,7 @@ func setup(m: PaxMod, c: Dictionary) -> void:
 		level = maxi(1, int((saved as Dictionary).get("level", 1)))
 		xp = float((saved as Dictionary).get("xp", 0.0))
 		skill_points = int((saved as Dictionary).get("skill_points", 0))
+		gold = int((saved as Dictionary).get("gold", 0))
 		var sa: Variant = (saved as Dictionary).get("stats_added", {})
 		stats_added = sa if sa is Dictionary else {}
 
@@ -55,7 +57,13 @@ func add_xp(v: float) -> int:
 
 
 func _save() -> void:
-	mod.set_setting("progress", {"level": level, "xp": xp, "skill_points": skill_points, "stats_added": stats_added})
+	mod.set_setting("progress", {"level": level, "xp": xp, "skill_points": skill_points, "stats_added": stats_added,
+		"gold": gold})
+
+
+func add_gold(v: int) -> void:
+	gold = maxi(0, gold + v)
+	_save()
 
 
 # ---------- очки характеристик и масштабирование урона ----------

@@ -133,6 +133,7 @@ var _npcs: Array = []
 var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
 var _journal: Journal              # журнал заданий (J)
+var _gold_flash := 0.0             # монеты пришли — счётчик золота вспыхивает
 var _quest_item: Node3D            # находка задания в лесу (светится; вошёл в зону — взял)
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
@@ -365,6 +366,10 @@ func build(city: Dictionary) -> void:
 	add_child(_talk)
 	_talk.closed.connect(_end_talk)
 	_talk.quest_changed.connect(_mark_giver)
+	_talk.rewarded.connect(func(coins: int) -> void:
+		_prog.add_gold(coins)
+		_gold_flash = 1.0
+		_toast = {"text": mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0})
 	_journal = Journal.new()
 	_journal.setup(mod, _hud)
 	add_child(_journal)
@@ -1959,6 +1964,7 @@ func _process(delta: float) -> void:
 ## Шарики маны: по кривой от павшего врага к концу полоски опыта; долетел — +опыт (полоска растёт на глазах).
 func _tick_orbs(delta: float) -> void:
 	_lvl_flash = maxf(0.0, _lvl_flash - delta)
+	_gold_flash = maxf(0.0, _gold_flash - delta * 0.8)
 	if _orbs.is_empty() or not is_instance_valid(_hud):
 		return
 	var keep: Array = []
@@ -2022,7 +2028,11 @@ func _hud_tick(delta: float) -> void:
 			for k: int in n:
 				_orbs.append({"p0": from + Vector2(randf_range(-30, 30), randf_range(-30, 30)), "t": 0.0,
 					"delay": k * 0.06, "v": gain / n, "bend": randf_range(-1.0, 1.0)})
-			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), int(gain)], "t": 0.0}
+			var coins := randi_range(6, 14)                # и немного золота
+			_prog.add_gold(coins)
+			_gold_flash = 1.0
+			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
+				mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0}
 		elif gob.is_alive():
 			_dead_seen[id] = false
 	_tick_orbs(delta)
@@ -2034,7 +2044,7 @@ func _hud_tick(delta: float) -> void:
 	_hint_t = maxf(0.0, _hint_t - delta)
 	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(),
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
-		"skill_points": _prog.skill_points, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,

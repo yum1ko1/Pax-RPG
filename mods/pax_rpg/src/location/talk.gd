@@ -7,6 +7,7 @@ extends Control
 ## Enter — сказать, Esc — уйти. Мир на паузе, пока окно открыто (location.gd → paused()).
 
 signal closed
+signal rewarded(coins: int)          # сдано задание — награда золотом (location.gd → progress.add_gold)
 signal quest_changed                 # выдано или сдано задание — точка на глобусе меняется (location → travel → planet)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
@@ -265,6 +266,9 @@ func _answer(a: Dictionary, key: String, tok: int) -> void:
 		_log.append_text("[color=#e8c070]◆ %s[/color]\n" % _esc(mod.tr_key("pax_rpg_quest_new") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))))
 		quest_changed.emit()
 	elif qs == "return":
+		var coins := randi_range(80, 150)
+		rewarded.emit(coins)
+		_log.append_text("[color=#e8c070]◆ %s[/color]\n" % _esc(mod.tr_key("pax_rpg_gold_got") % coins))
 		_log.append_text("[color=#e8c070]◆ %s[/color]\n" % _esc(mod.tr_key("pax_rpg_quest_done")))
 		quest_changed.emit()
 	if key == "bye":

@@ -257,5 +257,7 @@
 	"pax_rpg_journal_active": "Ищется",
 	"pax_rpg_journal_found": "Найдено — вернуть",
 	"pax_rpg_journal_todo_active": "Отправляйтесь в лес: точка «❖ Задание» на карте мира. Вещь стерегут гоблины.",
-	"pax_rpg_journal_todo_found": "Вернитесь к жителю %s (%s): над ним золотой ❖. В разговоре — кнопка «Отдать»."
+	"pax_rpg_journal_todo_found": "Вернитесь к жителю %s (%s): над ним золотой ❖. В разговоре — кнопка «Отдать».",
+	"pax_rpg_gold_got": "+%d золота",
+	"pax_rpg_gold_name": "Золото"
 }

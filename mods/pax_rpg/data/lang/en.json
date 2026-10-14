@@ -257,5 +257,7 @@
 	"pax_rpg_journal_active": "Searching",
 	"pax_rpg_journal_found": "Found — return it",
 	"pax_rpg_journal_todo_active": "Go to the forest: the «❖ Quest» mark on the world map. Goblins guard the item.",
-	"pax_rpg_journal_todo_found": "Return to %s (%s): a golden ❖ above them. In the talk — the «Give» button."
+	"pax_rpg_journal_todo_found": "Return to %s (%s): a golden ❖ above them. In the talk — the «Give» button.",
+	"pax_rpg_gold_got": "+%d gold",
+	"pax_rpg_gold_name": "Gold"
 }
