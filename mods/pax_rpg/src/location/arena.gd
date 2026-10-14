@@ -36,6 +36,7 @@ var _fade: ColorRect
 var _fade_label: Label
 var _busy := false
 var _inside := false
+var _near_hint := false
 
 
 func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_foe: Callable, heal: Callable) -> void:
@@ -76,7 +77,12 @@ func _foe_text(i: int) -> String:
 func tick() -> void:
 	if not is_instance_valid(_player) or _busy:
 		return
-	var inside := Vector2(_player.global_position.x - center.x, _player.global_position.z - center.z).length() < pit
+	var dist := Vector2(_player.global_position.x - center.x, _player.global_position.z - center.z).length()
+	var inside := dist < pit and _player.global_position.y < -1.0      # в яме (на решётке сверху — нет)
+	var near := dist < RIM + 6.0 and not inside
+	if near and not _near_hint and not fighting:
+		toast.emit(mod.tr_key("pax_rpg_arena_way_down"))   # где спуск
+	_near_hint = near
 	if inside and not _inside and not fighting:
 		toast.emit(mod.tr_key("pax_rpg_arena_prompt") % _foe_text(stage()))
 	_inside = inside
@@ -297,7 +303,7 @@ func _build_bowl(view: Node) -> void:
 			g.add_child(body)
 		var key := ""                                     # материал — по имени части (имена материалов glb не доходят)
 		for pair: Array in [["floor", "arena_sand"], ["wall", "arena_wall"], ["rim", "arena_seat"], ["stairs", "arena_seat"],
-				["fence", "wood"], ["roof", "iron"]]:
+				["fence", "wood"], ["roof", "iron"], ["rail", "iron"]]:
 			if nm.begins_with(str(pair[0])):
 				key = str(pair[1])
 		for si: int in g.mesh.get_surface_count():
@@ -305,6 +311,21 @@ func _build_bowl(view: Node) -> void:
 			if mat != null:
 				g.set_surface_override_material(si, mat)
 		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	for xs: float in [1.0, -1.0]:                      # каменные фонари у проходов к лестницам — спуск видно издалека
+		var dir := Vector3(xs * STX, 0.0, ST_TOP).normalized()
+		var side := Vector3(-dir.z, 0.0, dir.x)
+		for k: float in [-1.0, 1.0]:
+			var lt := Assets.model(mod, "models/gharn/props/stone_lantern.glb")
+			if lt != null:
+				lt.position = center + dir * (RIM + 0.6) + side * k * 1.8
+				view.add_child(lt)
+				var ol := OmniLight3D.new()
+				ol.light_color = Color(1.0, 0.7, 0.4)
+				ol.light_energy = 0.8
+				ol.omni_range = 5.0
+				ol.light_volumetric_fog_energy = 0.0
+				ol.position = Vector3(0, 1.2, 0)
+				lt.add_child(ol)
 	var run := ST_TOP - ST_BOT
 	for xs: float in [1.0, -1.0]:
 		var ramp := StaticBody3D.new()
