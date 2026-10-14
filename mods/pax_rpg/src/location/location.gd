@@ -255,6 +255,8 @@ func build(city: Dictionary) -> void:
 	city_data = city
 	var layout := Forest.generate(int(city.get("seed", 0)), Quest.get_q(mod)) if str(city.get("id", "")) == "forest" \
 		else _city_layout(str(city.get("id", "")))
+	if str(city.get("id", "")) == "gharn":
+		_palace_stairs(layout)
 	if not layout.is_empty() and not layout.has("forest") and not layout.has("decor"):
 		layout["decor"] = {"seed": 4242, "count": 420}    # природа в городе: камни, трава, цветы (city.gd → _decor)
 	START = ARENA_START
@@ -640,6 +642,32 @@ func _spawn_npcs(layout: Dictionary) -> void:
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n, int(npc.get("relation"))))
 		_view.add_child(npc)
 		_npcs.append(npc)
+
+
+## Ко дворцу хана — лестница: цоколь (коробка 52 × 3 × 36 у z = −54) раньше стоял глухой стеной перед входом.
+## Ступени — для вида (без коллизии), под ними пологий пандус с коллизией: герой поднимается шагом.
+func _palace_stairs(layout: Dictionary) -> void:
+	var items: Array = layout.get("items", [])
+	for it: Variant in items:
+		var d: Dictionary = it
+		if d.has("box") and str(d.get("mat", "")) == "stone_cut":
+			var b: Array = d.box
+			var p: Array = d.p
+			if float(b[1]) >= 2.0 and float(b[0]) > 30.0:
+				var h := float(b[1])
+				var front := float(p[2]) + float(b[2]) * 0.5     # к воротам (+Z)
+				var run := h * 3.2                               # длина лестницы (уклон ~17°)
+				var steps := int(ceil(h / 0.25))
+				for i: int in steps:
+					var top := h - i * (h / steps)
+					var dz := run / steps
+					items.append({"box": [14, top, dz], "mat": "stone_cut", "p": [float(p[0]), top * 0.5, front + dz * (i + 0.5)],
+						"r": 0.0, "c": false})
+				var slope := atan2(h, run)
+				items.append({"box": [14, 0.2, sqrt(h * h + run * run)], "mat": "stone_cut",
+					"p": [float(p[0]), h * 0.5 - 0.05, front + run * 0.5], "r": 0.0, "rx": rad_to_deg(slope), "c": true, "ramp": true})
+				break
+	layout["items"] = items
 
 
 ## Находка задания: светящаяся вещь на поляне (зона 1.6 м), рядом — гоблины задания (quest_goblins).

@@ -70,7 +70,7 @@ func setup(m: PaxMod = null) -> void:
 		var mat := ShaderMaterial.new()
 		mat.shader = sh
 		_stage.material = mat
-	_fly = _player("sounds/katana_fly_%d.ogg", 3, -6.0)
+	_fly = _player("sounds/katana_hit_%d.ogg", 3, -8.0)       # вместо свиста — звон катаны, как в заставке города
 	_hit = _player("sounds/katana_hit_%d.ogg", 3, -4.0)
 	_thud = _player("sounds/body_fall.ogg", 0, -3.0)
 
@@ -334,24 +334,6 @@ func _draw_stage() -> void:
 		var f := _frame()
 		var src := Rect2(float((f % cols) * int(cell[0])), float((f / cols) * int(cell[1])), float(cell[0]), float(cell[1]))
 		_stage.draw_texture_rect_region(_sheet, Rect2(wr.position + _shiver(), wr.size), src)
-	if _die > 0.62:                                         # пыль от удара о землю — клубы дыма (флипбук vfx)
-		var b := (_die - 0.62) / 0.38
-		var ground := _bone("Spine01")
-		ground.y = _warrior_rect().end.y
-		if _smoke == null and mod != null:
-			_smoke = mod.texture("textures/vfx/smoke_8x8.png")
-		if _smoke != null:
-			var fw := float(_smoke.get_width()) / 8.0
-			for j: int in 9:
-				var hsh := absf(fmod(sin(j * 12.9898) * 43758.5453, 1.0))
-				var t := clampf(b * 1.15 - hsh * 0.15, 0.0, 1.0)      # клубы стартуют чуть вразнобой
-				var fi := mini(int(t * 63.0), 63)
-				var src := Rect2((fi % 8) * fw, (fi / 8) * fw, fw, fw)
-				var dx := (float(j) / 8.0 - 0.5) * h * 0.34 * (0.4 + t)    # расходятся в стороны
-				var sz := h * (0.08 + 0.05 * hsh) * (0.6 + t * 1.3)
-				var c := ground + Vector2(dx, -sz * (0.35 + 0.25 * t))
-				_stage.draw_texture_rect_region(_smoke, Rect2(c - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), src,
-					Color(0.78, 0.7, 0.72, 0.85 * (1.0 - smoothstep(0.7, 1.0, b))))
 	_draw_flash(vs)
 
 

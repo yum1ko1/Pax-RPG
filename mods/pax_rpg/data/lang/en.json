@@ -212,12 +212,6 @@
 	"pax_rpg_talk_rel_neutral": "indifferent",
 	"pax_rpg_talk_rel_warm": "friendly",
 	"pax_rpg_talk_rel_friend": "friend",
-	"pax_rpg_talk_fallback_question": "Hm? Strangers don't get told everything here.",
-	"pax_rpg_talk_fallback_trade": "I have wares, but not for the likes of you. Come back with gold.",
-	"pax_rpg_talk_fallback_quest": "Work? Ask at the khan's court, knight.",
-	"pax_rpg_talk_fallback_flatter": "Heh… sweet words. What do you want?",
-	"pax_rpg_talk_fallback_threat": "Easy, easy! The guards are near, hear?",
-	"pax_rpg_talk_fallback_bye": "Go in peace.",
 	"pax_rpg_npc_race_goblin": "goblin",
 	"pax_rpg_npc_role_merchant": "Merchant",
 	"pax_rpg_npc_role_guard": "Guard",
@@ -259,5 +253,8 @@
 	"pax_rpg_journal_todo_active": "Go to the forest: the «❖ Quest» mark on the world map. Goblins guard the item.",
 	"pax_rpg_journal_todo_found": "Return to %s (%s): a golden ❖ above them. In the talk — the «Give» button.",
 	"pax_rpg_gold_got": "+%d gold",
-	"pax_rpg_gold_name": "Gold"
+	"pax_rpg_gold_name": "Gold",
+	"pax_rpg_talk_silent": "%s stays silent, looking past you. (The AI did not answer — try again.)",
+	"pax_rpg_talk_city_about": "Gharn is the capital of a goblin khanate in the steppe: yurts and wooden houses around the khan's stone palace, a market by the dragon fountain, an arena where warriors fight for glory on feast days, a palisade and the Fang gate. It smells of smoke, kumis and dung; the khan's guards are hard on strangers.",
+	"pax_rpg_talk_hero_looks": "a foreigner in black plate with a huge two-handed sword on the back and a katana at the hip; speaks little, carries himself like a warrior"
 }

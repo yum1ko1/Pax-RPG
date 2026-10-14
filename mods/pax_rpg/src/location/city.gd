@@ -78,6 +78,18 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var d: Dictionary = it
 		var p: Array = d.get("p", [0, 0, 0])
 		var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
+		if d.has("box") and d.has("ramp"):                # невидимый пандус под ступенями: только коллизия
+			var rb: Array = d.box
+			var body := StaticBody3D.new()
+			var cs := CollisionShape3D.new()
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(float(rb[0]), float(rb[1]), float(rb[2]))
+			cs.shape = bx
+			body.add_child(cs)
+			body.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))) *
+				Basis(Vector3.RIGHT, deg_to_rad(float(d.get("rx", 0.0)))), pos)
+			root.add_child(body)
+			continue
 		if d.has("box"):
 			var b: Array = d.box
 			_block(Vector3(float(b[0]), float(b[1]), float(b[2])), pos, str(d.get("mat", "stone")), float(d.get("r", 0.0)),
@@ -875,7 +887,7 @@ func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
 
 
 ## Растительность → наклон верха на ветру, м (shaders/foliage.gdshader). Нет в списке — модель стоит.
-const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.16, "oak_": 0.2, "grass_": 0.1, "plant_": 0.06,
+const FOLIAGE := {"grass_tuft": 0.12, "bush_dry": 0.1, "flame_tree": 0.16, "oak_": 0.2, "grass_": 0.3, "plant_": 0.15,
 	"mushrooms": 0.0}
 const CANOPY := ["flame_tree", "oak_"]  # деревья: ствол стоит, качаются крона и листва
 var _fol_mats := {}
@@ -930,6 +942,9 @@ func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 		m.set_shader_parameter("albedo_tex", src.albedo_texture)
 	m.set_shader_parameter("albedo_col", src.albedo_color)
 	m.set_shader_parameter("use_alpha", src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED)
+	var f := path.get_file()
+	if f.begins_with("grass_") or f.begins_with("plant_"):
+		m.set_shader_parameter("push", 0.35)              # трава и цветы раздвигаются героем
 	m.set_shader_parameter("roughness", src.roughness)
 	if src.roughness_texture != null:
 		m.set_shader_parameter("rough_tex", src.roughness_texture)
@@ -1116,12 +1131,15 @@ func _decor(data: Dictionary) -> Array:
 	var weight := 0
 	for k: Array in kinds:
 		weight += int(k[4])
+	var ar: Array = data.get("arena", [])                 # не на арене (и с запасом вокруг)
 	var out: Array = []
 	var tries := int(d.get("count", 400)) * 3
 	while out.size() < int(d.get("count", 400)) and tries > 0:
 		tries -= 1
 		var p := ctr + Vector2(rng.randf_range(-half.x, half.x), rng.randf_range(-half.y, half.y))
 		if _road != null and _road_at(Vector3(p.x, 0.0, p.y)) > 0.08:
+			continue
+		if ar.size() >= 3 and p.distance_to(Vector2(float(ar[0]), float(ar[1]))) < float(ar[2]) + 9.0:
 			continue
 		var near := false
 		for q: Vector2 in solid:
@@ -1211,6 +1229,8 @@ func _collect(n: Node, xf: Transform3D, out: Array) -> void:
 ## Материалы блоков — общие на все блоки (раньше свой на каждый). Арена — CC0 текстуры 4K (Poly Haven, DDS:
 ## pax_rpg/dev/assets/tex_dds.gd): цвет 4K, нормали 2K; развёртка трипланарная по миру — без растяжений на кольцах.
 const TEX_MATS := {"arena_wall": ["japanese_stone_wall", 0.33], "arena_seat": ["large_sandstone_blocks", 0.4],
+	# простые каменные блоки планировки (цоколь дворца, тумбы жаровен) — тоже текстурой, не плоским цветом
+	"stone_cut": ["large_sandstone_blocks", 0.4], "stone": ["japanese_stone_wall", 0.33], "stone_dark": ["japanese_stone_wall", 0.45],
 	"arena_sand": ["dense_sand", 0.22]}
 var _mat_cache := {}
 
@@ -1231,7 +1251,7 @@ func _block_mat(mat: String) -> StandardMaterial3D:
 		var tm: Array = TEX_MATS[mat]
 		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % tm[0])
 		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % tm[0])
-		sm.albedo_color = Color.WHITE
+		sm.albedo_color = Color(0.62, 0.6, 0.58) if mat == "stone_dark" else Color.WHITE
 		if d != null:
 			sm.albedo_texture = ImageTexture.create_from_image(d)
 		if n != null:
