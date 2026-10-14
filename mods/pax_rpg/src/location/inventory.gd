@@ -8,6 +8,7 @@ signal closed
 signal stat_added(key: String)       # «+» у характеристики — вложить очко (location.gd → progress.add_stat)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const WeaponView := preload("res://mods/pax_rpg/src/location/weapon_view.gd")
 const HERO_LAYER := 1 << 19
 const W := 1920.0
 const H := 1080.0
@@ -31,7 +32,9 @@ var _sans: Font
 var _cjk: Font
 var _t := 0.0
 var _points := 0                     # свободные очки характеристик
-var _main_stat := ""                 # главная характеристика героя — ★ у её строки
+var _main_stat := ""
+var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
+var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
 
 
 func setup(m: PaxMod) -> void:
@@ -63,6 +66,9 @@ func setup(m: PaxMod) -> void:
 	_build_left()
 	_build_right()
 	_build_hints()
+	_wv = WeaponView.new()
+	_wv.setup(m, _panel_sh, _serif, _sans, _cjk)
+	_frame.add_child(_wv)
 	resized.connect(_fit)
 
 
@@ -89,6 +95,8 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	_pv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_fill_stats(st)
 	_main_stat = str(st.get("main_stat", ""))
+	_st = st
+	_wv.close()
 	_points = int(st.get("stat_points", 0))
 	_fill_attrs(st.get("attributes", {}) as Dictionary)
 	_update_cape()
@@ -106,6 +114,19 @@ func _hero_layer(root: Node) -> void:
 		stack.append_array(n.get_children())
 		if n is VisualInstance3D:
 			(n as VisualInstance3D).layers |= HERO_LAYER
+
+
+## Окно оружия для слота: модель, урон, масштабирование, способности, выбор внизу.
+func _open_weapon(slot: String) -> void:
+	_wv.open(slot, _st.get("attributes", {}) as Dictionary, float(_st.get("level_mult", 1.0)))
+
+
+## Esc: сначала закрывает окно оружия; true — закрыл (инвентарь остаётся открытым).
+func back() -> bool:
+	if is_instance_valid(_wv) and _wv.visible:
+		_wv.close()
+		return true
+	return false
 
 
 func close() -> void:
@@ -281,9 +302,11 @@ func _build_left() -> void:
 	_label(_tr("pax_rpg_hero_name"), Vector2(90, 130), _serif, 40, Hud.TEXT, _frame)
 	_label(_tr("pax_rpg_hero_title").to_upper(), Vector2(92, 182), _sans, 14, Hud.MUTED, _frame)
 	_label(_tr("pax_rpg_inv_weapons").to_upper(), Vector2(90, 300), _sans, 13, Hud.DIM, _frame)
-	_slot(Rect2(90, 330, 440, 124), "斬", Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"), _tr("pax_rpg_weapon_greatsword"),
-		_tr("pax_rpg_inv_greatsword_sub"), true, false)
-	_slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
+	var main_b := _slot(Rect2(90, 330, 440, 124), "斬", Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
+		_tr("pax_rpg_weapon_greatsword"), _tr("pax_rpg_inv_greatsword_sub"), true, false)
+	main_b.pressed.connect(_open_weapon.bind("main"))
+	var iai_b := _slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
+	iai_b.pressed.connect(_open_weapon.bind("iai"))
 	_slot(Rect2(90, 590, 440, 96), "", Hud.DIM, "", _tr("pax_rpg_inv_talisman_empty"), "", false, true)
 	_panel(Rect2(90, 706, 440, 298), _frame)
 	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(114, 718), _sans, 13, Hud.DIM, _frame)

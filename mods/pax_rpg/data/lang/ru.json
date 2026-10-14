@@ -165,5 +165,21 @@
 	"pax_rpg_char_black_knight_moves": "Комбо тяжёлым мечом · Блок и парирование · Земной разлом · Иай",
 	"pax_rpg_char_black_knight_lore": "Тяжёлая броня и двуручный Разрубатель. Медленный, но выдерживает удары, от которых падают другие.",
 	"pax_rpg_weapon_cleaver": "Разрубатель",
-	"pax_rpg_inv_stat_points": "Очки характеристик"
+	"pax_rpg_inv_stat_points": "Очки характеристик",
+	"pax_rpg_wslot_main": "Основное оружие",
+	"pax_rpg_wslot_iai": "Клинок иая",
+	"pax_rpg_wbase": "Базовый",
+	"pax_rpg_wscaling": "Масштабирование",
+	"pax_rpg_wskills": "Способности",
+	"pax_rpg_wequip": "Надеть",
+	"pax_rpg_wworn": "Надето",
+	"pax_rpg_wother_slot": "Надевается в слот «%s»",
+	"pax_rpg_wskill_combo": "Тяжёлое комбо",
+	"pax_rpg_wskill_combo_desc": "ЛКМ трижды: два широких взмаха и удар сверху о землю. Последний удар бьёт по кругу и отбрасывает.",
+	"pax_rpg_wskill_rift": "Земной разлом",
+	"pax_rpg_wskill_rift_desc": "T: меч вонзается в землю, волна трещин и шипов подбрасывает врагов вокруг.",
+	"pax_rpg_wskill_guard": "Широкий блок",
+	"pax_rpg_wskill_guard_desc": "ПКМ: клинок закрывает корпус. В первые доли секунды — парирование.",
+	"pax_rpg_wskill_iai": "Иай: остановка времени",
+	"pax_rpg_wskill_iai_desc": "V: время замирает, клинок выходит из ножен — враги на экране разрублены, когда цуба щёлкнет о ножны."
 }

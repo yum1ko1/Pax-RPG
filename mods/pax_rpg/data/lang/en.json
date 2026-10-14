@@ -165,5 +165,21 @@
 	"pax_rpg_char_black_knight_moves": "Greatsword combo · Block and parry · Earth Rift · Iai",
 	"pax_rpg_char_black_knight_lore": "Heavy armour and the two-handed Cleaver. Slow, but stands through blows that fell others.",
 	"pax_rpg_weapon_cleaver": "Cleaver",
-	"pax_rpg_inv_stat_points": "Attribute points"
+	"pax_rpg_inv_stat_points": "Attribute points",
+	"pax_rpg_wslot_main": "Main weapon",
+	"pax_rpg_wslot_iai": "Iai blade",
+	"pax_rpg_wbase": "Base",
+	"pax_rpg_wscaling": "Scaling",
+	"pax_rpg_wskills": "Abilities",
+	"pax_rpg_wequip": "Equip",
+	"pax_rpg_wworn": "Equipped",
+	"pax_rpg_wother_slot": "Goes into the «%s» slot",
+	"pax_rpg_wskill_combo": "Heavy combo",
+	"pax_rpg_wskill_combo_desc": "LMB three times: two wide swings and an overhead slam. The last hit strikes all around and knocks back.",
+	"pax_rpg_wskill_rift": "Earth Rift",
+	"pax_rpg_wskill_rift_desc": "T: the blade is driven into the ground; a wave of cracks and spikes throws enemies up.",
+	"pax_rpg_wskill_guard": "Wide guard",
+	"pax_rpg_wskill_guard_desc": "RMB: the blade covers the body. The first split second is a parry.",
+	"pax_rpg_wskill_iai": "Iai: time stop",
+	"pax_rpg_wskill_iai_desc": "V: time freezes, the blade is drawn — enemies on screen are cut when the tsuba clicks against the sheath."
 }

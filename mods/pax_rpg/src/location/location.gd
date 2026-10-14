@@ -808,6 +808,7 @@ func _set_inventory(on: bool) -> void:
 		st["weapon"] = str((_character().get("weapon", {}) as Dictionary).get("name", "")) if _character().get("weapon", {}) is Dictionary else ""
 		st["dmg_mult"] = _dmg_mult()
 		st["stat_points"] = _prog.stat_points()
+		st["level_mult"] = _prog.damage_mult()
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
@@ -1880,7 +1881,8 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
 			if is_instance_valid(_inv) and _inv.visible and pk == KEY_ESCAPE:
-				_set_inventory(false)
+				if not _inv.back():                       # сначала — окно оружия, потом сам инвентарь
+					_set_inventory(false)
 				get_viewport().set_input_as_handled()
 			elif pk == KEY_ESCAPE:
 				_set_paused(false)
