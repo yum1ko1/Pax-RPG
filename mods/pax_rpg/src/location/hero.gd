@@ -1258,6 +1258,15 @@ func _ground_burst() -> void:
 
 # ---------- команды ----------
 
+## Точка кости в мире (для наручного терминала — запястье); нет кости — центр героя.
+func bone_pos(bone: String) -> Vector3:
+	if _skel != null:
+		var bi := _skel.find_bone(bone)
+		if bi >= 0:
+			return _bone_world(bi).origin
+	return model.global_position + Vector3(0.0, 1.0, 0.0)
+
+
 func toggle_sword(on_floor: bool, moving := false) -> void:
 	_cancel_hurt()
 	if anim == null or action != "" or not on_floor:

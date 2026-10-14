@@ -194,5 +194,9 @@
 	"pax_rpg_gfx_fps_144": "144",
 	"pax_rpg_gfx_fps_165": "165",
 	"pax_rpg_gfx_fps_240": "240",
-	"pax_rpg_gfx_vsync": "Vertical sync"
+	"pax_rpg_gfx_vsync": "Vertical sync",
+	"pax_rpg_wrist_title": "Wrist terminal",
+	"pax_rpg_wrist_inventory": "Inventory",
+	"pax_rpg_wrist_map": "Map",
+	"pax_rpg_wrist_menu": "Menu"
 }

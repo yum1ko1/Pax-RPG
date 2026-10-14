@@ -361,7 +361,7 @@ func _smoke() -> void:
 	_deco.draw_set_transform(anchor * (1.0 - BOT) * _s, 0.0, Vector2(_s * BOT, _s * BOT))
 
 
-## Герб рыцаря за кольцом: тёмный щит в золотой кайме, за ним скрещённые мечи (клинки выходят из-за кольца).
+## Герб рыцаря за кольцом: скрещённые мечи — клинки и рукояти выходят из-за кольца.
 func _knight_emblem(c: Vector2) -> void:
 	for sgn: float in [-1.0, 1.0]:                           # мечи крест-накрест
 		var dir := Vector2(sgn * 0.62, -0.78).normalized()
@@ -374,23 +374,6 @@ func _knight_emblem(c: Vector2) -> void:
 		var guard := c - dir * 150.0
 		_ci.draw_line(guard + side * 34.0, guard - side * 34.0, c_gold, 7.0, true)  # гарда
 		_ci.draw_circle(pom - dir * 6.0, 9.0, c_gold)                              # навершие
-	var sh := PackedVector2Array()                           # щит: прямой верх, к низу — острие
-	var top := c + Vector2(0, -175.0)
-	for i: int in 21:
-		var t := float(i) / 20.0
-		var x := lerpf(-150.0, 150.0, t)
-		sh.append(top + Vector2(x, absf(x) * -0.05))
-	for i: int in 21:
-		var t := float(i) / 20.0
-		var a := lerpf(0.0, PI * 0.5, t)
-		sh.append(c + Vector2(150.0 * cos(a), 10.0 + 185.0 * sin(a) * (0.6 + 0.4 * t)))
-	for i: int in range(19, -1, -1):                       # без нижней точки — она уже есть (иначе щит не триангулируется)
-		var t := float(i) / 20.0
-		var a := lerpf(0.0, PI * 0.5, t)
-		sh.append(c + Vector2(-150.0 * cos(a), 10.0 + 185.0 * sin(a) * (0.6 + 0.4 * t)))
-	_ci.draw_colored_polygon(sh, Color(0.09, 0.07, 0.06, 0.92))
-	_outline(sh, c_bronze, 7.0)
-	_outline(sh, c_gold, 2.0)
 
 
 ## Неподвижная оправа HUD — в слой _deco (рисуется за HUD, только при смене размера экрана).
@@ -400,7 +383,8 @@ func _draw_deco() -> void:
 	_ci = _deco
 	var anchor := Vector2(_w * 0.5, 1080.0)
 	_deco.draw_set_transform(anchor * (1.0 - BOT) * _s, 0.0, Vector2(_s * BOT, _s * BOT))
-	_smoke()
+	if emblem == "knight":
+		_knight_emblem(_core_c())                         # под панелью: видны только клинки над ней
 	_draw_bar()
 	var c := _core_c()
 	var disc := PackedVector2Array()
@@ -409,8 +393,6 @@ func _draw_deco() -> void:
 		var q := c + Vector2(cos(TAU * i / 96.0), sin(TAU * i / 96.0)) * 134.0
 		disc.append(q)
 		duv.append(q / 256.0)
-	if emblem == "knight":
-		_knight_emblem(c)
 	_ci.draw_colored_polygon(disc, Color(c_lac, 1.0), duv, _lacquer())
 	# оправа: кованый ободок с заклёпками, навершие с камнем сверху, засечки как на гарде
 	_bezel(c, 139.0, 11.0, 12)

@@ -31,6 +31,7 @@ const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Music := preload("res://mods/pax_rpg/src/location/music.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
+const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -121,6 +122,7 @@ var _daynight: DayNight            # тело доворачивается к ц
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var _inv: Inventory                # инвентарь (TAB)
+var _wrist: Wrist                  # наручный терминал (TAB / Esc): инвентарь, карта, меню
 var building := false              # город ещё строится (по кадрам) — экран загрузки ждёт is_ready()
 var _build_gen := 0                # номер стройки: clear() посреди неё — старая сопрограмма бросает работу
 var _build_finished := false
@@ -334,6 +336,10 @@ func build(city: Dictionary) -> void:
 	_inv.setup(mod)
 	add_child(_inv)
 	_inv.closed.connect(func() -> void: _set_inventory(false))
+	_wrist = Wrist.new()
+	_wrist.setup(mod, _hud)
+	add_child(_wrist)
+	_wrist.picked.connect(_on_wrist)
 	_inv.stat_added.connect(func(key: String) -> void:
 		if _prog.add_stat(key):
 			_set_inventory(false)
@@ -471,7 +477,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -805,7 +811,39 @@ func _dmg_mult() -> float:
 
 
 func paused() -> bool:
-	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible)
+	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible)
+
+
+## Наручный терминал: над левым запястьем героя; мир на паузе, мышь — интерфейсу.
+func _set_wrist(on: bool) -> void:
+	if not is_instance_valid(_wrist):
+		return
+	if on:
+		var at := Vector2(get_viewport().get_visible_rect().size * Vector2(0.3, 0.7))
+		if _hero != null and is_instance_valid(_cam):
+			var wp: Vector3 = _hero.bone_pos("LeftHand")
+			if not _cam.is_position_behind(wp):
+				at = _cam.unproject_position(wp)
+		_wrist.open_at(at)
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		_wrist.close()
+		if not paused():
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_rmb = false
+	_lmb_queued = false
+
+
+func _on_wrist(id: String) -> void:
+	_set_wrist(false)
+	match id:
+		"inventory":
+			_set_inventory(true)
+		"map":
+			if is_instance_valid(_city_map):
+				_city_map.toggle()
+		"menu":
+			_set_paused(true)
 
 
 ## Инвентарь (TAB): мир на паузе, мышь — интерфейсу; закрыть — TAB или Esc.
@@ -1725,7 +1763,10 @@ func _process(delta: float) -> void:
 	# TAB — ещё и опросом: если событие клавиши перехватил кто-то из игры раньше _input, инвентарь всё равно откроется
 	var tab := active and Input.is_physical_key_pressed(KEY_TAB) and not _typing()
 	if tab and not _tab_was and not (is_instance_valid(_pause) and _pause.visible):
-		_set_inventory(not (is_instance_valid(_inv) and _inv.visible))
+		if is_instance_valid(_inv) and _inv.visible:
+			_set_inventory(false)
+		else:
+			_set_wrist(not (is_instance_valid(_wrist) and _wrist.visible))   # TAB — наручный терминал
 	_tab_was = tab
 	_stream_t -= delta
 	if active and _stream_t <= 0.0 and is_instance_valid(_cam):
@@ -1904,7 +1945,10 @@ func _input(event: InputEvent) -> void:
 	if paused():
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
-			if is_instance_valid(_inv) and _inv.visible and pk == KEY_ESCAPE:
+			if is_instance_valid(_wrist) and _wrist.visible and pk == KEY_ESCAPE:
+				_set_wrist(false)
+				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_inv) and _inv.visible and pk == KEY_ESCAPE:
 				if not _inv.back():                       # сначала — окно оружия, потом сам инвентарь
 					_set_inventory(false)
 				get_viewport().set_input_as_handled()
@@ -1964,7 +2008,7 @@ func _input(event: InputEvent) -> void:
 				and _city_map.visible:
 			_city_map.visible = false
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
-			_set_paused(true)
+			_set_wrist(true)                         # меню — через наручный терминал
 			get_viewport().set_input_as_handled()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_R:
 			_drink()                                 # эликсир
