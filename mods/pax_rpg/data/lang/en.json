@@ -242,5 +242,6 @@
 	"pax_rpg_qitem_scroll": "Charm scroll",
 	"pax_rpg_map_you": "You",
 	"pax_rpg_map_here": "You are here",
-	"pax_rpg_map_travel": "~%.1f h on the road, arriving:"
+	"pax_rpg_map_travel": "~%.1f h on the road, arriving:",
+	"pax_rpg_wrist_leave": "Leave the area"
 }

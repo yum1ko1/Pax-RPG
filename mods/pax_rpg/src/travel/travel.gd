@@ -75,6 +75,29 @@ func leave() -> void:
 		float(cfg.get("loading_seconds", 1.6)) * 0.6, location.clear, _back_on_map)
 
 
+## Меню паузы игры, открытое под локацией (Esc дошёл до игры), — закрыть: щёлкнуть его «Продолжить».
+func _close_game_pause() -> void:
+	var b := _find_continue(get_tree().root)
+	if b != null:
+		b.pressed.emit()
+		if game != null:
+			game.set_speed(0)                             # на карте мир всё равно стоит
+
+
+func _find_continue(n: Node) -> Button:
+	if n is Button and (n as Button).is_visible_in_tree():
+		var t := (n as Button).text.to_lower()
+		if t.contains("продолжить") or t.contains("continue") or t.contains("resume"):
+			return n
+	for c: Node in n.get_children():
+		if c == location or c == loading:
+			continue
+		var f := _find_continue(c)
+		if f != null:
+			return f
+	return null
+
+
 ## Герой идёт в место city: часы мира + время пути по дуге от прежнего места, место героя — новое.
 func _move_to(city: Dictionary) -> void:
 	var from := planet.player_pos()
@@ -98,6 +121,7 @@ func _process(delta: float) -> void:
 
 func _back_on_map() -> void:
 	planet.enabled = true
+	_close_game_pause()
 	planet.refresh_quest()                               # задание выдано / найдено / сдано — точка на глобусе
 
 

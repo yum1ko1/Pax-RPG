@@ -6,12 +6,13 @@ extends Control
 signal picked(id: String)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
-const ITEMS := [["inventory", "pax_rpg_wrist_inventory", "TAB"], ["map", "pax_rpg_wrist_map", "M"],
+const BASE := [["inventory", "pax_rpg_wrist_inventory", "TAB"], ["map", "pax_rpg_wrist_map", "M"],
 	["menu", "pax_rpg_wrist_menu", "Esc"]]
 const W := 300.0
 const ROW := 58.0
 
 var mod: PaxMod
+var _items: Array = BASE.duplicate()   # кнопки этого раза (в лесу задания — ещё «Покинуть локацию»)
 var hud: Hud
 var anchor := Vector2.ZERO           # запястье на экране (px окна)
 var _open := 0.0                     # 0..1 — раскрытие
@@ -32,7 +33,9 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_mono = Hud._sys(["Bahnschrift", "Consolas", "Segoe UI"], 400)
 
 
-func open_at(p: Vector2) -> void:
+func open_at(p: Vector2, extra: Array = []) -> void:
+	_items = BASE.duplicate()
+	_items.append_array(extra)
 	anchor = p
 	_open = 0.0
 	_hover = -1
@@ -50,7 +53,7 @@ func _s() -> float:
 ## Прямоугольник панели (px окна): над запястьем, не вылезает за экран.
 func _panel_rect() -> Rect2:
 	var s := _s()
-	var h := (ROW * ITEMS.size() + 74.0) * s
+	var h := (ROW * _items.size() + 74.0) * s
 	var w := W * s
 	var pos := anchor + Vector2(-w * 0.5, -h - 60.0 * s)
 	pos.x = clampf(pos.x, 16.0 * s, size.x - w - 16.0 * s)
@@ -75,15 +78,15 @@ func _process(delta: float) -> void:
 func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion:
 		_hover = -1
-		for i: int in ITEMS.size():
+		for i: int in _items.size():
 			if _row_rect(i).has_point((e as InputEventMouseMotion).position):
 				_hover = i
 	elif e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 			and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var mp := (e as InputEventMouseButton).position
-		for i: int in ITEMS.size():
+		for i: int in _items.size():
 			if _row_rect(i).has_point(mp):
-				picked.emit(str(ITEMS[i][0]))
+				picked.emit(str(_items[i][0]))
 				return
 		if not _panel_rect().has_point(mp):
 			close()
@@ -122,13 +125,13 @@ func _draw() -> void:
 	draw_string(_mono, r.position + Vector2(18, 32) * s, mod.tr_key("pax_rpg_wrist_title").to_upper(),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, int(14 * s), Color(accent, 0.9))
 	draw_line(r.position + Vector2(18, 42) * s, r.position + Vector2(r.size.x / s - 18, 42) * s, Color(gold, 0.4), 1.0)
-	for i: int in ITEMS.size():
+	for i: int in _items.size():
 		var rw := _row_rect(i)
 		var on := i == _hover
 		draw_rect(rw, Color(accent, 0.16 if on else 0.05))
 		draw_rect(rw, Color(gold if on else muted, 0.7 if on else 0.3), false, 1.0)
 		var fs := int(24 * s)
-		draw_string(_font, rw.position + Vector2(14 * s, rw.size.y * 0.5 + fs * 0.35), mod.tr_key(str(ITEMS[i][1])),
+		draw_string(_font, rw.position + Vector2(14 * s, rw.size.y * 0.5 + fs * 0.35), mod.tr_key(str(_items[i][1])),
 			HORIZONTAL_ALIGNMENT_LEFT, rw.size.x - 80 * s, fs, text if on else muted)
-		draw_string(_mono, rw.position + Vector2(rw.size.x - 64 * s, rw.size.y * 0.5 + 6 * s), str(ITEMS[i][2]),
+		draw_string(_mono, rw.position + Vector2(rw.size.x - 64 * s, rw.size.y * 0.5 + 6 * s), str(_items[i][2]),
 			HORIZONTAL_ALIGNMENT_RIGHT, 52 * s, int(14 * s), Color(gold, 0.8))

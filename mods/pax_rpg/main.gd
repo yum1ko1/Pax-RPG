@@ -104,6 +104,7 @@ static func _find_menu(n: Node) -> Variant:
 func _mod_unloaded() -> void:
 	if is_instance_valid(location):
 		location.clear()
+		location.queue_free()                         # локация может жить прямо под корнем (ввод — первой)
 	if is_instance_valid(planet):
 		planet.restore()
 

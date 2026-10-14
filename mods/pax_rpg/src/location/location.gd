@@ -215,6 +215,7 @@ func prewarm() -> void:
 ## Сопрограмма для города (строится несколько кадров, экран загрузки живой); арена без города — сразу.
 func build(city: Dictionary) -> void:
 	clear()
+	_input_first()
 	_build_gen += 1
 	var gen := _build_gen
 	building = true
@@ -287,7 +288,10 @@ func build(city: Dictionary) -> void:
 		if layout.has("quest_item"):
 			_make_quest_item.call_deferred(layout)       # после героя (гоблинам нужен герой)
 		_shots = layout.get("shots", [])
-		_make_portal()
+		if not layout.has("forest"):                  # лес задания — без портала: выход в наручном терминале
+			_make_portal()
+		else:
+			_gate_radius = 0.0
 		var probe := ReflectionProbe.new()             # отражения неба и улиц в стёклах (снимок — один раз)
 		probe.size = Vector3(200.0, 50.0, 200.0)
 		probe.position = Vector3(0.0, 12.0, 0.0)
@@ -940,6 +944,17 @@ func _end_talk() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+## Клавиши — сначала локации: _input идёт с конца дерева, а узлы мира игры созданы позже мода и раньше ловили Esc —
+## под локацией открывалось меню паузы игры, и после выхода из города игрок оказывался в нём. Последний ребёнок корня
+## получает ввод первым.
+func _input_first() -> void:
+	var root := get_tree().root
+	if get_parent() != root:
+		reparent.call_deferred(root)
+	else:
+		root.move_child.call_deferred(self, -1)
+
+
 ## Наручный терминал: над левым запястьем героя; мир на паузе, мышь — интерфейсу.
 func _set_wrist(on: bool) -> void:
 	if not is_instance_valid(_wrist):
@@ -950,7 +965,10 @@ func _set_wrist(on: bool) -> void:
 			var wp: Vector3 = _hero.bone_pos("LeftHand")
 			if not _cam.is_position_behind(wp):
 				at = _cam.unproject_position(wp)
-		_wrist.open_at(at)
+		var extra: Array = []
+		if str(city_data.get("id", "")) == "forest":
+			extra.append(["leave", "pax_rpg_wrist_leave", ""])
+		_wrist.open_at(at, extra)
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
 		_wrist.close()
@@ -970,6 +988,8 @@ func _on_wrist(id: String) -> void:
 				_city_map.toggle()
 		"menu":
 			_set_paused(true)
+		"leave":
+			exit_requested.emit()
 
 
 ## Инвентарь (TAB): мир на паузе, мышь — интерфейсу; закрыть — TAB или Esc.
