@@ -1,8 +1,8 @@
 extends Control
 ## Инвентарь (TAB), макет «Инвентарь A»: живой герой в центре на фоне лунного диска (своя камера видит только слой героя
 ## — gfx.gd RIM_LAYER; мышью — повернуть), слева оружие (Разрубатель — надет; клинок иая; талисман), справа броня
-## 2 × 3 (плащ — надеть / снять щелчком, hero.toggle_slot) и характеристики — здесь числа здоровья, концентрации и опыта,
-## которых нет на HUD. Панели — shaders/ui_panel.gdshader (лак, золотая рамка). Мир на паузе, пока открыт (location.gd).
+## 2 × 3 (плащ — надеть / снять щелчком, hero.toggle_slot) и состояние — числа здоровья, концентрации и опыта, которых нет
+## на HUD; слева под оружием — характеристики персонажа (config/hero.json → character.attributes) со знаками-иероглифами. Панели — shaders/ui_panel.gdshader (лак, золотая рамка). Мир на паузе, пока открыт (location.gd).
 
 signal closed
 
@@ -22,6 +22,7 @@ var _hero: Object                    # hero.gd (toggle_slot, worn)
 var _yaw := 0.0
 var _drag := false
 var _stats: VBoxContainer
+var _attrs: VBoxContainer
 var _cape: Button
 var _panel_sh: Shader
 var _serif: Font
@@ -72,7 +73,8 @@ func _fit() -> void:
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
 
 
-## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, posture, level, xp_abs, xp_need).
+## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, posture, level, xp_abs, xp_need;
+## attributes — характеристики персонажа из config/hero.json).
 func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dictionary) -> void:
 	_player = player
 	_body = body
@@ -81,6 +83,7 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	if is_instance_valid(view):
 		_pv.world_3d = view.world_3d
 	_fill_stats(st)
+	_fill_attrs(st.get("attributes", {}) as Dictionary)
 	_update_cape()
 	visible = true
 	_fit()
@@ -261,6 +264,13 @@ func _build_left() -> void:
 		_tr("pax_rpg_inv_greatsword_sub"), true, false)
 	_slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
 	_slot(Rect2(90, 590, 440, 96), "", Hud.DIM, "", _tr("pax_rpg_inv_talisman_empty"), "", false, true)
+	_panel(Rect2(90, 706, 440, 298), _frame)
+	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(114, 718), _sans, 13, Hud.DIM, _frame)
+	_attrs = VBoxContainer.new()
+	_attrs.position = Vector2(110, 744)
+	_attrs.size = Vector2(400, 252)
+	_attrs.add_theme_constant_override("separation", 6)
+	_frame.add_child(_attrs)
 
 
 func _build_right() -> void:
@@ -281,7 +291,7 @@ func _build_right() -> void:
 					_hero.call("toggle_slot", "back")
 				_update_cape())
 	_panel(Rect2(1390, 620, 436, 300), _frame)
-	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(1414, 640), _sans, 13, Hud.DIM, _frame)
+	_label(_tr("pax_rpg_inv_status").to_upper(), Vector2(1414, 640), _sans, 13, Hud.DIM, _frame)
 	_stats = VBoxContainer.new()
 	_stats.position = Vector2(1414, 672)
 	_stats.size = Vector2(388, 230)
@@ -328,6 +338,42 @@ func _fill_stats(st: Dictionary) -> void:
 		v.add_theme_color_override("font_color", r[2] as Color)
 		hb.add_child(v)
 		_stats.add_child(hb)
+
+
+## Характеристики: знак (иероглиф в лаковой плашке, как у слотов), название, шкала 0–100 и число.
+const ATTRS := [["agility", "敏", Hud.BLUE], ["intellect", "智", Hud.BLUE], ["charisma", "魅", Hud.PINK],
+	["strength", "力", Hud.AMBER], ["smithing", "鍛", Hud.AMBER], ["inlay", "嵌", Hud.PINK], ["luck", "運", Hud.BLUE]]
+
+
+func _fill_attrs(attrs: Dictionary) -> void:
+	for c: Node in _attrs.get_children():
+		c.queue_free()
+	for a: Array in ATTRS:
+		var key := str(a[0])
+		var col := a[2] as Color
+		var val := int(attrs.get(key, 0))
+		var row := Control.new()
+		row.custom_minimum_size = Vector2(400, 30)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_attrs.add_child(row)
+		var box := _panel(Rect2(0, 0, 30, 30), row)
+		var g := _label(str(a[1]), Vector2(0, 2), _cjk, 18, col, box, 30.0)
+		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_label(_tr("pax_rpg_attr_" + key), Vector2(44, 3), _sans, 18, Hud.MUTED, row)
+		var track := ColorRect.new()
+		track.color = Hud.INK2
+		track.position = Vector2(220, 13)
+		track.size = Vector2(120, 4)
+		track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(track)
+		var fill := ColorRect.new()
+		fill.color = col
+		fill.position = track.position
+		fill.size = Vector2(120.0 * clampf(val / 100.0, 0.0, 1.0), 4)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(fill)
+		var v := _label(str(val), Vector2(350, 3), _sans, 18, Hud.TEXT, row, 50.0)
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 
 func _build_hints() -> void:

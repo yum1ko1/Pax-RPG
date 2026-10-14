@@ -144,5 +144,13 @@
 	"pax_rpg_tod_night": "Night",
 	"pax_rpg_tod_morning": "Morning",
 	"pax_rpg_tod_day": "Day",
-	"pax_rpg_tod_evening": "Evening"
+	"pax_rpg_tod_evening": "Evening",
+	"pax_rpg_inv_status": "Condition",
+	"pax_rpg_attr_agility": "Agility",
+	"pax_rpg_attr_intellect": "Intellect",
+	"pax_rpg_attr_charisma": "Charisma",
+	"pax_rpg_attr_strength": "Strength",
+	"pax_rpg_attr_smithing": "Smithing",
+	"pax_rpg_attr_inlay": "Inlay",
+	"pax_rpg_attr_luck": "Luck"
 }

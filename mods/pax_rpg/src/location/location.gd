@@ -762,7 +762,7 @@ func _set_inventory(on: bool) -> void:
 	mod.log_info("Pax RPG: inventory %s" % ("open" if on else "closed"))
 	if on:
 		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
-			"xp_abs": _prog.xp, "xp_need": _prog.need()}
+			"xp_abs": _prog.xp, "xp_need": _prog.need(), "attributes": (hero_cfg.get("character", {}) as Dictionary).get("attributes", {})}
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false

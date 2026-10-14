@@ -144,5 +144,13 @@
 	"pax_rpg_tod_night": "Ночь",
 	"pax_rpg_tod_morning": "Утро",
 	"pax_rpg_tod_day": "День",
-	"pax_rpg_tod_evening": "Вечер"
+	"pax_rpg_tod_evening": "Вечер",
+	"pax_rpg_inv_status": "Состояние",
+	"pax_rpg_attr_agility": "Ловкость",
+	"pax_rpg_attr_intellect": "Интеллект",
+	"pax_rpg_attr_charisma": "Харизма",
+	"pax_rpg_attr_strength": "Сила",
+	"pax_rpg_attr_smithing": "Кузнечное дело",
+	"pax_rpg_attr_inlay": "Инкрустация",
+	"pax_rpg_attr_luck": "Удача"
 }
