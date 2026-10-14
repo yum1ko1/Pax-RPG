@@ -8,6 +8,7 @@ extends RefCounted
 const SIZE := 150.0                  # м, сторона квадрата леса
 const STEP := 1.5                    # м, шаг сетки земли
 const AMP := 7.0                     # м, перепад высот
+const POT_H := 2.05                  # м, высота кадки в модели flame_tree.glb при масштабе 1 (по вершинам: −0.81…−0.41 × 5.08)
 
 
 static func noise(seed_v: int) -> FastNoiseLite:
@@ -60,7 +61,9 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 			if absf(p.x) > half - 4.0 or absf(p.y) > half - 4.0 or not free.call(p, 2.0):
 				continue
 			var s := rng.randf_range(1.4, 2.4)
-			items.append({"m": "models/gharn/flame_tree.glb", "p": [p.x, height(n, p.x, p.y, t) - 0.15, p.y],
+			# у огненного дерева Гхарна в модели запечена кадка (нижние ~2 м при масштабе 1) — в лесу она уходит в землю:
+			# над рельефом — только ствол и крона
+			items.append({"m": "models/gharn/flame_tree.glb", "p": [p.x, height(n, p.x, p.y, t) - POT_H * s, p.y],
 				"r": rng.randf_range(0.0, 360.0), "s": s, "c": true, "col": [0.5 * s, 3.0, 0.5 * s]})
 	var scatter := [["models/gharn/props/bush_dry.glb", 90, 0.8, 1.5, false], ["models/gharn/props/rock_small.glb", 45, 0.8, 2.6, true],
 		["models/gharn/props/wood_pile.glb", 14, 0.9, 1.4, true], ["models/gharn/props/grass_tuft.glb", 260, 0.8, 1.6, false]]
