@@ -6,7 +6,7 @@ extends Control
 
 const PINK := Color(1.0, 0.55, 0.78)
 const BLUE := Color(0.47, 0.84, 1.0)
-const INK := Color(c_ink, 0.82)
+const INK := Color(0.04, 0.06, 0.14, 0.82)
 const INK2 := Color(0.11, 0.11, 0.27, 0.95)
 const TEXT := Color(0.96, 0.94, 1.0)
 const MUTED := Color(0.78, 0.8, 0.94)
