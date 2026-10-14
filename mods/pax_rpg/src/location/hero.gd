@@ -641,6 +641,12 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 		t_r = _bone_world(int(c.right_b)) * _bone_world(int(c.right_b), true).affine_inverse()
 	var half: float = c.half
 	var it_cape: Dictionary = c.get("item", {})
+	var hang_w := _iv(it_cape, "hang", 0.75)
+	var yaw := Basis(Vector3.UP, atan2(t_low.basis.z.x, t_low.basis.z.z))   # поворот таза от покоя, только по горизонтали
+	var top_cols := PackedVector3Array()                  # точка крепления каждой колонки (верхний ряд) — раз за вызов
+	top_cols.resize(nx)
+	for col_i: int in nx:
+		top_cols[col_i] = t_top * (mg * rest[col_i])
 	var out := PackedVector3Array()
 	out.resize(idx.size())
 	for k: int in idx.size():
@@ -653,17 +659,15 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 		# ниже лопаток ткань висит под своим весом: от точки крепления этой колонки — прямо вниз (с поворотом
 		# корпуса по горизонтали), а не по наклону спины — иначе в боевой стойке середина выгибается горбом
 		var col := idx[k] % nx
-		var r0: Vector3 = rest[col]
-		var top_w := t_top * (mg * r0)
-		var d := mg.basis * (rest[idx[k]] - r0)
-		var yaw := Basis(Vector3.UP, atan2(t_low.basis.z.x, t_low.basis.z.z))   # поворот таза от покоя, только по горизонтали
-		var hang := top_w + yaw * d
-		var low := (t_low * p).lerp(hang, _iv(it_cape, "hang", 0.75))
+		var d := mg.basis * (rest[idx[k]] - rest[col])
+		var hang := top_cols[col] + yaw * d
+		var low := (t_low * p).lerp(hang, hang_w)
 		out[k] = up.lerp(low, wl)
 	return out
 
 
 func _cape_tick(w: Dictionary, delta: float) -> void:
+	_cache_colliders()
 	var c: Dictionary = w.cape
 	var it: Dictionary = w.item
 	var cx: int = c.cx
@@ -724,18 +728,38 @@ static func _cape_link(x: PackedVector3Array, a: int, b: int, rest_len: float, a
 
 ## Вытолкнуть точку ткани из капсул тела. ref — где ткань должна быть (цель): если нога «перешагнула» точку и та
 ## оказалась спереди, выталкиваем в сторону цели (назад, за ногу), а не вперёд сквозь неё.
-func _push_out(p: Vector3, ref := Vector3.INF) -> Vector3:
-	for cl: Array in _colliders:
-		var body: AnimatableBody3D = cl[0]
+var _cap_pos := PackedVector3Array()     # капсулы тела на этот такт (_cache_colliders): центр, ось, полудлина, радиус
+var _cap_axis := PackedVector3Array()
+var _cap_half := PackedFloat32Array()
+var _cap_r := PackedFloat32Array()
+
+
+## Капсулы тела — один раз за такт плаща, а не на каждую из сотен точек ткани (узел, форма, оси — дорого из скрипта).
+func _cache_colliders() -> void:
+	var n := _colliders.size()
+	_cap_pos.resize(n)
+	_cap_axis.resize(n)
+	_cap_half.resize(n)
+	_cap_r.resize(n)
+	for i: int in n:
+		var body: AnimatableBody3D = _colliders[i][0]
 		var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
-		var axis := body.global_transform.basis.y
-		var half := cap.height * 0.5 - cap.radius
-		var rel := p - body.global_position
+		_cap_pos[i] = body.global_position
+		_cap_axis[i] = body.global_transform.basis.y
+		_cap_half[i] = cap.height * 0.5 - cap.radius
+		_cap_r[i] = cap.radius + 0.03
+
+
+func _push_out(p: Vector3, ref := Vector3.INF) -> Vector3:
+	for ci: int in _cap_pos.size():
+		var axis := _cap_axis[ci]
+		var half := _cap_half[ci]
+		var rel := p - _cap_pos[ci]
 		var along := clampf(rel.dot(axis), -half, half)
-		var nearest := body.global_position + axis * along
+		var nearest := _cap_pos[ci] + axis * along
 		var off := p - nearest
 		var dist := off.length()
-		var r := cap.radius + 0.03
+		var r := _cap_r[ci]
 		if dist < r:
 			var dir := off / dist if dist > 0.0001 else Vector3.ZERO
 			if ref != Vector3.INF:
@@ -849,13 +873,25 @@ static func _cr_at(g: PackedVector3Array, i: int, nx: int, nz: int, t: float, al
 	var n := nz if along_j else nx
 	var k := mini(int(t), n - 2)
 	var f := t - k
-	var idx := func(m: int) -> int:
-		m = clampi(m, 0, n - 1)
-		return m * nx + i if along_j else i * nx + m
-	var p0: Vector3 = g[idx.call(k - 1)]
-	var p1: Vector3 = g[idx.call(k)]
-	var p2: Vector3 = g[idx.call(k + 1)]
-	var p3: Vector3 = g[idx.call(k + 2)]
+	# индексы четырёх соседей — без лямбды (раньше на каждый из ~1700 вызовов за кадр создавалась своя)
+	var m0 := clampi(k - 1, 0, n - 1)
+	var m1 := clampi(k, 0, n - 1)
+	var m2 := clampi(k + 1, 0, n - 1)
+	var m3 := clampi(k + 2, 0, n - 1)
+	var p0: Vector3
+	var p1: Vector3
+	var p2: Vector3
+	var p3: Vector3
+	if along_j:
+		p0 = g[m0 * nx + i]
+		p1 = g[m1 * nx + i]
+		p2 = g[m2 * nx + i]
+		p3 = g[m3 * nx + i]
+	else:
+		p0 = g[i * nx + m0]
+		p1 = g[i * nx + m1]
+		p2 = g[i * nx + m2]
+		p3 = g[i * nx + m3]
 	return 0.5 * ((2.0 * p1) + (-p0 + p2) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f * f
 		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * f * f * f)
 

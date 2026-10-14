@@ -26,6 +26,9 @@ func setup(m: PaxMod, who: Node3D) -> void:
 	_mesh.subdivide_width = 24
 
 
+var _gust_up := 0.0                 # сколько ещё секунд порыв нарастает
+
+
 func _process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_proc(delta)
@@ -40,7 +43,12 @@ func _proc(delta: float) -> void:
 	if _next <= 0.0:
 		_next = randf_range(4.0, 9.0)
 		_spawn_gust()
-	_gust = maxf(0.0, _gust - delta * 0.35)
+	# порыв нарастает плавно (~0.7 с) и спадает медленно: раньше он вставал в 1 за кадр — трава разом дёргалась
+	if _gust_up > 0.0:
+		_gust_up = maxf(0.0, _gust_up - delta)
+		_gust = minf(1.0, _gust + delta * 1.5)
+	else:
+		_gust = maxf(0.0, _gust - delta * 0.35)
 	# трава, листва, степь — шейдеры читают ветер из глобального параметра (gfx.gd: pax_rpg_wind)
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_wind", Vector4(dir.x, dir.z, 0.55 + 0.25 * sin(Time.get_ticks_msec() * 0.0004), _gust))
 	for l: Variant in leaves:
@@ -67,7 +75,7 @@ func _proc(delta: float) -> void:
 func _spawn_gust() -> void:
 	if _shader == null:
 		return
-	_gust = 1.0
+	_gust_up = 0.7
 	var side := dir.cross(Vector3.UP).normalized()
 	var cam0 := get_viewport().get_camera_3d()
 	var base := target.global_position - dir * 6.0

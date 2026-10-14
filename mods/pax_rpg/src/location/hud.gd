@@ -534,13 +534,13 @@ func _draw_core() -> void:
 	draw_arc(c, 75.0, 0.0, TAU, 72, Color(c_blue, 0.7), 1.2, true)
 	draw_arc(c, 70.0, PI * 1.1, PI * 1.9, 32, Color(1, 1, 1, 0.12), 6.0, true)   # стеклянный блик на портрете
 	# в разрыве колец под портретом: уровень, под ним — полоска опыта (числа — в инвентаре)
-	var lv := c + Vector2(0, 100)
-	var dm := _diamond(lv, 15.0)
-	draw_colored_polygon(_diamond(lv, 19.0), c_bronze)
-	_outline(_diamond(lv, 19.0), c_gold, 1.6)
+	var lv := c + Vector2(0, 82)                         # крупный ромб уровня — заходит на низ аватарки
+	var dm := _diamond(lv, 25.0)
+	draw_colored_polygon(_diamond(lv, 31.0), c_bronze)
+	_outline(_diamond(lv, 31.0), c_gold, 2.2)
 	draw_colored_polygon(dm, Color(c_ink, 1.0))
-	_outline(dm, c_blue, 1.5)
-	_center(lv, str(int(_g("level", 1))), sans, 14, c_blue)
+	_outline(dm, c_blue, 2.0)
+	_center(lv, str(int(_g("level", 1))), serif, 26, c_blue, 3)
 	var fl := float(_g("lvl_flash", 0.0))
 	if fl > 0.0:                                         # новый уровень: свет вокруг кольца
 		var k := clampf(fl / 1.6, 0.0, 1.0)

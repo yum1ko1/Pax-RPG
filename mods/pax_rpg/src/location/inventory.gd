@@ -8,6 +8,7 @@ signal closed
 signal stat_added(key: String)       # «+» у характеристики — вложить очко (location.gd → progress.add_stat)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const WeaponView := preload("res://mods/pax_rpg/src/location/weapon_view.gd")
 const HERO_LAYER := 1 << 19
 const W := 1920.0
@@ -33,6 +34,8 @@ var _cjk: Font
 var _t := 0.0
 var _points := 0                     # свободные очки характеристик
 var _main_stat := ""
+var _pivot: Node3D                   # студия превью: шарнир копии героя (мышью — крутить)
+var _copy: Node3D
 var _bg_tex: Texture2D               # textures/inventory_bg.jpg (если есть)
 var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
 var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
@@ -91,9 +94,7 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	_body = body
 	_hero = hero
 	_yaw = 0.0
-	if is_instance_valid(view):
-		_pv.world_3d = view.find_world_3d()             # у локации свой мир (own_world_3d) — world_3d его не отдаёт
-	_hero_layer(player)
+	_ensure_model(str(st.get("model", "models/knight.glb")))
 	_pv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_fill_stats(st)
 	_main_stat = str(st.get("main_stat", ""))
@@ -155,18 +156,37 @@ func _build_preview() -> void:
 	_pv.msaa_3d = Viewport.MSAA_4X
 	_pv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
 	add_child(_pv)
+	# своя «студия»: отдельный мир с копией героя (Idle) и тремя светами — не ночной город вокруг, герой не чёрный
+	_pv.own_world_3d = true
 	_cam = Camera3D.new()
-	_cam.cull_mask = HERO_LAYER                         # только герой, без города вокруг
 	_cam.fov = 30.0
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.6, 0.78)
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.7, 0.68, 0.8)
+	env.ambient_light_energy = 0.9
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.1
 	_cam.environment = env
 	_pv.add_child(_cam)
 	_cam.current = true
+	var key := DirectionalLight3D.new()                  # тёплый ключевой: спереди-сбоку сверху
+	key.light_color = Color(1.0, 0.92, 0.82)
+	key.light_energy = 2.2
+	key.rotation_degrees = Vector3(-35, 30, 0)
+	_pv.add_child(key)
+	var fill := DirectionalLight3D.new()                 # холодный заполняющий с другой стороны
+	fill.light_color = Color(0.7, 0.8, 1.0)
+	fill.light_energy = 0.9
+	fill.rotation_degrees = Vector3(-15, -60, 0)
+	_pv.add_child(fill)
+	var rim := DirectionalLight3D.new()                  # розовый контровой сзади — силуэт на фоне кольца
+	rim.light_color = Color(1.0, 0.6, 0.85)
+	rim.light_energy = 2.6
+	rim.rotation_degrees = Vector3(-20, 180, 0)
+	_pv.add_child(rim)
+	_pivot = Node3D.new()
+	_pv.add_child(_pivot)
 	var hero_rect := TextureRect.new()
 	hero_rect.texture = _pv.get_texture()
 	hero_rect.position = Vector2(620, 84)            # в центре кольца фона (textures/inventory_bg.jpg)
@@ -176,15 +196,37 @@ func _build_preview() -> void:
 	_frame.add_child(hero_rect)
 
 
-func _place_camera() -> void:
-	if not is_instance_valid(_player) or not is_instance_valid(_body):
+## Копия героя для студии (раз за сессию локации): модель героя, клип Idle по кругу.
+func _ensure_model(path: String) -> void:
+	if is_instance_valid(_copy):
 		return
-	var center := _player.global_position + Vector3(0.0, 0.05, 0.0)
-	var fwd := -_body.global_transform.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
-	var dir := fwd.rotated(Vector3.UP, _yaw + 0.35)      # чуть сбоку — видно и лицо, и меч за спиной
-	_cam.global_position = center + dir * 3.9 + Vector3(0.0, 0.25, 0.0)
+	_copy = Assets.model(mod, path)
+	if _copy == null:
+		return
+	_pivot.add_child(_copy)
+	var ap := _find_player(_copy)
+	if ap != null and ap.has_animation("Idle"):
+		ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
+		ap.play("Idle")
+	var hand := _copy.find_child("Sword_Hand", true, false) as Node3D
+	if hand != null:
+		hand.visible = false                              # меч — за спиной, как в покое
+
+
+static func _find_player(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c: Node in n.get_children():
+		var f := _find_player(c)
+		if f != null:
+			return f
+	return null
+
+
+func _place_camera() -> void:
+	_pivot.rotation.y = _yaw + 0.35                      # чуть сбоку — видно и лицо, и меч за спиной
+	var center := Vector3(0.0, 0.95, 0.0)
+	_cam.position = center + Vector3(0.0, 0.25, 3.9)
 	_cam.look_at(center, Vector3.UP)
 
 
