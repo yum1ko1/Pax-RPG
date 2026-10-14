@@ -85,17 +85,20 @@ func _tr(k: String) -> String:
 func _draw() -> void:
 	if st.is_empty():
 		return
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	# низ (панель, кольцо героя, эликсир, приёмы) — уменьшен в BOT раз к середине нижнего края
+	var anchor := Vector2(_w * 0.5, 1080.0)
+	draw_set_transform(anchor * (1.0 - BOT) * _s, 0.0, Vector2(_s * BOT, _s * BOT))
 	_draw_bar()
 	_draw_core()
+	_draw_flask()
+	_draw_skills()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
 	_draw_compass()
 	_draw_map_frame()
 	_draw_quest()
 	_draw_enemy()
 	_draw_marks()
 	_draw_toast()
-	_draw_flask()
-	_draw_skills()
 	_draw_hint()
 	_draw_orbs()
 
@@ -125,7 +128,7 @@ static func _lacquer() -> ImageTexture:
 			var g := grain.get_noise_2d(x, y) * 0.5 + 0.5
 			var b := brush.get_noise_2d(x * 0.15, y * 2.2) * 0.5 + 0.5
 			var v := 0.75 + g * 0.3 + b * 0.25
-			img.set_pixel(x, y, Color(0.045 * v, 0.055 * v, 0.13 * v, 1.0))
+			img.set_pixel(x, y, Color(0.07 * v, 0.075 * v, 0.17 * v, 1.0))
 	_lac = ImageTexture.create_from_image(img)
 	return _lac
 
@@ -224,7 +227,7 @@ func _draw_bar() -> void:
 	var half_w := minf(660.0, _w * 0.5 - 250.0)
 	var top := cc.y - 52.0
 	var r := Rect2(cc.x - half_w, top, half_w * 2.0, 1080.0 - top - 6.0)
-	_plate(r, 22.0, BLUE)
+	_plate(r, 22.0, BLUE, 1.0)
 	var gy := r.position.y + 14.0
 	var gy2 := r.end.y - 12.0
 	draw_line(Vector2(r.position.x + 40, gy), Vector2(r.end.x - 40, gy), Color(GOLD, 0.28), 1.0, true)
@@ -275,6 +278,7 @@ func _skew_bar(x: float, y: float, w: float, h: float, frac: float, color: Color
 ## Герой по центру снизу (макет «HUD A»): портрет в круге, вокруг — толстое кольцо здоровья (270°, разрыв внизу —
 ## там числа), снаружи — тонкое кольцо концентрации (растёт от левого края разрыва; ближе к пределу — краснее).
 ## Слева от кольца — эликсир и навыки ЛКМ / ПКМ / Alt, справа — Q / T / V (_draw_skills). Опыт — полоса по низу.
+const BOT := 0.74                    # масштаб нижнего блока HUD (не занимает пол-экрана)
 const CORE_UP := 150.0               # px макета от низа экрана до центра кольца
 const ARC0 := PI * 0.75              # начало дуг — левый край разрыва внизу
 const ARC_LEN := PI * 1.5            # 270°
@@ -292,7 +296,7 @@ func _draw_core() -> void:
 		var q := c + Vector2(cos(TAU * i / 96.0), sin(TAU * i / 96.0)) * 134.0
 		disc.append(q)
 		duv.append(q / 256.0)
-	draw_colored_polygon(disc, Color(1, 1, 1, 0.95), duv, _lacquer())
+	draw_colored_polygon(disc, Color(1, 1, 1, 1.0), duv, _lacquer())
 	# оправа: кованый ободок с заклёпками, навершие с камнем сверху, засечки как на гарде
 	_bezel(c, 139.0, 11.0, 12)
 	_crest(c + Vector2(0, -146.0), 34.0, PINK)
@@ -435,7 +439,9 @@ const XP_BAR := Rect2(178, 152, 440, 6)              # px макета
 ## Куда летит мана (экранные px): конец заполненной части полоски опыта (по низу экрана).
 func xp_target(frac: float) -> Vector2:
 	var r := _xp_rect()
-	return (r.position + Vector2(r.size.x * clampf(frac, 0.0, 1.0), r.size.y * 0.5)) * _s
+	var p := r.position + Vector2(r.size.x * clampf(frac, 0.0, 1.0), r.size.y * 0.5)
+	var anchor := Vector2(_w * 0.5, 1080.0)
+	return (anchor + (p - anchor) * BOT) * _s                 # полоска — в уменьшенном нижнем блоке
 
 
 func _draw_orbs() -> void:
@@ -458,7 +464,7 @@ func _draw_compass() -> void:
 	var cx := _w * 0.5
 	var yaw := float(_g("yaw", 0.0))
 	var line_y := 52.0
-	_plate(Rect2(cx - 330.0, 18.0, 660.0, 52.0), 16.0, Color(0, 0, 0, 0), 0.78)
+	_plate(Rect2(cx - 330.0, 18.0, 660.0, 52.0), 16.0, Color(0, 0, 0, 0), 0.97)
 	for sgn: float in [-1.0, 1.0]:                          # торцы — камни в оправе
 		_gem(Vector2(cx + sgn * 342.0, 44.0), 7.0, PINK)
 	for i: int in 24:
@@ -501,7 +507,7 @@ func _draw_map_frame() -> void:
 		var d := Vector2(cos(a), sin(a))
 		draw_line(c + d * (MAP_R + 14.0), c + d * (MAP_R + (19.0 if i % 4 == 0 else 16.0)), Color(GOLD, 0.7), 1.0, true)
 	_crest(c + Vector2(0, -MAP_R - 15.0), 26.0, BLUE)
-	_plate(Rect2(c.x - 120.0, c.y + MAP_R + 14.0, 240.0, 56.0), 12.0, PINK, 0.85)
+	_plate(Rect2(c.x - 120.0, c.y + MAP_R + 14.0, 240.0, 56.0), 12.0, PINK, 0.97)
 	# север на кольце: карта вращается с камерой
 	var yaw := float(_g("yaw", 0.0))
 	var n := c + Vector2(sin(yaw), -cos(yaw)) * (MAP_R - 14.0)
@@ -567,7 +573,7 @@ func _draw_map() -> void:
 func _draw_quest() -> void:
 	var rx := _w - 40.0
 	var y := 372.0
-	_plate(Rect2(rx - 336.0, y - 22.0, 344.0, 126.0), 14.0, Color(0, 0, 0, 0), 0.72)
+	_plate(Rect2(rx - 336.0, y - 22.0, 344.0, 126.0), 14.0, Color(0, 0, 0, 0), 0.97)
 	draw_line(Vector2(rx - 300, y + 8), Vector2(rx - 8, y + 8), Color(GOLD, 0.45), 1.0, true)
 	_text(Vector2(rx - 320, y), _tr("pax_rpg_hud_quest").to_upper(), sans, 12, PINK, HORIZONTAL_ALIGNMENT_RIGHT, 320)
 	_text(Vector2(rx - 320, y + 32), _tr("pax_rpg_quest_title"), serif, 27, TEXT, HORIZONTAL_ALIGNMENT_RIGHT, 320)

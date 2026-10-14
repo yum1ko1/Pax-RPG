@@ -152,5 +152,18 @@
 	"pax_rpg_attr_strength": "Сила",
 	"pax_rpg_attr_smithing": "Кузнечное дело",
 	"pax_rpg_attr_inlay": "Инкрустация",
-	"pax_rpg_attr_luck": "Удача"
+	"pax_rpg_attr_luck": "Удача",
+	"pax_rpg_inv_passive": "Пассивка",
+	"pax_rpg_passive_iron_wall": "Железная стена",
+	"pax_rpg_passive_iron_wall_desc": "Броня: блок дополнительно гасит 30% урона",
+	"pax_rpg_inv_main_stat": "★ — главная характеристика",
+	"pax_rpg_char_title": "Выбор героя",
+	"pax_rpg_char_pick": "Выбрать",
+	"pax_rpg_char_soon": "Скоро",
+	"pax_rpg_char_main": "Главная характеристика",
+	"pax_rpg_char_moves": "Приёмы",
+	"pax_rpg_char_black_knight_moves": "Комбо тяжёлым мечом · Блок и парирование · Земной разлом · Иай",
+	"pax_rpg_char_black_knight_lore": "Тяжёлая броня и двуручный Разрубатель. Медленный, но выдерживает удары, от которых падают другие.",
+	"pax_rpg_weapon_cleaver": "Разрубатель",
+	"pax_rpg_inv_stat_points": "Очки характеристик"
 }

@@ -9,12 +9,16 @@ const LEAVE_LINES := 2             # pax_rpg_narrator_leave_1 … _2
 const Planet := preload("res://mods/pax_rpg/src/planet/planet.gd")
 const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
+const CharSelect := preload("res://mods/pax_rpg/src/ui/char_select.gd")
 
 var mod: PaxMod
 var game: PaxGame
 var planet: Planet
 var location: Location
 var loading: Loading
+var hero_id := ""                  # кем играем в этом мире; как в Terraria — герой не привязан к сохранению:
+                                   # выбор при каждом заходе в мир (start), последний выбор — настройка мода «character»
+var _picker: CharSelect
 var _rng := RandomNumberGenerator.new()   # свой — общий randf() игры не трогаем (повторяемость мира)
 
 
@@ -31,6 +35,7 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 
 func start(g: PaxGame) -> void:
 	game = g
+	hero_id = ""                                      # новый заход в мир (новая игра или загрузка) — герой выбирается заново
 	location.game = g
 
 
@@ -41,6 +46,9 @@ func _line(prefix: String, count: int, city_name: String) -> String:
 
 func enter(city: Dictionary) -> void:
 	if loading.busy() or location.active:
+		return
+	if hero_id == "":
+		_pick_hero(enter.bind(city))
 		return
 	var city_name := mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
 	planet.enabled = false
@@ -64,3 +72,18 @@ func leave() -> void:
 
 func _back_on_map() -> void:
 	planet.enabled = true
+
+
+## Экран выбора героя; после выбора — then (вход в город). Карточка — из config/hero.json → character.
+func _pick_hero(then: Callable) -> void:
+	if is_instance_valid(_picker):
+		return
+	var ch: Variant = location.hero_cfg.get("character", {})
+	_picker = CharSelect.new()
+	_picker.setup(mod, ch if ch is Dictionary else {})
+	add_child(_picker)
+	_picker.picked.connect(func(id: String) -> void:
+		hero_id = id
+		mod.set_setting("character", id)
+		_picker.queue_free()
+		then.call())

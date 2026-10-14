@@ -260,7 +260,6 @@ func _fill_gfx() -> void:
 		fog_changed.emit(v), _gfx_rows)
 	_gslider("pax_rpg_gfx_glow", "glow", float(_gfx_cfg.get("glow", 0.55)), 0.0, 1.0, 0.01)
 	_gslider("pax_rpg_gfx_sharpen", "lens_sharpen", float(_gfx_cfg.get("lens_sharpen", 0.3)), 0.0, 1.0, 0.01)
-	_gslider("pax_rpg_gfx_blur", "cam_blur", float(_gfx_cfg.get("cam_blur", 0.35)), 0.0, 1.0, 0.01)
 	_toggle("pax_rpg_gfx_flare", "flare", float(_gfx_cfg.get("flare", 1.0)) > 0.0)
 	_toggle("pax_rpg_gfx_exposure", "auto_exposure", bool(_gfx_cfg.get("auto_exposure", true)))
 	_gslider("pax_rpg_gfx_grass", "grass_density", float(_gfx_cfg.get("grass_density", 6.0)), 0.0, 10.0, 1.0)

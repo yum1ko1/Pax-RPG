@@ -152,5 +152,18 @@
 	"pax_rpg_attr_strength": "Strength",
 	"pax_rpg_attr_smithing": "Smithing",
 	"pax_rpg_attr_inlay": "Inlay",
-	"pax_rpg_attr_luck": "Luck"
+	"pax_rpg_attr_luck": "Luck",
+	"pax_rpg_inv_passive": "Passive",
+	"pax_rpg_passive_iron_wall": "Iron Wall",
+	"pax_rpg_passive_iron_wall_desc": "Armour: blocking absorbs 30% more damage",
+	"pax_rpg_inv_main_stat": "★ — main attribute",
+	"pax_rpg_char_title": "Choose your hero",
+	"pax_rpg_char_pick": "Choose",
+	"pax_rpg_char_soon": "Soon",
+	"pax_rpg_char_main": "Main attribute",
+	"pax_rpg_char_moves": "Moveset",
+	"pax_rpg_char_black_knight_moves": "Greatsword combo · Block and parry · Earth Rift · Iai",
+	"pax_rpg_char_black_knight_lore": "Heavy armour and the two-handed Cleaver. Slow, but stands through blows that fell others.",
+	"pax_rpg_weapon_cleaver": "Cleaver",
+	"pax_rpg_inv_stat_points": "Attribute points"
 }

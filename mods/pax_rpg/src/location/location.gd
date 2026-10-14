@@ -333,6 +333,10 @@ func build(city: Dictionary) -> void:
 	_inv.setup(mod)
 	add_child(_inv)
 	_inv.closed.connect(func() -> void: _set_inventory(false))
+	_inv.stat_added.connect(func(key: String) -> void:
+		if _prog.add_stat(key):
+			_set_inventory(false)
+			_set_inventory(true))                  # открыть заново — числа и урон пересчитаны
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
@@ -748,12 +752,39 @@ func _set_paused(on: bool) -> void:
 	_lmb_queued = false
 
 
-## Характеристики персонажа (config/hero.json → character.attributes) — для инвентаря.
+## Пассивка «Железная стена» (config/hero.json → character.block_reduce): доля урона, которую блок гасит сверх обычного.
+func _block_reduce() -> float:
+	var ch: Variant = hero_cfg.get("character", {})
+	if ch is Dictionary and str((ch as Dictionary).get("passive", "")) == "iron_wall":
+		return clampf(float((ch as Dictionary).get("block_reduce", 0.3)), 0.0, 0.9)
+	return 0.0
+
+
+func _character() -> Dictionary:
+	var ch: Variant = hero_cfg.get("character", {})
+	return ch if ch is Dictionary else {}
+
+
+## Характеристики персонажа (config/hero.json → character.attributes) + очки, вложенные за уровни.
 func _attributes() -> Dictionary:
+	var base: Dictionary = {}
 	var ch: Variant = hero_cfg.get("character", {})
 	if ch is Dictionary and (ch as Dictionary).get("attributes", {}) is Dictionary:
-		return (ch as Dictionary)["attributes"]
+		base = (ch as Dictionary)["attributes"]
+	return _prog.attributes(base) if _prog != null else base
+
+
+## Масштабирование оружия героя (character.weapon.scaling, буквы как в DS3).
+func _weapon_scaling() -> Dictionary:
+	var w: Variant = _character().get("weapon", {})
+	if w is Dictionary and (w as Dictionary).get("scaling", {}) is Dictionary:
+		return (w as Dictionary)["scaling"]
 	return {}
+
+
+## Урон героя: рост от уровня × масштабирование оружия от характеристик.
+func _dmg_mult() -> float:
+	return _prog.damage_mult() * Progress.scaling_mult(_weapon_scaling(), _attributes())
 
 
 func paused() -> bool:
@@ -771,6 +802,12 @@ func _set_inventory(on: bool) -> void:
 	if on:
 		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
 			"xp_abs": _prog.xp, "xp_need": _prog.need(), "attributes": _attributes()}
+		st["main_stat"] = str(_character().get("main_stat", ""))
+		st["passive"] = str(_character().get("passive", ""))
+		st["scaling"] = _weapon_scaling()
+		st["weapon"] = str((_character().get("weapon", {}) as Dictionary).get("name", "")) if _character().get("weapon", {}) is Dictionary else ""
+		st["dmg_mult"] = _dmg_mult()
+		st["stat_points"] = _prog.stat_points()
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
@@ -850,7 +887,7 @@ func _iai_cut(v: Node) -> void:
 	var g := v as Goblin
 	if g == null or not g.is_alive():
 		return
-	var dmg := _hf("iai_damage", 60.0) * _prog.damage_mult()
+	var dmg := _hf("iai_damage", 60.0) * _dmg_mult()
 	if not g.boss and is_instance_valid(_cam):          # разрез — по диагонали кадра: тело рубится пополам
 		var cb := _cam.global_transform.basis
 		var line := cb.x.rotated(-cb.z, randf_range(-1.0, 1.0))
@@ -900,7 +937,7 @@ func _quake_wave(radius: float, dmg: float, i: int) -> void:
 		var gob: Goblin = g
 		var d := Vector2(gob.global_position.x - c.x, gob.global_position.z - c.z).length()
 		if d <= radius:
-			gob.take_damage(dmg * _prog.damage_mult(), c, i == 2)          # последняя волна — отбрасывает
+			gob.take_damage(dmg * _dmg_mult(), c, i == 2)          # последняя волна — отбрасывает
 			gob.posture = minf(gob.max_posture, gob.posture + dmg * 0.8)
 			if d >= maxf(0.0, radius - 3.0):                               # шипы на кольце волны — подбрасывают
 				var away := Vector3(gob.global_position.x - c.x, 0.0, gob.global_position.z - c.z).normalized()
@@ -1247,7 +1284,7 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
-		gob.take_damage(float(hit.damage) * _prog.damage_mult(), _player.global_position, bool(hit.get("knock", false)))
+		gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
 		_impact_feel(gob, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
@@ -1287,7 +1324,7 @@ func _blade_strike(b: Dictionary) -> void:
 		if not hit:
 			continue
 		done[g] = true
-		var dmg := float(b.damage) * _prog.damage_mult()
+		var dmg := float(b.damage) * _dmg_mult()
 		gob.take_damage(dmg, _player.global_position, false)
 		_impact_feel(gob, false)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
@@ -1457,7 +1494,8 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 			(attacker as Goblin).deflected(_player.global_position)
 		return
 	if _hero != null and facing and not unblockable and _hero.blocking:
-		_posture = minf(_pos_max(), _posture + damage * (4.4 if kind == "heavy" else 2.2))
+		var guard := 1.0 - _block_reduce()               # пассивка героя (Чёрный рыцарь — «Железная стена»)
+		_posture = minf(_pos_max(), _posture + damage * (4.4 if kind == "heavy" else 2.2) * guard)
 		_since_hit = 0.0
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
 		_hero.block_hit(kind == "heavy")                # отдача: сдвиг назад — root motion клипа

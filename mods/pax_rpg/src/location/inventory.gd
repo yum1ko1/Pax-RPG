@@ -5,6 +5,7 @@ extends Control
 ## на HUD; слева под оружием — характеристики персонажа (config/hero.json → character.attributes) со знаками-иероглифами. Панели — shaders/ui_panel.gdshader (лак, золотая рамка). Мир на паузе, пока открыт (location.gd).
 
 signal closed
+signal stat_added(key: String)       # «+» у характеристики — вложить очко (location.gd → progress.add_stat)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const HERO_LAYER := 1 << 19
@@ -29,6 +30,8 @@ var _serif: Font
 var _sans: Font
 var _cjk: Font
 var _t := 0.0
+var _points := 0                     # свободные очки характеристик
+var _main_stat := ""                 # главная характеристика героя — ★ у её строки
 
 
 func setup(m: PaxMod) -> void:
@@ -81,12 +84,28 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	_hero = hero
 	_yaw = 0.0
 	if is_instance_valid(view):
-		_pv.world_3d = view.world_3d
+		_pv.world_3d = view.find_world_3d()             # у локации свой мир (own_world_3d) — world_3d его не отдаёт
+	_hero_layer(player)
+	_pv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_fill_stats(st)
+	_main_stat = str(st.get("main_stat", ""))
+	_points = int(st.get("stat_points", 0))
 	_fill_attrs(st.get("attributes", {}) as Dictionary)
 	_update_cape()
 	visible = true
 	_fit()
+
+
+## Вся геометрия героя (тело, меч, плащ, надетое) — на слое HERO_LAYER: камера инвентаря видит только его.
+func _hero_layer(root: Node) -> void:
+	if not is_instance_valid(root):
+		return
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is VisualInstance3D:
+			(n as VisualInstance3D).layers |= HERO_LAYER
 
 
 func close() -> void:
@@ -96,6 +115,8 @@ func close() -> void:
 
 func _process(delta: float) -> void:
 	if not visible:
+		if _pv.render_target_update_mode != SubViewport.UPDATE_DISABLED:
+			_pv.render_target_update_mode = SubViewport.UPDATE_DISABLED   # закрыт — превью героя не рисуется
 		return
 	_t += delta
 	_place_camera()
@@ -319,9 +340,11 @@ func _fill_stats(st: Dictionary) -> void:
 		["pax_rpg_hud_posture_label", "%d%%" % int(float(st.get("posture", 0.0)) * 100.0), Hud.AMBER],
 		["pax_rpg_hud_level", str(int(st.get("level", 1))), Hud.BLUE],
 		["pax_rpg_inv_xp", "%d / %d" % [int(st.get("xp_abs", 0)), int(st.get("xp_need", 0))], Hud.BLUE],
-		["pax_rpg_inv_damage", "—", Hud.TEXT],
+		["pax_rpg_inv_damage", _scaling_text(st), Hud.TEXT],
 		["pax_rpg_inv_defense", "—", Hud.TEXT],
 	]
+	if str(st.get("passive", "")) != "":
+		rows.append(["pax_rpg_inv_passive", _tr("pax_rpg_passive_" + str(st.get("passive", ""))), Hud.AMBER])
 	for r: Array in rows:
 		var hb := HBoxContainer.new()
 		var a := Label.new()
@@ -341,8 +364,9 @@ func _fill_stats(st: Dictionary) -> void:
 
 
 ## Характеристики: знак (иероглиф в лаковой плашке, как у слотов), название, шкала 0–100 и число.
-const ATTRS := [["agility", "敏", Hud.BLUE], ["intellect", "智", Hud.BLUE], ["charisma", "魅", Hud.PINK],
-	["strength", "力", Hud.AMBER], ["smithing", "鍛", Hud.AMBER], ["inlay", "嵌", Hud.PINK], ["luck", "運", Hud.BLUE]]
+## Цвет знака: 0 — голубой (Hud.BLUE), 1 — розовый (Hud.PINK), 2 — янтарный (Hud.AMBER).
+const ATTRS := [["agility", "敏", 0], ["intellect", "智", 0], ["charisma", "魅", 1], ["strength", "力", 2],
+	["smithing", "鍛", 2], ["inlay", "嵌", 1], ["luck", "運", 0]]
 
 
 func _fill_attrs(attrs: Dictionary) -> void:
@@ -350,8 +374,9 @@ func _fill_attrs(attrs: Dictionary) -> void:
 		c.queue_free()
 	for a: Array in ATTRS:
 		var key := str(a[0])
-		var col := a[2] as Color
-		var val := int(attrs.get(key, 0))
+		var tone := int(a[2])
+		var col: Color = Hud.BLUE if tone == 0 else (Hud.PINK if tone == 1 else Hud.AMBER)
+		var val: int = int(attrs.get(key, 0))
 		var row := Control.new()
 		row.custom_minimum_size = Vector2(400, 30)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -359,7 +384,9 @@ func _fill_attrs(attrs: Dictionary) -> void:
 		var box := _panel(Rect2(0, 0, 30, 30), row)
 		var g := _label(str(a[1]), Vector2(0, 2), _cjk, 18, col, box, 30.0)
 		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_label(_tr("pax_rpg_attr_" + key), Vector2(44, 3), _sans, 18, Hud.MUTED, row)
+		var main := key == _main_stat
+		_label(_tr("pax_rpg_attr_" + key) + ("  ★" if main else ""), Vector2(44, 3), _sans, 18,
+			Hud.AMBER if main else Hud.MUTED, row)
 		var track := ColorRect.new()
 		track.color = Hud.INK2
 		track.position = Vector2(220, 13)
@@ -369,11 +396,37 @@ func _fill_attrs(attrs: Dictionary) -> void:
 		var fill := ColorRect.new()
 		fill.color = col
 		fill.position = track.position
-		fill.size = Vector2(120.0 * clampf(val / 100.0, 0.0, 1.0), 4)
+		fill.size = Vector2(120.0 * clampf(float(val) / 100.0, 0.0, 1.0), 4)
 		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(fill)
 		var v := _label(str(val), Vector2(350, 3), _sans, 18, Hud.TEXT, row, 50.0)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		if _points > 0:                                      # есть очки — «+» вложить
+			var plus := Button.new()
+			plus.text = "+"
+			plus.position = Vector2(406, 0)
+			plus.size = Vector2(30, 30)
+			plus.add_theme_color_override("font_color", Hud.AMBER)
+			plus.pressed.connect(func() -> void: stat_added.emit(key))
+			row.add_child(plus)
+	if _points > 0:
+		var pl := Label.new()
+		pl.text = "◆ %s: %d" % [_tr("pax_rpg_inv_stat_points"), _points]
+		pl.add_theme_color_override("font_color", Hud.AMBER)
+		pl.add_theme_font_override("font", _sans)
+		pl.add_theme_font_size_override("font_size", 16)
+		_attrs.add_child(pl)
+
+
+## «Разрубатель · Сила A · ×1.94» — оружие, буквы масштабирования и итоговый множитель урона.
+func _scaling_text(st: Dictionary) -> String:
+	var parts: Array[String] = []
+	var sc: Dictionary = st.get("scaling", {}) as Dictionary
+	for k: Variant in sc:
+		parts.append("%s %s" % [_tr("pax_rpg_attr_" + str(k)), str(sc[k])])
+	var w := str(st.get("weapon", ""))
+	var head := _tr(w) if w != "" else ""
+	return "%s · %s · ×%.2f" % [head, ", ".join(parts), float(st.get("dmg_mult", 1.0))]
 
 
 func _build_hints() -> void:

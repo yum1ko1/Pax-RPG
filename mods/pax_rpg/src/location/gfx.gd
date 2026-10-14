@@ -484,7 +484,7 @@ func _lens_layer(v: SubViewport) -> void:
 	lens_mat = ShaderMaterial.new()
 	lens_mat.shader = sh
 	lens_mat.set_meta("pax_rpg_lens", true)
-	for kv: Array in [["distortion", 0.0], ["ca", 0.0012], ["sharpen", 0.3], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
+	for kv: Array in [["distortion", 0.0], ["ca", 0.0006], ["sharpen", 0.3], ["grain", 0.0], ["vignette", 0.0], ["ghosts", 0.0]]:
 		lens_mat.set_shader_parameter(str(kv[0]), _f("lens_" + str(kv[0]), float(kv[1])))
 	box.material = lens_mat
 
@@ -531,7 +531,7 @@ func _camera_lens(delta: float) -> void:
 	var vs := Vector2(view.size)
 	var aspect := vs.x / maxf(vs.y, 1.0)
 	var th := tan(deg_to_rad(cam.fov) * 0.5)
-	var shutter := _f("cam_blur", 0.5)
+	var shutter := 0.0                                   # размытие поворота выкл.: по сдвигу за кадр оно дёргалось с частотой кадров
 	var mb := Vector2.ZERO
 	if _prev_fwd != Vector3.ZERO and shutter > 0.0 and delta > 0.0:
 		var d := fwd - _prev_fwd
