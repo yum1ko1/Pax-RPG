@@ -162,7 +162,7 @@
 	"pax_rpg_char_soon": "Soon",
 	"pax_rpg_char_main": "Main attribute",
 	"pax_rpg_char_moves": "Moveset",
-	"pax_rpg_char_black_knight_moves": "Greatsword combo · Block and parry · Earth Rift · Iai",
+	"pax_rpg_char_black_knight_moves": "Heavy combo (three hits, the last all around) · Block and parry · Dodge · Deathblow",
 	"pax_rpg_char_black_knight_lore": "Heavy armour and the two-handed Cleaver. Slow, but stands through blows that fell others.",
 	"pax_rpg_weapon_cleaver": "Cleaver",
 	"pax_rpg_inv_stat_points": "Attribute points",
@@ -181,5 +181,6 @@
 	"pax_rpg_wskill_guard": "Wide guard",
 	"pax_rpg_wskill_guard_desc": "RMB: the blade covers the body. The first split second is a parry.",
 	"pax_rpg_wskill_iai": "Iai: time stop",
-	"pax_rpg_wskill_iai_desc": "V: time freezes, the blade is drawn — enemies on screen are cut when the tsuba clicks against the sheath."
+	"pax_rpg_wskill_iai_desc": "V: time freezes, the blade is drawn — enemies on screen are cut when the tsuba clicks against the sheath.",
+	"pax_rpg_char_weapon_note": "Special abilities belong to weapons: Rift to the Cleaver, Iai to the katana"
 }

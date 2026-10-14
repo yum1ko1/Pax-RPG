@@ -132,6 +132,7 @@ func _hero_card(r: Rect2, ch: Dictionary) -> void:
 		y += 92.0
 	_label(mod.tr_key("pax_rpg_char_moves").to_upper(), Vector2(30, y), _sans, 13, Hud.DIM, p)
 	_label(mod.tr_key("pax_rpg_char_%s_moves" % id), Vector2(30, y + 20), _sans, 15, Hud.TEXT, p, w)
+	_label(mod.tr_key("pax_rpg_char_weapon_note"), Vector2(30, y + 84), _sans, 13, Hud.DIM, p, w)
 	var btn := Button.new()
 	btn.text = mod.tr_key("pax_rpg_char_pick")
 	btn.position = Vector2(r.position.x + 90, r.end.y - 80)

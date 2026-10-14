@@ -1,5 +1,5 @@
 {
-	"_note": "Оружие героя (инвентарь → окно оружия, src/location/weapon_view.gd). slot — куда надевается: main — основное, iai — клинок иая; model + node — модель (node — узел внутри glb, если меч — часть модели героя); glyph — знак в круге; damage — базовый урон (для основного — средний удар комбо, config/hero.json → hit_damage); scaling — масштабирование от характеристик буквами S/A/B/C/D/E (как в DS3, progress.gd → scaling_mult); skills — способности: [ключ названия, ключ описания] в data/lang.",
+	"_note": "Оружие героя (инвентарь → окно оружия, src/location/weapon_view.gd). slot — куда надевается: main — основное, iai — клинок иая; model + node — модель (node — узел внутри glb, если меч — часть модели героя); glyph — знак в круге; damage — базовый урон (для основного — средний удар комбо, config/hero.json → hit_damage); scaling — масштабирование от характеристик буквами S/A/B/C/D/E (как в DS3, progress.gd → scaling_mult); skills — способности оружия (не героя: приёмы героя — комбо, блок, уворот — у персонажа): [ключ названия, ключ описания] в data/lang.",
 	"order": ["cleaver", "katana"],
 	"cleaver": {
 		"name": "pax_rpg_weapon_greatsword",
@@ -10,9 +10,7 @@
 		"damage": 22,
 		"scaling": {"strength": "A"},
 		"skills": [
-			["pax_rpg_wskill_combo", "pax_rpg_wskill_combo_desc"],
-			["pax_rpg_wskill_rift", "pax_rpg_wskill_rift_desc"],
-			["pax_rpg_wskill_guard", "pax_rpg_wskill_guard_desc"]
+			["pax_rpg_wskill_rift", "pax_rpg_wskill_rift_desc"]
 		]
 	},
 	"katana": {
