@@ -718,6 +718,15 @@ func _palace_stairs(layout: Dictionary) -> void:
 				var front := float(p[2]) + float(b[2]) * 0.5     # к воротам (+Z)
 				var run := h * 3.2                               # длина лестницы (уклон ~17°)
 				var steps := int(ceil(h / 0.25))
+				# старый пандус планировки (наклонная плита и площадка) стоял там же — две лестницы друг в друге
+				var keep: Array = []
+				for o: Variant in items:
+					var op: Array = (o as Dictionary).get("p", [0, 0, 0])
+					var inside: bool = (o as Dictionary).has("box") and o != it and absf(float(op[0]) - float(p[0])) < 8.0 \
+						and float(op[2]) > front - 1.0 and float(op[2]) < front + run + 1.0
+					if not inside:
+						keep.append(o)
+				items = keep
 				for i: int in steps:
 					var top := h - i * (h / steps)
 					var dz := run / steps
@@ -1243,6 +1252,16 @@ func _iai_cut(v: Node) -> void:
 	if not g.boss:
 		g.deathblow()                                    # щелчок цубы — падает сразу, без «на коленях»
 	_numbers.append({"pos": g.global_position + Vector3(0, 1.4, 0), "v": int(dmg), "crit": true, "t": 0.0})
+
+
+var _icons := {}
+
+
+## Иконка способности (textures/icon_<id>.png), один раз.
+func _icon_tex(id: String) -> Texture2D:
+	if not _icons.has(id):
+		_icons[id] = mod.texture("textures/icon_%s.png" % id)
+	return _icons[id]
 
 
 func _quake_tex() -> Texture2D:
@@ -2800,10 +2819,10 @@ func _hud_tick(delta: float) -> void:
 			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
 			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
 		{"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
-			"color": Color(1.0, 0.45, 0.25), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
+			"color": Color(1.0, 0.45, 0.25), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
 			"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))},   # серый — не бежит
 		{"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
-			"color": Color(0.75, 0.6, 1.0), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
+			"color": Color(0.75, 0.6, 1.0), "icon": _icon_tex("iai"), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 			"ready": _iai_cd <= 0.0}]
 	_hud.st = st
 	if is_instance_valid(_city_map):
