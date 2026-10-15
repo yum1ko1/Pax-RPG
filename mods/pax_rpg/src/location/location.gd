@@ -1838,6 +1838,8 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		gob.posture_scale = 1.0 / maxf(_dmg_mult(), 0.01)
 		gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
+		if _hero != null and _hero.action == "Launcher":
+			_sfx_once("sounds/kick_hit.wav", 0.0)          # пинок попал
 		if _hero != null and _hero.action == "Launcher" and gob.is_alive():   # подброс: пинок по площади — враг взлетает
 			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
 		_style.hit(_hero.action if _hero != null and _hero.action != "" else "Attack3")
@@ -2159,7 +2161,10 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		return
 	_hp = maxf(0.0, _hp - damage)
 	_style.hurt()
-	_armor_hit_sound(damage)
+	if attacker != null and str(attacker.get("_atk")) == "Kick":
+		_sfx_once("sounds/kick_hit.wav", 0.0)              # пинок врага — удар в живот, а не по стали
+	else:
+		_armor_hit_sound(damage)
 	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
@@ -2188,6 +2193,25 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 
 var _armor_hit: AudioStreamPlayer
 var _db_snd: AudioStreamPlayer
+var _sfx_players := {}
+
+
+## Разовый звук по пути (кэш плееров): пинки и т. п.
+func _sfx_once(path: String, db: float) -> void:
+	var p: AudioStreamPlayer = _sfx_players.get(path)
+	if p == null:
+		var st: AudioStream = mod.sound(path)
+		if st == null:
+			return
+		p = AudioStreamPlayer.new()
+		p.stream = st
+		p.bus = "PaxRpgSfx"
+		p.max_polyphony = 3
+		add_child(p)
+		_sfx_players[path] = p
+	p.volume_db = db
+	p.pitch_scale = randf_range(0.94, 1.06)
+	p.play()
 
 
 ## Добивание: клинок входит в тело (sounds/deathblow.wav) — в миг удара клипа (deathblow_hit).
