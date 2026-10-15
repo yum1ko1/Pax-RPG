@@ -490,6 +490,23 @@ func _hand_fast(delta: float) -> bool:
 	return fast
 
 
+## Добивание босса — как в Sekiro: снимает «жизнь», а не убивает. Пока здоровья больше 30 % —
+## тяжёлая рана (40 % от полного), равновесие сброшено, встаёт и бьётся дальше; меньше — гибель.
+func deathblow() -> void:
+	if dead:
+		return
+	if hp > max_hp * 0.3:
+		hp = maxf(1.0, hp - max_hp * 0.4)
+		posture = 0.0
+		_lethal = false
+		_burst(global_position + Vector3(0.0, 1.2, 0.0), Vector3.UP, Color(0.55, 0.02, 0.03), 60, 4.0, 9.0, 0.6, 0.07)
+		_snd(_snd_hurt)
+		_set_state("hurt")
+		mod.log_info("[pax_rpg] orc deathblow: wounded, hp %.0f/%.0f" % [hp, max_hp])
+		return
+	_die()
+
+
 ## Достаёт ли удар героя сейчас: кисть (у пинка — стопа) ближе CONTACT к телу героя (отрезок от колен до головы).
 ## Нет скелета — по старому: дистанция до героя.
 func _contact(foot: bool) -> bool:
