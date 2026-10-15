@@ -132,6 +132,7 @@ var _chain_t := 0.0                 # с с начала последнего у
 var _tilt := 0.0                    # рад: наклон корпуса во взмахе (клинок не параллелен земле)
 var _tilt_want := 0.0
 var _waves: Array = []              # волны разреза: {node, dir, t, hit: {}}
+var _shove := Vector3.ZERO          # м/с: отброс героя тараном орка
 var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
 var _city_lights: Array = []
@@ -1764,6 +1765,10 @@ func _physics_body(delta: float) -> void:
 		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f2.x * _hf("ult_dash_speed", 9.0)
 		vel.z = f2.z * _hf("ult_dash_speed", 9.0)
+	if _shove.length_squared() > 0.01:                 # отброс тараном: гаснет трением о землю
+		vel.x += _shove.x
+		vel.z += _shove.z
+		_shove = _shove.move_toward(Vector3.ZERO, _hf("shove_friction", 9.0) * delta)
 	if _recoil.length_squared() > 0.0001:                # отдача удара: толчок назад, гаснет пружиной (Гук)
 		vel.x += _recoil.x
 		vel.z += _recoil.z
@@ -2318,10 +2323,11 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null:
 		if kind == "charge" and _hp > 0.0:
 			_hero.knock_down()
-			if attacker != null:
+			if attacker != null:                             # таран: героя отбрасывает и он скользит по земле
 				var push := _player.global_position - attacker.global_position
 				push.y = 0.0
-				_player.velocity += push.normalized() * 7.0
+				_shove = push.normalized() * _hf("charge_shove", 9.0)
+				_player.velocity.y = _hf("charge_lift", 3.5)
 		else:
 			_hero.hurt()
 	if _hp <= 0.0 and attacker != null and is_instance_valid(attacker) and attacker.has_method("cheer"):

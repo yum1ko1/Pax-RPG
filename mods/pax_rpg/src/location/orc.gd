@@ -36,6 +36,7 @@ const SPIN_DMG := 16.0
 const CHARGE_SPEED := 8.5
 const CHARGE_TURN := 1.2        # рад/с — почти не поворачивает: уйти вбок
 const CHARGE_TIME := 2.2
+const SKID_DECEL := 11.0      # м/с²: торможение после промаха тараном
 const CHARGE_DMG := 34.0
 const PARRY_WINDOW := 0.28      # с от начала блока: удар героя отбит
 const DIZZY_TIME := 1.6         # после вихря и промаха тараном — открыт
@@ -43,6 +44,8 @@ const DIZZY_TIME := 1.6         # после вихря и промаха тар
 var _atk := ""
 var _hits_done := 0
 var _slam_done := false
+var _roar_taunt := false             # насмешка после промаха тараном — рёв, а не смех
+var _skid_v := 0.0                   # м/с: скорость торможения после промаха
 var _whoosh_done := 0                # сколько свистов замаха уже прозвучало (до удара, не в миг урона)
 var _skel: Skeleton3D
 const AXE := 0.95                    # м: от кисти до лезвия топора
@@ -79,10 +82,10 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/orc_hurt_%d.mp3", 1, 1, 1.0, 4.0)        # попадание по орку (меньше половины здоровья)
 	_snd_hurt_hi = _sound("sounds/orc_hurt_hi_%d.mp3", 1, 1, 1.0, 4.0)  # попадание, пока здоровья больше половины
-	_snd_cheer = _sound("sounds/orc_cheer_%d.mp3", 1, 1, 1.0, 7.0)      # радость: герой пал
-	_snd_laugh = _sound("sounds/orc_laugh_%d.mp3", 1, 1, 1.0, 6.0)      # насмешка, удачный удар
-	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, 3.0)        # рычание и сопение между ударами
-	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
+	_snd_cheer = _sound("sounds/orc_cheer_%d.mp3", 1, 1, 1.0, -2.0)      # радость: герой пал
+	_snd_laugh = _sound("sounds/orc_laugh_%d.mp3", 1, 1, 1.0, -3.0)      # насмешка, удачный удар
+	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, -6.0)        # рычание и сопение между ударами
+	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, -3.0)       # рёв перед ударом и в насмешке
 	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -146,6 +149,8 @@ func _clip(name_: String) -> String:
 
 func _set_state(s: String) -> void:
 	super._set_state(s)
+	if _model != null and s != "skid":
+		_model.rotation.x = 0.0                          # торможение прервали (удар и т. п.) — выпрямился
 	_danger.visible = s in ["spin", "charge_wind", "charge"]
 	match s:
 		"broken":
@@ -166,7 +171,10 @@ func _set_state(s: String) -> void:
 			_play("BlockIdle", true, 0.12)
 		"taunt":
 			_play("Taunt", true)
-			_snd(_snd_laugh)
+			_snd(_snd_grunt if _roar_taunt else _snd_laugh)
+			_roar_taunt = false
+		"skid":
+			_play("ChargeRun", true)
 		"spin":
 			_play("Spin360High", true)
 			_spin_tick = 0.5
@@ -354,6 +362,22 @@ func _phys(delta: float) -> void:
 				_set_state("charge")
 		"charge":
 			flat = _charge_tick(delta, dist, dir)
+		"skid":
+			# по инерции: скорость гаснет трением, корпус откинут назад, ноги скользят, пыль из-под ступней
+			_skid_v = move_toward(_skid_v, 0.0, SKID_DECEL * delta)
+			flat = _charge_dir * _skid_v
+			var k := _skid_v / CHARGE_SPEED
+			if _model != null:
+				_model.rotation.x = -0.32 * k
+			if _anim != null:
+				_anim.speed_scale = maxf(0.15, k * 0.8)
+			if randf() < k * 0.6:
+				_burst(global_position + _charge_dir * 0.4, Vector3.UP, Color(0.6, 0.5, 0.4), 4, 1.5, 2.0, 0.6, 0.06)
+			if _skid_v <= 0.4:
+				if _model != null:
+					_model.rotation.x = 0.0
+				_roar_taunt = true
+				_set_state("taunt")                          # встал — ревёт и снова идёт за героем
 		"charge_end":
 			_damp(delta)
 			if _state_t >= _clip_len("ChargeHit") * 0.9:
@@ -564,9 +588,13 @@ func _charge_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 			_on_hit.call(CHARGE_DMG, self, "charge")
 		_set_state("charge_end")
 		return _charge_dir * 2.0
-	if _state_t >= CHARGE_TIME or (get_slide_collision_count() > 0 and _state_t > 0.4):
-		_set_state("dizzy")
+	if get_slide_collision_count() > 0 and _state_t > 0.4:
+		_set_state("dizzy")                                  # врезался в стену — оглушён
 		return Vector3.ZERO
+	if _state_t >= CHARGE_TIME or (_state_t > 0.5 and _charge_dir.dot(dir) < -0.1):
+		_skid_v = CHARGE_SPEED                               # промахнулся (герой позади) — тормозит по инерции
+		_set_state("skid")
+		return _charge_dir * _skid_v
 	return _charge_dir * CHARGE_SPEED
 
 
