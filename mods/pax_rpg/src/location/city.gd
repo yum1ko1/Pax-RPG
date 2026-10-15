@@ -1174,7 +1174,7 @@ func _decor(data: Dictionary) -> Array:
 			solid.append(Vector2(float(pp[0]), float(pp[2])))
 	var kinds := [["rock_mossy_%s", ["6", "10", "12", "16", "17", "18", "27"], 0.8, 2.0, 3],
 		["grass_%s", ["tall", "tall_low", "fresh", "dry"], 1.4, 2.4, 14], ["plant_%s", ["flower", "leaf", "cover_1"], 0.25, 0.45, 4],
-		["mushrooms", [""], 0.6, 1.1, 1], ["oak_small_%s", ["1", "2"], 0.8, 1.1, 1], ["stone_%s", ["small_1", "small_3", "runic_5"], 0.4, 0.8, 1]]
+		["mushrooms", [""], 0.6, 1.1, 1], ["stone_%s", ["small_1", "small_3", "runic_5"], 0.4, 0.8, 1]]
 	var weight := 0
 	for k: Array in kinds:
 		weight += int(k[4])
@@ -1184,8 +1184,10 @@ func _decor(data: Dictionary) -> Array:
 	while out.size() < int(d.get("count", 400)) and tries > 0:
 		tries -= 1
 		var p := ctr + Vector2(rng.randf_range(-half.x, half.x), rng.randf_range(-half.y, half.y))
-		if _road != null and _road_at(Vector3(p.x, 0.0, p.y)) > 0.08:
-			continue
+		if _road != null and (_road_at(Vector3(p.x, 0.0, p.y)) > 0.03 or _road_at(Vector3(p.x + 1.5, 0.0, p.y)) > 0.03
+				or _road_at(Vector3(p.x - 1.5, 0.0, p.y)) > 0.03 or _road_at(Vector3(p.x, 0.0, p.y + 1.5)) > 0.03
+				or _road_at(Vector3(p.x, 0.0, p.y - 1.5)) > 0.03):
+			continue                                       # не на дороге и не у самой её кромки (деревья в городе — только по планировке)
 		if ar.size() >= 3 and p.distance_to(Vector2(float(ar[0]), float(ar[1]))) < float(ar[2]) + 9.0:
 			continue
 		var near := false
