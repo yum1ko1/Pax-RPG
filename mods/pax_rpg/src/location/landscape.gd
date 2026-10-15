@@ -21,7 +21,8 @@ const SECTORS := 24
 const MOUNT_NA := 720
 const MOUNT_NR := 84
 
-static var _cache := {}            # str(area) → {"steppe": [arrays…], "mountains": [arrays…]}
+static var hole := Vector3.ZERO       # x, z, радиус ямы арены в городе (city.gd): степь под ямой уходит вниз (не видна в вырезе)
+static var _cache := {}            # _key(area) → {"steppe": [arrays…], "mountains": [arrays…]}
 static var _pending := {}
 
 var mod: PaxMod
@@ -31,6 +32,10 @@ var _flat := Rect2()
 
 
 ## Площадка города по планировке (как в city.gd: ground = [ширина, глубина, центр X, центр Z]).
+static func _key(area: Rect2) -> String:
+	return str(area) + str(hole)
+
+
 static func area_of(layout: Dictionary) -> Rect2:
 	var g: Array = layout.get("ground", [190, 186, 0, 0])
 	var gw := Vector2(float(g[0]), float(g[1]))
@@ -39,7 +44,7 @@ static func area_of(layout: Dictionary) -> Rect2:
 
 ## Начать расчёт в потоке (если ещё не считали и не считаем).
 static func request(area: Rect2) -> void:
-	var key := str(area)
+	var key := _key(area)
 	if _cache.has(key) or _pending.has(key):
 		return
 	_pending[key] = true
@@ -54,7 +59,7 @@ static func _run_request(area: Rect2, key: String) -> void:
 
 
 static func ready_for(area: Rect2) -> bool:
-	return _cache.has(str(area))
+	return _cache.has(_key(area))
 
 
 static func _steppe_noise() -> FastNoiseLite:
@@ -67,6 +72,8 @@ static func _steppe_noise() -> FastNoiseLite:
 
 ## Высота степи: в городе — ниже земли города, за стеной поднимается холмами.
 static func steppe_h(n: FastNoiseLite, flat: Rect2, x: float, z: float) -> float:
+	if hole.z > 0.0 and Vector2(x - hole.x, z - hole.y).length() < hole.z + 1.0:
+		return -12.0                                   # под ямой арены — глубоко, ниже её пола (−4 м)
 	var dx := maxf(0.0, absf(x - flat.get_center().x) - flat.size.x * 0.5)
 	var dz := maxf(0.0, absf(z - flat.get_center().y) - flat.size.y * 0.5)
 	var d := sqrt(dx * dx + dz * dz)
@@ -192,12 +199,12 @@ func build(m: PaxMod, parent: Node3D, area: Rect2) -> void:
 		if not is_instance_valid(root) or not root.is_inside_tree():
 			return
 		if Time.get_ticks_msec() - t0 > 30000:              # поток так и не ответил — считаем здесь, но не виснем
-			_cache[str(area)] = compute(area)
+			_cache[_key(area)] = compute(area)
 			break
 		await root.get_tree().process_frame
 	if not is_instance_valid(root):
 		return
-	var data: Dictionary = _cache[str(area)]
+	var data: Dictionary = _cache[_key(area)]
 	var steppe := _steppe_mat()
 	for arr: Variant in data.get("steppe", []):
 		_add_mesh(arr as Array, steppe, "Steppe")

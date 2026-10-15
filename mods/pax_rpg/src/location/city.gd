@@ -59,6 +59,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var rr: Array = gmask.get("rect", [0, 0, 1, 1])
 		_road_rect = Rect2(float(rr[0]), float(rr[1]), float(rr[2]), float(rr[3]))
 	if bool(data.get("landscape", true)):
+		var hl: Array = data.get("hole", [])
+		Landscape.hole = Vector3(float(hl[0]), float(hl[1]), float(hl[2])) if hl.size() >= 3 else Vector3.ZERO
 		Landscape.request(Landscape.area_of(data))         # горы и степь считаются в потоке, пока ставим город
 	var g: Array = data.get("ground", [190, 186, 0, 0])
 	var gm: Dictionary = data.get("ground_mask", {})
@@ -72,12 +74,15 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	var all_items: Array = (data.get("items", []) as Array).duplicate()
 	if data.has("decor"):
 		all_items.append_array(_decor(data))
+	var hole: Array = data.get("hole", [])               # вырез под арену: в нём ничего не ставим (ни планировку, ни природу)
 	for it: Variant in all_items:
 		if not await _slice():
 			return
 		var d: Dictionary = it
 		var p: Array = d.get("p", [0, 0, 0])
 		var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
+		if hole.size() >= 3 and not d.has("ramp") and Vector2(pos.x - float(hole[0]), pos.z - float(hole[1])).length() < float(hole[2]) + 1.5:
+			continue
 		if d.has("box") and d.has("ramp"):                # невидимый пандус под ступенями: только коллизия
 			var rb: Array = d.box
 			var body := StaticBody3D.new()

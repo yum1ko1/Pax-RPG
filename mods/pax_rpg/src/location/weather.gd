@@ -279,13 +279,21 @@ func footprint(pos: Vector3, yaw: float, left: bool) -> void:
 		_print_tex = ImageTexture.create_from_image(img)
 	var d := Decal.new()
 	d.texture_albedo = _print_tex
-	d.size = Vector3(0.16, 0.5, 0.3)
+	d.size = Vector3(0.16, 0.12, 0.3)                       # тонкая проекция: только земля под ногой, не предметы рядом
 	d.albedo_mix = 1.0
 	d.normal_fade = 0.5
 	d.cull_mask = 0xFFFFF & ~(1 << 19)
 	add_child(d)
 	var side := Vector3(cos(yaw), 0.0, -sin(yaw)) * (0.11 if left else -0.11)
-	d.global_position = pos + side + Vector3(0, 0.1, 0)
+	var at := pos + side
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space != null:                                       # земля под ногой — лучом вниз (след ложится точно на неё)
+		var q := PhysicsRayQueryParameters3D.create(at + Vector3(0, 1.0, 0), at - Vector3(0, 3.0, 0))
+		q.collision_mask = 1
+		var r := space.intersect_ray(q)
+		if r.has("position"):
+			at.y = (r.position as Vector3).y
+	d.global_position = at + Vector3(0, 0.02, 0)
 	d.rotation.y = yaw
 	d.modulate = Color(1, 1, 1, 0.9 if wet > 0.3 else 0.6)
 	_prints.append(d)

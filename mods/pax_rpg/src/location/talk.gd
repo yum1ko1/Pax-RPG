@@ -264,8 +264,7 @@ func _prompt() -> String:
 		+ "«task» — о задании: give — попроси найти «task_item» в лесу у города; return — герой отдаёт вещь сейчас, " \
 		+ "поблагодари; has_it — вещь у него, попроси отдать; pending — ты ждёшь вещь; other или none — о задании не говори. " \
 		+ "«manner» — как герой это сказал (вопрос, торг, задание, лесть, угроза, прощание); смысл — по его словам. " \
-		+ "Не говори про ИИ и игры. Ответ — только JSON без другого текста: " \
-		+ "{\"reply\": \"твои слова\", \"mood\": \"friendly|neutral|wary|angry|afraid\", \"relation_delta\": число от -15 до 15}"
+		+ "Не говори про ИИ и игры. Ответ — только JSON, ровно так: {\"reply\": \"твои слова\"}"
 
 
 ## Запрос к нейросети игры; пусто (нет связи, лимит, тайм-аут) — ещё одна попытка, потом честное «не ответил».
@@ -316,7 +315,8 @@ func _answer(a: Dictionary, key: String, tok: int) -> void:
 		if a.get(k, null) is String and str(a[k]).strip_edges() != "":
 			reply = str(a[k]).strip_edges()
 			break
-	var delta := clampi(int(a.get("relation_delta", 0)), -15, 15) if reply != "" else 0
+	var delta := clampi(int(a.get("relation_delta", {"flatter": 3, "threat": -8, "quest": 1, "trade": 1}.get(key, 1))), -15, 15) \
+		if reply != "" else 0                               # нейросеть даёт только реплику — отношение по манере
 	var qs := _quest_after(key)
 	if qs == "return":
 		delta = maxi(delta, 15)                          # вернул вещь — отношение растёт заметно

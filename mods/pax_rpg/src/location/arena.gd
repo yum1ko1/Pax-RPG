@@ -311,7 +311,7 @@ func _build_bowl(view: Node) -> void:
 			var mat := _bowl_mat(key)
 			if mat != null:
 				g.set_surface_override_material(si, mat)
-		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if nm.begins_with("roof") or nm.begins_with("rail") 			else GeometryInstance3D.SHADOW_CASTING_SETTING_ON           # тени тонких прутьев рябят — без них
 	for xs: float in [1.0, -1.0]:                      # каменные фонари у проходов к лестницам — спуск видно издалека
 		var dir := Vector3(xs * STX, 0.0, ST_TOP).normalized()
 		var side := Vector3(-dir.z, 0.0, dir.x)
