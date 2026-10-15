@@ -2066,6 +2066,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		return
 	_hp = maxf(0.0, _hp - damage)
 	_style.hurt()
+	_armor_hit_sound(damage)
 	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
@@ -2090,6 +2091,26 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_update_hud()
+
+
+var _armor_hit: AudioStreamPlayer
+
+
+## Клинок по латам рыцаря: металлический отзвук (sounds/armor_hit.wav); сильнее удар — громче и ниже.
+func _armor_hit_sound(damage: float) -> void:
+	if _armor_hit == null:
+		var st: AudioStream = mod.sound("sounds/armor_hit.wav")
+		if st == null:
+			return
+		_armor_hit = AudioStreamPlayer.new()
+		_armor_hit.stream = st
+		_armor_hit.bus = "PaxRpgSfx"
+		_armor_hit.max_polyphony = 2
+		add_child(_armor_hit)
+	var k := clampf(damage / 30.0, 0.3, 1.5)
+	_armor_hit.volume_db = lerpf(-8.0, 0.0, clampf(k, 0.0, 1.0))
+	_armor_hit.pitch_scale = randf_range(1.05, 1.15) - 0.15 * (k - 0.3)
+	_armor_hit.play()
 
 
 func _regen_posture(delta: float) -> void:
