@@ -294,7 +294,7 @@ func _build_bowl(view: Node) -> void:
 		if nm.begins_with("grate_col"):
 			cs.shape = g.mesh.create_trimesh_shape()   # по решётке ходят; сама плоскость не рисуется
 			g.visible = false
-		elif nm.begins_with("stairs") or nm.begins_with("roof"):
+		elif nm.begins_with("stairs") or nm.begins_with("roof") or nm.begins_with("edge"):
 			cs.shape = null
 		else:
 			cs.shape = g.mesh.create_trimesh_shape()
@@ -302,7 +302,8 @@ func _build_bowl(view: Node) -> void:
 			body.add_child(cs)
 			g.add_child(body)
 		var key := ""                                     # материал — по имени части (имена материалов glb не доходят)
-		for pair: Array in [["floor", "arena_sand"], ["wall", "arena_wall"], ["rim", "arena_seat"], ["stairs", "arena_seat"],
+		for pair: Array in [["floor", "arena_sand"], ["wall", "arena_wall"], ["rim", "arena_seat"], ["stairs", "arena_wall"],
+				["edge", "arena_seat"],
 				["fence", "wood"], ["roof", "iron"], ["rail", "iron"]]:
 			if nm.begins_with(str(pair[0])):
 				key = str(pair[1])
@@ -326,6 +327,18 @@ func _build_bowl(view: Node) -> void:
 				ol.light_volumetric_fog_energy = 0.0
 				ol.position = Vector3(0, 1.2, 0)
 				lt.add_child(ol)
+	for xs: float in [1.0, -1.0]:                      # фонари внизу у лестниц — видно глубину ямы
+		var lb := Assets.model(mod, "models/gharn/props/stone_lantern.glb")
+		if lb != null:
+			lb.position = center + Vector3(xs * (STX - 1.9), -DEPTH, ST_BOT - 0.9)
+			view.add_child(lb)
+			var ol2 := OmniLight3D.new()
+			ol2.light_color = Color(1.0, 0.62, 0.32)
+			ol2.light_energy = 1.4
+			ol2.omni_range = 7.0
+			ol2.light_volumetric_fog_energy = 0.0
+			ol2.position = Vector3(0, 1.2, 0)
+			lb.add_child(ol2)
 	var run := ST_TOP - ST_BOT
 	for xs: float in [1.0, -1.0]:
 		var ramp := StaticBody3D.new()
