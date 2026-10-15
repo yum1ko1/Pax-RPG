@@ -228,14 +228,25 @@ func in_combat() -> bool:
 # ---------- что с ним делают ----------
 
 ## Удар героя: кровь, отлёт, атака сорвана; растёт концентрация. Без равновесия — не принимает обычных ударов.
+var posture_scale := 1.0              # урон героя → равновесие: без множителя силы и уровня (location.gd ставит 1/множитель)
+
+
 func take_damage(amount: float, from: Vector3, knock := false) -> void:
-	if dead or _state == "broken":
+	if dead:
 		return
+	if _state == "broken":                         # сломлен (добивание): удары всё равно ранят, а не проходят впустую
+		hp = maxf(0.0, hp - amount)
+		_update_bars()
+		if hp <= 0.0:
+			_lethal = true
+			_die()                                   # добит ударами — падает сразу
+		return
+	var pa := amount * posture_scale
 	var face := global_position.direction_to(from)
 	var fwd := -global_transform.basis.z
 	if not knock and _state in ["idle", "circle", "stalk", "evade", "recover", "guard"] \
 			and fwd.dot(Vector3(face.x, 0.0, face.z).normalized()) > 0.3 and randf() < _guard_chance:
-		posture = minf(max_posture, posture + amount * 0.55)     # принял на клинок: урона нет, равновесие шатается
+		posture = minf(max_posture, posture + pa * 0.4)     # принял на клинок: урона нет, равновесие шатается
 		_since_hit = 0.0
 		_burst(global_position + Vector3(0.0, 1.0, 0.0) + face * 0.4, face, Color(1.0, 0.75, 0.35), 14, 3.0, 6.0,
 			0.25, 0.03, true)
@@ -247,7 +258,7 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 		_update_bars()
 		return
 	hp = maxf(0.0, hp - amount)
-	posture = minf(max_posture, posture + amount * 0.7)
+	posture = minf(max_posture, posture + pa * 0.45)
 	_since_hit = 0.0
 	if _hurt_cd <= 0.0:
 		_hurt_cd = 0.3

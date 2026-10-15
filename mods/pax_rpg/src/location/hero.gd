@@ -1137,7 +1137,7 @@ func _active() -> bool:
 
 func _blade_out(out: Dictionary) -> void:
 	var imp: Dictionary = meta.get("impact", {})
-	if not _active() or imp.has(action) or _sword_hand == null or not _sword_hand.is_inside_tree():
+	if not _active() or imp.has(action) or action == "Launcher" or _sword_hand == null or not _sword_hand.is_inside_tree():
 		_blade_prev = []
 		_swing_action = ""
 		return
@@ -1848,6 +1848,12 @@ func deathblow() -> bool:
 ## Миг удара: середина взмаха (swing_peaks), у финального — касание земли (impact). tick вернёт
 ## {"hit": {"range": м, "arc": косинус полуугла перед героем (-1 — круг)}} — location.gd бьёт по врагам.
 func _hit(out: Dictionary) -> void:
+	if not _hit_done and action == "Launcher":         # пинок: меч не летит — удар по площади в миг касания ногой
+		if _frac() >= _f("launcher_hit_at", 0.42):
+			_hit_done = true
+			out["hit"] = {"range": _per("hit_range", action, 2.3), "arc": 0.3, "damage": _per("hit_damage", action, 18.0),
+				"knock": false}
+		return
 	if _hit_done or action not in ATTACKS:
 		return
 	var imp: Dictionary = meta.get("impact", {})

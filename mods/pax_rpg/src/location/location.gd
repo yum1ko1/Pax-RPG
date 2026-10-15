@@ -1662,7 +1662,10 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
+		gob.posture_scale = 1.0 / maxf(_dmg_mult(), 0.01)
 		gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
+		if _hero != null and _hero.action == "Launcher" and gob.is_alive():   # подброс: пинок по площади — враг взлетает
+			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
 		_style.hit(_hero.action if _hero != null and _hero.action != "" else "Attack3")
 		_impact_feel(gob, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
@@ -1704,11 +1707,11 @@ func _blade_strike(b: Dictionary) -> void:
 			continue
 		done[g] = true
 		var dmg := float(b.damage) * _dmg_mult()
+		gob.posture_scale = 1.0 / maxf(_dmg_mult(), 0.01)
 		gob.take_damage(dmg, _player.global_position, false)
 		var mv := str(b.get("move", "Attack1"))
 		_style.hit(mv)
-		if mv == "Launcher" and gob.is_alive():         # подброс: враг взлетает (без добивания в воздухе)
-			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
+
 		_impact_feel(gob, false)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
