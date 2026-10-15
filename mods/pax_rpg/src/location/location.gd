@@ -342,6 +342,7 @@ func build(city: Dictionary) -> void:
 	_view.add_child(_daynight)
 	if not layout.is_empty():
 		_weather = Weather.new()
+		_weather.puddles = not layout.is_empty() and not layout.has("forest")   # лужи — на земле города (ground.gdshader)
 		_view.add_child(_weather)
 		_weather.setup.call_deferred(mod, weather_kind, _env, _sky_mat, _cam, _daynight.day_amount() if _daynight.has_method("day_amount") else 1.0,
 			_city_lights)
@@ -1308,7 +1309,18 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 	var waves: Array = hero_cfg.get("quake_waves", [[3.0, 22.0], [5.5, 18.0], [8.0, 15.0]])
 	if i == 0:
 		Rift.crack(mod, _view, c, float((waves[waves.size() - 1] as Array)[0]) + 1.5, 7.0)
-	Rift.spikes(mod, _view, c, maxf(0.9, radius - 2.5), radius, int(radius * 2.2), 0.35)
+	# зона растёт понемногу: шипы и комья земли идут кольцами от прошлой волны к этой (шаг ~0.8 м, 70 мс)
+	var r0 := maxf(0.9, radius - 2.5)
+	var steps := maxi(1, int(ceil((radius - r0) / 0.8)))
+	for k: int in steps:
+		var ra := r0 + (radius - r0) * float(k) / steps
+		var rb := r0 + (radius - r0) * float(k + 1) / steps
+		var t := get_tree().create_timer(0.07 * k)
+		t.timeout.connect(func() -> void:
+			if not is_instance_valid(_view):
+				return
+			Rift.spikes(mod, _view, c, ra, rb, maxi(2, int(rb * 2.2 / steps * 1.6)), 0.35)
+			_quake_debris(c, rb))
 	# волна: пыль по кругу (без светящегося кольца — земля трескается, а не светится)
 	if _vfx == null:
 		_vfx = Vfx.new(mod)
@@ -1324,6 +1336,47 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 	dust.emitting = true
 	dust.finished.connect(dust.queue_free)
 	_sparks(c + Vector3(0, 0.3, 0), Color(0.62, 0.48, 0.36), 30 + i * 10, 6.0)   # каменная крошка, не мана
+
+
+## Комья земли и камешки, подброшенные волной: летят вверх с кольца радиуса r, падают и катятся.
+func _quake_debris(c: Vector3, r: float) -> void:
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.emitting = false
+	p.amount = int(clampf(r * 6.0, 10.0, 60.0))
+	p.lifetime = 1.1
+	p.explosiveness = 0.85
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	p.emission_ring_axis = Vector3.UP
+	p.emission_ring_radius = r
+	p.emission_ring_inner_radius = maxf(0.0, r - 0.6)
+	p.emission_ring_height = 0.05
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 28.0
+	p.initial_velocity_min = 3.5
+	p.initial_velocity_max = 7.5
+	p.gravity = Vector3(0, -16.0, 0)
+	p.angular_velocity_min = -360.0
+	p.angular_velocity_max = 360.0
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 1.3
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.11, 0.08, 0.1)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.36, 0.28, 0.21)
+	mat.roughness = 1.0
+	mat.vertex_color_use_as_albedo = true
+	bm.material = mat
+	p.mesh = bm
+	var g := Gradient.new()                                # комья земли и серые камешки вперемешку
+	g.set_color(0, Color(0.42, 0.33, 0.25))
+	g.set_color(1, Color(0.55, 0.52, 0.5))
+	p.color_initial_ramp = g
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_view.add_child(p)
+	p.global_position = c + Vector3(0, 0.15, 0)
+	p.emitting = true
+	p.finished.connect(p.queue_free)
 
 
 func _physics_body(delta: float) -> void:
@@ -1548,6 +1601,7 @@ func _physics_body(delta: float) -> void:
 		if fl and not _was_floor:
 			_sfx.land()
 		_was_floor = fl
+		_sfx.puddle = is_instance_valid(_weather) and _weather.puddle_at(_player.global_position)
 		_sfx.walk(d.length(), running, _hero != null and _hero.armed, fl)
 		if fl and is_instance_valid(_weather):              # следы: шаг ~0.8 м (бег — реже)
 			_step_acc += d.length()

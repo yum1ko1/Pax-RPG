@@ -29,6 +29,7 @@ var _shadow: Decal
 var _prints: Array = []
 var _print_tex: Texture2D
 var _drift := Vector2.ZERO
+var puddles := false                    # location.gd: земля — ground.gdshader (город), лужи на ней есть
 var _player_pos := Vector3.INF          # location.gd → footprint: где земля у героя (брызги — вокруг него)
 var _env: Environment
 var _flash: DirectionalLight3D          # гроза: вспышка молнии
@@ -322,7 +323,92 @@ func _make_moths(lamps: Array, day: float) -> void:
 
 # ---------- следы ----------
 
+## В луже ли точка (тот же шум, что у луж в ground.gdshader; край — середина перехода).
+static func _h2(x: float, y: float) -> float:
+	var a := fposmod(x * 0.1031, 1.0)
+	var b := fposmod(y * 0.1031, 1.0)
+	var c := a
+	var d := a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33)
+	a += d
+	b += d
+	c += d
+	return fposmod((a + b) * c, 1.0)
+
+
+static func _pn(x: float, y: float) -> float:
+	var ix := floorf(x)
+	var iy := floorf(y)
+	var fx := x - ix
+	var fy := y - iy
+	var ux := fx * fx * (3.0 - 2.0 * fx)
+	var uy := fy * fy * (3.0 - 2.0 * fy)
+	return lerpf(lerpf(_h2(ix, iy), _h2(ix + 1.0, iy), ux), lerpf(_h2(ix, iy + 1.0), _h2(ix + 1.0, iy + 1.0), ux), uy)
+
+
+func puddle_at(pos: Vector3) -> bool:
+	if not puddles or wet < 0.3:
+		return false
+	var pn := _pn(pos.x * 0.11 + 7.3, pos.z * 0.11 + 7.3) * 0.8 + _pn(pos.x * 0.45, pos.z * 0.45) * 0.2
+	return pn > 0.702
+
+
+## Шаг в луже: брызги-капли вверх и в стороны, кольцо по воде.
+func splash(pos: Vector3) -> void:
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.emitting = false
+	p.amount = 18
+	p.lifetime = 0.45
+	p.explosiveness = 0.95
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 55.0
+	p.initial_velocity_min = 1.2
+	p.initial_velocity_max = 2.6
+	p.gravity = Vector3(0, -9.8, 0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.0
+	var q := QuadMesh.new()
+	q.size = Vector2(0.035, 0.035)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.82, 0.88, 0.95, 0.65)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	q.material = mat
+	p.mesh = q
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
+	p.global_position = pos + Vector3(0, 0.04, 0)
+	p.emitting = true
+	# кольцо по воде: плоское, растёт и тает
+	var ring := MeshInstance3D.new()
+	var rm := TorusMesh.new()
+	rm.inner_radius = 0.16
+	rm.outer_radius = 0.2
+	rm.rings = 24
+	rm.ring_segments = 4
+	ring.mesh = rm
+	var rmat := StandardMaterial3D.new()
+	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rmat.albedo_color = Color(0.85, 0.9, 1.0, 0.45)
+	ring.material_override = rmat
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.scale = Vector3(1.0, 0.05, 1.0)
+	add_child(ring)
+	ring.global_position = pos + Vector3(0, 0.02, 0)
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(ring, "scale", Vector3(3.2, 0.05, 3.2), 0.6).set_ease(Tween.EASE_OUT)
+	tw.tween_property(rmat, "albedo_color:a", 0.0, 0.6)
+	tw.chain().tween_callback(ring.queue_free)
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+
+
 func footprint(pos: Vector3, yaw: float, left: bool) -> void:
+	if puddle_at(pos):
+		splash(pos)
+		_player_pos = pos
+		return                                              # в воде след не остаётся
 	if _print_tex == null:
 		var img := Image.create(32, 64, false, Image.FORMAT_RGBA8)
 		for y: int in 64:

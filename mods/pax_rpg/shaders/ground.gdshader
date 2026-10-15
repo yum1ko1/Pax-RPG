@@ -28,6 +28,19 @@ float noise(vec2 p) {
 	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
 }
 
+// шум луж — без sin (точен в float на любой видеокарте): тот же счёт в weather.gd → puddle_at, чтобы шаг знал,
+// что он в луже (хлюпает только в ней)
+float hash2(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+float pnoise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash2(i), hash2(i + vec2(1, 0)), u.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), u.x), u.y);
+}
+
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
@@ -75,7 +88,7 @@ void fragment() {
 		// мокро — пятнами: где-то просто влажный камень, где-то потемнее; лужи — отдельные круглые пятна
 		// с ровным краем (крупный шум + чуть мелкого), только на ровном и в низких местах кладки
 		float damp = wet * mix(0.45, 1.0, smoothstep(0.25, 0.75, noise(p * 0.06 + 3.1)));
-		float pn = noise(p * 0.11 + 7.3) * 0.8 + noise(p * 0.45) * 0.2 - (h - 0.5) * 0.12 * w;
+		float pn = pnoise(p * 0.11 + 7.3) * 0.8 + pnoise(p * 0.45) * 0.2 - (h - 0.5) * 0.04 * w;
 		float pud = smoothstep(0.69, 0.715, pn) * wet;
 		float rim = smoothstep(0.6, 0.69, pn) * (1.0 - pud) * wet;          // мокрый ободок вокруг лужи
 		alb *= mix(1.0, 0.6, damp + rim * 0.3);
