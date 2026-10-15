@@ -1784,10 +1784,25 @@ func _combo_yaw() -> float:
 		return INF
 	var x := float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
 	var y := float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
-	if absf(x) + absf(y) < 0.01:
-		return INF
-	var m := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw) * x - Vector3(0.0, 0.0, -1.0).rotated(Vector3.UP, _yaw) * y
-	return atan2(-m.x, -m.z)
+	var base := _body_mesh.rotation.y                     # без ввода — куда стоит
+	if absf(x) + absf(y) >= 0.01:
+		var m := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw) * x - Vector3(0.0, 0.0, -1.0).rotated(Vector3.UP, _yaw) * y
+		base = atan2(-m.x, -m.z)
+	# магнит: ближайший живой враг в конусе этого направления — удар в него (каждый удар серии заново)
+	var best: Goblin = null
+	var bd := _hf("magnet_range", 5.0)
+	var cone := deg_to_rad(_hf("magnet_angle", 75.0))
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var d := gob.global_position.distance_to(_player.global_position)
+		if d < bd and absf(angle_difference(base, _yaw_to(gob))) < cone:
+			bd = d
+			best = gob
+	if best != null:
+		return _yaw_to(best)
+	return base if absf(x) + absf(y) >= 0.01 else INF
 
 
 func _aim_yaw() -> float:
