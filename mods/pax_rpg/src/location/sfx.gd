@@ -13,6 +13,8 @@ var _bed: AudioStreamPlayer
 var _far: AudioStreamPlayer
 var _impact: AudioStreamPlayer
 var _walked := 0.0
+var soft := false                     # location.gd: под ногами песок/земля (лес, яма арены) — мягкий шаг
+var _sand: AudioStreamPlayer
 var puddle := false                   # location.gd: герой стоит в луже — шаг хлюпает
 var _splash: AudioStreamPlayer
 var _next_far := 4.0
@@ -28,7 +30,8 @@ func setup(mod: PaxMod, in_city: bool) -> void:
 	name = "PaxRpgSfx"
 	city = in_city
 	_step = _rand(mod, "sounds/step_%d.ogg", STEPS, 0.12, -9.0)
-	_splash = _rand(mod, "sounds/puddle_step_%d.wav", 9, 0.1, -8.0)   # шаг по луже (нарезка idm-po-lujam)
+	_splash = _rand(mod, "sounds/puddle_step_%d.wav", 9, 0.1, -8.0)
+	_sand = _rand(mod, "sounds/sand_step_%d.wav", 8, 0.1, -9.0)     # шаг по песку и земле (нарезка sand_dry_barefoot)   # шаг по луже (нарезка idm-po-lujam)
 	_gear = _rand(mod, "sounds/armor_step_%d.wav", 10, 0.1, -14.0)   # лязг доспеха — по шагу (нарезка knight-in-armor)
 	if _gear == null:
 		_gear = _rand(mod, "sounds/gear_%d.ogg", GEAR, 0.15, -17.0)
@@ -81,6 +84,9 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 	if puddle and _splash != null:                       # в луже — хлюпает вместо шага по камню
 		_splash.volume_db = -5.0 if running else -8.0
 		_splash.play()
+	elif soft and _sand != null:
+		_sand.volume_db = -6.0 if running else -9.0
+		_sand.play()
 	elif _step != null:
 		_step.volume_db = -6.0 if running else -9.0
 		_step.play()
