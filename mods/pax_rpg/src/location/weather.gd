@@ -161,7 +161,11 @@ func _make_rain() -> void:
 	_rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_rain)
 	_make_splashes()
-	var st: AudioStream = mod.sound("sounds/rain_loop.wav")
+	var st: AudioStream = mod.sound("sounds/storm_loop.mp3") if kind == "storm" else null   # гроза — ливень с громом
+	if st is AudioStreamMP3:
+		(st as AudioStreamMP3).loop = true
+	if st == null:
+		st = mod.sound("sounds/rain_loop.wav")
 	if st != null:
 		if st is AudioStreamWAV:
 			var wav := st as AudioStreamWAV
@@ -396,10 +400,11 @@ func _make_storm() -> void:
 	_flash.shadow_enabled = false
 	_flash.rotation_degrees = Vector3(-65, 30, 0)
 	add_child(_flash)
-	_thunder = AudioStreamPlayer.new()
-	_thunder.stream = _thunder_wav()
-	_thunder.bus = "PaxRpgSfx"
-	add_child(_thunder)
+	if not (_rain_snd != null and _rain_snd.stream is AudioStreamMP3):   # в записи грозы гром уже есть — свой не нужен
+		_thunder = AudioStreamPlayer.new()
+		_thunder.stream = _thunder_wav()
+		_thunder.bus = "PaxRpgSfx"
+		add_child(_thunder)
 	_bolt_in = randf_range(2.0, 5.0)
 
 
