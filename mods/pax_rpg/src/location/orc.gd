@@ -1,4 +1,6 @@
 extends "res://mods/pax_rpg/src/location/goblin.gd"
+
+signal slammed(at: Vector3)          # прыжок с ударом приземлился — location.gd: мини-землетрясение
 ## Гхаррок, орк-чемпион арены — мини-босс в духе тяжёлых боссов Sekiro. Тяжёлый и медленный, но коварный:
 ##  • удары с долгим замахом и задержкой (замах замирает — и обрушивается), иногда наоборот резкий быстрый выпад;
 ##  • держит блок и парирует: если ударить в первые доли его блока — отбивает, у героя сбита концентрация;
@@ -16,7 +18,7 @@ const LOOPS := ["Idle", "BlockIdle", "WalkF", "WalkB", "WalkL", "WalkR", "TownWa
 const ATTACKS := {
 	"Backhand": {"hits": [0.34], "dmg": 30.0, "kind": "heavy", "reach": 3.0, "step": 1.2,
 		"tempo": [[0.0, 0.2, 0.55], [0.2, 0.4, 1.5], [0.4, 1.0, 1.0]], "hold": [0.18, 0.45]},
-	"Combo1": {"hits": [0.18, 0.45, 0.64], "dmg": 22.0, "kind": "", "reach": 2.8, "step": 1.0,
+	"Combo1": {"hits": [0.18, 0.43, 0.62], "dmg": 22.0, "kind": "", "reach": 2.8, "step": 1.0,
 		"tempo": [[0.0, 0.12, 0.8], [0.12, 0.5, 1.2], [0.5, 0.58, 0.45], [0.58, 1.0, 1.25]], "hold": [0.55, 0.5]},
 	"Combo3": {"hits": [0.37, 0.64], "dmg": 26.0, "kind": "heavy", "reach": 2.8, "step": 1.4,
 		"tempo": [[0.0, 0.26, 0.6], [0.26, 0.7, 1.3], [0.7, 1.0, 1.0]], "hold": []},
@@ -40,10 +42,12 @@ const DIZZY_TIME := 1.6         # после вихря и промаха тар
 
 var _atk := ""
 var _hits_done := 0
+var _slam_done := false
 var _whoosh_done := 0                # сколько свистов замаха уже прозвучало (до удара, не в миг урона)
 var _skel: Skeleton3D
+const AXE := 0.95                    # м: от кисти до лезвия топора
 const CONTACT := 1.1                 # м: от кисти до тела героя — топор (~1 м) и плечо удара; ближе — попал
-const WINDOW := [0.02, 0.16]         # доли клипа до и после замеренного удара: в этом окне топор может задеть
+const WINDOW := [0.06, 0.12]         # доли клипа до и после замеренного удара: в этом окне топор может задеть
 var _held := false
 var _hold_t := 0.0
 var _spin_tick := 0.0
@@ -262,6 +266,7 @@ func _start_attack(clip: String) -> void:
 	_atk = clip
 	_hits_done = 0
 	_whoosh_done = 0
+	_slam_done = false
 	_hand_prev = Vector3.INF
 	if randf() < 0.6 or str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy":
 		_snd(_snd_grunt)
@@ -443,10 +448,14 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 	if _whoosh_done < hits.size() and frac >= float(hits[_whoosh_done]) - 0.09:
 		_whoosh_done += 1
 		_snd(_snd_swing)
+	if _atk == "JumpAttack" and not _slam_done and hits.size() > 0 and frac >= float(hits[0]):
+		_slam_done = true
+		var fw := -global_transform.basis.z
+		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.2)
 	if _hits_done < hits.size():
 		var ht := float(hits[_hits_done])
 		if frac >= ht - float(WINDOW[0]):
-			var touch := _contact(_atk == "Kick") and _hand_fast(delta)
+			var touch := _contact(_atk == "Kick")
 			if touch and _on_hit.is_valid():
 				_hits_done += 1
 				var heavy := str(a.get("kind", "")) == "heavy"
@@ -490,15 +499,19 @@ func _contact(foot: bool) -> bool:
 	var hero_hi := _target.global_position + Vector3(0, 1.7, 0)
 	if _skel == null:
 		return global_position.distance_to(_target.global_position) <= float((ATTACKS.get(_atk, {}) as Dictionary).get("reach", 2.8))
+	# не запястье, а сам топор: отрезок от кисти до лезвия (~AXE м по оси кисти — замерено покадрово в Blender:
+	# в миг удара лезвие выходит на 0.8–1.0 м перед тазом); пинок — стопа
 	var best := INF
-	for bn: String in (["RightFoot", "LeftFoot"] if foot else ["RightHand", "LeftHand"]):
+	for bn: String in (["RightFoot", "LeftFoot"] if foot else ["RightHand"]):
 		var bi := _skel.find_bone(bn)
 		if bi < 0:
 			continue
-		var p := _skel.global_transform * _skel.get_bone_global_pose(bi).origin
-		var cp := Geometry3D.get_closest_point_to_segment(p, hero_lo, hero_hi)
-		best = minf(best, p.distance_to(cp))
-	return best <= (0.7 if foot else CONTACT)
+		var g := _skel.global_transform * _skel.get_bone_global_pose(bi)
+		var a := g.origin
+		var b := a if foot else a + g.basis.y.normalized() * AXE
+		var cp := Geometry3D.get_closest_points_between_segments(a, b, hero_lo, hero_hi)
+		best = minf(best, (cp[0] as Vector3).distance_to(cp[1]))
+	return best <= (0.6 if foot else 0.5)
 
 
 ## Вихрь: середина клипа 360 крутится по кругу, орк медленно идёт за героем, удары по кругу.

@@ -212,6 +212,7 @@ func spawn_orc() -> String:
 	var g := Orc.new()
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	g.setup(mod, _player, _on_hero_hit, _player.global_position + fwd * 8.0, _hero_attacking, _hero_blocking)
+	g.slammed.connect(_orc_slam)
 	_view.add_child(g)
 	_goblins.append(g)
 	return "orc spawned"
@@ -1464,6 +1465,28 @@ func _waves_tick(delta: float) -> void:
 			_waves.erase(w)
 
 
+## Орк приземлился с прыжка: мини-землетрясение — трещины, кольцо шипов, комья земли, пыль, дрожь камеры.
+func _orc_slam(at: Vector3) -> void:
+	if not is_instance_valid(_view):
+		return
+	var c := Vector3(at.x, at.y, at.z)
+	Rift.crack(mod, _view, c, 3.2, 4.0)
+	for k: int in 3:                                      # растёт кольцами
+		var ra := 0.6 + k * 0.8
+		var t := get_tree().create_timer(0.07 * k)
+		t.timeout.connect(func() -> void:
+			if is_instance_valid(_view):
+				Rift.spikes(mod, _view, c, ra, ra + 0.8, 5 + k * 3, 0.25)
+				_quake_debris(c, ra + 0.8))
+	_sparks(c + Vector3(0, 0.3, 0), Color(0.62, 0.48, 0.36), 30, 5.0)
+	var d := c.distance_to(_player.global_position)
+	if d < 9.0:
+		_shake = _f("shake_time", 0.18) * 2.0
+		_shake_amp = _hf("shake_heavy", 0.09) * (1.6 - d / 9.0)
+	if _sfx != null:
+		_sfx.impact()
+
+
 func _quake_debris(c: Vector3, r: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
@@ -1810,6 +1833,8 @@ func probe() -> String:
 func _arena_spawn(kind: String, pos: Vector3) -> Node:
 	var g: Goblin = Orc.new() if kind == "orc" else Goblin.new()
 	g.setup(mod, _player, _on_hero_hit, pos, _hero_attacking, _hero_blocking)
+	if g.has_signal("slammed"):
+		g.connect("slammed", _orc_slam)
 	_view.add_child(g)
 	_goblins.append(g)
 	return g
