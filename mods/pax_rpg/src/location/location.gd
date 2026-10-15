@@ -34,6 +34,7 @@ const CityTitle := preload("res://mods/pax_rpg/src/location/city_title.gd")
 const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
 const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
+const Weight := preload("res://mods/pax_rpg/src/location/weight.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const Journal := preload("res://mods/pax_rpg/src/location/journal.gd")
 const Weather := preload("res://mods/pax_rpg/src/location/weather.gd")
@@ -116,6 +117,8 @@ var _body_turn := false
 var _reface := 0.0                  # с: после уворота в захвате герой быстро разворачивается обратно к врагу
 var _shake := 0.0                   # с: тряска камеры от попадания (затухает)
 var _shake_amp := 0.0
+var _w: Weight                      # вес героя и ударов (weight.gd, config/hero.json → weight)
+var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
 var _city_lights: Array = []
 var _city_smoke: Array = []
@@ -158,6 +161,7 @@ func setup(m: PaxMod) -> void:
 	cfg = parsed if parsed is Dictionary else {}
 	var hp: Variant = JSON.parse_string(m.read_text("config/hero.json"))
 	hero_cfg = hp if hp is Dictionary else {}
+	_w = Weight.new(hero_cfg.get("weight", {}))
 
 
 func _f(key: String, fallback: float) -> float:
@@ -1393,8 +1397,10 @@ func _physics_body(delta: float) -> void:
 	elif _lock != null and not running:
 		speed *= _hf("lock_speed_factor", 0.75)          # в поединке — осторожный шаг
 	var vel := _player.velocity
-	vel.x = move.x * speed
-	vel.z = move.z * speed
+	var want_v := Vector2(move.x, move.z) * speed
+	var hv := _w.approach(Vector2(vel.x, vel.z), want_v, delta) if on_floor else want_v   # инерция: a = F/m, стоп — трением
+	vel.x = hv.x
+	vel.z = hv.y
 	var space := Input.is_physical_key_pressed(KEY_SPACE) and not _typing()
 	if on_floor:
 		if space and not _space_down and not locked:
@@ -1435,7 +1441,12 @@ func _physics_body(delta: float) -> void:
 		elif moving or (_hero != null and _hero.blocking):
 			face = _yaw
 		if face != INF:
-			_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, face, minf(1.0, delta * 12.0))
+			var turn := angle_difference(_body_mesh.rotation.y, face) * minf(1.0, delta * 12.0)
+			if running and moving:                            # на бегу — по дуге: ω ≤ μ·g / v (иначе занос)
+				var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
+				var lim := _w.max_turn(hs) * delta
+				turn = clampf(turn, -lim, lim)
+			_body_mesh.rotation.y += turn
 	if _hero != null:
 		var look: Variant = null
 		if _lock != null and is_instance_valid(_lock):
@@ -1503,6 +1514,10 @@ func _physics_body(delta: float) -> void:
 		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f2.x * _hf("ult_dash_speed", 9.0)
 		vel.z = f2.z * _hf("ult_dash_speed", 9.0)
+	if _recoil.length_squared() > 0.0001:                # отдача удара: толчок назад, гаснет пружиной (Гук)
+		vel.x += _recoil.x
+		vel.z += _recoil.z
+		_recoil = Weight.spring(_recoil, delta, _w.f("recoil_k", 60.0), _w.f("recoil_damp", 9.0))
 	_player.velocity = vel
 	var was := _player.global_position
 	var tm := Time.get_ticks_usec()
@@ -1651,14 +1666,14 @@ func _follow_camera(delta := 0.0) -> void:
 
 ## Вес попадания: герой и враг замирают на миг (hitstop), камера вздрагивает. Тяжёлый удар — дольше и сильнее.
 ## Несколько врагов одним взмахом — замирание не складывается.
-func _impact_feel(gob: Goblin, heavy: bool) -> void:
-	var t := _hf("hitstop_heavy", 0.14) if heavy else _hf("hitstop", 0.08)
+func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
+	var t := (_hf("hitstop_heavy", 0.14) if heavy else _hf("hitstop", 0.08)) * clampf(heft, 0.6, 1.6)   # F = Δp/Δt
 	if _hero != null:
 		_hero.hitstop(t)
 	if is_instance_valid(gob):
 		gob.hitstop(t)
 	_shake = _f("shake_time", 0.18)
-	_shake_amp = _hf("shake_heavy", 0.09) if heavy else _hf("shake", 0.045)
+	_shake_amp = (_hf("shake_heavy", 0.09) if heavy else _hf("shake", 0.045)) * clampf(heft, 0.6, 1.8)
 
 
 ## Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
@@ -1682,9 +1697,31 @@ func _strike(hit: Dictionary) -> void:
 		if _hero != null and _hero.action == "Launcher" and gob.is_alive():   # подброс: пинок по площади — враг взлетает
 			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
 		_style.hit(_hero.action if _hero != null and _hero.action != "" else "Attack3")
-		_impact_feel(gob, bool(hit.get("knock", false)))
+		_impact_feel(gob, bool(hit.get("knock", false)), _mass_hit(gob, 0.0, bool(hit.get("knock", false))))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
+
+
+## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —
+## отдача (III закон Ньютона). Возвращает вес удара (0.5…2) для замирания и тряски. tip — скорость острия, 0 — по клипу.
+func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
+	var p := _w.impulse(tip, heavy)
+	var me := gob.mass * (_w.f("boss_mass_mult", 2.2) if gob.boss and gob.mass < 60.0 else 1.0)   # главарь гоблинов — тяжелее
+	var away := gob.global_position - _player.global_position
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.01 else -_body_mesh.global_transform.basis.z
+	if gob.is_alive():
+		var kv := _w.knock(p, me)
+		var flat := Vector2(gob.velocity.x, gob.velocity.z)
+		if heavy:                                           # финальный удар: отлёт тоже по массе (орка — меньше)
+			var ref := _w.knock(_w.impulse(0.0, true), _w.f("goblin_mass", 45.0))
+			flat *= clampf(kv / maxf(ref, 0.01), 0.25, 1.4)
+		else:
+			flat = Vector2(away.x, away.z) * kv
+		gob.velocity.x = flat.x
+		gob.velocity.z = flat.y
+	_recoil -= away * _w.recoil(p, me)
+	return _w.heft(p) * (1.25 if heavy else 1.0)
 
 
 ## Удар клинком по пути: враг задет, если полоса клинка (сейчас, кадр назад и посередине) прошла ближе
@@ -1727,7 +1764,8 @@ func _blade_strike(b: Dictionary) -> void:
 		var mv := str(b.get("move", "Attack1"))
 		_style.hit(mv)
 
-		_impact_feel(gob, false)
+		var tip := ((b.b as Vector3) - (b.pb as Vector3)).length() / maxf(get_physics_process_delta_time(), 0.001)
+		_impact_feel(gob, false, _mass_hit(gob, tip, false))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
 

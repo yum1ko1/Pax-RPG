@@ -51,6 +51,7 @@ static var _attacker: Node = null   # у кого жетон атаки
 var mod: PaxMod
 var max_hp := MAX_HP
 var max_posture := MAX_POSTURE
+var mass := 45.0                    # кг: сколько уносит удар (location.gd → _mass_hit, weight.gd)
 var boss := false                   # мини-босс: своя полоса внизу экрана (HUD), а не карточка врага
 var title_key := ""                 # титул под именем босса
 var display_key := "pax_rpg_goblin"   # имя в HUD (ключ перевода)

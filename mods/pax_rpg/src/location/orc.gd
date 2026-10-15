@@ -64,6 +64,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	hp = max_hp
 	display_key = "pax_rpg_orc"
 	boss = true
+	mass = 150.0                                     # кг с топором и бронёй: удары его почти не сдвигают
 	title_key = "pax_rpg_orc_title"
 	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 2.0)       # тяжёлый топор — ниже и громче
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 4.0)
