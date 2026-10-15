@@ -10,7 +10,9 @@ extends Node3D
 ##  • следы ног героя (footprint) — декали, гаснут; на песке арены и в лесу заметнее.
 
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
-const KINDS := ["clear", "cloudy", "fog", "rain"]
+const KINDS := ["clear", "cloudy", "fog", "rain", "storm"]
+
+static var forced := ""                 # консоль rpg_weather: погода для следующих локаций ("" — по дню мира)
 
 var mod: PaxMod
 var kind := "clear"
@@ -27,10 +29,18 @@ var _shadow: Decal
 var _prints: Array = []
 var _print_tex: Texture2D
 var _drift := Vector2.ZERO
+var _env: Environment
+var _flash: DirectionalLight3D          # гроза: вспышка молнии
+var _bolt_in := 4.0                     # до следующей молнии, с
+var _flash_t := 0.0
+var _thunder_in := -1.0                 # гром — позже вспышки (свет быстрее звука)
+var _thunder: AudioStreamPlayer
 
 
 ## Какая погода сейчас: по дню мира и часу (детерминированно — тот же час, та же погода).
 static func pick(hour: float, day_index: int) -> String:
+	if forced != "":
+		return forced
 	var h := fmod(abs(sin(float(day_index) * 12.9898 + 4.1) * 43758.5453), 1.0)
 	if hour >= 4.5 and hour < 8.5 and h < 0.45:
 		return "fog"
@@ -47,7 +57,12 @@ func setup(m: PaxMod, k: String, env: Environment, sky_mat: ShaderMaterial, cam:
 	kind = k
 	name = "PaxRpgWeather"
 	_cam = cam
+	_env = env
 	match kind:
+		"storm":
+			wet = 1.0
+			rain = 1.0
+			overcast = 1.0
 		"rain":
 			wet = 1.0
 			rain = 1.0
@@ -75,6 +90,8 @@ func setup(m: PaxMod, k: String, env: Environment, sky_mat: ShaderMaterial, cam:
 	_make_cloud_shadows()
 	if rain > 0.0:
 		_make_rain()
+	if kind == "storm":
+		_make_storm()
 	if day > 0.5 and rain <= 0.0:
 		_make_dust()
 	if day < 0.4 and rain <= 0.0:
@@ -319,4 +336,69 @@ func _process(delta: float) -> void:
 		if _shadow != null:                                 # облака плывут по ветру
 			_drift += Vector2(delta, delta)                 # плавно туда-обратно (без скачка при повторе)
 			_shadow.global_position = Vector3(sin(_drift.x * 0.006) * 70.0, 20.0, sin(_drift.y * 0.0041 + 1.3) * 70.0)
+	if _flash != null:
+		_storm_tick(delta)
 	Prof.add("погода", t0)
+
+
+# ---------- гроза ----------
+
+func _make_storm() -> void:
+	if _rain != null:                                       # ливень гуще и косой
+		_rain.amount = 9000
+		var pm := _rain.process_material as ParticleProcessMaterial
+		pm.direction = Vector3(0.3, -1, 0.12)
+	if _env != null:
+		_env.ambient_light_energy *= 0.8
+	_flash = DirectionalLight3D.new()
+	_flash.light_color = Color(0.8, 0.85, 1.0)
+	_flash.light_energy = 0.0
+	_flash.shadow_enabled = false
+	_flash.rotation_degrees = Vector3(-65, 30, 0)
+	add_child(_flash)
+	_thunder = AudioStreamPlayer.new()
+	_thunder.stream = _thunder_wav()
+	_thunder.bus = "PaxRpgSfx"
+	add_child(_thunder)
+	_bolt_in = randf_range(2.0, 5.0)
+
+
+func _storm_tick(delta: float) -> void:
+	_bolt_in -= delta
+	if _bolt_in <= 0.0:
+		_bolt_in = randf_range(6.0, 16.0)
+		_flash_t = 0.45
+		_thunder_in = randf_range(0.4, 2.5)
+	if _flash_t > 0.0:                                      # две-три вспышки подряд
+		_flash_t -= delta
+		var k := _flash_t / 0.45
+		_flash.light_energy = (6.0 if fmod(_flash_t, 0.15) > 0.07 else 1.5) * k
+	else:
+		_flash.light_energy = 0.0
+	if _thunder_in > 0.0:
+		_thunder_in -= delta
+		if _thunder_in <= 0.0 and _thunder != null:
+			_thunder.volume_db = randf_range(-6.0, 0.0)
+			_thunder.pitch_scale = randf_range(0.8, 1.15)
+			_thunder.play()
+
+
+## Гром без файла: бурый шум с резким началом и долгим раскатистым затуханием.
+func _thunder_wav() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate * 4
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var b := 0.0
+	var roll := 0.0
+	for i in n:
+		var t := float(i) / rate
+		b = clampf(b + randf_range(-1.0, 1.0) * 0.06, -1.0, 1.0) * 0.995
+		roll = 0.6 + 0.4 * sin(t * 5.0 + sin(t * 1.7) * 3.0)
+		var env := minf(1.0, t * 30.0) * exp(-t * 1.1) * roll
+		data.encode_s16(i * 2, int(clampf(b * env * 2.5, -1.0, 1.0) * 32000.0))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.data = data
+	return w

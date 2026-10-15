@@ -281,7 +281,7 @@ func build(city: Dictionary) -> void:
 		_mark("city…")
 		await c.build(mod, _view, layout)              # по кадрам, горы и степь — из потока
 		_mark("city done (%d items)" % c.count)
-		c.wet_materials({"rain": 1.0, "fog": 0.35, "cloudy": 0.15}.get(weather_kind, 0.0))
+		c.wet_materials({"rain": 1.0, "storm": 1.0, "fog": 0.35, "cloudy": 0.15}.get(weather_kind, 0.0))
 		if gen != _build_gen or c.cancelled or not is_instance_valid(_view):
 			return                                     # локацию убрали посреди стройки
 		_arena_cfg = layout.get("arena", [])
@@ -1024,6 +1024,7 @@ func _start_talk() -> void:
 		place["time"] = DayNight.label(mod, _daynight.hour)
 	place["city_data"] = city_data
 	_talk.context = place
+	_talk.game = game
 	_talk_focus(true)
 	_talk.open(_talk_npc)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1330,8 +1331,9 @@ func _physics_body(delta: float) -> void:
 		_set_lock(null)
 	if _lmb_queued and _hero != null and _stagger <= 0.0:
 		if not _try_deathblow():
-			if _hero.action == "":
-				_face_now(_aim_yaw())                # удар — куда смотрит камера (мышь); при захвате — во врага
+			var cy := _combo_yaw()
+			if cy != INF and (_hero.action == "" or _hero.action in Hero.ATTACKS):
+				_face_now(cy)                        # удар — во врага в захвате, иначе по ходу (WASD); без ввода — куда стоит
 			var fw := Input.is_physical_key_pressed(KEY_W)
 			var bk := Input.is_physical_key_pressed(KEY_S)
 			var done_sp := false
@@ -1720,6 +1722,20 @@ func _blade_strike(b: Dictionary) -> void:
 # ---------- бой как в Sekiro ----------
 
 ## Куда целиться: в захваченного врага, иначе — туда, куда смотрит камера.
+## Куда бить: в захваченного врага; без захвата — в сторону движения (WASD от камеры); без ввода — INF (как стоит).
+func _combo_yaw() -> float:
+	if _lock != null and is_instance_valid(_lock):
+		return _aim_yaw()
+	if _typing():
+		return INF
+	var x := float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
+	var y := float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+	if absf(x) + absf(y) < 0.01:
+		return INF
+	var m := Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, _yaw) * x - Vector3(0.0, 0.0, -1.0).rotated(Vector3.UP, _yaw) * y
+	return atan2(-m.x, -m.z)
+
+
 func _aim_yaw() -> float:
 	if _lock != null:
 		var d := _lock.global_position - _player.global_position

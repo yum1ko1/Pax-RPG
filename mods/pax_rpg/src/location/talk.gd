@@ -20,6 +20,7 @@ var mod: PaxMod
 var hud: Hud
 var context: Dictionary = {}         # город, время суток, герой — location.gd
 var _npc: Node                       # npc.gd
+var game: PaxGame                    # голос игры (Main.голос) — задаёт location.gd
 var _log: RichTextLabel
 var _edit: LineEdit
 var _title: Label
@@ -149,6 +150,7 @@ func close() -> void:
 	if not visible:
 		return
 	visible = false
+	DisplayServer.tts_stop()
 	_token += 1                                        # запоздалый ответ и таймеры этого разговора — больше не его
 	_waiting = false
 	_giving = false
@@ -326,6 +328,7 @@ func _answer(a: Dictionary, key: String, tok: int) -> void:
 	if reply != "":
 		_history.append({"who": "npc", "text": reply})
 		_line(str(_npc.get("npc_name")), reply, false)
+		_speak(reply)
 	else:                                               # без заготовок: нейросеть не ответила — так и пишем
 		_log.append_text("[i][color=#8a8070]%s[/color][/i]\n\n" % _esc(mod.tr_key("pax_rpg_talk_silent") % str(_npc.get("npc_name"))))
 	_sub.text = "%s · %s" % [mod.tr_key("pax_rpg_npc_role_" + str(_npc.get("role"))), _relation_text()]
@@ -434,3 +437,29 @@ func _draw_panel() -> void:
 		for cy: float in [0.0, H]:
 			_panel.draw_colored_polygon(PackedVector2Array([Vector2(cx, cy - 7), Vector2(cx + 7, cy), Vector2(cx, cy + 7),
 				Vector2(cx - 7, cy)]), gold)
+
+
+const VOICE_METHODS := ["сказать", "говорить", "озвучить", "произнести", "прочитать", "speak", "say", "talk"]
+
+
+## Реплика вслух: голос игры (Main.голос — его метод «сказать»), иначе системный голос (DisplayServer).
+func _speak(text: String) -> void:
+	var main: Object = game.main if game != null else null
+	var v: Variant = main.get("голос") if main != null else null
+	if v is Object and is_instance_valid(v):
+		for want: String in VOICE_METHODS:
+			for m: Dictionary in (v as Object).get_method_list():
+				var n := str(m["name"])
+				var args: Array = m.get("args", [])
+				if not n.trim_prefix("_").begins_with(want) or args.is_empty():
+					continue
+				var call_args: Array = [text]
+				for k in range(1, args.size() - (m.get("default_args", []) as Array).size()):
+					call_args.append("" if int((args[k] as Dictionary).get("type", TYPE_STRING)) == TYPE_STRING else null)
+				(v as Object).callv(n, call_args)
+				mod.log_info("talk voice: Main.голос.%s" % n)
+				return
+	var voices := DisplayServer.tts_get_voices_for_language("ru" if TranslationServer.get_locale().begins_with("ru") else "en")
+	if not voices.is_empty():
+		DisplayServer.tts_stop()
+		DisplayServer.tts_speak(text, voices[0])

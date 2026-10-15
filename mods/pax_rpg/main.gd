@@ -39,6 +39,7 @@ func _mod_loaded() -> void:
 	Pax.register_command("rpg_city", _city_command, "rpg_city <id> — открыть город (напр. gharn)")
 	Pax.register_command("rpg_cam", _cam_command, "rpg_cam N — ракурс превью города (0 — обычная камера)")
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
+	Pax.register_command("rpg_weather", _weather_command, "rpg_weather <clear|cloudy|fog|rain|storm|auto> — погода в локации (перестраивает её)")
 	Pax.register_command("rpg_time", _time_command, "rpg_time H — время суток в локации (0–24)")
 	# Для разработки: pax_rpg/dev/arena.ps1 ставит настройку autostart_arena — арена откроется сразу после запуска.
 	# Флаг одноразовый: следующий обычный запуск идёт как всегда.
@@ -133,6 +134,15 @@ func _city_command(args: PackedStringArray) -> String:
 	var id := args[0] if args.size() > 0 else "gharn"
 	location.build({"id": id})
 	return "Pax RPG: city " + id
+
+
+func _weather_command(args: PackedStringArray) -> String:
+	const W := preload("res://mods/pax_rpg/src/location/weather.gd")
+	var k := args[0] if args.size() > 0 else "auto"
+	if k != "auto" and not k in W.KINDS:
+		return "rpg_weather: " + "|".join(W.KINDS) + "|auto"
+	W.forced = "" if k == "auto" else k
+	return "rpg_weather: %s — войдите в локацию заново (выйти и зайти), погода применится" % k
 
 
 func _time_command(args: PackedStringArray) -> String:
