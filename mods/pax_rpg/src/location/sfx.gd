@@ -22,7 +22,9 @@ func setup(mod: PaxMod, in_city: bool) -> void:
 	name = "PaxRpgSfx"
 	city = in_city
 	_step = _rand(mod, "sounds/step_%d.ogg", STEPS, 0.12, -9.0)
-	_gear = _rand(mod, "sounds/gear_%d.ogg", GEAR, 0.15, -17.0)
+	_gear = _rand(mod, "sounds/armor_step_%d.wav", 10, 0.1, -14.0)   # лязг доспеха — по шагу (нарезка knight-in-armor)
+	if _gear == null:
+		_gear = _rand(mod, "sounds/gear_%d.ogg", GEAR, 0.15, -17.0)
 	_far = _rand(mod, "sounds/city_%d.ogg", CITY, 0.2, -26.0)
 	_impact = _rand(mod, "sounds/impact_%d.wav", 4, 0.1, -2.0)          # impact_1..3 (0 нет — пропустится)
 	if city:
@@ -72,8 +74,9 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 	if _step != null:
 		_step.volume_db = -6.0 if running else -9.0
 		_step.play()
-	if _gear != null and (armed or running or _left):
-		_gear.volume_db = (-12.0 if running else -16.0) + (2.0 if armed else 0.0)
+	if _gear != null:                                    # доспех лязгает на каждом шаге — в такт ногам
+		_gear.volume_db = (-9.0 if running else -13.0) + (1.5 if armed else 0.0)
+		_gear.pitch_scale = 1.08 if running else 1.0
 		_gear.play()
 
 
