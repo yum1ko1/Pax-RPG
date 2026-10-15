@@ -2183,12 +2183,14 @@ func _show_sword(delta: float) -> void:
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)
 	if not in_hand:
 		_drag_w = 0.0
+		_left_hand_ik(false)
 		return
 	var drag := action == "" and anim != null and anim.current_animation == "RunArmed" and _sword_drag != null 		and bool(cfg.get("sword_drag_run", true))         # клип бега сам держит меч (на плече) — не волочить
 	var dur := maxf(0.05, _f("blend_run_armed", 0.5))
 	_drag_w = move_toward(_drag_w, 1.0 if drag else 0.0, delta / dur) if delta > 0.0 else (1.0 if drag else 0.0)
 	_sword_hand.transform = _hand_rest
 	_two_hand_grip()
+	_left_hand_ik(_sword_hand.visible and not action.begins_with("Dodge") and action not in ["SwordTrick", "Iai", "Ultimate", "Kick", "Launcher"])
 	if _drag_w > 0.0 and _sword_drag != null and _sword_drag.is_inside_tree():
 		var k := smoothstep(0.0, 1.0, _drag_w)
 		var a := _sword_hand.global_transform
@@ -2254,7 +2256,9 @@ func _trick_sword() -> void:
 	var axis := (ph - pf).normalized()
 	var on_arm := pf.lerp(ph, 0.55)                          # отверстие меча — на середине предплечья
 	var ref := Vector3.UP if absf(axis.dot(Vector3.UP)) < 0.9 else Vector3.FORWARD
-	var d := (ref - axis * ref.dot(axis)).normalized().rotated(axis, TAU * (t - t0) / (t1 - t0))   # один оборот
+	var u := clampf((t - t0) / (t1 - t0), 0.0, 1.0)
+	var e := 1.0 - pow(1.0 - u, 3.0)                         # резко раскрутил — к концу притормаживает
+	var d := (ref - axis * ref.dot(axis)).normalized().rotated(axis, TAU * e)   # один оборот
 	var tl := _tip.normalized()                              # клинок в осях меча
 	var fl := (Vector3.UP - tl * Vector3.UP.dot(tl)).normalized()
 	if fl.length() < 0.1:
@@ -2290,10 +2294,10 @@ func _two_hand_grip() -> void:
 	L += (L - g * _skel.get_bone_global_pose(lf).origin).normalized() * 0.08
 	var fwd := model.global_transform.basis.z.normalized()
 	var dir := Vector3.ZERO
-	if (R - L).length() < _f("grip_two_hand", 0.6) and (R - L).length() > 0.05:
-		dir = (R - L).normalized()                            # от левого кулака через правый — к острию
-	elif action == "" or action.begins_with("Walk") or action.begins_with("Run"):
-		dir = (-fwd * 0.85 + Vector3.DOWN * 0.5).normalized()  # в покое и на ходу — остриём назад, низко
+	if action == "" or action.begins_with("Walk") or action.begins_with("Run"):
+		dir = (-fwd * 0.85 + Vector3.DOWN * 0.5).normalized()  # в покое и на ходу — остриём назад, низко (левая — по IK)
+	elif (R - L).length() < _f("grip_two_hand", 0.6) and (R - L).length() > 0.05:
+		dir = (R - L).normalized()                            # в ударе — от левого кулака через правый, к острию
 	else:
 		return
 	if _sw_flat == Vector3.ZERO and _sword_hand is MeshInstance3D and (_sword_hand as MeshInstance3D).mesh != null:
@@ -2308,6 +2312,37 @@ func _two_hand_grip() -> void:
 	var sc := _sword_hand.global_transform.basis.get_scale()
 	var bs := (Basis(dir, n, dir.cross(n)) * Basis(tl, fl, tl.cross(fl)).inverse()).scaled_local(sc)
 	_sword_hand.global_transform = Transform3D(bs, R)
+
+
+## Левая рука — на рукоять (IK: плечо → предплечье → кисть), ниже правой на grip_left_at м по рукояти.
+## Клипы Meshy держат воображаемый меч, руки там врозь — без этого левая висит мимо меча.
+var _lik: Node
+
+
+func _left_hand_ik(on: bool) -> void:
+	if _skel == null or not ClassDB.class_exists("SkeletonIK3D"):
+		return
+	if _lik == null:
+		if not on:
+			return
+		_lik = ClassDB.instantiate("SkeletonIK3D")
+		_lik.set("root_bone", "LeftArm")
+		_lik.set("tip_bone", "LeftHand")
+		_lik.set("override_tip_basis", false)
+		_skel.add_child(_lik)
+		_lik.call("start")
+	var w := 1.0 if on else 0.0
+	if "influence" in _lik:
+		_lik.set("influence", move_toward(float(_lik.get("influence")), w, 0.2))
+	else:
+		_lik.set("interpolation", move_toward(float(_lik.get("interpolation")), w, 0.2))
+	if not on or _tip == Vector3.ZERO:
+		return
+	var sg := _sword_hand.global_transform
+	var axis := (sg.basis * _tip).normalized()               # к острию
+	var grip := sg.origin - axis * _f("grip_left_at", 0.32)   # ниже правой руки по рукояти
+	var tr := Transform3D(sg.basis.orthonormalized(), grip)
+	_lik.set("target", _skel.global_transform.affine_inverse() * tr)
 
 
 func _keep_above_floor() -> void:
