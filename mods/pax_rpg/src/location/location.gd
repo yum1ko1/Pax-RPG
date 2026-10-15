@@ -1693,8 +1693,8 @@ func _physics_body(delta: float) -> void:
 			if cy2 != INF:
 				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
 			_cam_swing(_hero.action)
-			_chain = _chain + 1 if _chain_t < _hf("chain_window", 1.3) else 1
-			_chain_t = 0.0
+			_chain = _chain + 1 if _chain_t < _hf("chain_window", 0.9) else 1
+			_chain_t = 0.0                                   # отсчёт паузы — от конца удара, а не от начала
 			# наклон взмаха: иногда слева, иногда справа (по стороне врага или наугад); финальный сверху — ровно
 			var ts := float(_hero.swing_side) if _hero.swing_side != 0 else (1.0 if randf() < 0.5 else -1.0)
 			_tilt_want = 0.0 if _hero.action in ["Attack3", "Launcher", "PauseFinisher"] else ts * deg_to_rad(_hf("swing_tilt", 20.0)) * randf_range(0.75, 1.0)
@@ -1710,7 +1710,8 @@ func _physics_body(delta: float) -> void:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
-		_chain_t += delta
+		if _hero.action == "" or not (_hero.action in Hero.ATTACKS or _hero.action in Hero.SPECIALS):
+			_chain_t += delta                            # серия рвётся, только если герой не бьёт дольше chain_window
 		if _hero.action not in Hero.ATTACKS and _hero.action not in Hero.SPECIALS:
 			_tilt_want = 0.0
 		if _chain >= int(_hf("chain_finisher", 5.0)) and _hero.action == "" and _stagger <= 0.0:

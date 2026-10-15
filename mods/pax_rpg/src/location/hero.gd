@@ -1777,7 +1777,7 @@ func combo_finisher(on_floor: bool) -> bool:
 	_prev_off = Vector2.ZERO
 	var back := "DodgeBackArmed" if has("DodgeBackArmed") else ("DodgeBack" if has("DodgeBack") else "")
 	if back != "":
-		_ult_play(back, 0.0, 1.25)
+		_ult_play(back, 0.0, 1.0)
 	return true
 
 
@@ -1785,7 +1785,7 @@ func _fin_tick() -> void:
 	var length := anim.current_animation_length
 	match _fin_stage:
 		0:
-			if _pos() >= length * 0.7 or not has("DodgeBack"):
+			if _pos() >= length * 0.85 or not has("DodgeBack"):
 				fin_back = false
 				_fin_stage = 1
 				_ult_play("HeavyAttack", _f("fin_skip", 0.25), _f("fin_speed", 1.2))

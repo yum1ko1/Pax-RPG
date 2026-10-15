@@ -424,7 +424,7 @@ func _phys(delta: float) -> void:
 		_swing_seen = true
 	elif not swinging:
 		_swing_seen = false
-	if _state in ["approach", "circle", "attack", "spin", "charge", "idle", "taunt", "guard", "charge_wind"]:
+	if _state in ["approach", "circle", "attack", "spin", "charge", "idle", "taunt", "guard", "charge_wind", "skid"]:
 		velocity.x = lerpf(velocity.x, flat.x, minf(1.0, delta * 8.0))
 		velocity.z = lerpf(velocity.z, flat.z, minf(1.0, delta * 8.0))
 	move_and_slide()
@@ -481,7 +481,9 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		flat = dir * float(a.get("step", 0.0))
 	# свист — чуть раньше удара (топор уже летит), а урон — только когда кисть с топором прошла у тела героя:
 	# окно вокруг замеренного удара; не дотянулся до конца окна — промах (кувырок/шаг назад спасают)
-	if _whoosh_done < hits.size() and frac >= float(hits[_whoosh_done]) - 0.09:
+	# замах с замиранием (hold): пока орк застыл или ещё не дошёл до него — ни свиста, ни урона (удар не начался)
+	var holding := hold.size() == 2 and (_hold_t > 0.0 or (not _held and frac < float(hold[0])))
+	if not holding and _whoosh_done < hits.size() and frac >= float(hits[_whoosh_done]) - 0.04:
 		_whoosh_done += 1
 		_snd(_snd_swing)
 	if _atk == "JumpAttack" and not _slam_done and hits.size() > 0 and frac >= float(hits[0]):
@@ -490,7 +492,7 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.2)
 	if _hits_done < hits.size():
 		var ht := float(hits[_hits_done])
-		if frac >= ht - float(WINDOW[0]):
+		if not holding and frac >= ht - float(WINDOW[0]):
 			var touch := _contact(_atk == "Kick")
 			if touch and _on_hit.is_valid():
 				_hits_done += 1
@@ -579,12 +581,25 @@ func _spin_tick_fn(delta: float, dist: float, dir: Vector3) -> Vector3:
 			_set_state("dizzy")                             # закружился — окно для героя
 			return Vector3.ZERO
 	_spin_tick -= delta
+	_spin_hit_t = maxf(0.0, _spin_hit_t - delta)
+	if _state_t > 0.7 and _contact(false):
+		_spin_hit_t = 0.2                                   # топор прошёл по герою между тиками — удар засчитается
 	if _spin_tick <= 0.0 and _state_t < SPIN_TIME:
 		_spin_tick = SPIN_TICK
 		_snd(_snd_swing)
-		if dist <= SPIN_RADIUS and _on_hit.is_valid():
+		if _state_t > 0.7 and _spin_contact() and _on_hit.is_valid():   # бьёт топор, когда он реально проходит по герою
 			_on_hit.call(SPIN_DMG, self, "perilous")
 	return dir * SPIN_SPEED if _state_t < SPIN_TIME else Vector3.ZERO
+
+
+## Вихрь: топор (кисть → лезвие) в 0.6 м от тела героя — в любой момент последних 0.2 с (кружится быстро).
+func _spin_contact() -> bool:
+	if _spin_hit_t > 0.0:
+		return true
+	return _contact(false)
+
+
+var _spin_hit_t := 0.0
 
 
 ## Таран: бежит почти по прямой; задел — сбивает с ног; промахнулся или время вышло — спотыкается.
