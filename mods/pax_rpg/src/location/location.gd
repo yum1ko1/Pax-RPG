@@ -1705,7 +1705,8 @@ func _strike(hit: Dictionary) -> void:
 ## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —
 ## отдача (III закон Ньютона). Возвращает вес удара (0.5…2) для замирания и тряски. tip — скорость острия, 0 — по клипу.
 func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
-	var p := _w.impulse(tip, heavy)
+	# острие: прошлое положение в первом кадре взмаха бывает старым — скорость не больше 2.2 × ω·r
+	var p := _w.impulse(minf(tip, _w.f("weapon_omega", 9.0) * _w.f("weapon_length", 1.3) * 2.2), heavy)
 	var me := gob.mass * (_w.f("boss_mass_mult", 2.2) if gob.boss and gob.mass < 60.0 else 1.0)   # главарь гоблинов — тяжелее
 	var away := gob.global_position - _player.global_position
 	away.y = 0.0
@@ -1720,7 +1721,9 @@ func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
 			flat = Vector2(away.x, away.z) * kv
 		gob.velocity.x = flat.x
 		gob.velocity.z = flat.y
-	_recoil -= away * _w.recoil(p, me)
+	_recoil -= away * minf(_w.recoil(p, me), _w.f("recoil_max", 0.9))     # толчок, а не полёт
+	if _recoil.length() > _w.f("recoil_max", 0.9) * 1.5:                    # серия ударов не складывается в разгон
+		_recoil = _recoil.normalized() * _w.f("recoil_max", 0.9) * 1.5
 	return _w.heft(p) * (1.25 if heavy else 1.0)
 
 
