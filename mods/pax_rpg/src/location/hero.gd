@@ -2188,6 +2188,7 @@ func _show_sword(delta: float) -> void:
 	var dur := maxf(0.05, _f("blend_run_armed", 0.5))
 	_drag_w = move_toward(_drag_w, 1.0 if drag else 0.0, delta / dur) if delta > 0.0 else (1.0 if drag else 0.0)
 	_sword_hand.transform = _hand_rest
+	_two_hand_grip()
 	if _drag_w > 0.0 and _sword_drag != null and _sword_drag.is_inside_tree():
 		var k := smoothstep(0.0, 1.0, _drag_w)
 		var a := _sword_hand.global_transform
@@ -2265,6 +2266,48 @@ func _trick_sword() -> void:
 	var hole := _tip * _f("trick_hole_at", 0.86)             # отверстие у острия
 	_sword_hand.global_transform = Transform3D(bs, on_arm - bs * hole)
 	_trick_last = _sword_hand.global_transform
+
+
+## Хват двумя руками, как у Гатса (Elden Ring): меч на линии рук — правая у гарды (начало сетки), левая ниже по
+## рукояти, клинок — дальше за правой рукой. Руки далеко (клип держит одной) — в покое и на ходу остриё назад-вниз,
+## в ударах — как держит кисть (_hand_rest). Плоскость клинка — кромкой вперёд/вниз.
+var _sw_flat := Vector3.ZERO
+
+
+func _two_hand_grip() -> void:
+	if _skel == null or _tip == Vector3.ZERO or action.begins_with("Dodge") or action in ["SwordTrick", "Iai"]:
+		return
+	var rh := _skel.find_bone("RightHand")
+	var lh := _skel.find_bone("LeftHand")
+	var rf := _skel.find_bone("RightForeArm")
+	var lf := _skel.find_bone("LeftForeArm")
+	if rh < 0 or lh < 0 or rf < 0 or lf < 0:
+		return
+	var g := _skel.global_transform
+	var R := g * _skel.get_bone_global_pose(rh).origin
+	var L := g * _skel.get_bone_global_pose(lh).origin
+	R += (R - g * _skel.get_bone_global_pose(rf).origin).normalized() * 0.08    # середина кулака
+	L += (L - g * _skel.get_bone_global_pose(lf).origin).normalized() * 0.08
+	var fwd := model.global_transform.basis.z.normalized()
+	var dir := Vector3.ZERO
+	if (R - L).length() < _f("grip_two_hand", 0.6) and (R - L).length() > 0.05:
+		dir = (R - L).normalized()                            # от левого кулака через правый — к острию
+	elif action == "" or action.begins_with("Walk") or action.begins_with("Run"):
+		dir = (-fwd * 0.85 + Vector3.DOWN * 0.5).normalized()  # в покое и на ходу — остриём назад, низко
+	else:
+		return
+	if _sw_flat == Vector3.ZERO and _sword_hand is MeshInstance3D and (_sword_hand as MeshInstance3D).mesh != null:
+		var sz := (_sword_hand as MeshInstance3D).mesh.get_aabb().size
+		_sw_flat = Vector3.RIGHT if sz.x <= sz.y and sz.x <= sz.z else (Vector3.UP if sz.y <= sz.z else Vector3.BACK)
+	var tl := _tip.normalized()
+	var fl := (_sw_flat - tl * _sw_flat.dot(tl)).normalized()
+	var n := dir.cross(Vector3.UP)                            # нормаль плашмя — вбок: кромка смотрит вперёд/вниз
+	if n.length() < 0.1:
+		n = dir.cross(fwd)
+	n = n.normalized()
+	var sc := _sword_hand.global_transform.basis.get_scale()
+	var bs := (Basis(dir, n, dir.cross(n)) * Basis(tl, fl, tl.cross(fl)).inverse()).scaled_local(sc)
+	_sword_hand.global_transform = Transform3D(bs, R)
 
 
 func _keep_above_floor() -> void:
