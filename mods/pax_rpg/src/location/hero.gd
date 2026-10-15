@@ -9,6 +9,10 @@ const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 const AnimCtl := preload("res://mods/pax_rpg/src/location/anim_ctl.gd")
 
 const ATTACKS := ["Attack1", "Attack2", "Attack3"]
+# приёмы комбо (location.gd выбирает по вводу): «Выпад» — захват + вперёд + ЛКМ, «Подброс» — захват + назад + ЛКМ,
+# «Пауза» — ЛКМ, ЛКМ, пауза, ЛКМ: вместо третьего удара — тяжёлый сверху. Клипы — из имеющихся (SPECIAL_CLIPS).
+const SPECIALS := ["Lunge", "Launcher", "PauseFinisher"]
+const SPECIAL_CLIPS := {"Lunge": ["Attack1", 0.3], "Launcher": ["Kick", 0.2], "PauseFinisher": ["HeavySlash", 0.1]}
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
 const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
@@ -1122,7 +1126,7 @@ var _swing_action := ""
 ## Активная фаза удара: клинок бьёт (и рисует след) только в окне active [с, по] секунд клипа — не на замахе
 ## (меч, переходя из стойки в замах, мог «чиркнуть» врага раньше удара) и не на возврате. Нет окна — весь удар.
 func _active() -> bool:
-	if action not in ATTACKS:
+	if action not in ATTACKS and action not in SPECIALS:
 		return false
 	var w: Variant = (cfg.get("active", {}) as Dictionary).get(action, null)
 	if not (w is Array) or (w as Array).size() < 2:
@@ -1148,7 +1152,7 @@ func _blade_out(out: Dictionary) -> void:
 		var fast := (tip - (_blade_prev[1] as Vector3)).length() > _f("blade_min_step", 0.04)
 		if fast:
 			out["blade"] = {"a": base, "b": tip, "pa": _blade_prev[0], "pb": _blade_prev[1], "id": _swing_id,
-				"damage": _per("hit_damage", action, 15.0)}
+				"damage": _per("hit_damage", action, 15.0), "move": action}
 	_blade_prev = [base, tip]
 
 
@@ -1287,6 +1291,34 @@ func _cancel_hurt() -> void:
 		action = ""
 
 
+var lunge_t := 0.0                   # с: «Выпад» несёт героя вперёд (location.gd)
+var _last_attack := ""
+var _last_end_ms := 0
+
+
+## Приём комбо kind (SPECIALS): из стойки или сразу после удара серии.
+func special(kind: String, on_floor: bool) -> bool:
+	_cancel_hurt()
+	_cancel_recovery()
+	if anim == null or not armed or not on_floor or action != "" or not SPECIAL_CLIPS.has(kind):
+		return false
+	var sc: Array = SPECIAL_CLIPS[kind]
+	var clip := str(sc[0])
+	if not has(clip):
+		clip = "Attack2"
+	blocking = false
+	_play_once(kind, float(sc[1]), clip)
+	if kind == "Lunge":
+		lunge_t = _f("lunge_time", 0.28)
+	return true
+
+
+## «Пауза»: после второго удара серии выдержать паузу (pause_min..pause_max с) и ударить — тяжёлая концовка.
+func pause_finisher_ready() -> bool:
+	var dt := (Time.get_ticks_msec() - _last_end_ms) / 1000.0
+	return action == "" and _last_attack == "Attack2" and dt >= _f("pause_min", 0.35) and dt <= _f("pause_max", 1.1)
+
+
 func attack(on_floor: bool) -> void:
 	_cancel_hurt()
 	blocking = false
@@ -1393,6 +1425,11 @@ func _on_finished(n: StringName) -> void:
 
 
 func _end_action() -> void:
+	if action in ATTACKS:
+		_last_attack = action
+		_last_end_ms = Time.get_ticks_msec()
+	elif action != "":
+		_last_attack = ""
 	if action == "Knocked" and has("GetUp"):
 		_play_once("GetUp")
 		return
@@ -1434,6 +1471,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	elif action == "Iai":
 		_iai_tick()
 	_combo_left = maxf(0.0, _combo_left - delta)
+	lunge_t = maxf(0.0, lunge_t - delta)
 	if blocking:
 		_block_t += delta
 	if action == "Hurt" and moving:
@@ -1584,7 +1622,7 @@ func set_block(on: bool) -> void:
 ## Удар уже нанесён (клинок прошёл пик) — откат можно прервать блоком или кувырком; замах — нельзя.
 ## Порог — доля клипа recover_cancel (по ударам), финальный по площади — только после касания земли.
 func _cancel_recovery() -> void:
-	if action not in ATTACKS:
+	if action not in ATTACKS and action not in SPECIALS:
 		return
 	var imp: Dictionary = meta.get("impact", {})
 	var from := _per("recover_cancel", action, 0.42)
@@ -1896,7 +1934,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
 	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
-	elif action in ATTACKS or action == "Ultimate":
+	elif action in ATTACKS or action in SPECIALS or action == "Ultimate":
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai"
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)

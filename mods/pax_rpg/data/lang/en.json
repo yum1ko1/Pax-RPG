@@ -267,5 +267,12 @@
 	"pax_rpg_wskill_ult": "Shatter (G)",
 	"pax_rpg_wskill_ult_desc": "A running overhead blow drives the blade into the ground — first wave. Rising on the hilt, a forward roll and a lunge — the second blow: twice the damage and reach, earthquake waves.",
 	"pax_rpg_ult_need_run": "Shatter — only on the run (Shift)",
-	"pax_rpg_talk_thinking": "%s is thinking…"
+	"pax_rpg_talk_thinking": "%s is thinking…",
+	"pax_rpg_style_d": "Dull",
+	"pax_rpg_style_c": "Crude",
+	"pax_rpg_style_b": "Bravo",
+	"pax_rpg_style_a": "Assault!",
+	"pax_rpg_style_s": "Shattering!",
+	"pax_rpg_style_ss": "Samurai Style!!",
+	"pax_rpg_style_sss": "Storm of Steel!!!"
 }

@@ -1,5 +1,26 @@
 {
-	"character": {"_note": "Персонаж и его характеристики (инвентарь → панель «Характеристики», src/location/inventory.gd). Пока один герой — Чёрный рыцарь; шкала 0–100. main_stat — главная характеристика (★ в инвентаре); passive — пассивка (iron_wall: блок дополнительно гасит block_reduce урона по концентрации); weapon.scaling — масштабирование урона оружия от характеристик буквами S/A/B/C/D/E, как в Dark Souls 3 (src/location/progress.gd → scaling_mult); очко характеристик — каждый stat_every-й уровень (progress).", "id": "black_knight", "main_stat": "strength", "passive": "iron_wall", "block_reduce": 0.3, "weapon": {"name": "pax_rpg_weapon_cleaver", "scaling": {"strength": "A"}}, "attributes": {"agility": 30, "intellect": 30, "charisma": 40, "strength": 60, "smithing": 50, "inlay": 30, "luck": 20}},
+	"character": {
+		"_note": "Персонаж и его характеристики (инвентарь → панель «Характеристики», src/location/inventory.gd). Пока один герой — Чёрный рыцарь; шкала 0–100. main_stat — главная характеристика (★ в инвентаре); passive — пассивка (iron_wall: блок дополнительно гасит block_reduce урона по концентрации); weapon.scaling — масштабирование урона оружия от характеристик буквами S/A/B/C/D/E, как в Dark Souls 3 (src/location/progress.gd → scaling_mult); очко характеристик — каждый stat_every-й уровень (progress).",
+		"id": "black_knight",
+		"main_stat": "strength",
+		"passive": "iron_wall",
+		"block_reduce": 0.3,
+		"weapon": {
+			"name": "pax_rpg_weapon_cleaver",
+			"scaling": {
+				"strength": "A"
+			}
+		},
+		"attributes": {
+			"agility": 30,
+			"intellect": 30,
+			"charisma": 40,
+			"strength": 60,
+			"smithing": 50,
+			"inlay": 30,
+			"luck": 20
+		}
+	},
 	"_note": "Герой локации (src/location/hero.gd). model — glb со скелетом и клипами Idle/Walk/Run/WalkArmed/Jump/Draw/Sheathe/Attack1-3 и мечами Sword_Back/Sword_Hand; anim_meta — root motion и смена меча (pax_rpg/dev/blender/knight/assemble_knight.py). Метры, секунды; доли — от длины клипа. Словари по клипам ({\"Attack1\": …}) — своё значение для каждого удара: combo_cancel — с какой доли клипа начинается следующий удар, если нажат; combo_skip — сколько секунд замаха следующего удара пропустить; attack_end — где удар без продолжения кончается и уходит в стойку; combo_grace — сколько секунд после этого нажатие ещё продолжает комбо; parry_window — сколько секунд от нажатия блока удар парируется; block_hold — где клип Parry замирает в блоке; posture_regen(_block) — как быстро спадает концентрация (в блоке — медленнее); guard_break_time — сколько секунд герой беспомощен, если концентрация переполнилась; deathblow_range / deathblow_hit — с какого расстояния и на какой секунде клипа добивание убивает; stride_strafe / stride_back — длина шага клипов вбок и назад (скорость ног); hit_range / hit_damage — до куда и сколько бьёт удар (финальный — по кругу, в миг удара о землю); sword_follow — как быстро волочащийся меч догоняет руку (меньше — тяжелее); impact_lead — звук удара о землю на столько секунд раньше касания. items / equipped — что можно надеть (config/items.json) и что надето при старте; cloth_body_scale — толщина капсул тела, о которые бьётся ткань; trail_* — след взмаха (сколько живёт, с какой скорости острия рисуется, яркость, цвет); burst_radius — кольцо удара о землю; clip_skip — сколько секунд начала разового клипа пропустить (у увороток — раскачку); clip_speed — скорость разовых клипов (увороты Dodge / DodgeArmed — тяжелее, если меньше); air — прыжок удара: [с, по секунду клипа, во сколько раз медленнее]; reach — до какой дистанции (м) удар подводит героя к врагу к мигу удара (магнит; финальный — долетает); pull_from — с какой секунды клипа тянет (финальный — с отрыва от земли).",
 	"model": "models/knight.glb",
 	"anim_meta": "models/knight_anim.json",
@@ -87,7 +108,10 @@
 	"hit_damage": {
 		"Attack1": 15,
 		"Attack2": 20,
-		"Attack3": 30
+		"Attack3": 30,
+		"Lunge": 26,
+		"Launcher": 18,
+		"PauseFinisher": 42
 	},
 	"clip_skip": {
 		"Dodge": 0.06,
@@ -255,5 +279,6 @@
 		]
 	},
 	"trail_from": 0.66,
-	"via_time": 0.4
+	"via_time": 0.4,
+	"_note_combo": "Комбо (location.gd → ЛКМ): Lunge — захват + W + ЛКМ (lunge_time, lunge_speed — рывок); Launcher — захват + S + ЛКМ (враг взлетает); PauseFinisher — ЛКМ, ЛКМ, пауза pause_min..pause_max с, ЛКМ. Урон — hit_damage; шкала стиля — src/location/style.gd."
 }

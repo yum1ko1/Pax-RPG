@@ -194,6 +194,7 @@ func _draw() -> void:
 	_draw_marks()
 	_draw_toast()
 	_draw_gold()
+	_draw_style()
 	_draw_hint()
 	_draw_orbs()
 
@@ -998,6 +999,28 @@ func _wrap(line: String, width: float, fs: int) -> PackedStringArray:
 	if cur != "":
 		out.append(cur)
 	return out
+
+
+## Ранг стиля справа (под заданием): крупная буква в огне и золоте, название ранга, полоска до следующего; вспышка — рост.
+func _draw_style() -> void:
+	var sd: Dictionary = _g("style", {})
+	var l := str(sd.get("letter", ""))
+	if l == "":
+		return
+	var rk := int(sd.get("rank", 0))
+	var fl := float(sd.get("flash", 0.0))
+	var x := _w - 60.0
+	var y := 560.0
+	var hot := Color(1.0, 0.55, 0.2).lerp(Color(1.0, 0.25, 0.3), clampf(rk / 6.0, 0.0, 1.0))
+	var fs := 92 + rk * 6 + int(fl * 24.0)
+	for k: int in 3:                                         # огненный ореол
+		draw_circle(Vector2(x - 70, y - 30), 60.0 + k * 14.0 + fl * 20.0, Color(hot, 0.06 + 0.04 * float(rk) / 6.0))
+	_text(Vector2(x - 260, y), l, serif, fs, c_gold_hi.lerp(hot, 0.45), HORIZONTAL_ALIGNMENT_RIGHT, 260, 8)
+	_text(Vector2(x - 320, y + 30), str(sd.get("title", "")).to_upper(), sans, 15, Color(hot, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 320, 3)
+	var bw := 200.0
+	draw_rect(Rect2(x - bw, y + 42, bw, 5), Color(c_ink, 0.9))
+	draw_rect(Rect2(x - bw, y + 42, bw * clampf(float(sd.get("frac", 0.0)), 0.0, 1.0), 5), hot)
+	draw_rect(Rect2(x - bw, y + 42, bw, 5), Color(c_gold, 0.6), false, 1.0)
 
 
 ## Золото слева вверху: монета (золото, шлем самурая, розовое переливающееся свечение) и число монет.

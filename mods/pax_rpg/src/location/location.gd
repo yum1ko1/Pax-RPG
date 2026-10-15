@@ -37,6 +37,7 @@ const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const Journal := preload("res://mods/pax_rpg/src/location/journal.gd")
 const Weather := preload("res://mods/pax_rpg/src/location/weather.gd")
+const Style := preload("res://mods/pax_rpg/src/location/style.gd")
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Wind := preload("res://mods/pax_rpg/src/location/wind.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
@@ -135,6 +136,7 @@ var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
 var _journal: Journal              # журнал заданий (J)
 var _gold_flash := 0.0
+var _style := Style.new()           # шкала стиля (D … SSS): очки за попадания, множит награду
 var _weather: Weather
 var weather_kind := "clear"        # погода этого захода (решена до стройки: мокрые материалы — в city.gd)
 var _step_acc := 0.0
@@ -1029,28 +1031,16 @@ func _start_talk() -> void:
 	_lmb_queued = false
 
 
-## Режим разговора: 3D локации не рисуется (на экране — последний кадр, затемнён), кадров — 15 в секунду: видеокарта
-## свободна для нейросети игрока, если она работает на этом же компьютере. После разговора — как было.
-var _talk_fps_saved := -1
-
-
+## Разговор — отдельное окно: 3D локации скрыто и не рисуется вовсе (видеокарта свободна для нейросети игрока на этом же
+## компьютере), HUD спрятан. После разговора — как было.
 func _talk_focus(on: bool) -> void:
 	if not is_instance_valid(_view):
 		return
-	if on:
-		_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
-		if is_instance_valid(_box):
-			_box.modulate = Color(0.45, 0.45, 0.5)
-		if _talk_fps_saved < 0:
-			_talk_fps_saved = Engine.max_fps
-		Engine.max_fps = 15
-	else:
-		_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-		if is_instance_valid(_box):
-			_box.modulate = Color.WHITE
-		if _talk_fps_saved >= 0:
-			Engine.max_fps = _talk_fps_saved
-			_talk_fps_saved = -1
+	_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if on else SubViewport.UPDATE_ALWAYS
+	if is_instance_valid(_box):
+		_box.visible = not on
+	if is_instance_valid(_hud):
+		_hud.visible = not on
 
 
 func _end_talk() -> void:
@@ -1289,6 +1279,7 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 		var d := Vector2(gob.global_position.x - c.x, gob.global_position.z - c.z).length()
 		if d <= radius:
 			gob.take_damage(dmg * _dmg_mult(), c, i == 2)          # последняя волна — отбрасывает
+			_style.hit("Ultimate" if _hero != null and _hero.action == "Ultimate" else "Quake")
 			gob.posture = minf(gob.max_posture, gob.posture + dmg * 0.8)
 			if d >= maxf(0.0, radius - 3.0):                               # шипы на кольце волны — подбрасывают
 				var away := Vector3(gob.global_position.x - c.x, 0.0, gob.global_position.z - c.z).normalized()
@@ -1341,7 +1332,17 @@ func _physics_body(delta: float) -> void:
 		if not _try_deathblow():
 			if _hero.action == "":
 				_face_now(_aim_yaw())                # удар — куда смотрит камера (мышь); при захвате — во врага
-			_hero.attack(on_floor)
+			var fw := Input.is_physical_key_pressed(KEY_W)
+			var bk := Input.is_physical_key_pressed(KEY_S)
+			var done_sp := false
+			if _lock != null and fw and not bk:          # захват + вперёд + ЛКМ — «Выпад»
+				done_sp = _hero.special("Lunge", on_floor)
+			elif _lock != null and bk and not fw:        # захват + назад + ЛКМ — «Подброс»
+				done_sp = _hero.special("Launcher", on_floor)
+			elif _hero.pause_finisher_ready():           # ЛКМ, ЛКМ, пауза, ЛКМ — «Пауза»
+				done_sp = _hero.special("PauseFinisher", on_floor)
+			if not done_sp:
+				_hero.attack(on_floor)
 	_lmb_queued = false
 	if _hero != null:
 		_hero.set_block(_rmb and _stagger <= 0.0)
@@ -1479,6 +1480,10 @@ func _physics_body(delta: float) -> void:
 			vel.z = w.z / delta
 		if mag != null:
 			vel = _magnet_pull(vel, mag, delta)
+	if _hero != null and _hero.lunge_t > 0.0:          # «Выпад» — рывок к врагу
+		var f3 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+		vel.x = f3.x * _hf("lunge_speed", 11.0)
+		vel.z = f3.z * _hf("lunge_speed", 11.0)
 	if _hero != null and _hero.ult_dash:               # разбег ультимейта — рывком по взгляду
 		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f2.x * _hf("ult_dash_speed", 9.0)
@@ -1658,6 +1663,7 @@ func _strike(hit: Dictionary) -> void:
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
 		gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
+		_style.hit(_hero.action if _hero != null and _hero.action != "" else "Attack3")
 		_impact_feel(gob, bool(hit.get("knock", false)))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
@@ -1699,6 +1705,10 @@ func _blade_strike(b: Dictionary) -> void:
 		done[g] = true
 		var dmg := float(b.damage) * _dmg_mult()
 		gob.take_damage(dmg, _player.global_position, false)
+		var mv := str(b.get("move", "Attack1"))
+		_style.hit(mv)
+		if mv == "Launcher" and gob.is_alive():         # подброс: враг взлетает (без добивания в воздухе)
+			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
 		_impact_feel(gob, false)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
@@ -1860,6 +1870,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	var spark_at := _player.global_position + fwd * 0.7 + Vector3(0.0, 1.2, 0.0)
 	if _hero != null and facing and not unblockable and _hero.parry_window():
 		_hero.deflect()
+		_style.hit("Parry")
 		_hero.block_hit(false)
 		_posture = minf(_pos_max(), _posture + 4.0)
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
@@ -1881,6 +1892,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 			_hero.hurt()
 		return
 	_hp = maxf(0.0, _hp - damage)
+	_style.hurt()
 	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
@@ -2095,6 +2107,7 @@ func _process(delta: float) -> void:
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
 ## Шарики маны: по кривой от павшего врага к концу полоски опыта; долетел — +опыт (полоска растёт на глазах).
 func _tick_orbs(delta: float) -> void:
+	_style.tick(delta)
 	_lvl_flash = maxf(0.0, _lvl_flash - delta)
 	_gold_flash = maxf(0.0, _gold_flash - delta * 0.8)
 	if _orbs.is_empty() or not is_instance_valid(_hud):
@@ -2160,7 +2173,8 @@ func _hud_tick(delta: float) -> void:
 			for k: int in n:
 				_orbs.append({"p0": from + Vector2(randf_range(-30, 30), randf_range(-30, 30)), "t": 0.0,
 					"delay": k * 0.06, "v": gain / n, "bend": randf_range(-1.0, 1.0)})
-			var coins := randi_range(6, 14)                # и немного золота
+			var coins := roundi(randi_range(6, 14) * _style.reward_mult())   # и немного золота (больше — на высоком стиле)
+			gain *= _style.reward_mult()
 			_prog.add_gold(coins)
 			_gold_flash = 1.0
 			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
@@ -2176,7 +2190,9 @@ func _hud_tick(delta: float) -> void:
 	_hint_t = maxf(0.0, _hint_t - delta)
 	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(),
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
-		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash,
+		"style": {"letter": _style.letter(), "rank": _style.rank(), "frac": _style.frac(), "flash": _style.flash,
+			"title": mod.tr_key("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,

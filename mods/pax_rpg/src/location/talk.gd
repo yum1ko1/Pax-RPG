@@ -41,6 +41,11 @@ func setup(m: PaxMod, h: Hud) -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
+	var back := ColorRect.new()                         # отдельное окно: фон на весь экран (3D под ним не рисуется)
+	back.color = Color(0.03, 0.025, 0.035, 1.0)
+	back.set_anchors_preset(Control.PRESET_FULL_RECT)
+	back.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(back)
 	_panel = Control.new()
 	_panel.size = Vector2(W, H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -113,9 +118,9 @@ func _label(f: Font, fs: int, pos: Vector2) -> Label:
 
 
 func _place() -> void:
-	var s := clampf(size.y / 1080.0, 0.6, 2.0)
+	var s := clampf(size.y / 1080.0, 0.6, 2.0) * 1.3          # окно разговора — крупнее
 	_panel.scale = Vector2(s, s)
-	_panel.position = Vector2((size.x - W * s) * 0.5, size.y - (H + 40.0) * s)
+	_panel.position = (size - Vector2(W, H) * s) * 0.5          # по центру окна
 
 
 func open(npc: Node) -> void:
