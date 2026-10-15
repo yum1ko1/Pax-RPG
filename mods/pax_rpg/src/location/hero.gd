@@ -2220,13 +2220,29 @@ func flourish() -> bool:
 	return true
 
 
+var _trick_last := Transform3D.IDENTITY
+
+
 func _trick_sword() -> void:
 	if _skel == null or _tip == Vector3.ZERO:
 		return
 	var t := _pos()
 	var t0 := _f("trick_spin_from", 0.4)
 	var t1 := _f("trick_spin_to", 1.65)
+	var tc := t1 + _f("trick_fall", 0.28)                    # меч чуть падает — правая рука ловит его ниже
+	if t > t1 and t < tc and _trick_last != Transform3D.IDENTITY:
+		var u := (t - t1) / (tc - t1)
+		var drop := 0.5 * 9.8 * pow(t - t1, 2.0)              # свободное падение
+		var hand := _sword_hand.global_transform              # поза в руке (_hand_rest уже выставлен)
+		var fall_pos := _trick_last.origin - Vector3(0, drop, 0)
+		var k := u * u * u                                     # рука догоняет в самом конце — резкий перехват
+		var q := _trick_last.basis.get_rotation_quaternion().slerp(hand.basis.get_rotation_quaternion(), k)
+		var sc2 := hand.basis.get_scale()
+		_sword_hand.global_transform = Transform3D(Basis(q).scaled(sc2), fall_pos.lerp(hand.origin, k))
+		return
 	if t < t0 or t > t1:
+		if t >= tc:
+			_trick_last = Transform3D.IDENTITY
 		return
 	var lh := _skel.find_bone("LeftHand")
 	var lf := _skel.find_bone("LeftForeArm")
@@ -2248,6 +2264,7 @@ func _trick_sword() -> void:
 	var bs := (world_f * local_f.inverse()).scaled_local(sc)
 	var hole := _tip * _f("trick_hole_at", 0.86)             # отверстие у острия
 	_sword_hand.global_transform = Transform3D(bs, on_arm - bs * hole)
+	_trick_last = _sword_hand.global_transform
 
 
 func _keep_above_floor() -> void:
