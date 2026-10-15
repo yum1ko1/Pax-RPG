@@ -29,6 +29,7 @@ var _shadow: Decal
 var _prints: Array = []
 var _print_tex: Texture2D
 var _drift := Vector2.ZERO
+var _player_pos := Vector3.INF          # location.gd → footprint: где земля у героя (брызги — вокруг него)
 var _env: Environment
 var _flash: DirectionalLight3D          # гроза: вспышка молнии
 var _bolt_in := 4.0                     # до следующей молнии, с
@@ -83,7 +84,7 @@ func setup(m: PaxMod, k: String, env: Environment, sky_mat: ShaderMaterial, cam:
 			env.fog_height_density = 0.12
 			env.fog_density = maxf(env.fog_density, 0.9)
 		if env.volumetric_fog_enabled:                     # гуще в дождь и на заре — видны лучи
-			env.volumetric_fog_density *= 1.0 + rain * 1.5 + low_fog * 2.0 + (1.0 - day) * 0.5
+			env.volumetric_fog_density *= 1.0 + rain * 0.35 + low_fog * 1.2 + (1.0 - day) * 0.15   # дымка у глаза — едва
 		if rain > 0.0:
 			env.ambient_light_energy *= 0.85
 			env.fog_light_color = env.fog_light_color.lerp(Color(0.55, 0.58, 0.68), 0.5)
@@ -133,12 +134,12 @@ func _make_cloud_shadows() -> void:
 
 func _make_rain() -> void:
 	_rain = GPUParticles3D.new()
-	_rain.amount = 5000
-	_rain.lifetime = 0.9
+	_rain.amount = 6500
+	_rain.lifetime = 0.8
 	_rain.visibility_aabb = AABB(Vector3(-25, -20, -25), Vector3(50, 40, 50))
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(22, 0.5, 22)
+	pm.emission_box_extents = Vector3(16, 0.5, 16)        # ближе к камере — капли видны, а не тонут в дали
 	pm.direction = Vector3(0.08, -1, 0.04)
 	pm.spread = 3.0
 	pm.initial_velocity_min = 18.0
@@ -146,17 +147,20 @@ func _make_rain() -> void:
 	pm.gravity = Vector3(0, -9.8, 0)
 	_rain.process_material = pm
 	var q := QuadMesh.new()
-	q.size = Vector2(0.012, 0.55)
+	q.size = Vector2(0.022, 0.8)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.75, 0.8, 0.9, 0.35)
+	mat.albedo_color = Color(0.8, 0.85, 0.95, 0.55)
+	mat.emission_enabled = true                          # ночью и в тени капли ловят свет — не исчезают
+	mat.emission = Color(0.25, 0.27, 0.32)
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	mat.billboard_keep_scale = true
 	q.material = mat
 	_rain.draw_pass_1 = q
 	_rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_rain)
+	_make_splashes()
 	var st: AudioStream = mod.sound("sounds/rain_loop.wav")
 	if st != null:
 		if st is AudioStreamWAV:
@@ -169,6 +173,39 @@ func _make_rain() -> void:
 		_rain_snd.volume_db = -10.0
 		add_child(_rain_snd)
 		_rain_snd.play()
+
+
+## Брызги: короткие светлые всплески у земли вокруг героя — дождь видно и под ногами.
+var _splash: GPUParticles3D
+
+
+func _make_splashes() -> void:
+	_splash = GPUParticles3D.new()
+	_splash.amount = 900
+	_splash.lifetime = 0.25
+	_splash.visibility_aabb = AABB(Vector3(-12, -3, -12), Vector3(24, 6, 24))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(10, 0.05, 10)
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 35.0
+	pm.initial_velocity_min = 0.6
+	pm.initial_velocity_max = 1.4
+	pm.gravity = Vector3(0, -9.8, 0)
+	pm.scale_min = 0.6
+	pm.scale_max = 1.2
+	_splash.process_material = pm
+	var q := QuadMesh.new()
+	q.size = Vector2(0.05, 0.05)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.85, 0.9, 1.0, 0.5)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	q.material = mat
+	_splash.draw_pass_1 = q
+	_splash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_splash)
 
 
 # ---------- живой воздух ----------
@@ -301,6 +338,7 @@ func footprint(pos: Vector3, yaw: float, left: bool) -> void:
 	d.normal_fade = 0.5
 	d.cull_mask = 0xFFFFF & ~(1 << 19)
 	add_child(d)
+	_player_pos = pos
 	var side := Vector3(cos(yaw), 0.0, -sin(yaw)) * (0.11 if left else -0.11)
 	var at := pos + side
 	var space := get_world_3d().direct_space_state if is_inside_tree() else null
@@ -329,6 +367,8 @@ func _process(delta: float) -> void:
 		var cp := _cam.global_position
 		if _rain != null:
 			_rain.global_position = cp + Vector3(0, 14, 0)
+		if _splash != null and _player_pos != Vector3.INF:
+			_splash.global_position = _player_pos + Vector3(0, 0.05, 0)
 		if _dust != null:
 			_dust.global_position = cp + Vector3(0, -0.5, 0)
 		if _flies != null:

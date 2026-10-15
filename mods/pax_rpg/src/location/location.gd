@@ -2068,12 +2068,12 @@ func _apply_volfog(v: float) -> void:
 	var on := v > 0.01 and RenderingServer.get_current_rendering_method() == "forward_plus"
 	_env.volumetric_fog_enabled = on
 	if on:
-		_env.volumetric_fog_density = 0.0005 + 0.0035 * v  # тонкий: лучи и ореолы огней, а не стена (0.5 → 0.0023)
+		_env.volumetric_fog_density = 0.0002 + 0.0014 * v  # как в Elden Ring: у глаза воздух чистый, лучи и ореолы огней — едва
 		_env.volumetric_fog_albedo = Color(0.95, 0.9, 0.93)
 		_env.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
 		_env.volumetric_fog_length = 64.0
 		_env.volumetric_fog_detail_spread = 2.0
-		_env.volumetric_fog_ambient_inject = 0.05
+		_env.volumetric_fog_ambient_inject = 0.02
 		_env.volumetric_fog_sky_affect = 0.0
 
 

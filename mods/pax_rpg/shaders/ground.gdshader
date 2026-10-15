@@ -18,7 +18,8 @@ uniform float c_depth = 0.05;        // м, глубина рельефа кла
 uniform float normal_strength = 1.0;
 
 varying vec3 wpos;
-global uniform vec4 pax_rpg_weather;   // x — мокрость (weather.gd)
+global uniform vec4 pax_rpg_weather;   // x — мокрость, y — дождь (weather.gd)
+global uniform float pax_rpg_time;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -71,13 +72,25 @@ void fragment() {
 	// мокро: темнее и глаже; в низинах шума и в швах кладки — лужи (зеркальные, рельеф сглажен)
 	float wet = pax_rpg_weather.x;
 	if (wet > 0.001) {
-		float seam = mix(0.0, 1.0 - h, w);
-		float pud = smoothstep(0.62, 0.78, noise(p * 0.18) * 0.7 + seam * 0.5) * wet;
-		alb *= mix(1.0, 0.62, wet);
-		alb = mix(alb, alb * vec3(0.55, 0.6, 0.7), pud * 0.6);
-		rgh = mix(rgh, rgh * 0.35, wet);
-		rgh = mix(rgh, 0.03, pud);
-		nm = mix(nm, vec3(0.5, 0.5, 1.0), pud);
+		// мокро — пятнами: где-то просто влажный камень, где-то потемнее; лужи — отдельные круглые пятна
+		// с ровным краем (крупный шум + чуть мелкого), только на ровном и в низких местах кладки
+		float damp = wet * mix(0.45, 1.0, smoothstep(0.25, 0.75, noise(p * 0.06 + 3.1)));
+		float pn = noise(p * 0.11 + 7.3) * 0.8 + noise(p * 0.45) * 0.2 - (h - 0.5) * 0.12 * w;
+		float pud = smoothstep(0.69, 0.715, pn) * wet;
+		float rim = smoothstep(0.6, 0.69, pn) * (1.0 - pud) * wet;          // мокрый ободок вокруг лужи
+		alb *= mix(1.0, 0.6, damp + rim * 0.3);
+		rgh = mix(rgh, rgh * 0.4, damp);
+		rgh = mix(rgh, rgh * 0.25, rim);
+		// рябь от капель: кольца по ячейкам, каждое со своим временем
+		vec2 cell = floor(p * 2.2);
+		vec2 cp = fract(p * 2.2) - 0.5 - (vec2(hash(cell), hash(cell + 17.0)) - 0.5) * 0.6;
+		float ph = fract(pax_rpg_time * 1.3 + hash(cell + 5.0));
+		float d = length(cp);
+		float ring = sin((d - ph * 0.5) * 60.0) * (1.0 - smoothstep(0.5 * ph, 0.5 * ph + 0.06, d)) * smoothstep(0.0, 0.5 * ph + 0.001, d) * (1.0 - ph);
+		vec2 rn = (d > 0.001 ? cp / d : vec2(0.0)) * ring * 0.35 * pax_rpg_weather.y;
+		alb = mix(alb, alb * vec3(0.45, 0.5, 0.58), pud * 0.7);
+		rgh = mix(rgh, 0.02, pud);
+		nm = mix(nm, vec3(0.5 + rn.x, 0.5 + rn.y, 1.0), pud);             // зеркало воды, рельеф камня скрыт
 	}
 	ALBEDO = alb;
 	NORMAL_MAP = nm;
