@@ -1686,27 +1686,27 @@ func _cam_dynamics(delta: float) -> Vector3:
 	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
 	var on := _player.is_on_floor() and hs > 0.3
 	var run := clampf((hs - _hf("walk_speed", 2.4)) / maxf(_hf("run_speed", 5.0) - _hf("walk_speed", 2.4), 0.1), 0.0, 1.0)
-	var want := (lerpf(_f("cam_bob_walk", 0.035), _f("cam_bob_run", 0.085), run) if on else 0.0)
+	var want := (lerpf(_f("cam_bob_walk", 0.01), _f("cam_bob_run", 0.025), run) if on else 0.0)
 	_bob_amp = lerpf(_bob_amp, want, 1.0 - exp(-delta * 6.0))
 	_bob_ph += hs * delta / maxf(_f("cam_step", 0.85) * (1.0 + run * 0.35), 0.1) * PI   # пол-оборота — шаг
 	var v := absf(sin(_bob_ph)) * _bob_amp                      # вниз на каждом шаге (период |sin| — шаг)
-	var h := sin(_bob_ph) * _bob_amp * 0.8                      # вбок — с ноги на ногу
+	var h := sin(_bob_ph) * _bob_amp * 0.4                      # вбок — с ноги на ногу
 	# пружина толчка (Гук с демпфером): x'' = −k·x − c·x'
 	_cam_kick_v += (-_cam_kick * _f("cam_kick_k", 140.0) - _cam_kick_v * _f("cam_kick_damp", 16.0)) * delta
 	_cam_kick += _cam_kick_v * delta
-	_cam_roll = lerpf(_cam_roll, sin(_bob_ph) * _bob_amp * 0.25, 1.0 - exp(-delta * 7.0))
+	_cam_roll = lerpf(_cam_roll, sin(_bob_ph) * _bob_amp * _f("cam_bob_roll", 0.0), 1.0 - exp(-delta * 7.0))   # крен от шагов — выкл.: укачивает
 	var b := _cam.global_transform.basis
 	return b * Vector3(h + _cam_kick.x, _bob_amp * 0.5 - v + _cam_kick.y, _cam_kick.z)
 
 
 ## Толчок камеры на взмахе: к герою (вперёд) и в сторону удара, крен по взмаху; финальный — сильнее.
 func _cam_swing(move: String) -> void:
-	var k := _f("cam_kick", 0.12) * (1.8 if move == "Attack3" else 1.0)
+	var k := _f("cam_kick", 0.05) * (1.8 if move == "Attack3" else 1.0)
 	var side := 0.0
 	if _hero != null:
 		side = float(_hero.swing_side) if _hero.swing_side != 0 else (-1.0 if move == "Attack1" else 1.0)
 	_cam_kick_v += Vector3(side * k * 4.0, -k * 1.5, -k * 9.0)       # z < 0 — к герою
-	_cam_roll += side * _f("cam_roll", 0.03) * (1.6 if move == "Attack3" else 1.0)
+	_cam_roll += side * _f("cam_roll", 0.008) * (1.6 if move == "Attack3" else 1.0)
 
 
 ## Вес попадания: герой и враг замирают на миг (hitstop), камера вздрагивает. Тяжёлый удар — дольше и сильнее.
