@@ -40,6 +40,10 @@ const DIZZY_TIME := 1.6         # после вихря и промаха тар
 
 var _atk := ""
 var _hits_done := 0
+var _whoosh_done := 0                # сколько свистов замаха уже прозвучало (до удара, не в миг урона)
+var _skel: Skeleton3D
+const CONTACT := 1.35                # м: от кисти до тела героя — топор (~1 м) и плечо удара; ближе — попал
+const WINDOW := [0.07, 0.16]         # доли клипа до и после замеренного удара: в этом окне топор может задеть
 var _held := false
 var _hold_t := 0.0
 var _spin_tick := 0.0
@@ -70,6 +74,8 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 4.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
+	_snd_grunt = _sound("sounds/goblin_bark_%d.mp3", 1, 3, 0.5, 3.0)    # рык перед ударом — голос гоблина, ниже
+	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.55
@@ -158,6 +164,8 @@ var _snd_swing: AudioStreamPlayer3D
 var _snd_impact: AudioStreamPlayer3D
 var _snd_clang: AudioStreamPlayer3D
 var _snd_hurt: AudioStreamPlayer3D
+var _snd_grunt: AudioStreamPlayer3D
+var _snd_heavy: AudioStreamPlayer3D
 
 
 func _sound(pattern: String, first: int, n: int, pitch: float, db: float) -> AudioStreamPlayer3D:
@@ -226,6 +234,9 @@ func _atk_after_guard() -> void:
 func _start_attack(clip: String) -> void:
 	_atk = clip
 	_hits_done = 0
+	_whoosh_done = 0
+	if randf() < 0.6 or str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy":
+		_snd(_snd_grunt)
 	_held = false
 	_hold_t = 0.0
 	_set_state("attack")
@@ -394,17 +405,47 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 			flat = dir * minf(float(a.leap), dist + 0.5) / maxf(dur, 0.2)
 	elif _hits_done == 0 and frac < (float(hits[0]) if hits.size() > 0 else 0.0) and dist > 1.6:
 		flat = dir * float(a.get("step", 0.0))
-	if _hits_done < hits.size() and frac >= float(hits[_hits_done]):
-		_hits_done += 1
+	# свист — чуть раньше удара (топор уже летит), а урон — только когда кисть с топором прошла у тела героя:
+	# окно вокруг замеренного удара; не дотянулся до конца окна — промах (кувырок/шаг назад спасают)
+	if _whoosh_done < hits.size() and frac >= float(hits[_whoosh_done]) - 0.09:
+		_whoosh_done += 1
 		_snd(_snd_swing)
-		if dist <= float(a.get("reach", 2.8)) and _on_hit.is_valid():
-			_snd(_snd_impact)
-			_on_hit.call(float(a.get("dmg", 20.0)), self, str(a.get("kind", "")))
+	if _hits_done < hits.size():
+		var ht := float(hits[_hits_done])
+		if frac >= ht - float(WINDOW[0]):
+			var touch := _contact(_atk == "Kick")
+			if touch and _on_hit.is_valid():
+				_hits_done += 1
+				var heavy := str(a.get("kind", "")) == "heavy"
+				_snd(_snd_heavy if heavy else _snd_impact)
+				_on_hit.call(float(a.get("dmg", 20.0)), self, str(a.get("kind", "")))
+			elif frac >= ht + float(WINDOW[1]):
+				_hits_done += 1                              # мимо
 	if frac >= 0.98 or (_anim != null and not _anim.is_playing()):
 		_atk = ""
 		_set_state("circle")
 		_wait = randf_range(0.9, 1.8)
 	return flat
+
+
+## Достаёт ли удар героя сейчас: кисть (у пинка — стопа) ближе CONTACT к телу героя (отрезок от колен до головы).
+## Нет скелета — по старому: дистанция до героя.
+func _contact(foot: bool) -> bool:
+	if _skel == null:
+		_skel = BodyFx.find_skeleton(_model)
+	var hero_lo := _target.global_position + Vector3(0, 0.3, 0)
+	var hero_hi := _target.global_position + Vector3(0, 1.7, 0)
+	if _skel == null:
+		return global_position.distance_to(_target.global_position) <= float((ATTACKS.get(_atk, {}) as Dictionary).get("reach", 2.8))
+	var best := INF
+	for bn: String in (["RightFoot", "LeftFoot"] if foot else ["RightHand", "LeftHand"]):
+		var bi := _skel.find_bone(bn)
+		if bi < 0:
+			continue
+		var p := _skel.global_transform * _skel.get_bone_global_pose(bi).origin
+		var cp := Geometry3D.get_closest_point_to_segment(p, hero_lo, hero_hi)
+		best = minf(best, p.distance_to(cp))
+	return best <= (0.7 if foot else CONTACT)
 
 
 ## Вихрь: середина клипа 360 крутится по кругу, орк медленно идёт за героем, удары по кругу.
