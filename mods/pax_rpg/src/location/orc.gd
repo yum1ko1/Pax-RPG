@@ -74,7 +74,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
-	_snd_grunt = _sound("sounds/goblin_bark_%d.mp3", 1, 3, 0.55, 9.0)    # рык перед ударом — голос гоблина, ниже
+	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
 	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -158,6 +158,7 @@ func _set_state(s: String) -> void:
 			_play("BlockIdle", true, 0.12)
 		"taunt":
 			_play("Taunt", true)
+			_snd(_snd_grunt)
 		"spin":
 			_play("Spin360High", true)
 			_spin_tick = 0.5
