@@ -1459,17 +1459,20 @@ func _physics_body(delta: float) -> void:
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		Prof.add("герой (с плащом)", th)
 		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
-			_face_now(_aim_yaw())                    # каждый удар серии — заново туда, куда смотрит камера
+			var cy2 := _combo_yaw()
+			if cy2 != INF:
+				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
 		_quake_step()
-		if _hero.ult_hit > _ult_done:                   # ультимейт: удар о землю — волна
+		if _hero.action == "Ultimate" and _hero.ult_hit > _ult_done:   # ультимейт: удар о землю — волна (раз на удар)
 			_ult_done = _hero.ult_hit
 			_ult_wave(_ult_done)
 		if _hero.action != "Ultimate":
 			_ult_done = 0
+			_hero.ult_hit = 0
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)
@@ -1486,6 +1489,16 @@ func _physics_body(delta: float) -> void:
 		var f3 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f3.x * _hf("lunge_speed", 11.0)
 		vel.z = f3.z * _hf("lunge_speed", 11.0)
+	if _hero != null and _hero.action == "Ultimate":
+		_hero.ult_landed = on_floor and vel.y <= 0.0
+		if _hero.ult_leap:                             # после удара о землю — прыжок с кувырком вперёд
+			_hero.ult_leap = false
+			vel.y = _hf("ult_leap_speed", 8.0)
+			_hero.ult_landed = false
+		if _hero.ult_air:
+			var fa := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+			vel.x = fa.x * _hf("ult_leap_forward", 6.0)
+			vel.z = fa.z * _hf("ult_leap_forward", 6.0)
 	if _hero != null and _hero.ult_dash:               # разбег ультимейта — рывком по взгляду
 		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f2.x * _hf("ult_dash_speed", 9.0)

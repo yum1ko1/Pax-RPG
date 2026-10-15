@@ -151,6 +151,8 @@ func close() -> void:
 		return
 	visible = false
 	DisplayServer.tts_stop()
+	if is_instance_valid(_voice):
+		_voice.stop()
 	_token += 1                                        # запоздалый ответ и таймеры этого разговора — больше не его
 	_waiting = false
 	_giving = false
@@ -439,6 +441,33 @@ func _draw_panel() -> void:
 				Vector2(cx - 7, cy)]), gold)
 
 
+var _voice: AudioStreamPlayer
+
+
+## Голос игры синтезирует фразу (Piper), но его проигрыватель в локации не слышно: как только он получил новую
+## фразу — играем её сами на шине мода PaxRpgSfx, а его глушим (иначе вдвоём, если он всё-таки звучит).
+func _relay_voice(pw: AudioStreamPlayer, old: Variant, v: Object, tok: int) -> void:
+	var until := Time.get_ticks_msec() + 30000
+	while Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+		if tok != _token or not visible or not is_instance_valid(pw):
+			return
+		if pw.stream != null and pw.stream != old:
+			mod.log_info("talk voice: phrase ready (bus %s, playing %s, mute %s)" % [pw.bus, str(pw.playing),
+				str(AudioServer.is_bus_mute(maxi(0, AudioServer.get_bus_index(pw.bus))))])
+			pw.volume_db = -80.0                       # не stop(): игра ждёт его finished, иначе очередь фраз встанет
+			if _voice == null:
+				_voice = AudioStreamPlayer.new()
+				_voice.process_mode = Node.PROCESS_MODE_ALWAYS
+				add_child(_voice)
+			_voice.bus = "PaxRpgSfx" if AudioServer.get_bus_index("PaxRpgSfx") >= 0 else "Master"
+			_voice.stream = pw.stream
+			_voice.pitch_scale = pw.pitch_scale
+			_voice.play()
+			return
+	mod.log_info("talk voice: no phrase in 30 s (%s)" % str(v.get("last_error")))
+
+
 const VOICE_METHODS := ["сказать", "говорить", "озвучить", "произнести", "прочитать", "speak", "say", "talk"]
 
 
@@ -456,8 +485,12 @@ func _speak(text: String) -> void:
 				var call_args: Array = [text]
 				for k in range(1, args.size() - (m.get("default_args", []) as Array).size()):
 					call_args.append("" if int((args[k] as Dictionary).get("type", TYPE_STRING)) == TYPE_STRING else null)
+				var pw: Variant = (v as Object).get("player_widget")
+				var old: Variant = (pw as AudioStreamPlayer).stream if pw is AudioStreamPlayer else null
 				(v as Object).callv(n, call_args)
 				mod.log_info("talk voice: Main.голос.%s" % n)
+				if pw is AudioStreamPlayer:
+					_relay_voice(pw as AudioStreamPlayer, old, v as Object, _token)
 				return
 	var voices := DisplayServer.tts_get_voices_for_language("ru" if TranslationServer.get_locale().begins_with("ru") else "en")
 	if not voices.is_empty():

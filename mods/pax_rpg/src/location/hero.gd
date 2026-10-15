@@ -1644,6 +1644,9 @@ var quake_since := -1.0
 # Стадии ведёт _ult_tick; ult_dash — разбег (location.gd толкает героя вперёд); ult_hit — 1/2: удар о землю (волна).
 var ult_dash := false
 var ult_hit := 0
+var ult_leap := false                # кувырок в воздухе: location.gd подбрасывает героя (один раз) и несёт вперёд
+var ult_air := false                 # стадия прыжка идёт — location.gd толкает вперёд
+var ult_landed := false              # location.gd: герой на земле (после прыжка — выпад)
 var _ult_stage := -1
 var _ult_t := 0.0
 const ULT_DASH := 0.55               # с от удара меча о землю (−1 — ещё не ударил / приём не идёт)
@@ -1666,6 +1669,8 @@ func ult_begin(on_floor: bool) -> bool:
 	_ult_t = 0.0
 	ult_hit = 0
 	ult_dash = true
+	ult_leap = false
+	ult_air = false
 	_prev_off = Vector2.ZERO
 	anim.speed_scale = 1.0
 	anim.play("Sprint" if has("Sprint") else "RunArmed", 0.1)
@@ -1704,13 +1709,16 @@ func _ult_tick(delta: float) -> void:
 					_ult_play("Deathblow", anim.get_animation("Deathblow").length * _f("quake_plunge", 0.43) + 0.05, 1.3)
 				else:
 					_ult_stage = 4
-		3:
-			if _pos() >= length - 0.08 or _ult_t > 2.2:
+		3:                                            # встаёт рывком — сразу в прыжок (не досматривая подъём)
+			if _pos() >= length * 0.55 or _ult_t > 0.9:
 				_ult_stage = 4
 				_ult_t = 0.0
-				_ult_play("DodgeArmed" if has("DodgeArmed") else "Dodge", 0.0, 1.0)   # кувырок вперёд с мечом
-		4:
-			if _pos() >= length - 0.05 or _ult_t > 1.2:
+				ult_leap = true
+				ult_air = true
+				_ult_play("DodgeArmed" if has("DodgeArmed") else "Dodge", 0.0, 0.85)   # кувырок в воздухе с мечом
+		4:                                            # в воздухе — до приземления
+			if (_ult_t > 0.3 and ult_landed) or _ult_t > 1.6:
+				ult_air = false
 				_ult_stage = 5
 				_ult_t = 0.0
 				_ult_play("Attack3", 0.35, 1.2)        # резкий выпад: без долгого замаха
@@ -1721,6 +1729,8 @@ func _ult_tick(delta: float) -> void:
 			if _pos() >= length - 0.05 or _ult_t > 2.5:
 				_ult_stage = -1
 				ult_dash = false
+				ult_air = false
+				ult_hit = 0                           # иначе location.gd видит «новый удар» каждый кадр — волны без конца
 				_end_action()
 
 

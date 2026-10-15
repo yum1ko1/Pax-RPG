@@ -34,6 +34,31 @@ static func height(n: FastNoiseLite, x: float, z: float, t: Dictionary) -> float
 	return h
 
 
+# полуширина основания модели при масштабе 1, м (по вершинам glb) и подъём низа над нулём (грибы висят на 0.19)
+const FOOT := {"rock_mossy": 0.5, "stone_big_2": 3.0, "stone_big_4": 1.5, "stone_mid": 1.8, "stone_small": 0.8,
+	"log_trunk": 1.0, "snag_mossy": 0.6, "stump": 0.85, "mushrooms": 0.5, "plant_cover": 1.2, "plant": 0.8, "bush": 0.6}
+const LIFT := {"mushrooms": 0.19, "plant_cover_1": 0.07}
+
+
+## Высота, на которую ставить предмет: самая низкая точка земли под его основанием (радиус r) и чуть ниже —
+## на склоне ни один край не висит в воздухе; sink — насколько утопить (больше у крупных).
+static func ground_under(n: FastNoiseLite, p: Vector2, r: float, t: Dictionary, sink: float) -> float:
+	var h := height(n, p.x, p.y, t)
+	if r > 0.05:
+		for k: int in 8:
+			var a := TAU * k / 8.0
+			h = minf(h, height(n, p.x + cos(a) * r, p.y + sin(a) * r, t))
+	return h - sink
+
+
+static func _foot(path: String) -> float:
+	var f := path.get_file().get_basename()
+	for k: String in FOOT:
+		if f.begins_with(k):
+			return float(FOOT[k])
+	return 0.0
+
+
 ## Планировка леса (как config/gharn.json): старт, выход, находка, гоблины у неё, деревья, кусты, брёвна, камни, трава.
 static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
@@ -66,7 +91,7 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 			var o: Array = oaks[rng.randi() % oaks.size()]
 			var s := rng.randf_range(float(o[1]), float(o[2]))
 			var w := float(o[3]) * s
-			items.append({"m": "models/nature/%s.glb" % str(o[0]), "p": [p.x, height(n, p.x, p.y, t) - 0.1, p.y],
+			items.append({"m": "models/nature/%s.glb" % str(o[0]), "p": [p.x, ground_under(n, p, w, t, 0.15), p.y],
 				"r": rng.randf_range(0.0, 360.0), "s": s, "c": true, "col": [w, 4.0, w]})
 			trunks.append(p)
 			clear.append([p, 1.2])
@@ -93,8 +118,11 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 			var path := str(sc[0])
 			if path.contains("%s"):
 				path = path % str(names[rng.randi() % names.size()])
-			var e := {"m": path, "p": [p.x, height(n, p.x, p.y, t) - 0.08, p.y], "r": rng.randf_range(0.0, 360.0),
-				"s": rng.randf_range(float(sc[2]), float(sc[3]))}
+			var sz := rng.randf_range(float(sc[2]), float(sc[3]))
+			var fr := _foot(path) * sz * 0.8                  # край основания чуть внутри: валуны скруглены
+			var lift := float(LIFT.get(path.get_file().get_basename(), 0.0)) * sz
+			var e := {"m": path, "p": [p.x, ground_under(n, p, fr, t, 0.08 + fr * 0.08) - lift, p.y],
+				"r": rng.randf_range(0.0, 360.0), "s": sz}
 			if bool(sc[4]):
 				e["c"] = true
 			items.append(e)
