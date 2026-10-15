@@ -144,6 +144,16 @@ func _set_state(s: String) -> void:
 			_play("ReactR", true)
 		"dead":
 			_play("Death", true)
+			var ds: AudioStream = mod.sound("sounds/orc_death.mp3")    # предсмертный рёв
+			if ds != null:
+				var dp := AudioStreamPlayer3D.new()
+				dp.stream = ds
+				dp.bus = "PaxRpgSfx"
+				dp.volume_db = 6.0
+				dp.unit_size = 14.0
+				dp.position = Vector3(0, 1.6, 0)
+				add_child(dp)
+				dp.play()
 		"guard":
 			_play("BlockIdle", true, 0.12)
 		"taunt":
