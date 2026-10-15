@@ -74,6 +74,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
+	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, 3.0)        # рычание и сопение между ударами
 	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
 	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
 	var shape := CollisionShape3D.new()
@@ -176,6 +177,8 @@ var _snd_impact: AudioStreamPlayer3D
 var _snd_clang: AudioStreamPlayer3D
 var _snd_hurt: AudioStreamPlayer3D
 var _snd_grunt: AudioStreamPlayer3D
+var _snd_idle: AudioStreamPlayer3D
+var _idle_snd_t := 4.0                  # с до следующего рычания
 var _snd_heavy: AudioStreamPlayer3D
 
 
@@ -261,6 +264,11 @@ func _start_attack(clip: String) -> void:
 func _phys(delta: float) -> void:
 	if not is_instance_valid(_target):
 		return
+	_idle_snd_t -= delta                               # время от времени рычит, пока не бьёт и жив
+	if _idle_snd_t <= 0.0:
+		_idle_snd_t = randf_range(6.0, 12.0)
+		if not dead and _atk == "" and _state in ["idle", "circle", "stalk", "guard"] 				and not (_snd_grunt != null and _snd_grunt.playing):
+			_snd(_snd_idle)
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	elif velocity.y < 0.0:
