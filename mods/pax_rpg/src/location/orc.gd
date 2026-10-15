@@ -42,8 +42,8 @@ var _atk := ""
 var _hits_done := 0
 var _whoosh_done := 0                # сколько свистов замаха уже прозвучало (до удара, не в миг урона)
 var _skel: Skeleton3D
-const CONTACT := 1.35                # м: от кисти до тела героя — топор (~1 м) и плечо удара; ближе — попал
-const WINDOW := [0.07, 0.16]         # доли клипа до и после замеренного удара: в этом окне топор может задеть
+const CONTACT := 1.1                 # м: от кисти до тела героя — топор (~1 м) и плечо удара; ближе — попал
+const WINDOW := [0.02, 0.16]         # доли клипа до и после замеренного удара: в этом окне топор может задеть
 var _held := false
 var _hold_t := 0.0
 var _spin_tick := 0.0
@@ -63,18 +63,18 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_spawn = at
 	name = "OrcChampion"
 	position = at
-	max_hp = 420.0
-	max_posture = 240.0
+	max_hp = 1100.0                                  # босс арены: не падает от пары серий
+	max_posture = 420.0
 	hp = max_hp
 	display_key = "pax_rpg_orc"
 	boss = true
 	mass = 150.0                                     # кг с топором и бронёй: удары его почти не сдвигают
 	title_key = "pax_rpg_orc_title"
-	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 2.0)       # тяжёлый топор — ниже и громче
-	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 4.0)
+	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 8.0)       # тяжёлый топор — ниже и громче
+	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
-	_snd_grunt = _sound("sounds/goblin_bark_%d.mp3", 1, 3, 0.5, 3.0)    # рык перед ударом — голос гоблина, ниже
+	_snd_grunt = _sound("sounds/goblin_bark_%d.mp3", 1, 3, 0.55, 9.0)    # рык перед ударом — голос гоблина, ниже
 	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
@@ -179,7 +179,7 @@ func _sound(pattern: String, first: int, n: int, pitch: float, db: float) -> Aud
 	p.stream = rnd
 	p.pitch_scale = pitch
 	p.volume_db = db
-	p.unit_size = 6.0
+	p.unit_size = 14.0                               # арена большая: слышно и с края
 	p.bus = "PaxRpgSfx"
 	p.position = Vector3(0, 1.4, 0)
 	add_child(p)
@@ -195,6 +195,7 @@ func _snd(p: AudioStreamPlayer3D) -> void:
 func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	if dead or _state == "broken":
 		return
+	mod.log_info("[pax_rpg] orc hit %.0f (hp %.0f/%.0f, posture %.0f/%.0f, %s)" % [amount, hp, max_hp, posture, max_posture, _state])
 	if _state == "guard":
 		var away := (from - global_position)
 		away.y = 0.0
@@ -235,6 +236,7 @@ func _start_attack(clip: String) -> void:
 	_atk = clip
 	_hits_done = 0
 	_whoosh_done = 0
+	_hand_prev = Vector3.INF
 	if randf() < 0.6 or str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy":
 		_snd(_snd_grunt)
 	_held = false
@@ -413,7 +415,7 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 	if _hits_done < hits.size():
 		var ht := float(hits[_hits_done])
 		if frac >= ht - float(WINDOW[0]):
-			var touch := _contact(_atk == "Kick")
+			var touch := _contact(_atk == "Kick") and _hand_fast(delta)
 			if touch and _on_hit.is_valid():
 				_hits_done += 1
 				var heavy := str(a.get("kind", "")) == "heavy"
@@ -426,6 +428,22 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		_set_state("circle")
 		_wait = randf_range(0.9, 1.8)
 	return flat
+
+
+var _hand_prev := Vector3.INF
+
+
+## Кисть летит (а не замерла в замахе рядом с героем): скорость больше 3 м/с — удар, а не прицеливание.
+func _hand_fast(delta: float) -> bool:
+	if _skel == null or delta <= 0.0:
+		return true
+	var bi := _skel.find_bone("RightFoot" if _atk == "Kick" else "RightHand")
+	if bi < 0:
+		return true
+	var p := _skel.global_transform * _skel.get_bone_global_pose(bi).origin
+	var fast := _hand_prev != Vector3.INF and p.distance_to(_hand_prev) / delta > 3.0
+	_hand_prev = p
+	return fast
 
 
 ## Достаёт ли удар героя сейчас: кисть (у пинка — стопа) ближе CONTACT к телу героя (отрезок от колен до головы).

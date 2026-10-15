@@ -1154,7 +1154,7 @@ func _blade_out(out: Dictionary) -> void:
 	var base := g * (_tip * 0.2)
 	if not _blade_prev.is_empty():
 		var fast := (tip - (_blade_prev[1] as Vector3)).length() > _f("blade_min_step", 0.04)
-		if fast:
+		if fast and not (meta.get("impact", {}) as Dictionary).has(action):   # финальный бьёт о землю (_hit) — не дважды
 			out["blade"] = {"a": base, "b": tip, "pa": _blade_prev[0], "pb": _blade_prev[1], "id": _swing_id,
 				"damage": _per("hit_damage", action, 15.0), "move": action}
 	_blade_prev = [base, tip]
@@ -1424,6 +1424,8 @@ func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	_clip = clip if clip != "" else n
 	_queued = false
 	_prev_off = Vector2.ZERO
+	_swing_id += 1                         # новый взмах — даже тот же клип подряд (удар по стороне врага) ранит снова
+	_swing_action = n
 	_swing_done = false
 	_hit_done = false
 	_impact_done = false
