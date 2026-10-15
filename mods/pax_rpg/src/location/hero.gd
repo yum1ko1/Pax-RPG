@@ -15,7 +15,7 @@ const SPECIALS := ["Lunge", "Launcher", "PauseFinisher"]
 const SPECIAL_CLIPS := {"Lunge": ["Attack1", 0.3], "Launcher": ["Kick", 0.2], "PauseFinisher": ["HeavySlash", 0.1]}
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
-const ONCE := ["SwordTrick", "Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
+const ONCE := ["UltCrush", "SwordTrick", "Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
 	"Attack1", "Attack2", "Attack3", "Dodge",
 	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
@@ -1756,6 +1756,10 @@ func ult_begin(on_floor: bool) -> bool:
 	ult_air = false
 	_prev_off = Vector2.ZERO
 	anim.speed_scale = 1.0
+	if has("UltCrush"):                                # свой клип: разбег → прыжок с мечом над головой → удар в землю
+		_ult_stage = 20
+		_ult_play("UltCrush", 0.0, _f("ultc_speed", 1.0))
+		return true
 	anim.play("Sprint" if has("Sprint") else "RunArmed", 0.1)
 	return true
 
@@ -1772,6 +1776,20 @@ func _ult_tick(delta: float) -> void:
 	_ult_t += delta
 	var length := anim.current_animation_length
 	match _ult_stage:
+		20:                                           # клип UltCrush целиком: толчок на разбеге, волны — в миг удара о землю
+			var slam := _f("ultc_slam", 2.45)
+			ult_dash = _ult_t < _f("ultc_dash_to", 0.8)
+			ult_air = _ult_t > _f("ultc_air_from", 1.8) and _ult_t < slam - 0.05
+			if ult_hit == 0 and _ult_t >= slam:
+				ult_hit = 1
+			elif ult_hit == 1 and _ult_t >= slam + 0.18:
+				ult_hit = 2                           # вторая, сильнее — от вбитого меча
+			if _pos() >= length - 0.05 or _ult_t > length + 0.3:
+				_ult_stage = -1
+				ult_dash = false
+				ult_air = false
+				ult_hit = 0
+				_end_action()
 		0:                                            # разбег
 			if _ult_t >= ULT_DASH:
 				ult_dash = false
