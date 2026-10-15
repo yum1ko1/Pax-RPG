@@ -20,7 +20,11 @@ var _left := false
 var city := false
 
 
+var _mod: PaxMod
+
+
 func setup(mod: PaxMod, in_city: bool) -> void:
+	_mod = mod
 	name = "PaxRpgSfx"
 	city = in_city
 	_step = _rand(mod, "sounds/step_%d.ogg", STEPS, 0.12, -9.0)
@@ -89,12 +93,39 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 ## Приземление после прыжка — двойной шаг.
 ## Удар о землю (волна «Земного разлома»): низкий тяжёлый звук.
 func impact() -> void:
+	if _smash == null:
+		_smash = _one("sounds/ground_smash.wav", -2.0)             # меч о землю: удар и крошево
+	if _smash != null:
+		_smash.pitch_scale = randf_range(0.9, 1.05)
+		_smash.play()
 	if _impact != null:
 		_impact.pitch_scale = randf_range(0.55, 0.7)
 		_impact.play()
 
 
+var _land_armor: AudioStreamPlayer
+var _smash: AudioStreamPlayer
+
+
+func _one(mod_path: String, db: float) -> AudioStreamPlayer:
+	var st: AudioStream = _mod.sound(mod_path) if _mod != null else null
+	if st == null:
+		return null
+	var p := AudioStreamPlayer.new()
+	p.stream = st
+	p.volume_db = db
+	p.bus = "PaxRpgSfx"
+	p.max_polyphony = 3
+	add_child(p)
+	return p
+
+
 func land() -> void:
+	if _land_armor == null:
+		_land_armor = _one("sounds/armor_land.wav", -6.0)          # доспех ударился о землю
+	if _land_armor != null:
+		_land_armor.pitch_scale = randf_range(0.95, 1.05)
+		_land_armor.play()
 	if _step != null:
 		_step.volume_db = -4.0
 		_step.play()

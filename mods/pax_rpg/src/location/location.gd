@@ -132,6 +132,7 @@ var _chain_t := 0.0                 # с с начала последнего у
 var _tilt := 0.0                    # рад: наклон корпуса во взмахе (клинок не параллелен земле)
 var _tilt_want := 0.0
 var _waves: Array = []              # волны разреза: {node, dir, t, hit: {}}
+var _was_flip := false
 var _shove := Vector3.ZERO          # м/с: отброс героя тараном орка
 var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
@@ -1738,6 +1739,12 @@ func _physics_body(delta: float) -> void:
 		if _prev_action in Hero.ATTACKS and _hero.action == "" and int(_hero.get("_last_i")) == 1 and _stagger <= 0.0 \
 				and _chain < int(_hf("chain_finisher", 5.0)) and not _foe_near(_hf("trick_clear", 4.0)):
 			_hero.flourish()                                 # после второго удара, если враг не рядом — трюк с мечом
+		if _hero.action != _prev_action and (_hero.action.begins_with("Dodge") or _hero.action == "SwordTrick"):
+			_sfx_once("sounds/air_whoosh.wav", -8.0)          # кувырок / подброшенный меч — свист воздуха
+		var flip := bool(_hero.get("_flipping"))
+		if flip and not _was_flip:
+			_sfx_once("sounds/air_whoosh.wav", -3.0)          # сальто в ультимейте
+		_was_flip = flip
 		_prev_action = _hero.action
 		if _hero.action == "" or not (_hero.action in Hero.ATTACKS or _hero.action in Hero.SPECIALS):
 			_chain_t += delta                            # серия рвётся, только если герой не бьёт дольше chain_window

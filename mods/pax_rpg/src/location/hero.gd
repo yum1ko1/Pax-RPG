@@ -1756,8 +1756,13 @@ func ult_begin(on_floor: bool) -> bool:
 	ult_air = false
 	_prev_off = Vector2.ZERO
 	anim.speed_scale = 1.0
-	if has("UltCrush"):                                # свой клип: разбег → прыжок с мечом над головой → удар в землю
+	if has("UltCrush"):                                # свой клип: разбег → меч в землю → стойка на рукояти → прыжок → удар
 		_ult_stage = 20
+		ult_dash = false                               # двигает root motion клипа (meta root_motion → «Ultimate»)
+		_ult_start = _owner_body.global_transform if _owner_body != null else model.global_transform
+		var rm: Dictionary = meta.get("root_motion", {})
+		if rm.has("UltCrush"):
+			rm["Ultimate"] = rm["UltCrush"]
 		_ult_play("UltCrush", 0.0, _f("ultc_speed", 1.0))
 		return true
 	anim.play("Sprint" if has("Sprint") else "RunArmed", 0.1)
@@ -1776,15 +1781,28 @@ func _ult_tick(delta: float) -> void:
 	_ult_t += delta
 	var length := anim.current_animation_length
 	match _ult_stage:
-		20:                                           # клип UltCrush целиком: толчок на разбеге, волны — в миг удара о землю
-			var slam := _f("ultc_slam", 2.45)
-			ult_dash = _ult_t < _f("ultc_dash_to", 0.8)
-			ult_air = _ult_t > _f("ultc_air_from", 1.8) and _ult_t < slam - 0.05
+		20:                                           # клип UltCrush: меч воткнут — стоит на рукояти — выдернул — удар о землю
+			var slam := _f("ultc_slam", 3.5)
+			ult_dash = false
+			ult_air = false
+			var tp := _f("ultc_plant", 0.9)
+			var toff := _f("ultc_pull", 3.1)
+			_ult_flip(clampf((_ult_t - toff) / maxf(0.05, slam - toff), 0.0, 1.0))   # сальто: на вершине — вниз головой
+			if _ult_t >= tp and _ult_t < toff:
+				_plant_sword()
+				_tip_planted(clampf((_ult_t - (toff - _f("ultc_tip_time", 0.4))) / _f("ultc_tip_time", 0.4), 0.0, 1.0))
+			elif _planted != null:
+				_planted.queue_free()                     # выдернул — меч снова в руке
+				_planted = null
 			if ult_hit == 0 and _ult_t >= slam:
 				ult_hit = 1
 			elif ult_hit == 1 and _ult_t >= slam + 0.18:
 				ult_hit = 2                           # вторая, сильнее — от вбитого меча
 			if _pos() >= length - 0.05 or _ult_t > length + 0.3:
+				if _planted != null:
+					_planted.queue_free()
+					_planted = null
+				_ult_flip(1.0)
 				_ult_stage = -1
 				ult_dash = false
 				ult_air = false
@@ -1876,6 +1894,71 @@ func _fin_tick() -> void:
 				_fin_stage = -1
 				fin_back = false
 				_end_action()
+
+
+var _model_base := Transform3D.IDENTITY
+var _flipping := false
+
+
+## Сальто вокруг таза (k 0..1 — полный оборот назад-вперёд); 0 или 1 — модель на месте.
+func _ult_flip(k: float) -> void:
+	if not _flipping:
+		if k <= 0.0 or k >= 1.0:
+			return
+		_model_base = model.transform
+		_flipping = true
+	if k <= 0.0 or k >= 1.0:
+		model.transform = _model_base
+		_flipping = false
+		return
+	var hip := Vector3(0, _f("flip_pivot", 1.0), 0)          # от стоп до таза
+	var e := smoothstep(0.0, 1.0, k)
+	var r := Transform3D(Basis(Vector3.RIGHT, TAU * e), Vector3.ZERO)
+	model.transform = _model_base * Transform3D(Basis(), hip) * r * Transform3D(Basis(), -hip)
+
+
+var _ult_start := Transform3D.IDENTITY
+var _planted: MeshInstance3D
+var _planted_base := Transform3D.IDENTITY
+var _planted_pivot := Vector3.ZERO
+
+
+## Весом тела рыцарь валит воткнутый меч вперёд (k 0..1 → до ultc_tip_deg°) — вокруг точки, где клинок входит в землю.
+func _tip_planted(k: float) -> void:
+	if _planted == null:
+		return
+	var fwd := _ult_start.basis.z.normalized()
+	var right := Vector3.UP.cross(fwd).normalized()
+	var ang := deg_to_rad(_f("ultc_tip_deg", 55.0)) * smoothstep(0.0, 1.0, k)
+	var r := Transform3D(Basis(right, ang), Vector3.ZERO)
+	_planted.global_transform = Transform3D(Basis(), _planted_pivot) * r * Transform3D(Basis(), -_planted_pivot) * _planted_base
+
+
+## Меч воткнут остриём в землю там, куда встанут стопы (knight_anim.json → ult_pole: x, z от начала приёма,
+## top — высота стоп); рукоять — вверх, под ногами. Меч в руке пока скрыт (_show_sword).
+func _plant_sword() -> void:
+	if _planted != null or _sword_hand == null or not (_sword_hand is MeshInstance3D):
+		return
+	var pole: Dictionary = meta.get("ult_pole", {})
+	if pole.is_empty() or _owner_body == null:
+		return
+	var world := _owner_body.get_parent()
+	_planted = MeshInstance3D.new()
+	_planted.mesh = (_sword_hand as MeshInstance3D).mesh
+	world.add_child(_planted)
+	var spot := _ult_start * Vector3(float(pole.get("x", 0.0)), 0.0, float(pole.get("z", 1.8)))
+	var top := _ult_start.origin.y - _f("capsule_height", 1.9) * 0.5 + float(pole.get("top", 1.6)) - _f("ultc_sole", 0.08)
+	var tl := _tip.normalized()                              # клинок в осях меча — вниз, в землю
+	var sc := _sword_hand.global_transform.basis.get_scale()
+	var bs := Basis(Quaternion(tl, Vector3.DOWN)).scaled_local(sc)
+	var handle := 0.0                                        # длина рукояти над хватом (навершие — под стопами)
+	var box := _planted.mesh.get_aabb()
+	for i: int in 8:
+		handle = maxf(handle, box.get_endpoint(i).dot(-tl))
+	var up := (bs * (-tl * handle)).length()
+	_planted.global_transform = Transform3D(bs, Vector3(spot.x, top - up, spot.z))
+	_planted_base = _planted.global_transform
+	_planted_pivot = Vector3(spot.x, _ult_start.origin.y - _f("capsule_height", 1.9) * 0.5, spot.z)
 
 
 func quake(on_floor: bool) -> bool:
@@ -2096,7 +2179,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
 	elif action in ATTACKS or action in SPECIALS or action in ["Ultimate", "Finisher", "SwordTrick"]:
 		in_hand = true
-	_sword_hand.visible = in_hand and action != "Iai"
+	_sword_hand.visible = in_hand and action != "Iai" and _planted == null
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)
 	if not in_hand:
 		_drag_w = 0.0

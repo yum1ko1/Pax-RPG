@@ -49,7 +49,8 @@
 		"DodgeBack": 1.35,
 		"DodgeL": 1.3,
 		"DodgeR": 1.3,
-		"BlockHit": 1.0
+		"BlockHit": 1.0,
+		"Ultimate": 1.0
 	},
 	"air": {},
 	"root_motion_lateral": {
@@ -58,7 +59,8 @@
 		"DodgeR": 1.0,
 		"BlockHit": 1.0,
 		"Dodge": 1.0,
-		"DodgeArmed": 1.0
+		"DodgeArmed": 1.0,
+		"Ultimate": 1.0
 	},
 	"reach": {
 		"Attack1": 1.45,
@@ -171,9 +173,7 @@
 	"armed_run_factor": 0.8,
 	"stride_run_armed": 9.0,
 	"impact_files": [
-		"sounds/impact_1.wav",
-		"sounds/impact_2.wav",
-		"sounds/impact_3.wav"
+		"sounds/ground_smash.wav"
 	],
 	"impact_volume_db": 0.0,
 	"items": "config/items.json",
