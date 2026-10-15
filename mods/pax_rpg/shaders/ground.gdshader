@@ -89,8 +89,8 @@ void fragment() {
 		// с ровным краем (крупный шум + чуть мелкого), только на ровном и в низких местах кладки
 		float damp = wet * mix(0.45, 1.0, smoothstep(0.25, 0.75, noise(p * 0.06 + 3.1)));
 		float pn = pnoise(p * 0.11 + 7.3) * 0.8 + pnoise(p * 0.45) * 0.2 - (h - 0.5) * 0.04 * w;
-		float pud = smoothstep(0.69, 0.715, pn) * wet;
-		float rim = smoothstep(0.6, 0.69, pn) * (1.0 - pud) * wet;          // мокрый ободок вокруг лужи
+		float pud = smoothstep(0.6, 0.625, pn) * wet;           // в ливень луж много
+		float rim = smoothstep(0.52, 0.6, pn) * (1.0 - pud) * wet;         // мокрый ободок вокруг лужи
 		alb *= mix(1.0, 0.6, damp + rim * 0.3);
 		rgh = mix(rgh, rgh * 0.4, damp);
 		rgh = mix(rgh, rgh * 0.25, rim);

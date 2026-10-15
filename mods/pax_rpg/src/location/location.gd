@@ -259,6 +259,7 @@ func build(city: Dictionary) -> void:
 	_box.mouse_filter = Control.MOUSE_FILTER_STOP   # щелчки по локации не доходят до окон игры под ней
 	add_child(_box)
 	_view = SubViewport.new()
+	_view.audio_listener_enable_3d = true            # 3D-звуки локации (орк, удары по врагам) слышит камера локации
 	_view.own_world_3d = true
 	_view.msaa_3d = Viewport.MSAA_2X                 # 4x на 1440p съедал треть кадра
 	_box.add_child(_view)
@@ -1824,6 +1825,7 @@ func _cam_swing(move: String) -> void:
 ## Вес попадания: герой и враг замирают на миг (hitstop), камера вздрагивает. Тяжёлый удар — дольше и сильнее.
 ## Несколько врагов одним взмахом — замирание не складывается.
 func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
+	_sfx_once("sounds/impact_%d.wav" % randi_range(1, 3), -7.0 + 3.0 * clampf(heft - 1.0, -1.0, 1.0))   # меч попал
 	var t := (_hf("hitstop_heavy", 0.14) if heavy else _hf("hitstop", 0.08)) * clampf(heft, 0.6, 1.6)   # F = Δp/Δt
 	if _hero != null:
 		_hero.hitstop(t)

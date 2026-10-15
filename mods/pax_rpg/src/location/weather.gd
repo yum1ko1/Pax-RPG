@@ -135,12 +135,12 @@ func _make_cloud_shadows() -> void:
 
 func _make_rain() -> void:
 	_rain = GPUParticles3D.new()
-	_rain.amount = 6500
-	_rain.lifetime = 0.8
-	_rain.visibility_aabb = AABB(Vector3(-25, -20, -25), Vector3(50, 40, 50))
+	_rain.amount = 7000
+	_rain.lifetime = 1.0                                   # долетают до земли и в низинах, и на ровном
+	_rain.visibility_aabb = AABB(Vector3(-30, -30, -30), Vector3(60, 50, 60))
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(16, 0.5, 16)        # ближе к камере — капли видны, а не тонут в дали
+	pm.emission_box_extents = Vector3(14, 0.5, 14)        # ближе к камере — капли видны, а не тонут в дали
 	pm.direction = Vector3(0.08, -1, 0.04)
 	pm.spread = 3.0
 	pm.initial_velocity_min = 18.0
@@ -148,13 +148,13 @@ func _make_rain() -> void:
 	pm.gravity = Vector3(0, -9.8, 0)
 	_rain.process_material = pm
 	var q := QuadMesh.new()
-	q.size = Vector2(0.022, 0.8)
+	q.size = Vector2(0.011, 0.5)                          # тонкие штрихи, а не палки
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.8, 0.85, 0.95, 0.55)
+	mat.albedo_color = Color(0.78, 0.83, 0.92, 0.38)
 	mat.emission_enabled = true                          # ночью и в тени капли ловят свет — не исчезают
-	mat.emission = Color(0.25, 0.27, 0.32)
+	mat.emission = Color(0.12, 0.13, 0.16)
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	mat.billboard_keep_scale = true
 	q.material = mat
@@ -186,7 +186,7 @@ var _splash: GPUParticles3D
 
 func _make_splashes() -> void:
 	_splash = GPUParticles3D.new()
-	_splash.amount = 900
+	_splash.amount = 700
 	_splash.lifetime = 0.25
 	_splash.visibility_aabb = AABB(Vector3(-12, -3, -12), Vector3(24, 6, 24))
 	var pm := ParticleProcessMaterial.new()
@@ -201,7 +201,7 @@ func _make_splashes() -> void:
 	pm.scale_max = 1.2
 	_splash.process_material = pm
 	var q := QuadMesh.new()
-	q.size = Vector2(0.05, 0.05)
+	q.size = Vector2(0.022, 0.022)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -349,7 +349,7 @@ func puddle_at(pos: Vector3) -> bool:
 	if not puddles or wet < 0.3:
 		return false
 	var pn := _pn(pos.x * 0.11 + 7.3, pos.z * 0.11 + 7.3) * 0.8 + _pn(pos.x * 0.45, pos.z * 0.45) * 0.2
-	return pn > 0.702
+	return pn > 0.612
 
 
 ## Шаг в луже: брызги-капли вверх и в стороны, кольцо по воде.
