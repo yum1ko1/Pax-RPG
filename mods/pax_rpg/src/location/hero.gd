@@ -2180,6 +2180,7 @@ func _show_sword(delta: float) -> void:
 	elif action in ATTACKS or action in SPECIALS or action in ["Ultimate", "Finisher", "SwordTrick"]:
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai" and _planted == null
+	_curl_fingers(_sword_hand.visible)
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)
 	if not in_hand:
 		_drag_w = 0.0
@@ -2343,6 +2344,22 @@ func _left_hand_ik(on: bool) -> void:
 	var grip := sg.origin - axis * _f("grip_left_at", 0.32)   # ниже правой руки по рукояти
 	var tr := Transform3D(sg.basis.orthonormalized(), grip)
 	_lik.set("target", _skel.global_transform.affine_inverse() * tr)
+
+
+## Пальцы (кости RightFingers / LeftFingers — сгиб всех четырёх разом вокруг своей оси X): с мечом — сжаты на рукояти.
+var _curl := 0.0
+
+
+func _curl_fingers(hold: bool) -> void:
+	if _skel == null:
+		return
+	_curl = move_toward(_curl, 1.0 if hold else 0.0, 0.08)
+	for n: String in ["RightFingers", "LeftFingers"]:
+		var bi := _skel.find_bone(n)
+		if bi < 0:
+			continue
+		var ang := deg_to_rad(_f("finger_curl_deg", -70.0)) * _curl
+		_skel.set_bone_pose_rotation(bi, _skel.get_bone_rest(bi).basis.get_rotation_quaternion() * Quaternion(Vector3.RIGHT, ang))
 
 
 func _keep_above_floor() -> void:
