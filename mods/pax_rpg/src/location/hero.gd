@@ -89,6 +89,7 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
 	_sword_drag = model.find_child("Sword_Drag", true, false) as Node3D
+	_retune_swords()
 	if _sword_hand != null:
 		_hand_rest = _sword_hand.transform
 		_tip = _tip_of(_sword_hand)
@@ -101,6 +102,66 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	_swing = _player(cfg.get("swing_files", []), _f("swing_pitch_spread", 1.06), _f("swing_volume_db", -4.0))
 	_impact = _player(cfg.get("impact_files", []), 1.04, _f("impact_volume_db", 0.0))
 	return model
+
+
+## Меч крупнее (sword_scale) и на спине — по диагонали, как у Гатса: рукоять над правым плечом, клинок к левому бедру,
+## плашмя к спине (sword_back_grip / sword_back_dir — в осях модели, м; модель смотрит на +Z, правое у героя — −X).
+## Начало сетки меча — хват, остриё — дальняя от него точка (_tip_of). Мечи в руке — только крупнее (вокруг хвата).
+func _retune_swords() -> void:
+	var k := float(cfg.get("sword_scale", 1.3))
+	var mp := str(cfg.get("sword_model", ""))                 # своя модель меча (хват — в начале координат, клинок — +Y)
+	if mp != "":
+		var sw := Assets.model(_mod, mp)
+		if sw != null:
+			var mis := sw.find_children("*", "MeshInstance3D", true, false)
+			if mis.size() > 0:
+				var mesh := (mis[0] as MeshInstance3D).mesh
+				for s: Node3D in [_sword_back, _sword_hand, _sword_drag]:
+					if s is MeshInstance3D:
+						(s as MeshInstance3D).mesh = mesh
+						(s as MeshInstance3D).material_override = null
+			sw.free()
+	for s: Node3D in [_sword_hand, _sword_drag]:
+		if s != null:
+			s.transform = Transform3D(s.transform.basis.scaled_local(Vector3.ONE * k), s.transform.origin)
+	if _sword_back == null or not (_sword_back.get_parent() is BoneAttachment3D):
+		return
+	var ba := _sword_back.get_parent() as BoneAttachment3D
+	var sk := ba.get_parent() as Skeleton3D
+	if sk == null:
+		return
+	var bi := sk.find_bone(ba.bone_name)
+	if bi < 0:
+		return
+	var sk_to_model := Transform3D.IDENTITY                # скелет в осях модели (модель ещё не в дереве)
+	var c: Node = sk
+	while c != model and c is Node3D:
+		sk_to_model = (c as Node3D).transform * sk_to_model
+		c = c.get_parent()
+	var bone_m := sk_to_model * sk.get_bone_global_rest(bi)
+	var old_m := bone_m * _sword_back.transform
+	var s0 := old_m.basis.get_scale().x
+	var tip := _tip_of(_sword_back)
+	if tip.length() < 0.001:
+		return
+	var t := tip.normalized()                                # клинок в осях меча
+	var mi := _sword_back as MeshInstance3D
+	var flat := Vector3(0, 0, 1)                             # нормаль плашмя — самая тонкая сторона сетки
+	if mi != null and mi.mesh != null:
+		var sz := mi.mesh.get_aabb().size
+		flat = Vector3.RIGHT if sz.x <= sz.y and sz.x <= sz.z else (Vector3.UP if sz.y <= sz.z else Vector3.BACK)
+	flat = (flat - t * flat.dot(t)).normalized()
+	var chest := bone_m.origin
+	var gv: Array = cfg.get("sword_back_grip", [-0.24, 0.42, -0.26])
+	var dv: Array = cfg.get("sword_back_dir", [0.62, -0.78, -0.04])
+	var grip := chest + Vector3(float(gv[0]), float(gv[1]), float(gv[2]))
+	var b := Vector3(float(dv[0]), float(dv[1]), float(dv[2])).normalized()
+	var n := Vector3(0, 0, -1)
+	n = (n - b * n.dot(b)).normalized()                      # плашмя к спине
+	var local_f := Basis(t, flat, t.cross(flat))
+	var world_f := Basis(b, n, b.cross(n))
+	var bs := (world_f * local_f.inverse()).scaled_local(Vector3.ONE * s0 * k)
+	_sword_back.transform = bone_m.affine_inverse() * Transform3D(bs, grip)
 
 
 ## Остриё: дальняя от хвата точка габаритов сетки меча (в осях узла меча).
