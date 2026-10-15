@@ -28,7 +28,7 @@
 		"soft_shadows": true,
 		"sun_angle": 0.6,
 		"sun_shadow_distance": 110.0,
-		"lamp_shadows": 6,
+		"lamp_shadows": 4,
 		"lamp_shadow_atlas": 4096,
 		"fog_anisotropy": 0.6,
 		"auto_exposure": true,
