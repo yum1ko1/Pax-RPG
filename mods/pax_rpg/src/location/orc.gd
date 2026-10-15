@@ -70,7 +70,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	boss = true
 	mass = 150.0                                     # кг с топором и бронёй: удары его почти не сдвигают
 	title_key = "pax_rpg_orc_title"
-	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 8.0)       # тяжёлый топор — ниже и громче
+	_snd_swing = _sound("sounds/foe_swing_%d.mp3", 1, 1, 0.75, 8.0)      # тяжёлый топор — тот же свист, ниже       # тяжёлый топор — ниже и громче
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/orc_hurt_%d.mp3", 1, 1, 1.0, 4.0)        # попадание по орку (меньше половины здоровья)

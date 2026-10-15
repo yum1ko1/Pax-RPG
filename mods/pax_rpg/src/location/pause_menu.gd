@@ -136,6 +136,22 @@ func _build_settings(serif: Font) -> void:
 		AudioBus.set_volume(AudioBus.SFX, v))
 	_slider(_mod.tr_key("pax_rpg_set_mouse"), "mouse_sens", 1.0, 0.3, 2.5, func(v: float) -> void:
 		sens_changed.emit(v))
+	# реплики врагов голосом ИИ: выкл. по умолчанию — каждая реплика — запрос к нейросети (токены)
+	var row := HBoxContainer.new()
+	row.add_child(_label("pax_rpg_set_foe_voice"))
+	var cb := CheckButton.new()
+	cb.focus_mode = Control.FOCUS_NONE
+	cb.button_pressed = bool(_mod.get_setting("foe_voice", false))
+	cb.toggled.connect(func(on: bool) -> void: _mod.set_setting("foe_voice", on))
+	row.add_child(cb)
+	_settings.add_child(row)
+	var note := Label.new()
+	note.text = _mod.tr_key("pax_rpg_set_foe_voice_note")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(520, 0)
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(Hud.TEXT, 0.65))
+	_settings.add_child(note)
 	var back := _button(_mod.tr_key("pax_rpg_set_back"), serif)
 	_box.remove_child(back)
 	_settings.add_child(back)

@@ -93,6 +93,28 @@ static var _streams := {}
 
 ## Голос гоблина: kind "hurt" (урон) или "bark" (выкрик в бою). Громкость — по расстоянию до героя (у вида локации
 ## нет своего слушателя 3D-звука, поэтому без AudioStreamPlayer3D).
+var _whooshed := false
+var _whoosh: AudioStreamPlayer3D
+
+
+## Свист взмаха оружия (sounds/foe_swing_1.mp3, временный — общий для врагов).
+func _play_whoosh() -> void:
+	if mod == null:
+		return
+	if _whoosh == null:
+		var st: AudioStream = mod.sound("sounds/foe_swing_1.mp3")
+		if st == null:
+			return
+		_whoosh = AudioStreamPlayer3D.new()
+		_whoosh.stream = st
+		_whoosh.bus = "PaxRpgSfx"
+		_whoosh.unit_size = 8.0
+		_whoosh.position = Vector3(0, 1.0, 0)
+		add_child(_whoosh)
+	_whoosh.pitch_scale = randf_range(0.92, 1.08)
+	_whoosh.play()
+
+
 func _say(kind: String, n: int) -> void:
 	if not voiced or mod == null:
 		return
@@ -489,6 +511,7 @@ func _set_state(s: String) -> void:
 	_state = s
 	_state_t = 0.0
 	_struck = false
+	_whooshed = false
 	if _anim != null:
 		_anim.speed_scale = 1.0
 	if s in ["hurt", "deflected", "broken", "dead", "recover", "circle", "idle", "evade", "knockdown", "down", "getup"]:
@@ -686,6 +709,9 @@ func _phys(delta: float) -> void:
 			var hit_at := _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT
 			if _state_t < hit_at * 0.7 and dist > 1.2:
 				flat = dir * 2.0                         # шаг с ударом
+			if not _whooshed and _state_t >= hit_at - 0.12:   # свист оружия — чуть до удара
+				_whooshed = true
+				_play_whoosh()
 			if not _struck and _state_t >= hit_at:
 				_struck = true
 				if dist <= ATTACK_RANGE + 0.5 and _on_hit.is_valid():

@@ -35,6 +35,7 @@ const Wrist := preload("res://mods/pax_rpg/src/ui/wrist.gd")
 const Talk := preload("res://mods/pax_rpg/src/location/talk.gd")
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Weight := preload("res://mods/pax_rpg/src/location/weight.gd")
+const Voice := preload("res://mods/pax_rpg/src/location/voice.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const Journal := preload("res://mods/pax_rpg/src/location/journal.gd")
 const Weather := preload("res://mods/pax_rpg/src/location/weather.gd")
@@ -123,6 +124,9 @@ var _cam_kick := Vector3.ZERO       # м: толчок камеры от взм�
 var _cam_kick_v := Vector3.ZERO
 var _cam_roll := 0.0                # рад: крен в сторону взмаха
 var _w: Weight                      # вес героя и ударов (weight.gd, config/hero.json → weight)
+var _voice: Voice                   # голос ИИ для реплик врагов (voice.gd)
+var _foe_line_cd := 12.0            # с до следующей реплики врага (настройка foe_voice)
+var _foe_line_wait := false
 var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
 var _city_lights: Array = []
@@ -1154,6 +1158,7 @@ func _physics_process(delta: float) -> void:
 	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)
+	_foe_line_cd = maxf(0.0, _foe_line_cd - delta)
 	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
@@ -1752,8 +1757,38 @@ func _strike(hit: Dictionary) -> void:
 
 ## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —
 ## отдача (III закон Ньютона). Возвращает вес удара (0.5…2) для замирания и тряски. tip — скорость острия, 0 — по клипу.
+## Реплика врага голосом ИИ (настройки → «Реплики врагов»): иногда после обмена ударами — короткая фраза,
+## субтитром и вслух. Не чаще раза в foe_line_every с, только у главарей (орк). Каждая — запрос к нейросети.
+func _foe_line(gob: Goblin, event: String) -> void:
+	if not bool(mod.get_setting("foe_voice", false)) or _foe_line_wait or _foe_line_cd > 0.0 or not is_instance_valid(gob):
+		return
+	if randf() > _hf("foe_line_chance", 0.4):
+		return
+	_foe_line_cd = _hf("foe_line_every", 18.0)
+	_foe_line_wait = true
+	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
+	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
+	var got := func(a: Dictionary) -> void:
+		_foe_line_wait = false
+		var line := str(a.get("line", a.get("reply", a.get("text", "")))).strip_edges()
+		if line == "" or not is_instance_valid(gob) or not gob.is_alive():
+			return
+		_toast = {"text": "%s: «%s»" % [mod.tr_key("pax_rpg_orc"), line], "t": 0.0}
+		if _voice == null:
+			_voice = Voice.new()
+			_voice.setup(mod, game)
+			add_child(_voice)
+		_voice.say(line, "masculine", 0.8)
+	var asked := mod.ask_ai("foe_line", prompt, {}, got, {"temperature": 0.9, "max_tokens": 60})
+	if not asked:
+		_foe_line_wait = false
+
+
 func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
 	# острие: прошлое положение в первом кадре взмаха бывает старым — скорость не больше 2.2 × ω·r
+	if gob.boss and gob.is_alive():
+		_foe_line(gob, "got_hit")
 	var p := _w.impulse(minf(tip, _w.f("weapon_omega", 9.0) * _w.f("weapon_length", 1.3) * 2.2), heavy)
 	var me := gob.mass * (_w.f("boss_mass_mult", 2.2) if gob.boss and gob.mass < 60.0 else 1.0)   # главарь гоблинов — тяжелее
 	var away := gob.global_position - _player.global_position
@@ -1983,6 +2018,8 @@ func _try_deathblow() -> bool:
 func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and _hero.invulnerable():
 		return
+	if damage > 0.0 and attacker is Goblin and (attacker as Goblin).boss:
+		_foe_line(attacker as Goblin, "hit_hero")
 	if is_instance_valid(_iai) and _iai.active and not _iai.interrupt():
 		return                                       # время стоит — по герою не попасть
 	if kind == "parried":
