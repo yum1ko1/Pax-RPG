@@ -171,6 +171,7 @@ func setup(m: PaxMod) -> void:
 	var hp: Variant = JSON.parse_string(m.read_text("config/hero.json"))
 	hero_cfg = hp if hp is Dictionary else {}
 	_w = Weight.new(hero_cfg.get("weight", {}))
+	Pax.days_passed.connect(_on_world_days)               # время мира пошло, пока мы на локации — снова пауза
 
 
 func _f(key: String, fallback: float) -> float:
@@ -1374,6 +1375,19 @@ func _update_hip_katana() -> void:
 		var mdl := Assets.model(mod, path)
 		if mdl != null:
 			_hip_katana.add_child(mdl)
+
+
+## Мир снова стоит (пока герой в локации): «наблюдение» игры мотает дни, ставит свою паузу дерева — звуки и
+## удары локации от этого замирали.
+func _stop_world() -> void:
+	if active and game != null and bool(cfg.get("pause_world", true)):
+		game.set_speed(0)
+
+
+func _on_world_days(_g: Variant, _from: Variant, days: Variant) -> void:
+	if active and game != null and bool(cfg.get("pause_world", true)):
+		mod.log_info("[pax_rpg] world time ran %s day(s) during the location — paused again" % str(days))
+		game.set_speed(0)
 
 
 func _quake_debris(c: Vector3, r: float) -> void:
@@ -2631,6 +2645,12 @@ const KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_E, KEY_F, KEY_Q, KEY_SPACE, KEY_S
 func _input(event: InputEvent) -> void:
 	if not active:
 		return
+	# клавиши скорости игры (1–3, P, пробел) игра слушает раньше нас и включает «наблюдение» — оно мотает мир;
+	# сразу после её обработчика возвращаем паузу (пробел — прыжок, его держит _hold_pause)
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+		var sk := (event as InputEventKey).physical_keycode
+		if sk in [KEY_1, KEY_2, KEY_3, KEY_P, KEY_SPACE]:
+			_stop_world.call_deferred()
 	if paused():
 		if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
 			var pk := (event as InputEventKey).physical_keycode
