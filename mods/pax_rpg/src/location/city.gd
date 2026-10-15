@@ -1281,14 +1281,18 @@ static func _blot(col: Color, seed_v: int) -> ImageTexture:
 
 ## Мокрая погода: материалы предметов темнее и глаже (вода на дереве и камне).
 func wet_materials(wet: float) -> void:
-	if wet <= 0.01:
-		return
 	for m: Variant in _mats:
 		var bm := m as BaseMaterial3D
 		if bm == null:
 			continue
-		bm.albedo_color = bm.albedo_color * Color(1.0 - 0.3 * wet, 1.0 - 0.3 * wet, 1.0 - 0.28 * wet)
-		bm.roughness = lerpf(bm.roughness, bm.roughness * 0.45, wet)
+		# материалы общие (кэш моделей): от исходного цвета, а не от уже намокшего — иначе каждый дождливый вход темнее
+		if wet <= 0.01 and not bm.has_meta("pax_dry"):
+			continue                                      # сухо и не мокло — не трогаем
+		if not bm.has_meta("pax_dry"):
+			bm.set_meta("pax_dry", [bm.albedo_color, bm.roughness])
+		var dry: Array = bm.get_meta("pax_dry")
+		bm.albedo_color = (dry[0] as Color) * Color(1.0 - 0.3 * wet, 1.0 - 0.3 * wet, 1.0 - 0.28 * wet)
+		bm.roughness = lerpf(float(dry[1]), float(dry[1]) * 0.45, wet)
 
 
 func _off_road(p: Vector3) -> Vector3:

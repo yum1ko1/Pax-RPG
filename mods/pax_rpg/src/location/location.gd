@@ -290,6 +290,8 @@ func build(city: Dictionary) -> void:
 		_mark("city…")
 		await c.build(mod, _view, layout)              # по кадрам, горы и степь — из потока
 		_mark("city done (%d items)" % c.count)
+		mod.log_info("[pax_rpg] load: weather %s, memory %d MB static, %d MB video" % [weather_kind,
+			OS.get_static_memory_usage() / 1048576, int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)) / 1048576])
 		c.wet_materials({"rain": 1.0, "storm": 1.0, "fog": 0.35, "cloudy": 0.15}.get(weather_kind, 0.0))
 		if gen != _build_gen or c.cancelled or not is_instance_valid(_view):
 			return                                     # локацию убрали посреди стройки
