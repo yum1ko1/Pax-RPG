@@ -77,7 +77,7 @@
 		"sounds/swing_6.wav"
 	],
 	"swing_peaks": {
-		"Attack1": 0.9,
+		"Attack1": 0.933,
 		"Attack2": 0.833,
 		"Attack3": 1.067,
 		"Draw": 0.6,
