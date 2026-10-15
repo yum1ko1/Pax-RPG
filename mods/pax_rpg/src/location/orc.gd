@@ -45,6 +45,7 @@ var _atk := ""
 var _hits_done := 0
 var _slam_done := false
 var _roar_taunt := false             # насмешка после промаха тараном — рёв, а не смех
+var _charge_min := INF              # м: ближе всего к герою за таран (отошёл дальше — промах)
 var _skid_v := 0.0                   # м/с: скорость торможения после промаха
 var _whoosh_done := 0                # сколько свистов замаха уже прозвучало (до удара, не в миг урона)
 var _skel: Skeleton3D
@@ -174,7 +175,7 @@ func _set_state(s: String) -> void:
 			_snd(_snd_grunt if _roar_taunt else _snd_laugh)
 			_roar_taunt = false
 		"skid":
-			_play("ChargeRun", true)
+			_play("ChargeHit", true, 0.1)                 # не бег: упор ногами, корпус назад
 		"spin":
 			_play("Spin360High", true)
 			_spin_tick = 0.5
@@ -226,7 +227,17 @@ func _sound(pattern: String, first: int, n: int, pitch: float, db: float) -> Aud
 
 func _snd(p: AudioStreamPlayer3D) -> void:
 	if p != null and p.stream != null and (p.stream as AudioStreamRandomizer).streams_count > 0:
+		if p in [_snd_grunt, _snd_laugh, _snd_idle, _snd_cheer] and (_voice_busy() or p.playing):
+			return                                       # голос не перебивает сам себя — иначе рёв рвётся
 		p.play()
+
+
+## Орк уже что-то кричит (рёв, смех, рычание, ликование).
+func _voice_busy() -> bool:
+	for v: AudioStreamPlayer3D in [_snd_grunt, _snd_laugh, _snd_idle, _snd_cheer]:
+		if v != null and v.playing:
+			return true
+	return false
 
 
 ## Удар героя: в первые доли блока — отбит (концентрация героя), в блоке — почти без урона; вихрь не сбить.
@@ -276,7 +287,7 @@ func _start_attack(clip: String) -> void:
 	_whoosh_done = 0
 	_slam_done = false
 	_hand_prev = Vector3.INF
-	if randf() < 0.6 or str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy":
+	if randf() < 0.3 or (str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy" and randf() < 0.6):
 		_snd(_snd_grunt)
 	_held = false
 	_hold_t = 0.0
@@ -359,6 +370,7 @@ func _phys(delta: float) -> void:
 			_face(dir, delta * 1.5)
 			if _state_t >= _clip_len("ChargeStart") * 0.85:
 				_charge_dir = dir
+				_charge_min = INF
 				_set_state("charge")
 		"charge":
 			flat = _charge_tick(delta, dist, dir)
@@ -370,7 +382,7 @@ func _phys(delta: float) -> void:
 			if _model != null:
 				_model.rotation.x = -0.32 * k
 			if _anim != null:
-				_anim.speed_scale = maxf(0.15, k * 0.8)
+				_anim.speed_scale = 0.6
 			if randf() < k * 0.6:
 				_burst(global_position + _charge_dir * 0.4, Vector3.UP, Color(0.6, 0.5, 0.4), 4, 1.5, 2.0, 0.6, 0.06)
 			if _skid_v <= 0.4:
@@ -591,7 +603,9 @@ func _charge_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 	if get_slide_collision_count() > 0 and _state_t > 0.4:
 		_set_state("dizzy")                                  # врезался в стену — оглушён
 		return Vector3.ZERO
-	if _state_t >= CHARGE_TIME or (_state_t > 0.5 and _charge_dir.dot(dir) < -0.1):
+	_charge_min = minf(_charge_min, dist)
+	var passed := _charge_min < 4.0 and dist > _charge_min + 0.8      # проскочил мимо героя (тот увернулся)
+	if _state_t >= CHARGE_TIME or (_state_t > 0.4 and (passed or _charge_dir.dot(dir) < -0.1)):
 		_skid_v = CHARGE_SPEED                               # промахнулся (герой позади) — тормозит по инерции
 		_set_state("skid")
 		return _charge_dir * _skid_v

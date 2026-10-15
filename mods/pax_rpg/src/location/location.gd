@@ -1688,7 +1688,7 @@ func _physics_body(delta: float) -> void:
 		var th := Time.get_ticks_usec()
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		Prof.add("герой (с плащом)", th)
-		if _hero.action != _prev_action and _hero.action.begins_with("Attack"):
+		if _hero.action != _prev_action and (_hero.action.begins_with("Attack") or _hero.action in Hero.SPECIALS):
 			var cy2 := _combo_yaw()
 			if cy2 != INF:
 				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
@@ -1697,7 +1697,7 @@ func _physics_body(delta: float) -> void:
 			_chain_t = 0.0
 			# наклон взмаха: иногда слева, иногда справа (по стороне врага или наугад); финальный сверху — ровно
 			var ts := float(_hero.swing_side) if _hero.swing_side != 0 else (1.0 if randf() < 0.5 else -1.0)
-			_tilt_want = 0.0 if _hero.action == "Attack3" else ts * deg_to_rad(_hf("swing_tilt", 11.0)) * randf_range(0.6, 1.0)
+			_tilt_want = 0.0 if _hero.action in ["Attack3", "Launcher", "PauseFinisher"] else ts * deg_to_rad(_hf("swing_tilt", 20.0)) * randf_range(0.75, 1.0)
 			# концентрация: каждый удар её копит — бить без конца нельзя (отдохнуть или парировать)
 			_posture = minf(_pos_max(), _posture + _hf("attack_posture", 9.0) * (1.4 if _hero.action == "Attack3" else 1.0))
 			_since_hit = 0.0
@@ -1711,7 +1711,7 @@ func _physics_body(delta: float) -> void:
 		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
 		_chain_t += delta
-		if _hero.action not in Hero.ATTACKS:
+		if _hero.action not in Hero.ATTACKS and _hero.action not in Hero.SPECIALS:
 			_tilt_want = 0.0
 		if _chain >= int(_hf("chain_finisher", 5.0)) and _hero.action == "" and _stagger <= 0.0:
 			_chain = 0                                   # пять ударов подряд — отскок и разрез с волной
@@ -1721,7 +1721,7 @@ func _physics_body(delta: float) -> void:
 		if _hero.slash_wave:
 			_hero.slash_wave = false
 			_slash_wave()
-		_tilt = lerpf(_tilt, _tilt_want, 1.0 - exp(-delta * 10.0))
+		_tilt = lerpf(_tilt, _tilt_want, 1.0 - exp(-delta * 16.0))
 		if _hero.model != null:
 			_hero.model.rotation.z = _tilt
 		_quake_step()

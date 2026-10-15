@@ -145,9 +145,9 @@
 		"Attack3": 0.94
 	},
 	"attack_speed": {
-		"Attack1": 1.0,
-		"Attack2": 1.0,
-		"Attack3": 1.0
+		"Attack1": 0.8,
+		"Attack2": 0.8,
+		"Attack3": 0.74
 	},
 	"blend_in": {
 		"Attack1": 0.15,
@@ -253,8 +253,8 @@
 	"stride_lock_unarmed": 1.23,
 	"stride_block": 0.35,
 	"blend_space_smooth": 10.0,
-	"hitstop": 0.09,
-	"hitstop_heavy": 0.14,
+	"hitstop": 0.11,
+	"hitstop_heavy": 0.17,
 	"hitstop_scale": 0.02,
 	"reface_time": 0.35,
 	"_note_stage1": "Этап 1: blend_spaces — шаг смешивается по направлению (stride_lock / stride_lock_unarmed / stride_block — м/с, при которых клипы идут в 1×); уворот в захвате — DodgeBack/L/R лицом к врагу (root_motion_lateral по клипам: у остальных 0.5); hitstop / hitstop_heavy — замирание героя и врага при попадании, с; hitstop_scale — во сколько раз медленнее идут клипы в замирании; reface_time — сколько секунд после уворота в захвате герой разворачивается к врагу; sword_drag_run — волочить меч в беге (клип RunArmed держит его на плече — нет); run_attack_skip — с бега удар начинается со стольких секунд клипа (без раскачки); recover_after_peak — откат удара прерывается блоком/уворотом не раньше пика взмаха + столько секунд; look_release — голова следит за целью, пока та не дальше head_limit × это от взгляда тела.",
