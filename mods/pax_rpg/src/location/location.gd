@@ -2098,6 +2098,7 @@ func _try_deathblow() -> bool:
 		_face_now(atan2(-to.x, -to.z))
 		if _hero.deathblow():
 			get_tree().create_timer(_hf("deathblow_hit", 1.1)).timeout.connect(gob.deathblow)
+			get_tree().create_timer(maxf(0.0, _hf("deathblow_hit", 1.1) - 0.03)).timeout.connect(_deathblow_sound)
 			return true
 	return false
 
@@ -2186,6 +2187,22 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 
 
 var _armor_hit: AudioStreamPlayer
+var _db_snd: AudioStreamPlayer
+
+
+## Добивание: клинок входит в тело (sounds/deathblow.wav) — в миг удара клипа (deathblow_hit).
+func _deathblow_sound() -> void:
+	if _db_snd == null:
+		var st: AudioStream = mod.sound("sounds/deathblow.wav")
+		if st == null:
+			return
+		_db_snd = AudioStreamPlayer.new()
+		_db_snd.stream = st
+		_db_snd.bus = "PaxRpgSfx"
+		_db_snd.volume_db = 0.0
+		add_child(_db_snd)
+	_db_snd.pitch_scale = randf_range(0.96, 1.04)
+	_db_snd.play()
 var _parry_snd: AudioStreamPlayer
 var _parry_kick_snd: AudioStreamPlayer
 
