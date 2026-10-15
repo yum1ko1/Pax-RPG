@@ -32,6 +32,10 @@ var blocking := false               # держит блок (ПКМ)
 var _block_t := 0.0                 # с, сколько держит блок: в начале — окно парирования
 var _dir_sector := "F"              # направление шага (F/B/L/R) — с запасом, чтобы клипы не дёргались на диагонали
 var action := ""                    # разовый клип: Draw / Sheathe / Jump / AttackN; "" — ходьба и стойки
+var swing_side := 0                  # location.gd: враг слева от героя (−1) — удар справа налево (Attack1), справа (+1) — слева направо (Attack2)
+var _combo_i := 0                    # номер удара в серии (клип может быть «зеркальным» — Attack1 вместо Attack2)
+var _combo_next_i := 0
+var _last_i := -1                    # номер в серии последнего законченного удара («Пауза» — после второго)
 var _queued := false                # удар нажат во время текущего — следующий удар комбо
 var _combo_next := ""               # удар кончился — ещё combo_grace с нажатие продолжает комбо этим ударом
 var _combo_left := 0.0
@@ -1316,7 +1320,7 @@ func special(kind: String, on_floor: bool) -> bool:
 ## «Пауза»: после второго удара серии выдержать паузу (pause_min..pause_max с) и ударить — тяжёлая концовка.
 func pause_finisher_ready() -> bool:
 	var dt := (Time.get_ticks_msec() - _last_end_ms) / 1000.0
-	return action == "" and _last_attack == "Attack2" and dt >= _f("pause_min", 0.35) and dt <= _f("pause_max", 1.1)
+	return action == "" and _last_attack != "" and _last_i == 1 and dt >= _f("pause_min", 0.35) and dt <= _f("pause_max", 1.1)
 
 
 func attack(on_floor: bool) -> void:
@@ -1329,11 +1333,14 @@ func attack(on_floor: bool) -> void:
 			toggle_sword(on_floor)          # меч за спиной — сперва достать
 			return
 		if _combo_left > 0.0 and _combo_next != "" and has(_combo_next):
-			_play_once(_combo_next, _per("combo_skip", _combo_next, 0.0))   # успел после конца удара
+			_combo_i = _combo_next_i
+			var cn := _side_clip(_combo_i)
+			_play_once(cn, _per("combo_skip", cn, 0.0))   # успел после конца удара
 		else:
 			# с бега — как в соулсах: без раскачки, клинок летит сразу (инерция бега уже есть)
-			_play_once("Attack1", _f("run_attack_skip", 0.3) if _running else 0.0)
-	elif action in ATTACKS and action != ATTACKS[-1]:
+			_combo_i = 0
+			_play_once(_side_clip(0), _f("run_attack_skip", 0.3) if _running else 0.0)
+	elif action in ATTACKS and _combo_i < ATTACKS.size() - 1:
 		_queued = true                      # следующий удар — сразу после взмаха этого
 
 
@@ -1404,6 +1411,14 @@ func jump(on_floor: bool) -> bool:
 var _clip := ""                       # клип разового действия (у прыжка с мечом — свой клип при том же action)
 
 
+## Клип удара серии по стороне врага: первые два удара — взмахи в разные стороны (Attack1 справа налево, Attack2 слева
+## направо, по клинку в knight.glb), берём тот, что идёт ко врагу; финальный — всегда свой.
+func _side_clip(i: int) -> String:
+	if i >= 2 or swing_side == 0:
+		return ATTACKS[i]
+	return "Attack1" if swing_side < 0 else "Attack2"
+
+
 func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	action = n
 	_clip = clip if clip != "" else n
@@ -1427,6 +1442,7 @@ func _on_finished(n: StringName) -> void:
 func _end_action() -> void:
 	if action in ATTACKS:
 		_last_attack = action
+		_last_i = _combo_i
 		_last_end_ms = Time.get_ticks_msec()
 	elif action != "":
 		_last_attack = ""
@@ -1437,9 +1453,10 @@ func _end_action() -> void:
 		armed = true
 	elif action.begins_with("Sheathe"):
 		armed = false
-	var i := ATTACKS.find(action)
+	var i := _combo_i if action in ATTACKS else -1
 	if i >= 0 and i + 1 < ATTACKS.size():
 		_combo_next = ATTACKS[i + 1]
+		_combo_next_i = i + 1
 		_combo_left = _f("combo_grace", 0.45)
 	else:
 		_combo_left = 0.0
@@ -1479,10 +1496,11 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	if action != "" and action != "Iai" and action != "Ultimate" and not anim.is_playing():
 		_end_action()                        # сигнал конца не пришёл — не застрять (Иай ведёт стадии сам)
 	if action in ATTACKS:
-		var i := ATTACKS.find(action)
+		var i := _combo_i
 		# комбо: следующий удар — с точки отмены, и сразу с замаха, без долгой подготовки
 		if _queued and _frac() >= _per("combo_cancel", action, 0.4) and i + 1 < ATTACKS.size() and has(ATTACKS[i + 1]):
-			var nxt: String = ATTACKS[i + 1]
+			_combo_i = i + 1
+			var nxt := _side_clip(_combo_i)
 			_play_once(nxt, _per("combo_skip", nxt, 0.0))
 		elif not _queued and _frac() >= _per("attack_end", action, 0.5):
 			_end_action()                    # без продолжения — сразу в стойку, управление вернулось

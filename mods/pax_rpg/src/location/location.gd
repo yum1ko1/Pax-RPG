@@ -117,6 +117,11 @@ var _body_turn := false
 var _reface := 0.0                  # с: после уворота в захвате герой быстро разворачивается обратно к врагу
 var _shake := 0.0                   # с: тряска камеры от попадания (затухает)
 var _shake_amp := 0.0
+var _bob_ph := 0.0                  # фаза шага для покачивания камеры (растёт с пройденным путём)
+var _bob_amp := 0.0                 # сила покачивания: 0 — стоит, ходьба — мало, бег — больше (плавно)
+var _cam_kick := Vector3.ZERO       # м: толчок камеры от взмаха (в осях камеры), гаснет пружиной
+var _cam_kick_v := Vector3.ZERO
+var _cam_roll := 0.0                # рад: крен в сторону взмаха
 var _w: Weight                      # вес героя и ударов (weight.gd, config/hero.json → weight)
 var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
@@ -1336,6 +1341,11 @@ func _physics_body(delta: float) -> void:
 	if _lmb_queued and _hero != null and _stagger <= 0.0:
 		if not _try_deathblow():
 			var cy := _combo_yaw()
+			_hero.swing_side = 0                     # враг сбоку: слева — взмах справа налево, справа — зеркально
+			if cy != INF:
+				var side := angle_difference(_body_mesh.rotation.y, cy)
+				if absf(side) > deg_to_rad(_hf("swing_side_angle", 12.0)):
+					_hero.swing_side = -1 if side > 0.0 else 1
 			if cy != INF and (_hero.action == "" or _hero.action in Hero.ATTACKS):
 				_face_now(cy)                        # удар — во врага в захвате, иначе по ходу (WASD); без ввода — куда стоит
 			var fw := Input.is_physical_key_pressed(KEY_W)
@@ -1473,6 +1483,7 @@ func _physics_body(delta: float) -> void:
 			var cy2 := _combo_yaw()
 			if cy2 != INF:
 				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
+			_cam_swing(_hero.action)
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
@@ -1649,6 +1660,10 @@ func _follow_camera(delta := 0.0) -> void:
 		var off := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * a
 		pos += off
 		look += off * 0.6
+	if delta > 0.0 and is_instance_valid(_player):
+		var dyn := _cam_dynamics(delta)
+		pos += dyn
+		look += dyn * 0.5
 	var sway := _f("camera_sway", 0.0)                # по умолчанию выкл.: RPG, а не съёмка с плеча
 	if sway > 0.0 and is_instance_valid(_player):
 		# «ручная» камера (приём Bodycam): дыхание в покое, покачивание на бегу — кадр живой, а не на штативе
@@ -1661,7 +1676,37 @@ func _follow_camera(delta := 0.0) -> void:
 		pos += hand
 		look += hand * 0.35
 	_cam.position = pos
-	_cam.look_at(look, Vector3.UP)
+	_cam.look_at(look, Vector3.UP.rotated((look - pos).normalized(), _cam_roll) if (look - pos).length() > 0.01 else Vector3.UP)
+
+
+## Камера в движении: покачивание в такт шагам (вверх-вниз дважды за цикл шагов, вбок — раз), ходьба — легко,
+## бег — сильнее; толчок от взмаха (вперёд и в сторону удара) и крен гаснут пружиной. config/location.json →
+## cam_bob_walk / cam_bob_run (м), cam_step (м на шаг), cam_kick, cam_roll (рад); 0 — выкл.
+func _cam_dynamics(delta: float) -> Vector3:
+	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
+	var on := _player.is_on_floor() and hs > 0.3
+	var run := clampf((hs - _hf("walk_speed", 2.4)) / maxf(_hf("run_speed", 5.0) - _hf("walk_speed", 2.4), 0.1), 0.0, 1.0)
+	var want := (lerpf(_f("cam_bob_walk", 0.035), _f("cam_bob_run", 0.085), run) if on else 0.0)
+	_bob_amp = lerpf(_bob_amp, want, 1.0 - exp(-delta * 6.0))
+	_bob_ph += hs * delta / maxf(_f("cam_step", 0.85) * (1.0 + run * 0.35), 0.1) * PI   # пол-оборота — шаг
+	var v := absf(sin(_bob_ph)) * _bob_amp                      # вниз на каждом шаге (период |sin| — шаг)
+	var h := sin(_bob_ph) * _bob_amp * 0.8                      # вбок — с ноги на ногу
+	# пружина толчка (Гук с демпфером): x'' = −k·x − c·x'
+	_cam_kick_v += (-_cam_kick * _f("cam_kick_k", 140.0) - _cam_kick_v * _f("cam_kick_damp", 16.0)) * delta
+	_cam_kick += _cam_kick_v * delta
+	_cam_roll = lerpf(_cam_roll, sin(_bob_ph) * _bob_amp * 0.25, 1.0 - exp(-delta * 7.0))
+	var b := _cam.global_transform.basis
+	return b * Vector3(h + _cam_kick.x, _bob_amp * 0.5 - v + _cam_kick.y, _cam_kick.z)
+
+
+## Толчок камеры на взмахе: к герою (вперёд) и в сторону удара, крен по взмаху; финальный — сильнее.
+func _cam_swing(move: String) -> void:
+	var k := _f("cam_kick", 0.12) * (1.8 if move == "Attack3" else 1.0)
+	var side := 0.0
+	if _hero != null:
+		side = float(_hero.swing_side) if _hero.swing_side != 0 else (-1.0 if move == "Attack1" else 1.0)
+	_cam_kick_v += Vector3(side * k * 4.0, -k * 1.5, -k * 9.0)       # z < 0 — к герою
+	_cam_roll += side * _f("cam_roll", 0.03) * (1.6 if move == "Attack3" else 1.0)
 
 
 ## Вес попадания: герой и враг замирают на миг (hitstop), камера вздрагивает. Тяжёлый удар — дольше и сильнее.
@@ -1673,6 +1718,7 @@ func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
 	if is_instance_valid(gob):
 		gob.hitstop(t)
 	_shake = _f("shake_time", 0.18)
+	_cam_kick_v += Vector3(0.0, -0.8, -1.2) * clampf(heft, 0.6, 1.8) * _f("cam_hit_kick", 1.0)   # вздрог к удару
 	_shake_amp = (_hf("shake_heavy", 0.09) if heavy else _hf("shake", 0.045)) * clampf(heft, 0.6, 1.8)
 
 
