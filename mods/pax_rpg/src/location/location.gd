@@ -1922,6 +1922,7 @@ func _follow_camera(delta := 0.0) -> void:
 		hand = _cam.global_transform.basis * hand
 		pos += hand
 		look += hand * 0.35
+	pos = _cam_collide(pos, delta)
 	_cam.position = pos
 	_cam.look_at(look, Vector3.UP.rotated((look - pos).normalized(), _cam_roll) if (look - pos).length() > 0.01 else Vector3.UP)
 
@@ -1929,6 +1930,37 @@ func _follow_camera(delta := 0.0) -> void:
 ## Камера в движении: покачивание в такт шагам (вверх-вниз дважды за цикл шагов, вбок — раз), ходьба — легко,
 ## бег — сильнее; толчок от взмаха (вперёд и в сторону удара) и крен гаснут пружиной. config/location.json →
 ## cam_bob_walk / cam_bob_run (м), cam_step (м на шаг), cam_kick, cam_roll (рад); 0 — выкл.
+## Камера не проходит сквозь стены: шар 0.3 м летит от головы героя к желаемому месту камеры; упёрся — камера
+## встаёт перед препятствием. Подлетает к стене сразу, отходит обратно плавно (без рывков у углов).
+var _cam_pull := 1.0                # доля пути от головы до камеры, что свободна (сглажена)
+var _cam_shape: SphereShape3D
+
+
+func _cam_collide(pos: Vector3, delta: float) -> Vector3:
+	if not is_instance_valid(_player) or not _player.is_inside_tree() or not _f("cam_collide", 1.0) > 0.0:
+		return pos
+	var head := _player.global_position + Vector3(0, 0.9, 0)
+	var motion := pos - head
+	if motion.length() < 0.05:
+		return pos
+	if _cam_shape == null:
+		_cam_shape = SphereShape3D.new()
+		_cam_shape.radius = 0.3
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = _cam_shape
+	q.transform = Transform3D(Basis(), head)
+	q.motion = motion
+	q.collision_mask = 1
+	q.exclude = [_player.get_rid()]
+	var r := _player.get_world_3d().direct_space_state.cast_motion(q)
+	var free := clampf(float(r[0]) if r.size() > 0 else 1.0, 0.0, 1.0)
+	if free < _cam_pull:
+		_cam_pull = free                                     # к стене — сразу
+	else:
+		_cam_pull = lerpf(_cam_pull, free, 1.0 - exp(-delta * 4.0))   # от стены — плавно
+	return head + motion * maxf(_cam_pull, 0.12)
+
+
 func _cam_dynamics(delta: float) -> Vector3:
 	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
 	var on := _player.is_on_floor() and hs > 0.3
