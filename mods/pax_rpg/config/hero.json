@@ -295,7 +295,7 @@
 		"body_share_heavy": 0.22,
 		"transfer": 0.55,
 		"knock_max": 9.0,
-		"recoil_gain": 1.0,
+		"recoil_gain": 0.0,
 		"recoil_k": 60.0,
 		"recoil_damp": 9.0,
 		"goblin_mass": 45.0,
