@@ -327,8 +327,12 @@ func _fountain_water(t: Transform3D) -> void:
 	var sc := t.basis.get_scale().x
 	var wsh: Shader = mod.shader("shaders/water.gdshader")
 	var disc := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(4.3, 4.3) * sc
+	var pm := CylinderMesh.new()                          # круглая гладь: квадрат 4.3 м углами торчал из круглой чаши
+	pm.top_radius = 2.08 * sc
+	pm.bottom_radius = 2.08 * sc
+	pm.height = 0.002
+	pm.radial_segments = 48
+	pm.rings = 1
 	disc.mesh = pm
 	if wsh != null:
 		var wm := ShaderMaterial.new()
