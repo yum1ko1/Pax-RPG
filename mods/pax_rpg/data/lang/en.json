@@ -265,5 +265,7 @@
 	"pax_rpg_gfx_up_performance": "Performance (50%)",
 	"pax_rpg_hud_ult": "Shatter",
 	"pax_rpg_wskill_ult": "Shatter (G)",
-	"pax_rpg_wskill_ult_desc": "A running overhead blow drives the blade into the ground — first wave. Rising on the hilt, a forward roll and a lunge — the second blow: twice the damage and reach, earthquake waves."
+	"pax_rpg_wskill_ult_desc": "A running overhead blow drives the blade into the ground — first wave. Rising on the hilt, a forward roll and a lunge — the second blow: twice the damage and reach, earthquake waves.",
+	"pax_rpg_ult_need_run": "Shatter — only on the run (Shift)",
+	"pax_rpg_talk_thinking": "%s is thinking…"
 }

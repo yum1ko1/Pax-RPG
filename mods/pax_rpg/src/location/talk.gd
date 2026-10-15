@@ -29,7 +29,7 @@ var _key := ""                       # выбранный ключ тона ("" 
 var _history: Array = []             # [{"who": "hero"|"npc", "text": …}]
 var _waiting := false
 var _token := 0                      # номер разговора/запроса: ответ и таймеры чужого (прежнего) — не трогают нынешний
-const TIMEOUT := 20.0                # с: нейросеть молчит — ответ из заготовки, окно не зависает
+const TIMEOUT := 120.0               # с: локальной нейросети игрока нужно время (видеокарта свободна — режим разговора)
 const MAX_LEN := 240
 var _panel: Control
 
@@ -204,7 +204,7 @@ func _say(text: String) -> void:
 	_history.append({"who": "hero", "text": text})
 	_line(str(context.get("hero", "")), text, true)
 	_waiting = true
-	_log.append_text("[color=#8a8070]…[/color]")
+	_log.append_text("[i][color=#8a8070]%s[/color][/i]" % _esc(mod.tr_key("pax_rpg_talk_thinking") % str(_npc.get("npc_name"))))   # пока нейросеть думает
 	var data := _context(text, key, guessed, eff)
 	_ask(data, eff, _token, 0)
 

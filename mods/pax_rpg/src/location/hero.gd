@@ -1611,6 +1611,11 @@ var _ult_t := 0.0
 const ULT_DASH := 0.55               # с от удара меча о землю (−1 — ещё не ударил / приём не идёт)
 
 
+## Бежит ли герой сейчас (бег, не шаг) — ультимейт только с разбега.
+func is_running() -> bool:
+	return _running
+
+
 func ult_begin(on_floor: bool) -> bool:
 	_cancel_hurt()
 	_cancel_recovery()

@@ -1022,13 +1022,39 @@ func _start_talk() -> void:
 		place["time"] = DayNight.label(mod, _daynight.hour)
 	place["city_data"] = city_data
 	_talk.context = place
+	_talk_focus(true)
 	_talk.open(_talk_npc)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_rmb = false
 	_lmb_queued = false
 
 
+## Режим разговора: 3D локации не рисуется (на экране — последний кадр, затемнён), кадров — 15 в секунду: видеокарта
+## свободна для нейросети игрока, если она работает на этом же компьютере. После разговора — как было.
+var _talk_fps_saved := -1
+
+
+func _talk_focus(on: bool) -> void:
+	if not is_instance_valid(_view):
+		return
+	if on:
+		_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		if is_instance_valid(_box):
+			_box.modulate = Color(0.45, 0.45, 0.5)
+		if _talk_fps_saved < 0:
+			_talk_fps_saved = Engine.max_fps
+		Engine.max_fps = 15
+	else:
+		_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		if is_instance_valid(_box):
+			_box.modulate = Color.WHITE
+		if _talk_fps_saved >= 0:
+			Engine.max_fps = _talk_fps_saved
+			_talk_fps_saved = -1
+
+
 func _end_talk() -> void:
+	_talk_focus(false)
 	if is_instance_valid(_talk_npc):
 		_talk_npc.call("talk", false)
 	if not paused():
@@ -1207,6 +1233,9 @@ var _ult_done := 0
 
 func _ult_try() -> void:
 	if _hero == null or _ult_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+		return
+	if not _hero.is_running():                         # только с разбега: стоя или шагом — нельзя
+		_toast = {"text": mod.tr_key("pax_rpg_ult_need_run"), "t": 0.0}
 		return
 	if not _hero.ult_begin(true):
 		return
@@ -2216,7 +2245,7 @@ func _hud_tick(delta: float) -> void:
 			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
 		{"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
 			"color": Color(1.0, 0.45, 0.25), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
-			"ready": _ult_cd <= 0.0},
+			"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))},   # серый — не бежит
 		{"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
 			"color": Color(0.75, 0.6, 1.0), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 			"ready": _iai_cd <= 0.0}]
