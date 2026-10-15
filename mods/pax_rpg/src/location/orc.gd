@@ -74,6 +74,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
 	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
+	_snd_laugh = _sound("sounds/orc_laugh_%d.mp3", 1, 1, 1.0, 6.0)      # насмешка, удачный удар
 	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, 3.0)        # рычание и сопение между ударами
 	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
 	_snd_heavy = _sound("sounds/impact_%d.wav", 1, 3, 0.45, 7.0)     # тяжёлый удар — ниже и громче
@@ -159,7 +160,7 @@ func _set_state(s: String) -> void:
 			_play("BlockIdle", true, 0.12)
 		"taunt":
 			_play("Taunt", true)
-			_snd(_snd_grunt)
+			_snd(_snd_laugh)
 		"spin":
 			_play("Spin360High", true)
 			_spin_tick = 0.5
@@ -178,6 +179,7 @@ var _snd_clang: AudioStreamPlayer3D
 var _snd_hurt: AudioStreamPlayer3D
 var _snd_grunt: AudioStreamPlayer3D
 var _snd_idle: AudioStreamPlayer3D
+var _snd_laugh: AudioStreamPlayer3D
 var _idle_snd_t := 4.0                  # с до следующего рычания
 var _snd_heavy: AudioStreamPlayer3D
 
@@ -440,6 +442,10 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 				var heavy := str(a.get("kind", "")) == "heavy"
 				_snd(_snd_heavy if heavy else _snd_impact)
 				_on_hit.call(float(a.get("dmg", 20.0)), self, str(a.get("kind", "")))
+				if randf() < 0.25:                           # попал — иногда хохочет вслед
+					get_tree().create_timer(0.7).timeout.connect(func() -> void:
+						if is_instance_valid(self) and not dead:
+							_snd(_snd_laugh))
 			elif frac >= ht + float(WINDOW[1]):
 				_hits_done += 1                              # мимо
 	if frac >= 0.98 or (_anim != null and not _anim.is_playing()):
