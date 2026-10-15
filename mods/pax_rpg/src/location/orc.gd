@@ -73,7 +73,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 8.0)       # тяжёлый топор — ниже и громче
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
-	_snd_hurt = _sound("sounds/impact_%d.wav", 1, 3, 0.55, 0.0)
+	_snd_hurt = _sound("sounds/orc_hurt_%d.mp3", 1, 1, 1.0, 4.0)        # попадание по орку
 	_snd_laugh = _sound("sounds/orc_laugh_%d.mp3", 1, 1, 1.0, 6.0)      # насмешка, удачный удар
 	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, 3.0)        # рычание и сопение между ударами
 	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
