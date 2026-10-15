@@ -73,7 +73,9 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	_snd_swing = _sound("sounds/swing_%d.wav", 1, 6, 0.62, 8.0)       # тяжёлый топор — ниже и громче
 	_snd_impact = _sound("sounds/impact_%d.wav", 1, 3, 0.7, 8.0)
 	_snd_clang = _sound("sounds/katana_hit_%d.ogg", 0, 3, 0.8, 0.0)
-	_snd_hurt = _sound("sounds/orc_hurt_%d.mp3", 1, 1, 1.0, 4.0)        # попадание по орку
+	_snd_hurt = _sound("sounds/orc_hurt_%d.mp3", 1, 1, 1.0, 4.0)        # попадание по орку (меньше половины здоровья)
+	_snd_hurt_hi = _sound("sounds/orc_hurt_hi_%d.mp3", 1, 1, 1.0, 4.0)  # попадание, пока здоровья больше половины
+	_snd_cheer = _sound("sounds/orc_cheer_%d.mp3", 1, 1, 1.0, 7.0)      # радость: герой пал
 	_snd_laugh = _sound("sounds/orc_laugh_%d.mp3", 1, 1, 1.0, 6.0)      # насмешка, удачный удар
 	_snd_idle = _sound("sounds/orc_idle_%d.mp3", 1, 1, 1.0, 3.0)        # рычание и сопение между ударами
 	_snd_grunt = _sound("sounds/orc_roar_%d.mp3", 1, 1, 1.0, 6.0)       # рёв перед ударом и в насмешке
@@ -180,6 +182,14 @@ var _snd_hurt: AudioStreamPlayer3D
 var _snd_grunt: AudioStreamPlayer3D
 var _snd_idle: AudioStreamPlayer3D
 var _snd_laugh: AudioStreamPlayer3D
+var _snd_hurt_hi: AudioStreamPlayer3D
+var _snd_cheer: AudioStreamPlayer3D
+
+
+## Герой пал от его удара — ликует (location.gd → _on_hero_hit).
+func cheer() -> void:
+	if not dead:
+		_snd(_snd_cheer)
 var _idle_snd_t := 4.0                  # с до следующего рычания
 var _snd_heavy: AudioStreamPlayer3D
 
@@ -230,7 +240,7 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 			if _guard_hits >= 3:
 				_atk_after_guard()                          # надоело стоять в блоке — контратака
 		return
-	_snd(_snd_hurt)
+	_snd(_snd_hurt_hi if hp > max_hp * 0.5 else _snd_hurt)
 	if _state in ["spin", "charge", "charge_wind"] or _atk != "":
 		hp = maxf(0.0, hp - amount)                         # в приёме — урон без срыва (гиперброня)
 		posture = minf(max_posture, posture + amount * 0.4)

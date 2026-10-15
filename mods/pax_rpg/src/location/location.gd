@@ -2040,6 +2040,8 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 				_player.velocity += push.normalized() * 7.0
 		else:
 			_hero.hurt()
+	if _hp <= 0.0 and attacker != null and is_instance_valid(attacker) and attacker.has_method("cheer"):
+		attacker.call("cheer")                       # орк ликует над павшим героем
 	if _hp <= 0.0 and is_instance_valid(_arena) and _arena.fighting:
 		_hp = 1.0                                    # пал на арене — уносят с песка, без потери прогресса
 		_arena.leave(true)
