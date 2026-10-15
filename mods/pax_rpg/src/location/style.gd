@@ -5,7 +5,7 @@ extends RefCounted
 
 const RANKS := ["D", "C", "B", "A", "S", "SS", "SSS"]
 const STEP := 100.0                  # очков на ранг (внутри ранга — полоска 0..1)
-const POINTS := {"Attack1": 10.0, "Attack2": 12.0, "Attack3": 18.0, "Lunge": 22.0, "Launcher": 24.0,
+const POINTS := {"Finisher": 40.0, "Attack1": 10.0, "Attack2": 12.0, "Attack3": 18.0, "Lunge": 22.0, "Launcher": 24.0,
 	"PauseFinisher": 30.0, "Quake": 28.0, "Ultimate": 45.0, "Iai": 50.0, "Parry": 25.0, "Deathblow": 40.0}
 
 var points := 0.0

@@ -1487,6 +1487,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_quake_tick(delta)
 	elif action == "Ultimate":
 		_ult_tick(delta)
+	elif action == "Finisher":
+		_fin_tick()
 	elif action == "Iai":
 		_iai_tick()
 	_combo_left = maxf(0.0, _combo_left - delta)
@@ -1754,6 +1756,49 @@ func _ult_tick(delta: float) -> void:
 				_end_action()
 
 
+# финишер серии (5 ударов подряд): отскок назад → горизонтальный разрез двумя руками (клип HeavyAttack — клинок
+# идёт поперёк на уровне пояса) → волна разреза (location.gd → slash_wave). fin_back — отскок идёт (location.gd толкает).
+var fin_back := false
+var slash_wave := false
+var _fin_stage := -1
+var _fin_waved := false
+
+
+func combo_finisher(on_floor: bool) -> bool:
+	if anim == null or not armed or not on_floor or not has("HeavyAttack"):
+		return false
+	blocking = false
+	action = "Finisher"
+	_clip = ""
+	_fin_stage = 0
+	fin_back = true
+	slash_wave = false
+	_fin_waved = false
+	_prev_off = Vector2.ZERO
+	var back := "DodgeBackArmed" if has("DodgeBackArmed") else ("DodgeBack" if has("DodgeBack") else "")
+	if back != "":
+		_ult_play(back, 0.0, 1.25)
+	return true
+
+
+func _fin_tick() -> void:
+	var length := anim.current_animation_length
+	match _fin_stage:
+		0:
+			if _pos() >= length * 0.7 or not has("DodgeBack"):
+				fin_back = false
+				_fin_stage = 1
+				_ult_play("HeavyAttack", _f("fin_skip", 0.25), _f("fin_speed", 1.2))
+		1:
+			if not _fin_waved and _pos() >= length * _f("fin_slash_at", 0.38):
+				_fin_waved = true
+				slash_wave = true                     # location.gd пускает волну и сбрасывает флаг
+			if _pos() >= length - 0.05:
+				_fin_stage = -1
+				fin_back = false
+				_end_action()
+
+
 func quake(on_floor: bool) -> bool:
 	_cancel_hurt()
 	_cancel_recovery()
@@ -1970,7 +2015,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
 	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
-	elif action in ATTACKS or action in SPECIALS or action == "Ultimate":
+	elif action in ATTACKS or action in SPECIALS or action == "Ultimate" or action == "Finisher":
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai"
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)

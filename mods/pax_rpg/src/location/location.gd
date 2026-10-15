@@ -127,6 +127,11 @@ var _w: Weight                      # вес героя и ударов (weight.
 var _voice: Voice                   # голос ИИ для реплик врагов (voice.gd)
 var _foe_line_cd := 12.0            # с до следующей реплики врага (настройка foe_voice)
 var _foe_line_wait := false
+var _chain := 0                    # ударов серии подряд (5 — финишер: отскок и волна разреза)
+var _chain_t := 0.0                 # с с начала последнего удара серии
+var _tilt := 0.0                    # рад: наклон корпуса во взмахе (клинок не параллелен земле)
+var _tilt_want := 0.0
+var _waves: Array = []              # волны разреза: {node, dir, t, hit: {}}
 var _recoil := Vector3.ZERO         # м/с: отдача от попадания (III закон Ньютона), гаснет пружиной
 var _city_leaves: Array = []
 var _city_lights: Array = []
@@ -1166,6 +1171,8 @@ func _physics_process(delta: float) -> void:
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)
 	_foe_line_cd = maxf(0.0, _foe_line_cd - delta)
+	if not _waves.is_empty():
+		_waves_tick(delta)
 	if is_instance_valid(_hip_katana):
 		_hip_katana.visible = not (is_instance_valid(_iai) and _iai.active)   # в иае — своя катана (iai.gd)
 	_iai_cd = maxf(0.0, _iai_cd - delta)
@@ -1391,6 +1398,72 @@ func _on_world_days(_g: Variant, _from: Variant, days: Variant) -> void:
 		game.set_speed(0)
 
 
+## Волна разреза (финишер, как в DMC): светящийся серп летит вперёд над землёй, режет всех на пути (раз каждого).
+func _slash_wave() -> void:
+	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+	var node := MeshInstance3D.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 24
+	for i: int in n:                                      # дуга 150° перед героем: толще в середине, тонко к краям
+		var a0 := deg_to_rad(-75.0 + 150.0 * i / n)
+		var a1 := deg_to_rad(-75.0 + 150.0 * (i + 1) / n)
+		var w0 := 0.28 * sin(PI * float(i) / n) + 0.02
+		var w1 := 0.28 * sin(PI * float(i + 1) / n) + 0.02
+		var p0 := Vector3(sin(a0), 0.0, -cos(a0)) * 1.6
+		var p1 := Vector3(sin(a1), 0.0, -cos(a1)) * 1.6
+		var q0 := Vector3(sin(a0), 0.0, -cos(a0)) * (1.6 - w0)
+		var q1 := Vector3(sin(a1), 0.0, -cos(a1)) * (1.6 - w1)
+		for v: Vector3 in [p0, p1, q1, p0, q1, q0]:
+			st.add_vertex(v)
+	node.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.75, 0.55, 1.6, 0.9)
+	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_view.add_child(node)
+	node.global_position = _player.global_position + Vector3(0, 0.1, 0) + fwd * 0.6
+	node.rotation.y = _body_mesh.rotation.y
+	_waves.append({"node": node, "dir": fwd, "t": 0.0, "hit": {}, "mat": mat})
+	_shake = _f("shake_time", 0.18)
+	_shake_amp = _hf("shake_heavy", 0.09)
+	_sfx_once("sounds/foe_swing_1.mp3", 2.0)
+
+
+func _waves_tick(delta: float) -> void:
+	for w: Dictionary in _waves.duplicate():
+		var node: MeshInstance3D = w.node
+		if not is_instance_valid(node):
+			_waves.erase(w)
+			continue
+		w.t = float(w.t) + delta
+		var k := float(w.t) / _hf("wave_time", 0.7)
+		node.global_position += (w.dir as Vector3) * _hf("wave_speed", 16.0) * delta
+		node.scale = Vector3.ONE * (1.0 + k * 1.2)
+		(w.mat as StandardMaterial3D).albedo_color.a = 0.9 * (1.0 - k)
+		var reach := 1.6 * node.scale.x
+		for g: Variant in _goblins:
+			if not is_instance_valid(g) or not (g as Goblin).is_alive() or (w.hit as Dictionary).has(g):
+				continue
+			var gob: Goblin = g
+			var to := gob.global_position - node.global_position
+			to.y = 0.0
+			if to.length() < reach + 0.5 and to.normalized().dot(w.dir as Vector3) > -0.2:
+				(w.hit as Dictionary)[g] = true
+				var dmg := _hf("wave_damage", 40.0) * _dmg_mult()
+				gob.take_damage(dmg, node.global_position, true)
+				_style.hit("Finisher")
+				_impact_feel(gob, true, 1.6)
+				_numbers.append({"pos": gob.global_position + Vector3(0, 1.3, 0), "v": int(dmg), "crit": true, "t": 0.0})
+		if k >= 1.0:
+			node.queue_free()
+			_waves.erase(w)
+
+
 func _quake_debris(c: Vector3, r: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
@@ -1596,10 +1669,37 @@ func _physics_body(delta: float) -> void:
 			if cy2 != INF:
 				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
 			_cam_swing(_hero.action)
+			_chain = _chain + 1 if _chain_t < _hf("chain_window", 1.3) else 1
+			_chain_t = 0.0
+			# наклон взмаха: иногда слева, иногда справа (по стороне врага или наугад); финальный сверху — ровно
+			var ts := float(_hero.swing_side) if _hero.swing_side != 0 else (1.0 if randf() < 0.5 else -1.0)
+			_tilt_want = 0.0 if _hero.action == "Attack3" else ts * deg_to_rad(_hf("swing_tilt", 11.0)) * randf_range(0.6, 1.0)
+			# концентрация: каждый удар её копит — бить без конца нельзя (отдохнуть или парировать)
+			_posture = minf(_pos_max(), _posture + _hf("attack_posture", 9.0) * (1.4 if _hero.action == "Attack3" else 1.0))
+			_since_hit = 0.0
+			if _posture >= _pos_max():
+				_posture = _pos_max() * 0.35
+				_stagger = _hf("guard_break_time", 1.2)      # выдохся: открылся, как при пробитом блоке
+				_hero.hurt()
+				_toast = {"text": mod.tr_key("pax_rpg_out_of_breath"), "t": 0.0}
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
 		_prev_action = _hero.action
+		_chain_t += delta
+		if _hero.action not in Hero.ATTACKS:
+			_tilt_want = 0.0
+		if _chain >= int(_hf("chain_finisher", 5.0)) and _hero.action == "" and _stagger <= 0.0:
+			_chain = 0                                   # пять ударов подряд — отскок и разрез с волной
+			if _hero.combo_finisher(on_floor):
+				_posture = minf(_pos_max(), _posture + _hf("finisher_posture", 14.0))
+				_style.hit("Finisher")
+		if _hero.slash_wave:
+			_hero.slash_wave = false
+			_slash_wave()
+		_tilt = lerpf(_tilt, _tilt_want, 1.0 - exp(-delta * 10.0))
+		if _hero.model != null:
+			_hero.model.rotation.z = _tilt
 		_quake_step()
 		if _hero.action == "Ultimate" and _hero.ult_hit > _ult_done:   # ультимейт: удар о землю — волна (раз на удар)
 			_ult_done = _hero.ult_hit
@@ -1633,6 +1733,10 @@ func _physics_body(delta: float) -> void:
 			var fa := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 			vel.x = fa.x * _hf("ult_leap_forward", 6.0)
 			vel.z = fa.z * _hf("ult_leap_forward", 6.0)
+	if _hero != null and _hero.fin_back:               # финишер: отскок назад от врага
+		var fb := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+		vel.x = -fb.x * _hf("fin_back_speed", 6.5)
+		vel.z = -fb.z * _hf("fin_back_speed", 6.5)
 	if _hero != null and _hero.ult_dash:               # разбег ультимейта — рывком по взгляду
 		var f2 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f2.x * _hf("ult_dash_speed", 9.0)
@@ -2156,8 +2260,11 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_style.hit("Parry")
 		_parry_sound(attacker != null and str(attacker.get("_atk")) == "Kick")   # пинок — глухой шлепок, не звон стали
 		_hero.block_hit(false)
-		_posture = minf(_pos_max(), _posture + 4.0)
+		_posture = maxf(0.0, _posture - _hf("parry_relief", 22.0))   # удачное парирование — выдох: своя концентрация спадает
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
+		if attacker is Goblin:
+			var ag := attacker as Goblin                  # а у врага — копится
+			ag.posture = minf(ag.max_posture, ag.posture + _hf("parry_enemy_posture", 24.0))
 		if attacker is Goblin:
 			(attacker as Goblin).deflected(_player.global_position)
 		return
