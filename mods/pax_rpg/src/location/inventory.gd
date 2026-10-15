@@ -5,6 +5,7 @@ extends Control
 ## на HUD; слева под оружием — характеристики персонажа (config/hero.json → character.attributes) со знаками-иероглифами. Панели — shaders/ui_panel.gdshader (лак, золотая рамка). Мир на паузе, пока открыт (location.gd).
 
 signal closed
+signal weapon_equipped(slot: String, id: String)   # окно оружия: надето другое (location.gd — катана на поясе)
 signal stat_added(key: String)       # «+» у характеристики — вложить очко (location.gd → progress.add_stat)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
@@ -75,6 +76,7 @@ func setup(m: PaxMod) -> void:
 	_build_hints()
 	_wv = WeaponView.new()
 	_wv.setup(m, _panel_sh, _serif, _sans, _cjk)
+	_wv.equipped.connect(func(slot: String, id: String) -> void: weapon_equipped.emit(slot, id))
 	_frame.add_child(_wv)
 	_slot_icon(_main_b, "cleaver")                       # картинки оружия вместо иероглифов
 	_slot_icon(_iai_b, "katana")

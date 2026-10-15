@@ -391,6 +391,9 @@ func build(city: Dictionary) -> void:
 			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5)
 	_inv = Inventory.new()
 	_inv.setup(mod)
+	_inv.weapon_equipped.connect(func(slot: String, _id: String) -> void:
+		if slot == "iai":
+			_update_hip_katana())
 	add_child(_inv)
 	_inv.closed.connect(func() -> void: _set_inventory(false))
 	_wrist = Wrist.new()
@@ -902,6 +905,7 @@ func _make_player() -> void:
 		_body_mesh.add_child(model)
 		_view.add_child(_player)            # сначала в дерево: вне дерева AnimationPlayer не играет
 		_hero.start(_player)
+		_update_hip_katana.call_deferred()            # катана на поясе — когда скелет уже в позе
 		return
 	_hero = null
 	mod.log_warning("Pax RPG: %s did not load — the hero is an oval" % str(hero_cfg.get("model", "?")))
@@ -1160,6 +1164,8 @@ func _physics_process(delta: float) -> void:
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)
 	_foe_line_cd = maxf(0.0, _foe_line_cd - delta)
+	if is_instance_valid(_hip_katana):
+		_hip_katana.visible = not (is_instance_valid(_iai) and _iai.active)   # в иае — своя катана (iai.gd)
 	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
@@ -1339,6 +1345,37 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 
 
 ## Комья земли и камешки, подброшенные волной: летят вверх с кольца радиуса r, падают и катятся.
+## Катана в ножнах на левом бедре, пока во втором слоте оружия (иай) надета катана. Во время иая её прячем —
+## иай вешает свою (iai.gd → _attach_katana) и вынимает клинок из неё.
+var _hip_katana: Node3D
+
+
+func _equipped_iai() -> String:
+	var saved: Variant = mod.get_setting("equipped_weapons", {})
+	return str((saved as Dictionary).get("iai", "katana")) if saved is Dictionary else "katana"
+
+
+func _update_hip_katana() -> void:
+	if is_instance_valid(_hip_katana):
+		_hip_katana.get_parent().queue_free()             # вместе с креплением к кости
+	_hip_katana = null
+	if _hero == null or _equipped_iai() != "katana":
+		return
+	var holder := _hero.bone_holder("Hips")
+	if holder == null:
+		return
+	_hip_katana = Node3D.new()
+	holder.add_child(_hip_katana)
+	var want := Transform3D(Basis(Vector3.UP, deg_to_rad(-8.0)) * Basis(Vector3.RIGHT, deg_to_rad(-15.0)),
+		Vector3(0.17, 0.0, 0.0))                                   # как в iai.gd: у левого бедра, рукоять вперёд-вверх
+	var m := _hero.model.global_transform.basis.orthonormalized()
+	_hip_katana.global_transform = Transform3D(m * want.basis, holder.global_transform.origin + m * (want.origin + Vector3(0, -0.04, 0.13)))
+	for path: String in ["models/weapons/katana_saya.glb", "models/weapons/katana.glb"]:
+		var mdl := Assets.model(mod, path)
+		if mdl != null:
+			_hip_katana.add_child(mdl)
+
+
 func _quake_debris(c: Vector3, r: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true

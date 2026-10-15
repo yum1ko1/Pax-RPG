@@ -51,6 +51,11 @@ func setup(m: PaxMod, panel_sh: Shader, serif: Font, sans: Font, cjk: Font) -> v
 	_cfg = parsed if parsed is Dictionary else {}
 	var o: Variant = _cfg.get("order", [])
 	_order = o if o is Array else []
+	var saved: Variant = m.get_setting("equipped_weapons", {})     # что надето — сохраняется между заходами
+	if saved is Dictionary:
+		for k: Variant in saved:
+			if _order.has(str(saved[k])):
+				_equipped[str(k)] = str(saved[k])
 	for id: Variant in _order:
 		var w := _w(str(id))
 		if not _equipped.has(str(w.get("slot", ""))):
@@ -372,6 +377,7 @@ func _show() -> void:
 	if slot == _slot:
 		var put := func() -> void:
 			_equipped[slot] = id
+			mod.set_setting("equipped_weapons", _equipped.duplicate())
 			equipped.emit(slot, id)
 			_show()
 		var eb := _button(_tr("pax_rpg_wworn") if worn else _tr("pax_rpg_wequip"), Rect2(W * 0.5 - 140, 980, 280, 56),
