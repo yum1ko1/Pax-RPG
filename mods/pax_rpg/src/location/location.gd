@@ -2044,6 +2044,8 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and facing and not unblockable and _hero.parry_window():
 		_hero.deflect()
 		_style.hit("Parry")
+		if not (attacker != null and str(attacker.get("_atk")) == "Kick"):   # пинок отбит — без звона стали
+			_parry_sound()
 		_hero.block_hit(false)
 		_posture = minf(_pos_max(), _posture + 4.0)
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
@@ -2094,6 +2096,23 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 
 
 var _armor_hit: AudioStreamPlayer
+var _parry_snd: AudioStreamPlayer
+
+
+## Парирование оружия врага: яркий звон клинка о клинок (sounds/parry.wav).
+func _parry_sound() -> void:
+	if _parry_snd == null:
+		var st: AudioStream = mod.sound("sounds/parry.wav")
+		if st == null:
+			return
+		_parry_snd = AudioStreamPlayer.new()
+		_parry_snd.stream = st
+		_parry_snd.bus = "PaxRpgSfx"
+		_parry_snd.max_polyphony = 2
+		_parry_snd.volume_db = -2.0
+		add_child(_parry_snd)
+	_parry_snd.pitch_scale = randf_range(0.95, 1.06)
+	_parry_snd.play()
 
 
 ## Клинок по латам рыцаря: металлический отзвук (sounds/armor_hit.wav); сильнее удар — громче и ниже.
