@@ -161,7 +161,7 @@ func _make_rain() -> void:
 	_rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_rain)
 	_make_splashes()
-	var st: AudioStream = mod.sound("sounds/storm_loop.mp3") if kind == "storm" else null   # гроза — ливень с громом
+	var st: AudioStream = mod.sound("sounds/storm_loop.mp3" if kind == "storm" else "sounds/rain_loop.mp3")   # гроза — с громом
 	if st is AudioStreamMP3:
 		(st as AudioStreamMP3).loop = true
 	if st == null:
