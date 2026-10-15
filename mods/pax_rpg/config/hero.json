@@ -31,7 +31,7 @@
 	"run_speed": 4.2,
 	"armed_speed_factor": 0.55,
 	"stride_walk": 1.89,
-	"stride_walk_armed": 1.15,
+	"stride_walk_armed": 1.86,
 	"stride_run": 4.86,
 	"jump_speed": 6.0,
 	"combo_cancel": {
@@ -169,7 +169,7 @@
 	},
 	"blend_loop": 0.35,
 	"armed_run_factor": 0.8,
-	"stride_run_armed": 4.86,
+	"stride_run_armed": 9.0,
 	"impact_files": [
 		"sounds/impact_1.wav",
 		"sounds/impact_2.wav",

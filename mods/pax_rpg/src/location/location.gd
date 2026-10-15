@@ -1507,6 +1507,13 @@ func _orc_slam(at: Vector3) -> void:
 		_sfx.impact()
 
 
+func _foe_near(r: float) -> bool:
+	for g: Variant in _goblins:
+		if is_instance_valid(g) and (g as Goblin).is_alive() and (g as Goblin).global_position.distance_to(_player.global_position) < r:
+			return true
+	return false
+
+
 func _quake_debris(c: Vector3, r: float) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
@@ -1728,6 +1735,9 @@ func _physics_body(delta: float) -> void:
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
+		if _prev_action in Hero.ATTACKS and _hero.action == "" and int(_hero.get("_last_i")) == 1 and _stagger <= 0.0 \
+				and _chain < int(_hf("chain_finisher", 5.0)) and not _foe_near(_hf("trick_clear", 4.0)):
+			_hero.flourish()                                 # после второго удара, если враг не рядом — трюк с мечом
 		_prev_action = _hero.action
 		if _hero.action == "" or not (_hero.action in Hero.ATTACKS or _hero.action in Hero.SPECIALS):
 			_chain_t += delta                            # серия рвётся, только если герой не бьёт дольше chain_window

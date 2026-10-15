@@ -15,7 +15,7 @@ const SPECIALS := ["Lunge", "Launcher", "PauseFinisher"]
 const SPECIAL_CLIPS := {"Lunge": ["Attack1", 0.3], "Launcher": ["Kick", 0.2], "PauseFinisher": ["HeavySlash", 0.1]}
 const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "GuardStrafeL", "GuardStrafeR",
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
-const ONCE := ["Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
+const ONCE := ["SwordTrick", "Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
 	"Attack1", "Attack2", "Attack3", "Dodge",
 	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp"]
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
@@ -2076,7 +2076,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
 	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
-	elif action in ATTACKS or action in SPECIALS or action == "Ultimate" or action == "Finisher":
+	elif action in ATTACKS or action in SPECIALS or action in ["Ultimate", "Finisher", "SwordTrick"]:
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai"
 	_sword_back.visible = not in_hand and action != "Iai"     # в Иай — только катана (iai.gd)
@@ -2104,7 +2104,49 @@ func _show_sword(delta: float) -> void:
 		_sword_hand.global_transform = Transform3D(Basis(q).scaled(sc), a.origin.lerp(b.origin, k))
 	else:
 		_sword_lag = false
-	_keep_above_floor()
+	if action == "SwordTrick":
+		_trick_sword()
+	else:
+		_keep_above_floor()
+
+
+## Трюк после второго удара (клип SwordTrick): подбросил меч — он крутится вокруг левого предплечья через своё
+## отверстие (один оборот), герой откинут назад; потом рука выдёргивается, правая перехватывает рукоять.
+func flourish() -> bool:
+	if anim == null or not armed or action != "" or not has("SwordTrick"):
+		return false
+	_play_once("SwordTrick", 0.0)
+	return true
+
+
+func _trick_sword() -> void:
+	if _skel == null or _tip == Vector3.ZERO:
+		return
+	var t := _pos()
+	var t0 := _f("trick_spin_from", 0.4)
+	var t1 := _f("trick_spin_to", 1.65)
+	if t < t0 or t > t1:
+		return
+	var lh := _skel.find_bone("LeftHand")
+	var lf := _skel.find_bone("LeftForeArm")
+	if lh < 0 or lf < 0:
+		return
+	var ph := _skel.global_transform * _skel.get_bone_global_pose(lh).origin
+	var pf := _skel.global_transform * _skel.get_bone_global_pose(lf).origin
+	var axis := (ph - pf).normalized()
+	var on_arm := pf.lerp(ph, 0.55)                          # отверстие меча — на середине предплечья
+	var ref := Vector3.UP if absf(axis.dot(Vector3.UP)) < 0.9 else Vector3.FORWARD
+	var d := (ref - axis * ref.dot(axis)).normalized().rotated(axis, TAU * (t - t0) / (t1 - t0))   # один оборот
+	var tl := _tip.normalized()                              # клинок в осях меча
+	var fl := (Vector3.UP - tl * Vector3.UP.dot(tl)).normalized()
+	if fl.length() < 0.1:
+		fl = (Vector3.RIGHT - tl * Vector3.RIGHT.dot(tl)).normalized()
+	var sc := _sword_hand.global_transform.basis.get_scale()
+	var local_f := Basis(tl, fl, tl.cross(fl))
+	var world_f := Basis(-d, axis, (-d).cross(axis))       # рукоять описывает круг вокруг руки, плоскость клинка — поперёк руки
+	var bs := (world_f * local_f.inverse()).scaled_local(sc)
+	var hole := _tip * _f("trick_hole_at", 0.86)             # отверстие у острия
+	_sword_hand.global_transform = Transform3D(bs, on_arm - bs * hole)
 
 
 func _keep_above_floor() -> void:
