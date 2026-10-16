@@ -363,7 +363,7 @@ func _show() -> void:
 		var disc := _Disc.new()
 		disc.r = r
 		disc.on = on
-		disc.worn = str(_equipped.get(str(wi.get("slot", "")), "")) == str(_order[i])
+		disc.worn = str(_equipped.get(_slot, "")) == str(_order[i])
 		disc.glyph = str(wi.get("glyph", "?"))
 		disc.tex = icon(str(_order[i]))
 		disc.font = _cjk
@@ -373,12 +373,17 @@ func _show() -> void:
 	_button("‹", Rect2(x0 - 130, RING_Y - 30, 60, 60), _step.bind(-1), Hud.PINK)
 	_button("›", Rect2(x0 + gap * (n - 1) + 70, RING_Y - 30, 60, 60), _step.bind(1), Hud.PINK)
 	# надеть / закрыть
-	var worn := str(_equipped.get(slot, "")) == id
-	if slot == _slot:
+	var worn := str(_equipped.get(_slot, "")) == id
+	if _fits(w, _slot):
 		var put := func() -> void:
-			_equipped[slot] = id
+			var prev := str(_equipped.get(_slot, ""))
+			for other: Variant in _equipped.keys():         # то же оружие в другом слоте — меняются местами
+				if str(other) != _slot and str(_equipped[other]) == id:
+					_equipped[other] = prev
+					equipped.emit(str(other), prev)
+			_equipped[_slot] = id
 			mod.set_setting("equipped_weapons", _equipped.duplicate())
-			equipped.emit(slot, id)
+			equipped.emit(_slot, id)
 			_show()
 		var eb := _button(_tr("pax_rpg_wworn") if worn else _tr("pax_rpg_wequip"), Rect2(W * 0.5 - 140, 980, 280, 56),
 			put, Hud.PINK)
@@ -387,6 +392,14 @@ func _show() -> void:
 		_label(_tr("pax_rpg_wother_slot") % _tr("pax_rpg_wslot_" + slot), Vector2(0, 994), _sans, 16, Hud.DIM, W,
 			HORIZONTAL_ALIGNMENT_CENTER)
 	_button("✕", Rect2(W - 120, 50, 56, 56), close, Hud.PINK)
+
+
+## Можно ли надеть в слот: список slots (по умолчанию — свой slot).
+func _fits(w: Dictionary, slot: String) -> bool:
+	var sl: Variant = w.get("slots", [])
+	if sl is Array and not (sl as Array).is_empty():
+		return (sl as Array).has(slot)
+	return str(w.get("slot", "")) == slot
 
 
 ## Название оружия; пусто — подпись появится позже (пока без текста, не ключ перевода).
