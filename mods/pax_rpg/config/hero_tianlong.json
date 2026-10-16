@@ -1,5 +1,5 @@
 {
-	"_note": "Тян Лун — второй герой (для проверки): поверх config/hero.json, когда выбран в окне героя. Модель и клипы — dev bl_tianlong.py (кости под имена рыцаря), копьё Алого Заката держится за середину древка; хват двумя руками и IK левой руки рыцаря выключены.",
+	"_note": "Тян Лун — второй герой (для проверки): поверх config/hero.json, когда выбран в окне героя. Модель и клипы — dev bl_tl2.py (лоу-поли, риг Mixamo с глазами и веками) (кости под имена рыцаря), копьё Алого Заката держится за середину древка; хват двумя руками и IK левой руки рыцаря выключены.",
 	"model": "models/heroes/tian_long/model.glb",
 	"anim_meta": "models/heroes/tian_long/anim.json",
 	"sword_model": "",
@@ -14,7 +14,9 @@
 		"Attack3": 1.0,
 		"HeavyAttack": 1.0,
 		"Dodge": 1.0,
-		"DodgeArmed": 1.0
+		"DodgeArmed": 1.0,
+		"Ultimate": 1.0,
+		"UltSpear": 1.0
 	},
 	"swing_peaks": {
 		"Attack1": 0.5,
@@ -53,5 +55,13 @@
 		-0.45,
 		0.89,
 		0.0
-	]
+	],
+	"ult_cooldown": 12.0,
+	"spear_ult_damage": 45.0,
+	"spear_ult_range": 7.0,
+	"root_motion_lateral": {
+		"Ultimate": 1.0,
+		"Dodge": 1.0,
+		"DodgeArmed": 1.0
+	}
 }

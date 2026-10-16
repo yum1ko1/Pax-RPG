@@ -281,5 +281,7 @@
 	"pax_rpg_char_tian_long_name": "Тян Лун",
 	"pax_rpg_char_tian_long_moves": "Копьё Алого Заката · Быстрые выпады и вращения · Уворот · Блок",
 	"pax_rpg_weapon_crimson_spear": "Копьё Алого Заката",
-	"pax_rpg_char_test_note": "Для проверки: анимации ещё сырые"
+	"pax_rpg_char_test_note": "Для проверки: анимации ещё сырые",
+	"pax_rpg_ult_spear_name": "Алый Закат",
+	"pax_rpg_ult_spear_sub": "Ультимейт · Копьё Алого Заката"
 }

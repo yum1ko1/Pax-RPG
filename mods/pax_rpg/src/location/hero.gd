@@ -1593,6 +1593,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_loop(moving, speed, running)
 	_on_floor = on_floor
 	_show_sword(delta)
+	_face_tick(delta)
 	_trail_tick(delta)
 	_blade_out(out)
 	if not cloth_paused:
@@ -1743,6 +1744,24 @@ func is_running() -> bool:
 func ult_begin(on_floor: bool) -> bool:
 	_cancel_hurt()
 	_cancel_recovery()
+	if has("UltSpear"):                                # копьё (Тян Лун): кат-сцена «Алый Закат» — клип + spear_ult.gd
+		if anim == null or not on_floor or action != "":
+			return false
+		armed = true
+		blocking = false
+		action = "Ultimate"
+		_clip = ""
+		_ult_stage = 30
+		_ult_t = 0.0
+		ult_hit = 0
+		ult_dash = false
+		ult_leap = false
+		ult_air = false
+		var rms: Dictionary = meta.get("root_motion", {})
+		if rms.has("UltSpear"):
+			rms["Ultimate"] = rms["UltSpear"]
+		_ult_play("UltSpear", 0.0, 1.0)
+		return true
 	if anim == null or not armed or not on_floor or action != "" or not has("HeavySlash") or not has("Attack3"):
 		return false
 	blocking = false
@@ -1769,6 +1788,11 @@ func ult_begin(on_floor: bool) -> bool:
 	return true
 
 
+## Секунда клипа ультимейта (spear_ult.gd ведёт по ней кат-сцену).
+func ult_time() -> float:
+	return _pos() if action == "Ultimate" else 99.0
+
+
 func _ult_play(clip: String, skip := 0.0, speed := 1.0) -> void:
 	anim.speed_scale = speed
 	anim.play(clip, 0.1)
@@ -1781,6 +1805,10 @@ func _ult_tick(delta: float) -> void:
 	_ult_t += delta
 	var length := anim.current_animation_length
 	match _ult_stage:
+		30:                                           # копьё: сцену ведёт spear_ult.gd, тут — только конец клипа
+			if _pos() >= length - 0.03 or _ult_t > length + 0.3:
+				_ult_stage = -1
+				_end_action()
 		20:                                           # клип UltCrush: меч воткнут — стоит на рукояти — выдернул — удар о землю
 			var slam := _f("ultc_slam", 3.5)
 			ult_dash = false
@@ -2168,6 +2196,68 @@ func _root_step() -> Vector3:
 
 ## Меч там, где он сейчас: на спине или в руке. В беге он плавно перекладывается в «волочится» (цель — узел
 ## Sword_Drag) и в любом клипе не уходит в землю: если остриё ниже пола — меч поворачивается на хвате вверх.
+## Лицо (у кого есть кости глаз и морф век Blink — Тян Лун): моргает раз в 2–5 с (иногда дважды), глаза
+## иногда смотрят по сторонам — короткий скачок взгляда, потом обратно к центру.
+var _lids: Array = []
+var _eyes: Array = []
+var _face_ready := false
+var _blink_t := 3.0
+var _blink := -1.0
+var _blink_twice := false
+var _eye_t := 2.0
+var _eye_look := Vector2.ZERO
+var _eye_want := Vector2.ZERO
+
+
+func _face_tick(delta: float) -> void:
+	if delta <= 0.0 or model == null:
+		return
+	if not _face_ready:
+		_face_ready = true
+		for n: Node in model.find_children("Lid_Upper*", "MeshInstance3D", true, false):
+			var mi := n as MeshInstance3D
+			if mi.mesh != null and mi.find_blend_shape_by_name(&"Blink") >= 0:
+				_lids.append(mi)
+		if _skel != null:
+			for e: String in ["LeftEye", "RightEye"]:
+				var bi := _skel.find_bone(e)
+				if bi >= 0:
+					_eyes.append(bi)
+	if not _lids.is_empty():
+		_blink_t -= delta
+		if _blink < 0.0 and _blink_t <= 0.0:
+			_blink = 0.0
+			_blink_twice = randf() < 0.18
+			_blink_t = randf_range(2.0, 5.0)
+		var w := 0.0
+		if _blink >= 0.0:
+			_blink += delta
+			var dur := 0.16
+			w = sin(clampf(_blink / dur, 0.0, 1.0) * PI)
+			if _blink >= dur:
+				_blink = -1.0
+				if _blink_twice:
+					_blink_twice = false
+					_blink_t = 0.12
+		for mi: MeshInstance3D in _lids:
+			mi.set_blend_shape_value(mi.find_blend_shape_by_name(&"Blink"), w)
+	if not _eyes.is_empty():
+		_eye_t -= delta
+		if _eye_t <= 0.0:
+			if _eye_want != Vector2.ZERO and randf() < 0.6:
+				_eye_want = Vector2.ZERO                      # обратно к центру
+				_eye_t = randf_range(1.5, 3.5)
+			else:
+				_eye_want = Vector2(randf_range(-0.3, 0.3), randf_range(-0.1, 0.12))
+				_eye_t = randf_range(0.6, 1.6)
+		_eye_look = _eye_look.lerp(_eye_want, 1.0 - exp(-delta * 18.0))   # взгляд прыгает быстро (саккада)
+		for bi: int in _eyes:
+			var rest := _skel.get_bone_rest(bi).basis.get_rotation_quaternion()
+			var g := _skel.get_bone_global_rest(bi).basis.get_rotation_quaternion()
+			var off := Quaternion(Vector3.UP, _eye_look.x) * Quaternion(Vector3.RIGHT, -_eye_look.y)   # в осях головы: вбок, вверх
+			_skel.set_bone_pose_rotation(bi, rest * (g.inverse() * off * g))
+
+
 func _show_sword(delta: float) -> void:
 	if _sword_back == null or _sword_hand == null:
 		return

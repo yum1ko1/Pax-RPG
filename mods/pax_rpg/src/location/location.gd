@@ -16,6 +16,7 @@ var _gate_radius := GATE_RADIUS
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
+const SpearUlt := preload("res://mods/pax_rpg/src/location/spear_ult.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
@@ -566,6 +567,8 @@ func _warmup() -> void:
 
 func clear() -> void:
 	_build_gen += 1                                  # недостроенный город бросает стройку
+	if _sult != null:
+		_sult.stop()
 	building = false
 	_build_finished = false
 	_grass = null
@@ -1297,6 +1300,9 @@ var _ult_done := 0
 func _ult_try() -> void:
 	if _hero == null or _ult_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
 		return
+	if _hero.has("UltSpear"):
+		_spear_ult_try()                               # копьё Тян Луна — кат-сцена «Алый Закат»
+		return
 	if not _hero.is_running():                         # только с разбега: стоя или шагом — нельзя
 		_toast = {"text": mod.tr_key("pax_rpg_ult_need_run"), "t": 0.0}
 		return
@@ -1305,6 +1311,40 @@ func _ult_try() -> void:
 	_ult_cd = _hf("ult_cooldown", 45.0)
 	_posture = minf(_pos_max(), _posture + _hf("ult_posture", 25.0))
 	_since_hit = 0.0
+
+
+## Ультимейт копья: цель — захваченная (Q) или ближайшая живая впереди до spear_ult_range м; герой
+## разворачивается к ней, дальше сцену ведёт spear_ult.gd (цель, камера, оформление).
+var _sult: SpearUlt
+
+
+func _spear_ult_try() -> void:
+	var tgt: Node3D = null
+	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
+		tgt = _lock
+	else:
+		var best := _hf("spear_ult_range", 7.0)
+		for g: Variant in _goblins:
+			if not is_instance_valid(g) or not (g as Goblin).is_alive():
+				continue
+			var d := ((g as Goblin).global_position - _player.global_position).length()
+			if d < best:
+				best = d
+				tgt = g
+	if tgt != null:
+		var to := tgt.global_position - _player.global_position
+		to.y = 0.0
+		if to.length() > 0.1:
+			_body_mesh.rotation.y = atan2(-to.x, -to.z)
+	if not _hero.ult_begin(true):
+		return
+	_ult_cd = _hf("ult_cooldown", 45.0)
+	_since_hit = 0.0
+	if _sult == null:
+		_sult = SpearUlt.new()
+		add_child(_sult)
+	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
+	_sult.start(self, _hero, tgt, _player.global_position, fwd)
 
 
 ## Удар ультимейта о землю: перед героем; 1 — первая волна, 2 — выпад: урон вдвое, площадь шире.
@@ -1780,6 +1820,8 @@ func _physics_body(delta: float) -> void:
 		if _hero.model != null:
 			_hero.model.rotation.z = _tilt
 		_quake_step()
+		if _sult != null and _sult.active():
+			_sult.tick(delta)
 		if _hero.action == "Ultimate" and _hero.ult_hit > _ult_done:   # ультимейт: удар о землю — волна (раз на удар)
 			_ult_done = _hero.ult_hit
 			_ult_wave(_ult_done)
@@ -1979,7 +2021,12 @@ func _follow_camera(delta := 0.0) -> void:
 		hand = _cam.global_transform.basis * hand
 		pos += hand
 		look += hand * 0.35
-	pos = _cam_collide(pos, delta)
+	if _sult != null and _sult.active():             # кат-сцена ульты копья — своя камера
+		var cc: Array = _sult.camera()
+		pos = cc[0]
+		look = cc[1]
+	else:
+		pos = _cam_collide(pos, delta)
 	_cam.position = pos
 	_cam.look_at(look, Vector3.UP.rotated((look - pos).normalized(), _cam_roll) if (look - pos).length() > 0.01 else Vector3.UP)
 

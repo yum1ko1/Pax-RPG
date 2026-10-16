@@ -281,5 +281,7 @@
 	"pax_rpg_char_tian_long_name": "Tian Long",
 	"pax_rpg_char_tian_long_moves": "Crimson Sunset Spear · Quick thrusts and spins · Dodge · Block",
 	"pax_rpg_weapon_crimson_spear": "Crimson Sunset Spear",
-	"pax_rpg_char_test_note": "Test build: animations are rough"
+	"pax_rpg_char_test_note": "Test build: animations are rough",
+	"pax_rpg_ult_spear_name": "Crimson Sunset",
+	"pax_rpg_ult_spear_sub": "Ultimate · Crimson Sunset Spear"
 }

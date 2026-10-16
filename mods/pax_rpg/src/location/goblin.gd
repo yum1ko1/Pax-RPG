@@ -573,6 +573,15 @@ func _play(clip: String, restart := false, blend := 0.2) -> void:
 var _hitstop := 0.0
 
 
+## Кат-сцена (ультимейт копья, spear_ult.gd): врага ведут по пути, своя физика и решения стоят.
+var cine := false
+
+
+func cine_state(s: String) -> void:
+	if not dead:
+		_set_state(s)
+
+
 func hitstop(t: float) -> void:
 	_hitstop = maxf(_hitstop, t)
 	if _anim != null:
@@ -590,6 +599,8 @@ func _physics_process(delta: float) -> void:
 		_hitstop -= delta
 		if _hitstop <= 0.0 and _anim != null:
 			_anim.active = true
+		return
+	if cine:
 		return
 	var t0 := Time.get_ticks_usec()
 	_phys(delta)
