@@ -1367,6 +1367,8 @@ func _ult_wave(i: int) -> void:
 func _quake_try() -> void:
 	if _hero == null or _quake_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
 		return
+	if _equipped_main() != "cleaver":                  # «Земной разлом» — приём Разрубателя
+		return
 	if not _hero.quake(true):
 		return
 	_quake_cd = _hf("quake_cooldown", 30.0)
@@ -2714,6 +2716,22 @@ func _hud_enemy() -> Goblin:
 	return best
 
 
+## Способности основного оружия в панели (T и G): у Разрубателя — «Земной разлом» и «Сокрушение» (только с разбега),
+## у копья — один «Алый Закат». Что надето — то и в слотах.
+func _weapon_skills(act: String) -> Array:
+	if _equipped_main() == "crimson_spear":
+		return [{"k": "槍", "key": "G", "label": mod.tr_key("pax_rpg_ult_spear_name"), "on": act == "Ultimate",
+			"color": Color(1.0, 0.22, 0.18), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
+			"ready": _ult_cd <= 0.0}]
+	return [
+		{"k": "震", "key": "T", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
+			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
+			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
+		{"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
+			"color": Color(1.0, 0.45, 0.25), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
+			"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))}]   # серый — не бежит
+
+
 func _update_hud() -> void:
 	if is_instance_valid(_hud):
 		_hud_tick(0.0)
@@ -2909,12 +2927,7 @@ func _hud_tick(delta: float) -> void:
 			"color": Color(0.47, 0.84, 1.0)},
 		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
 			"color": Color(1.0, 0.55, 0.78)},
-		{"k": "震", "key": "T", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
-			"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
-			"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0},
-		{"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
-			"color": Color(1.0, 0.45, 0.25), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
-			"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))},   # серый — не бежит
+		] + _weapon_skills(act) + [
 		{"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
 			"color": Color(0.75, 0.6, 1.0), "icon": _icon_tex("iai"), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 			"ready": _iai_cd <= 0.0}]
