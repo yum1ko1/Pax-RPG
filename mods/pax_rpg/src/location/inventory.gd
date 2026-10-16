@@ -39,6 +39,7 @@ var _pivot: Node3D                   # студия превью: шарнир �
 var _copy: Node3D
 var _bg_tex: Texture2D               # textures/inventory_bg.jpg (если есть)
 var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
+var _name_l: Label                   # имя героя (у каждого своё: character.name_key)
 var _main_b: Button
 var _iai_b: Button
 var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
@@ -76,10 +77,11 @@ func setup(m: PaxMod) -> void:
 	_build_hints()
 	_wv = WeaponView.new()
 	_wv.setup(m, _panel_sh, _serif, _sans, _cjk)
-	_wv.equipped.connect(func(slot: String, id: String) -> void: weapon_equipped.emit(slot, id))
+	_wv.equipped.connect(func(slot: String, id: String) -> void:
+		weapon_equipped.emit(slot, id)
+		_refresh_slots())
 	_frame.add_child(_wv)
-	_slot_icon(_main_b, "cleaver")                       # картинки оружия вместо иероглифов
-	_slot_icon(_iai_b, "katana")
+	_refresh_slots()
 	resized.connect(_fit)
 
 
@@ -101,6 +103,9 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	_hero = hero
 	_yaw = 0.0
 	_ensure_model(str(st.get("model", "models/knight.glb")))
+	if is_instance_valid(_name_l):
+		_name_l.text = _tr(str(st.get("name_key", "pax_rpg_hero_name")))
+	_refresh_slots()
 	_pv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	_fill_stats(st)
 	_main_stat = str(st.get("main_stat", ""))
@@ -140,6 +145,42 @@ func _slot_icon(b: Button, id: String) -> void:
 	tr.size = box.size
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(tr)
+
+
+## Слоты оружия слева — по надетому (настройка equipped_weapons): картинка, имя, приёмы. Пересобираются при смене.
+var _weapons: Dictionary = {}
+
+
+func _equipped(slot: String, fallback: String) -> String:
+	var saved: Variant = mod.get_setting("equipped_weapons", {})
+	return str((saved as Dictionary).get(slot, fallback)) if saved is Dictionary else fallback
+
+
+func _refresh_slots() -> void:
+	if _weapons.is_empty():
+		var p: Variant = JSON.parse_string(mod.read_text("config/weapons.json"))
+		_weapons = p if p is Dictionary else {}
+	for slot: String in ["main", "iai"]:
+		var id := _equipped(slot, "cleaver" if slot == "main" else "katana")
+		var w: Dictionary = _weapons.get(id, {}) if _weapons.get(id, {}) is Dictionary else {}
+		var title := _tr(str(w.get("name", ""))) if str(w.get("name", "")) != "" else id
+		var sub := ""
+		for sk: Variant in w.get("skills", []):
+			if sk is Array and (sk as Array).size() > 0:
+				sub += (" · " if sub != "" else "") + _tr(str((sk as Array)[0]))
+		if slot == "main":
+			if is_instance_valid(_main_b):
+				_main_b.queue_free()
+			_main_b = _slot(Rect2(90, 330, 440, 124), str(w.get("glyph", "斬")), Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
+				title, sub, true, false)
+			_main_b.pressed.connect(_open_weapon.bind("main"))
+			_slot_icon(_main_b, id)
+		else:
+			if is_instance_valid(_iai_b):
+				_iai_b.queue_free()
+			_iai_b = _slot(Rect2(90, 474, 440, 96), str(w.get("glyph", "居")), Hud.PINK, _tr("pax_rpg_inv_iai"), title, "", false, false)
+			_iai_b.pressed.connect(_open_weapon.bind("iai"))
+			_slot_icon(_iai_b, id)
 
 
 ## Окно оружия для слота: модель, урон, масштабирование, способности, выбор внизу.
@@ -220,9 +261,15 @@ func _build_preview() -> void:
 
 
 ## Копия героя для студии (раз за сессию локации): модель героя, клип Idle по кругу.
+var _copy_path := ""
+
+
 func _ensure_model(path: String) -> void:
-	if is_instance_valid(_copy):
+	if is_instance_valid(_copy) and _copy_path == path:
 		return
+	if is_instance_valid(_copy):
+		_copy.queue_free()                               # другой герой — другая модель
+	_copy_path = path
 	_copy = Assets.model(mod, path)
 	if _copy == null:
 		return
@@ -239,6 +286,12 @@ func _ensure_model(path: String) -> void:
 		var n := _copy.find_child(nm, true, false) as Node3D
 		if n != null:
 			n.visible = false
+	var back := _copy.find_child("Sword_Back", true, false) as Node3D   # за спиной — так же, как у героя (hero.gd)
+	var hb: Variant = _hero.get("_sword_back") if _hero != null else null
+	if back != null and hb is Node3D and is_instance_valid(hb):
+		back.transform = (hb as Node3D).transform
+		if back is MeshInstance3D and hb is MeshInstance3D:
+			(back as MeshInstance3D).mesh = (hb as MeshInstance3D).mesh
 
 
 static func _find_player(n: Node) -> AnimationPlayer:
@@ -388,14 +441,9 @@ func _build_tabs() -> void:
 
 
 func _build_left() -> void:
-	_label(_tr("pax_rpg_hero_name"), Vector2(90, 130), _serif, 40, Hud.TEXT, _frame)
+	_name_l = _label(_tr("pax_rpg_hero_name"), Vector2(90, 130), _serif, 40, Hud.TEXT, _frame)
 	_label(_tr("pax_rpg_hero_title").to_upper(), Vector2(92, 182), _sans, 14, Hud.MUTED, _frame)
 	_label(_tr("pax_rpg_inv_weapons").to_upper(), Vector2(90, 300), _sans, 13, Hud.DIM, _frame)
-	_main_b = _slot(Rect2(90, 330, 440, 124), "斬", Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
-		_tr("pax_rpg_weapon_greatsword"), _tr("pax_rpg_inv_greatsword_sub"), true, false)
-	_main_b.pressed.connect(_open_weapon.bind("main"))
-	_iai_b = _slot(Rect2(90, 474, 440, 96), "居", Hud.PINK, _tr("pax_rpg_inv_iai"), _tr("pax_rpg_inv_katana"), "", false, false)
-	_iai_b.pressed.connect(_open_weapon.bind("iai"))
 	_slot(Rect2(90, 590, 440, 96), "", Hud.DIM, "", _tr("pax_rpg_inv_talisman_empty"), "", false, true)
 	_panel(Rect2(90, 706, 440, 298), _frame)
 	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(114, 718), _sans, 13, Hud.DIM, _frame)

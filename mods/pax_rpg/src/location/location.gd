@@ -1179,6 +1179,7 @@ func _set_inventory(on: bool) -> void:
 		st["stat_points"] = _prog.stat_points()
 		st["level_mult"] = _prog.damage_mult()
 		st["model"] = str(hero_cfg.get("model", "models/knight.glb"))
+		st["name_key"] = str(_character().get("name_key", "pax_rpg_hero_name"))
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
