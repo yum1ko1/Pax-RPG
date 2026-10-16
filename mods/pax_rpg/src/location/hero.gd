@@ -2317,33 +2317,29 @@ func _two_hand_grip() -> void:
 
 ## Левая рука — на рукоять (IK: плечо → предплечье → кисть), ниже правой на grip_left_at м по рукояти.
 ## Клипы Meshy держат воображаемый меч, руки там врозь — без этого левая висит мимо меча.
-var _lik: Node
+var _lik: SkeletonIK3D
 
 
 func _left_hand_ik(on: bool) -> void:
-	if _skel == null or not ClassDB.class_exists("SkeletonIK3D"):
+	if _skel == null:
 		return
 	if _lik == null:
 		if not on:
 			return
-		_lik = ClassDB.instantiate("SkeletonIK3D")
-		_lik.set("root_bone", "LeftArm")
-		_lik.set("tip_bone", "LeftHand")
-		_lik.set("override_tip_basis", false)
+		_lik = SkeletonIK3D.new()                              # без кода из строк: песочница игры такое блокирует
+		_lik.root_bone = &"LeftArm"
+		_lik.tip_bone = &"LeftHand"
+		_lik.override_tip_basis = false
 		_skel.add_child(_lik)
-		_lik.call("start")
-	var w := 1.0 if on else 0.0
-	if "influence" in _lik:
-		_lik.set("influence", move_toward(float(_lik.get("influence")), w, 0.2))
-	else:
-		_lik.set("interpolation", move_toward(float(_lik.get("interpolation")), w, 0.2))
+		_lik.start()
+	_lik.influence = move_toward(_lik.influence, 1.0 if on else 0.0, 0.2)
 	if not on or _tip == Vector3.ZERO:
 		return
 	var sg := _sword_hand.global_transform
 	var axis := (sg.basis * _tip).normalized()               # к острию
 	var grip := sg.origin - axis * _f("grip_left_at", 0.32)   # ниже правой руки по рукояти
 	var tr := Transform3D(sg.basis.orthonormalized(), grip)
-	_lik.set("target", _skel.global_transform.affine_inverse() * tr)
+	_lik.target = _skel.global_transform.affine_inverse() * tr
 
 
 ## Пальцы (кости RightFingers / LeftFingers — сгиб всех четырёх разом вокруг своей оси X): с мечом — сжаты на рукояти.
