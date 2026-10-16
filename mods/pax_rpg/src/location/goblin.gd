@@ -582,6 +582,37 @@ func cine_state(s: String) -> void:
 		_set_state(s)
 
 
+## Анимация в кат-сцене: hurt — получил удар, knock — отброшен, fall — падает и лежит, getup — встаёт.
+func cine_anim(kind: String) -> void:
+	if dead:
+		return
+	match kind:
+		"hurt":
+			_set_state_keep("hurt")
+			_play("hit", true, 0.05)
+		"knock":
+			_set_state_keep("knockdown")
+			_play("knockdown", true, 0.05)
+		"fall":
+			_set_state_keep("knockdown")
+			_play("knockdown", true, 0.08)
+		"getup":
+			_set_state("getup")
+
+
+## Конец кат-сцены: своя физика и решения снова его; после удара в спину — отлетает и падает (дальше встаёт сам).
+func cine_release(v: Vector3) -> void:
+	cine = false
+	_hitstop = 0.0
+	if _anim != null:
+		_anim.active = true
+	posture = minf(posture, max_posture * 0.7)            # не «сломлен» — иначе стоит и ждёт добивания
+	if dead:
+		return
+	velocity = v
+	_set_state("knockdown")
+
+
 func hitstop(t: float) -> void:
 	_hitstop = maxf(_hitstop, t)
 	if _anim != null:

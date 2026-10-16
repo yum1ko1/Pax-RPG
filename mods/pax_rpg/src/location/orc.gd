@@ -187,6 +187,39 @@ func _set_state(s: String) -> void:
 			_play("ChargeHit", true)
 
 
+## Кат-сцена: у орка нет клипов падения и подъёма — падение = начало клипа смерти (остановлен лёжа),
+## подъём = он же задом наперёд; удар — ReactL, отброс — ReactR.
+func cine_anim(kind: String) -> void:
+	if dead or _anim == null:
+		return
+	match kind:
+		"hurt":
+			_set_state_keep("hurt")
+			_anim.play("ReactL", 0.05)
+		"knock":
+			_set_state_keep("knockdown")
+			_anim.play("ReactR", 0.05)
+		"fall":
+			_set_state_keep("knockdown")
+			_anim.play("Death", 0.08)
+		"getup":
+			_set_state_keep("getup")
+			_anim.play_backwards("Death", 0.1)
+			_anim.seek(minf(_anim.current_animation_length, 1.6), true)
+
+
+func cine_release(v: Vector3) -> void:
+	cine = false
+	_hitstop = 0.0
+	if _anim != null:
+		_anim.active = true
+	posture = minf(posture, max_posture * 0.7)
+	if dead:
+		return
+	velocity = Vector3(v.x, 0.0, v.z) * 0.4                 # тяжёлый — отъезжает, не летит
+	_set_state("recover")
+
+
 ## Звуки орка: замах (свист), попадание (глухой удар), блок (сталь), получил урон (удар по телу).
 var _snd_swing: AudioStreamPlayer3D
 var _snd_impact: AudioStreamPlayer3D

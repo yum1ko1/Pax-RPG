@@ -62,8 +62,9 @@ func stop() -> void:
 	if not _on:
 		return
 	_on = false
-	if is_instance_valid(target):
-		target.set("cine", false)
+	if is_instance_valid(target) and target.has_method("cine_release"):
+		target.call("cine_release", Vector3.ZERO)
+	target = null
 	if is_instance_valid(_ui):
 		_ui.queue_free()
 	_ui = null
@@ -98,10 +99,10 @@ func tick(delta: float) -> void:
 
 ## Скорость клипа: вся сцена чуть медленнее, у каждого удара — слоу-мо (вход перед ударом, выход после).
 func _speed(t: float) -> float:
-	var s := float(loc.call("_hf", "spear_ult_speed", 0.8))
-	var slow := float(loc.call("_hf", "spear_ult_slowmo", 0.22))
+	var s := float(loc.call("_hf", "spear_ult_speed", 0.55))
+	var slow := float(loc.call("_hf", "spear_ult_slowmo", 0.12))
 	for h: float in [T_STUN, T_SPIN, T_TRIP, T_BACK]:
-		var k := smoothstep(h - 0.12, h - 0.02, t) * (1.0 - smoothstep(h + 0.18, h + 0.4, t))
+		var k := smoothstep(h - 0.2, h - 0.04, t) * (1.0 - smoothstep(h + 0.25, h + 0.5, t))
 		s = lerpf(s, slow, k)
 	return s
 
@@ -111,16 +112,9 @@ func _finish() -> void:
 	var ap: AnimationPlayer = hero.get("anim")
 	if ap != null:
 		ap.speed_scale = 1.0
-	if is_instance_valid(target) and target.has_method("is_alive") and bool(target.call("is_alive")):
-		target.set("cine", false)
-		target.set("_hitstop", 0.0)
-		var ta: Variant = target.get("_anim")
-		if ta is AnimationTree or ta is AnimationPlayer:
-			ta.set("active", true)
-		var mp := float(target.get("max_posture"))
-		target.set("posture", minf(float(target.get("posture")), mp * 0.7))   # не «сломлен» — иначе стоит и ждёт добивания
-		target.call("cine_state", "knockdown")
-		target.set("velocity", _fwd * 7.0 + Vector3.UP * 3.0)   # удар в спину: отлетает вперёд
+	if is_instance_valid(target) and target.has_method("cine_release"):
+		target.call("cine_release", _fwd * 6.0 + Vector3.UP * 2.0)
+	target = null
 	stop()
 
 
@@ -153,9 +147,13 @@ func _target_path() -> void:
 	elif _t < T_GETUP:
 		var u3 := (_t - T_TRIP) / (T_GETUP - T_TRIP)
 		d = lerpf(5.9, 6.8, 1.0 - pow(1.0 - u3, 2.0))  # подсекли — падает вперёд
-	else:
+	elif _t < T_BACK:
 		d = 6.8
 		_face(_fwd)                                      # встаёт спиной к герою
+	else:
+		var u4 := clampf((_t - T_BACK) / (LENGTH - T_BACK), 0.0, 1.0)
+		d = lerpf(6.8, 8.6, 1.0 - pow(1.0 - u4, 2.0))   # удар в спину — летит вперёд
+		up = 4.0 * 0.5 * u4 * (1.0 - u4)
 	target.global_position = _p0 + _fwd * d + Vector3(0.0, _ground - _p0.y + up, 0.0)
 
 
@@ -169,30 +167,34 @@ func _hits() -> void:
 	var base := float(loc.call("_hf", "spear_ult_damage", 45.0)) * float(loc.call("_dmg_mult"))
 	if _t >= T_STUN and not _done.has("stun"):
 		_done["stun"] = true
-		_hit(base * 0.35, false, "hurt", 0.09, 0.35)
+		_hit(base * 0.35, false, "hurt", 0.12, 0.35)
 		loc.call("_sfx_once", "sounds/katana_hit_0.ogg", -1.0)
 	if _t >= T_SPIN and not _done.has("spin"):
 		_done["spin"] = true
-		_hit(base * 0.6, true, "knockdown", 0.12, 0.6)
+		_hit(base * 0.6, true, "knock", 0.16, 0.6)
 		loc.call("_sfx_once", "sounds/impact_2.wav", 0.0)
 		loc.call("_sfx_once", "sounds/air_whoosh.wav", -3.0)
 	if _t >= T_TRIP and not _done.has("trip"):
 		_done["trip"] = true
-		_hit(base * 0.2, false, "knockdown", 0.06, 0.3)
+		_hit(base * 0.2, false, "fall", 0.1, 0.3)
 		loc.call("_sfx_once", "sounds/kick_hit.wav", 0.0)
 	if _t >= T_TRIP + 0.25 and not _done.has("fall"):
 		_done["fall"] = true
 		loc.call("_sfx_once", "sounds/body_fall.ogg", -2.0)
 	if _t >= T_GETUP and not _done.has("getup"):
 		_done["getup"] = true
-		if is_instance_valid(target) and target.has_method("cine_state"):
-			target.call("cine_state", "getup")
+		if is_instance_valid(target) and target.has_method("cine_anim"):
+			target.call("cine_anim", "getup")
 	if _t >= T_BACK and not _done.has("back"):
 		_done["back"] = true
-		_hit(base * 1.5, true, "knockdown", 0.2, 1.0)
+		_hit(base * 1.5, true, "hurt", 0.25, 1.0)
 		loc.call("_sfx_once", "sounds/deathblow.wav", 0.0)
 		loc.call("_sfx_once", "sounds/impact_3.wav", 0.0)
 		_vignette()
+	if _t >= T_BACK + 0.12 and not _done.has("back_fall"):
+		_done["back_fall"] = true
+		if is_instance_valid(target) and target.has_method("cine_anim"):
+			target.call("cine_anim", "fall")
 
 
 ## Попадание: урон (цифры, как у обычных ударов), состояние цели, замирание клипа, тряска, вспышка, искры.
@@ -205,11 +207,13 @@ func _hit(dmg: float, heavy: bool, state: String, stop_t: float, shake: float) -
 	_flash_now(0.45 if heavy else 0.28)
 	if not is_instance_valid(target) or not bool(target.call("is_alive")):
 		return
+	target.set("_state", "hurt")                      # в сцене не блокирует и не в гиперброне
+	target.set("_atk", "")
 	target.call("take_damage", dmg, _hero_pos(), false)
 	if target.has_method("hitstop"):
 		target.call("hitstop", stop_t)
-	if target.has_method("cine_state") and bool(target.call("is_alive")):
-		target.call("cine_state", state)
+	if target.has_method("cine_anim") and bool(target.call("is_alive")):
+		target.call("cine_anim", state)
 	var nums: Array = loc.get("_numbers")
 	nums.append({"pos": target.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg), "crit": heavy, "t": 0.0})
 	var at := target.global_position + Vector3(0.0, 1.0, 0.0)
@@ -229,24 +233,23 @@ func _spear_tip() -> Vector3:
 	return sw.global_transform * tip
 
 
-## Камера: [позиция, точка взгляда]. Планы со склейками на ударах, в каждом — лёгкий наезд.
+## Камера: [позиция, точка взгляда]. Сбоку от схватки, медленный облёт вокруг середины между героем и врагом:
+## начало — сбоку-спереди и ближе, отлёт и скольжение — широкий боковой план, удар в спину — низко сбоку.
 func camera() -> Array:
 	var h := _hero_pos()
-	var up := Vector3.UP
-	var tg := target.global_position if is_instance_valid(target) else h + _fwd * 2.0
-	var head := h + up * 1.35
-	if _t < T_STUN:                                    # крупно: лицо и копьё, медленный наезд
-		var k := _t / T_STUN
-		return [h + _fwd * lerpf(2.1, 1.6, k) + _right * 0.9 + up * 1.45, head + _fwd * 0.2]
-	if _t < T_SPIN:                                    # сбоку широко: укол и разворот
-		var k2 := (_t - T_STUN) / (T_SPIN - T_STUN)
-		return [h + _right * lerpf(3.6, 3.1, k2) + _fwd * 1.0 + up * 1.3, h.lerp(tg, 0.5) + up * 1.0]
-	if _t < 1.8:                                       # из-за спины: цель улетает
-		return [h - _fwd * 3.2 + _right * 1.4 + up * 1.7, tg + up * 0.8]
-	if _t < T_BACK - 0.25:                             # низко сбоку: скольжение и подножка
-		return [h + _right * 2.4 + _fwd * 0.6 + up * 0.45, h + _fwd * 1.6 + up * 0.5]
-	var k3 := clampf((_t - (T_BACK - 0.25)) / 0.6, 0.0, 1.0)   # сверху сзади: удар в спину
-	return [h - _fwd * lerpf(2.6, 3.4, k3) - _right * 1.2 + up * lerpf(2.6, 3.0, k3), tg + up * 0.7]
+	var tg := target.global_position if is_instance_valid(target) else h + _fwd * 2.5
+	var mid := h.lerp(tg, 0.5)
+	var u := clampf(_t / LENGTH, 0.0, 1.0)
+	var ang := lerpf(deg_to_rad(55.0), deg_to_rad(115.0), smoothstep(0.0, 1.0, u))   # от «сбоку-спереди» до «сбоку-сзади»
+	var span := (tg - h).length()
+	var radius := clampf(span * 0.9 + 3.2, 3.6, 7.0)
+	var height := 1.5
+	if _t < T_STUN:
+		radius = 3.0
+	if _t > T_BACK - 0.3:
+		height = 0.9                                     # удар в спину — ниже, драматичнее
+	var dir := (_right * sin(ang) + _fwd * cos(ang)).normalized()
+	return [mid + dir * radius + Vector3.UP * height, mid + Vector3.UP * 0.95]
 
 
 func _build_ui() -> void:
