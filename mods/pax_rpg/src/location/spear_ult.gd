@@ -15,7 +15,7 @@ const LENGTH := 3.0
 const CRIMSON := Color(1.0, 0.16, 0.12)
 
 var loc: Node                      # location.gd (его поля — без типов: свой класс там не объявлен)
-var hero: Node                     # hero.gd
+var hero: Object                   # hero.gd (не узел)
 var target: Node3D                 # враг (goblin.gd) или null
 var _t := 0.0
 var _on := false
@@ -39,7 +39,7 @@ func active() -> bool:
 	return _on
 
 
-func start(l: Node, h: Node, tgt: Node3D, p0: Vector3, fwd: Vector3) -> void:
+func start(l: Node, h: Object, tgt: Node3D, p0: Vector3, fwd: Vector3) -> void:
 	loc = l
 	hero = h
 	target = tgt
