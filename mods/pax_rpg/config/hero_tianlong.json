@@ -1,0 +1,57 @@
+{
+	"_note": "Тян Лун — второй герой (для проверки): поверх config/hero.json, когда выбран в окне героя. Модель и клипы — dev bl_tianlong.py (кости под имена рыцаря), копьё Алого Заката держится за середину древка; хват двумя руками и IK левой руки рыцаря выключены.",
+	"model": "models/heroes/tian_long/model.glb",
+	"anim_meta": "models/heroes/tian_long/anim.json",
+	"sword_model": "",
+	"sword_scale": 1.0,
+	"two_hand_grip": false,
+	"left_hand_ik": false,
+	"finger_curl_deg": 0.0,
+	"capsule_height": 1.7,
+	"root_motion_scale": {
+		"Attack1": 1.0,
+		"Attack2": 1.0,
+		"Attack3": 1.0,
+		"HeavyAttack": 1.0,
+		"Dodge": 1.0,
+		"DodgeArmed": 1.0
+	},
+	"swing_peaks": {
+		"Attack1": 0.5,
+		"Attack2": 0.5,
+		"Attack3": 0.6,
+		"Draw": 0.6
+	},
+	"character": {
+		"id": "tian_long",
+		"name_key": "pax_rpg_char_tian_long_name",
+		"portrait": "",
+		"main_stat": "agility",
+		"passive": "",
+		"weapon": {
+			"name": "pax_rpg_weapon_crimson_spear",
+			"scaling": {
+				"agility": "A"
+			}
+		},
+		"attributes": {
+			"agility": 65,
+			"intellect": 35,
+			"charisma": 50,
+			"strength": 35,
+			"smithing": 20,
+			"inlay": 20,
+			"luck": 40
+		}
+	},
+	"sword_back_grip": [
+		0.0,
+		0.05,
+		-0.2
+	],
+	"sword_back_dir": [
+		-0.45,
+		0.89,
+		0.0
+	]
+}

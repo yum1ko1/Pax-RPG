@@ -277,5 +277,9 @@
 	"pax_rpg_style_sss": "Storm of Steel!!!",
 	"pax_rpg_set_foe_voice": "Enemy lines by AI voice",
 	"pax_rpg_set_foe_voice_note": "The orc champion sometimes speaks to you in battle — as a subtitle and aloud. Each line is a separate request to the AI: it spends extra tokens (and the local model's video memory). Only for immersion; it does not affect the game.",
-	"pax_rpg_out_of_breath": "Out of breath — step back or parry"
+	"pax_rpg_out_of_breath": "Out of breath — step back or parry",
+	"pax_rpg_char_tian_long_name": "Tian Long",
+	"pax_rpg_char_tian_long_moves": "Crimson Sunset Spear · Quick thrusts and spins · Dodge · Block",
+	"pax_rpg_weapon_crimson_spear": "Crimson Sunset Spear",
+	"pax_rpg_char_test_note": "Test build: animations are rough"
 }

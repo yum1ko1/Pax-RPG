@@ -2191,7 +2191,7 @@ func _show_sword(delta: float) -> void:
 	_drag_w = move_toward(_drag_w, 1.0 if drag else 0.0, delta / dur) if delta > 0.0 else (1.0 if drag else 0.0)
 	_sword_hand.transform = _hand_rest
 	_two_hand_grip()
-	_left_hand_ik(_sword_hand.visible and not action.begins_with("Dodge") and action not in ["SwordTrick", "Iai", "Ultimate", "Kick", "Launcher"])
+	_left_hand_ik(bool(cfg.get("left_hand_ik", true)) and _sword_hand.visible and not action.begins_with("Dodge") and action not in ["SwordTrick", "Iai", "Ultimate", "Kick", "Launcher"])
 	if _drag_w > 0.0 and _sword_drag != null and _sword_drag.is_inside_tree():
 		var k := smoothstep(0.0, 1.0, _drag_w)
 		var a := _sword_hand.global_transform
@@ -2280,6 +2280,8 @@ var _sw_flat := Vector3.ZERO
 
 
 func _two_hand_grip() -> void:
+	if not bool(cfg.get("two_hand_grip", true)):
+		return                                                # не у всех героев двуручник (копьё держится клипом)
 	if _skel == null or _tip == Vector3.ZERO or action.begins_with("Dodge") or action in ["SwordTrick", "Iai"]:
 		return
 	var rh := _skel.find_bone("RightHand")

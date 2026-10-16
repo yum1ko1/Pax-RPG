@@ -188,6 +188,23 @@ func _f(key: String, fallback: float) -> float:
 # ---------- построить и убрать ----------
 
 ## Кнопка «Тест» главного меню: арена — та же площадка, герой и гоблин; ворота возвращают в меню.
+## Выбранный герой (настройка character): поверх config/hero.json — его файл из hero.json → characters.
+var _hero_base: Dictionary = {}
+
+
+func _apply_character() -> void:
+	if _hero_base.is_empty():
+		_hero_base = hero_cfg.duplicate(true)
+	var merged := _hero_base.duplicate(true)
+	var chars: Variant = _hero_base.get("characters", {})
+	var path: Variant = (chars as Dictionary).get(str(mod.get_setting("character", "black_knight")), "") if chars is Dictionary else ""
+	if path is String and path != "":
+		var p: Variant = JSON.parse_string(mod.read_text(str(path)))
+		if p is Dictionary:
+			merged.merge(p as Dictionary, true)
+	hero_cfg = merged
+
+
 func build_test() -> void:
 	build({"id": "test"})
 	test_mode = true
@@ -247,6 +264,7 @@ func prewarm() -> void:
 ## Сопрограмма для города (строится несколько кадров, экран загрузки живой); арена без города — сразу.
 func build(city: Dictionary) -> void:
 	clear()
+	_apply_character()
 	_input_first()
 	_build_gen += 1
 	var gen := _build_gen

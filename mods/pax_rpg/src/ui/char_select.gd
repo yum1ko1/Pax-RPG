@@ -56,11 +56,24 @@ func setup(m: PaxMod, character: Dictionary) -> void:
 		var r := Rect2(x0 + i * (cw + gap), 250, cw, 680)
 		if i == 0:
 			_hero_card(r, character)
+		elif i == 1 and not _extra().is_empty():
+			_hero_card(r, _extra())                         # второй герой (для проверки) — config/hero_tianlong.json
 		elif i - 1 < FUTURE.size():
 			_portrait_card(r, str(FUTURE[i - 1]))
 		else:
 			_empty_card(r)
 	_fit()
+
+
+var _extra_ch: Dictionary = {}
+
+
+func _extra() -> Dictionary:
+	if _extra_ch.is_empty():
+		var p: Variant = JSON.parse_string(mod.read_text("config/hero_tianlong.json"))
+		if p is Dictionary and (p as Dictionary).get("character", null) is Dictionary:
+			_extra_ch = (p as Dictionary)["character"]
+	return _extra_ch
 
 
 func _fit() -> void:
@@ -108,7 +121,8 @@ func _label(text: String, pos: Vector2, font: Font, fs: int, color: Color, paren
 func _hero_card(r: Rect2, ch: Dictionary) -> void:
 	var p := _panel(r, true, false)
 	var id := str(ch.get("id", "black_knight"))
-	var tex := mod.texture("textures/hero_portrait.png")
+	var portrait := str(ch.get("portrait", "textures/hero_portrait.png"))
+	var tex := mod.texture(portrait) if portrait != "" else null
 	if tex != null:
 		var tr := TextureRect.new()
 		tr.texture = tex
@@ -119,7 +133,7 @@ func _hero_card(r: Rect2, ch: Dictionary) -> void:
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(tr)
 	var w := r.size.x - 60
-	var name_l := _label(mod.tr_key("pax_rpg_hero_name"), Vector2(30, 324), _serif, 40, Hud.TEXT, p, w)
+	var name_l := _label(mod.tr_key(str(ch.get("name_key", "pax_rpg_hero_name"))), Vector2(30, 324), _serif, 40, Hud.TEXT, p, w)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var main := str(ch.get("main_stat", ""))
 	var y := 386.0
