@@ -1300,8 +1300,12 @@ var _ult_done := 0
 func _ult_try() -> void:
 	if _hero == null or _ult_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
 		return
-	if _hero.has("UltSpear"):
-		_spear_ult_try()                               # копьё Тян Луна — кат-сцена «Алый Закат»
+	var spear := _equipped_main() == "crimson_spear"  # ульта — от оружия в основном слоте
+	if spear != _hero.has("UltSpear") or (not spear and not _hero.has("HeavySlash")):
+		_toast = {"text": mod.tr_key("pax_rpg_ult_no_clip"), "t": 0.0}
+		return
+	if spear:
+		_spear_ult_try()                               # копьё — кат-сцена «Алый Закат»
 		return
 	if not _hero.is_running():                         # только с разбега: стоя или шагом — нельзя
 		_toast = {"text": mod.tr_key("pax_rpg_ult_need_run"), "t": 0.0}
@@ -1336,7 +1340,7 @@ func _spear_ult_try() -> void:
 		to.y = 0.0
 		if to.length() > 0.1:
 			_body_mesh.rotation.y = atan2(-to.x, -to.z)
-	if not _hero.ult_begin(true):
+	if not _hero.ult_begin(true, true):
 		return
 	_ult_cd = _hf("ult_cooldown", 45.0)
 	_since_hit = 0.0
@@ -1437,6 +1441,11 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 ## Катана в ножнах на левом бедре, пока во втором слоте оружия (иай) надета катана. Во время иая её прячем —
 ## иай вешает свою (iai.gd → _attach_katana) и вынимает клинок из неё.
 var _hip_katana: Node3D
+
+
+func _equipped_main() -> String:
+	var saved: Variant = mod.get_setting("equipped_weapons", {})
+	return str((saved as Dictionary).get("main", "cleaver")) if saved is Dictionary else "cleaver"
 
 
 func _equipped_iai() -> String:

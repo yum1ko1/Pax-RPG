@@ -73,10 +73,11 @@ func stop() -> void:
 func tick(delta: float) -> void:
 	if not _on:
 		return
+	var ap: AnimationPlayer = hero.get("anim")
 	if _freeze > 0.0:
 		_freeze -= delta
-		if _freeze <= 0.0 and hero.get("anim") != null:
-			(hero.get("anim") as AnimationPlayer).speed_scale = 1.0
+	elif ap != null:
+		ap.speed_scale = _speed(_t)                    # замедления на ударах — видно каждый момент
 	var t_clip: float = hero.call("ult_time")
 	_t = maxf(_t, t_clip)
 	if str(hero.get("action")) != "Ultimate" or _t >= LENGTH:
@@ -95,9 +96,30 @@ func tick(delta: float) -> void:
 			loc.call("_sfx_once", "sounds/katana_scrape.wav", -2.0)
 
 
+## Скорость клипа: вся сцена чуть медленнее, у каждого удара — слоу-мо (вход перед ударом, выход после).
+func _speed(t: float) -> float:
+	var s := float(loc.call("_hf", "spear_ult_speed", 0.8))
+	var slow := float(loc.call("_hf", "spear_ult_slowmo", 0.22))
+	for h: float in [T_STUN, T_SPIN, T_TRIP, T_BACK]:
+		var k := smoothstep(h - 0.12, h - 0.02, t) * (1.0 - smoothstep(h + 0.18, h + 0.4, t))
+		s = lerpf(s, slow, k)
+	return s
+
+
+## Конец сцены: цель отпущена — своя физика и решения снова её, без замирания, лежит после удара в спину и встаёт сама.
 func _finish() -> void:
+	var ap: AnimationPlayer = hero.get("anim")
+	if ap != null:
+		ap.speed_scale = 1.0
 	if is_instance_valid(target) and target.has_method("is_alive") and bool(target.call("is_alive")):
 		target.set("cine", false)
+		target.set("_hitstop", 0.0)
+		var ta: Variant = target.get("_anim")
+		if ta is AnimationTree or ta is AnimationPlayer:
+			ta.set("active", true)
+		var mp := float(target.get("max_posture"))
+		target.set("posture", minf(float(target.get("posture")), mp * 0.7))   # не «сломлен» — иначе стоит и ждёт добивания
+		target.call("cine_state", "knockdown")
 		target.set("velocity", _fwd * 7.0 + Vector3.UP * 3.0)   # удар в спину: отлетает вперёд
 	stop()
 
@@ -176,8 +198,9 @@ func _hits() -> void:
 ## Попадание: урон (цифры, как у обычных ударов), состояние цели, замирание клипа, тряска, вспышка, искры.
 func _hit(dmg: float, heavy: bool, state: String, stop_t: float, shake: float) -> void:
 	_freeze = stop_t
-	if hero.get("anim") != null:
-		(hero.get("anim") as AnimationPlayer).speed_scale = 0.04
+	var ap: AnimationPlayer = hero.get("anim")
+	if ap != null:
+		ap.speed_scale = 0.04
 	loc.set("_shake", maxf(float(loc.get("_shake")), shake))
 	_flash_now(0.45 if heavy else 0.28)
 	if not is_instance_valid(target) or not bool(target.call("is_alive")):

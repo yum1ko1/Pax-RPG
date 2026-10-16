@@ -283,5 +283,8 @@
 	"pax_rpg_weapon_crimson_spear": "Crimson Sunset Spear",
 	"pax_rpg_char_test_note": "Test build: animations are rough",
 	"pax_rpg_ult_spear_name": "Crimson Sunset",
-	"pax_rpg_ult_spear_sub": "Ultimate · Crimson Sunset Spear"
+	"pax_rpg_ult_spear_sub": "Ultimate · Crimson Sunset Spear",
+	"pax_rpg_wskill_spear_ult": "Crimson Sunset (G)",
+	"pax_rpg_wskill_spear_ult_desc": "A thrust stuns the target, a spinning blow knocks it back; sliding with the spear scraping the ground, the hero trips the foe and strikes its back as it rises.",
+	"pax_rpg_ult_no_clip": "This hero cannot use this weapon's technique"
 }

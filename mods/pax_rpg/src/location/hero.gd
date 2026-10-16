@@ -1741,10 +1741,10 @@ func is_running() -> bool:
 	return _running
 
 
-func ult_begin(on_floor: bool) -> bool:
+func ult_begin(on_floor: bool, spear := false) -> bool:
 	_cancel_hurt()
 	_cancel_recovery()
-	if has("UltSpear"):                                # копьё (Тян Лун): кат-сцена «Алый Закат» — клип + spear_ult.gd
+	if spear and has("UltSpear"):                      # копьё (Тян Лун): кат-сцена «Алый Закат» — клип + spear_ult.gd
 		if anim == null or not on_floor or action != "":
 			return false
 		armed = true
@@ -1806,7 +1806,7 @@ func _ult_tick(delta: float) -> void:
 	var length := anim.current_animation_length
 	match _ult_stage:
 		30:                                           # копьё: сцену ведёт spear_ult.gd, тут — только конец клипа
-			if _pos() >= length - 0.03 or _ult_t > length + 0.3:
+			if _pos() >= length - 0.03 or _ult_t > length * 5.0:   # по клипу: в сцене замедления
 				_ult_stage = -1
 				_end_action()
 		20:                                           # клип UltCrush: меч воткнут — стоит на рукояти — выдернул — удар о землю
