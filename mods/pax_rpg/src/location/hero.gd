@@ -2312,7 +2312,7 @@ func _two_hand_grip() -> void:
 	n = n.normalized()
 	var sc := _sword_hand.global_transform.basis.get_scale()
 	var bs := (Basis(dir, n, dir.cross(n)) * Basis(tl, fl, tl.cross(fl)).inverse()).scaled_local(sc)
-	_sword_hand.global_transform = Transform3D(bs, R)
+	_sword_hand.global_transform = Transform3D(bs, R + dir * _f("grip_off", 0.62))   # хват у навершия: гарда выше кулака
 
 
 ## Левая рука — на рукоять (IK: плечо → предплечье → кисть), ниже правой на grip_left_at м по рукояти.
@@ -2337,7 +2337,7 @@ func _left_hand_ik(on: bool) -> void:
 		return
 	var sg := _sword_hand.global_transform
 	var axis := (sg.basis * _tip).normalized()               # к острию
-	var grip := sg.origin - axis * _f("grip_left_at", 0.32)   # ниже правой руки по рукояти
+	var grip := sg.origin - axis * (_f("grip_off", 0.62) + _f("grip_left_at", 0.32))   # ниже правой руки по рукояти
 	var tr := Transform3D(sg.basis.orthonormalized(), grip)
 	_lik.target = _skel.global_transform.affine_inverse() * tr
 

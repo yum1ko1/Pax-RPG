@@ -317,5 +317,6 @@
 	],
 	"trick_spin_from": 0.45,
 	"trick_spin_to": 1.0,
-	"trick_fall": 0.25
+	"trick_fall": 0.25,
+	"grip_off": 0.62
 }
