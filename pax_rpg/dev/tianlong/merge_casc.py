@@ -75,6 +75,100 @@ def rotx(v):                    # −90° по X: (x, y, z) → (x, z, −y)
     return np.stack([v[:, 0], v[:, 2], -v[:, 1]], 1)
 
 
+def q2m(q):
+    x, y, z, w = q / np.linalg.norm(q)
+    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+
+def m2q(m):
+    t = np.trace(m)
+    if t > 0:
+        r = np.sqrt(1 + t) * 2
+        q = [(m[2, 1] - m[1, 2]) / r, (m[0, 2] - m[2, 0]) / r, (m[1, 0] - m[0, 1]) / r, r / 4]
+    else:
+        i = int(np.argmax(np.diag(m)))
+        j_, k = (i + 1) % 3, (i + 2) % 3
+        r = np.sqrt(1 + m[i, i] - m[j_, j_] - m[k, k]) * 2
+        q = [0.0, 0.0, 0.0, (m[k, j_] - m[j_, k]) / r]
+        q[i] = r / 4
+        q[j_] = (m[j_, i] + m[i, j_]) / r
+        q[k] = (m[k, i] + m[i, k]) / r
+    return np.array(q)
+
+
+def trs(t=None, r=None, sc=None):
+    M = np.eye(4)
+    M[:3, :3] = q2m(np.array(r if r is not None else [0, 0, 0, 1.0], float)) * np.array(sc if sc is not None else [1, 1, 1.0])
+    M[:3, 3] = t if t is not None else [0, 0, 0]
+    return M
+
+
+class FK:
+    """Мировые матрицы узлов исходного glb в момент t (каналы его первой анимации)."""
+
+    def __init__(self, j, bin_):
+        self.j = j
+        self.par = {c: i for i, n in enumerate(j["nodes"]) for c in n.get("children", [])}
+        self.tr = {}
+        a = j["animations"][0]
+        for c in a["channels"]:
+            sp = a["samplers"][c["sampler"]]
+            self.tr[(c["target"]["node"], c["target"]["path"])] = (read(j, bin_, sp["input"])[:, 0], read(j, bin_, sp["output"]))
+
+    def _val(self, i, path, t, d):
+        k = self.tr.get((i, path))
+        if k is None:
+            return d
+        tt, v = k
+        return np.array([np.interp(t, tt, v[:, c]) for c in range(v.shape[1])])
+
+    def world(self, i, t):
+        n = self.j["nodes"][i]
+        M = trs(self._val(i, "translation", t, n.get("translation")), self._val(i, "rotation", t, n.get("rotation")),
+                self._val(i, "scale", t, n.get("scale")))
+        return (self.world(self.par[i], t) @ M) if i in self.par else M
+
+
+def ortho(M):
+    R = M[:3, :3]
+    R = R / np.linalg.norm(R, axis=0)
+    out = np.eye(4)
+    out[:3, :3] = R
+    out[:3, 3] = M[:3, 3]
+    return out
+
+
+SPEAR_K = None                  # копьё Cascadeur → узел Spear модели: поправка по первому кадру первого клипа
+
+
+def spear_track(s, sb, j, names, tt):
+    """Копьё в Cascadeur — отдельный объект (подброс, перехват): его ход относительно кисти → узел Spear модели
+    (ребёнок RightHand, в нём сетка Sword_Hand). Первый кадр первого клипа = копьё в руке как в модели."""
+    global SPEAR_K
+    fk = FK(s, sb)
+    sn = {n.get("name"): i for i, n in enumerate(s["nodes"])}
+    if "CrimsonSpear" not in sn or "mixamorig:RightHand" not in sn or "Spear" not in names:
+        return None
+    gs = j["nodes"][names["Spear"]]
+    gh = j["nodes"][names["Sword_Hand"]]
+    rest = trs(gs.get("translation"), gs.get("rotation")) @ trs(gh.get("translation"), gh.get("rotation"))
+    sh_inv = np.linalg.inv(trs(gh.get("translation"), gh.get("rotation")))
+    pos, rot = [], []
+    for k, t in enumerate(tt):
+        rel = np.linalg.inv(ortho(fk.world(sn["mixamorig:RightHand"], t))) @ ortho(fk.world(sn["CrimsonSpear"], t))
+        if SPEAR_K is None:
+            SPEAR_K = np.linalg.inv(rel) @ rest
+        L = rel @ SPEAR_K @ sh_inv
+        pos.append(L[:3, 3])
+        q = m2q(L[:3, :3])
+        if rot and np.dot(q, rot[-1]) < 0:
+            q = -q
+        rot.append(q)
+    return np.array(pos), np.array(rot)
+
+
 def main():
     model, meta_p = sys.argv[1], sys.argv[2]
     pairs = [p.split("=", 1) for p in sys.argv[3:]]
@@ -121,11 +215,30 @@ def main():
             samp.append({"input": write(j, bin_, tt, "SCALAR"), "output": write(j, bin_, hv, "VEC3"),
                          "interpolation": "LINEAR"})
             ch.append({"sampler": len(samp) - 1, "target": {"node": names["Hips"], "path": "translation"}})
+        sp_ = spear_track(s, sb, j, names, tt)
+        if sp_ is not None:
+            ti = write(j, bin_, tt, "SCALAR")
+            for path, v, typ in (("translation", sp_[0], "VEC3"), ("rotation", sp_[1], "VEC4")):
+                samp.append({"input": ti, "output": write(j, bin_, v, typ), "interpolation": "LINEAR"})
+                ch.append({"sampler": len(samp) - 1, "target": {"node": names["Spear"], "path": path}})
+            print("  spear: max %.2f m from the hand" % float(np.linalg.norm(sp_[0], axis=1).max()))
         j["animations"] = [a for a in j["animations"] if a.get("name") != clip]
         j["animations"].append({"name": clip, "channels": ch, "samplers": samp})
         meta.setdefault("root_motion", {})[clip] = {"fps": FPS, "frames": n, "offset": off}
         meta.setdefault("clips", {})[clip] = {"frames": n}
         print(clip, "%.2f s" % t_end, len(ch), "channels", "path %.2f m" % (np.hypot(*off[-1]) if off else 0))
+    if "Spear" in names:                     # клипы без хода копья держат его в руке как в модели (иначе застынет где было)
+        gs = j["nodes"][names["Spear"]]
+        for a in j["animations"]:
+            if any(c["target"]["node"] == names["Spear"] for c in a["channels"]):
+                continue
+            t_end = max(float(j["accessors"][sp["input"]]["max"][0]) for sp in a["samplers"])
+            ti = write(j, bin_, np.array([0.0, t_end]), "SCALAR")
+            for path, v, typ in (("translation", gs.get("translation", [0, 0, 0]), "VEC3"),
+                                 ("rotation", gs.get("rotation", [0, 0, 0, 1]), "VEC4")):
+                a["samplers"].append({"input": ti, "output": write(j, bin_, np.array([v, v]), typ),
+                                      "interpolation": "LINEAR"})
+                a["channels"].append({"sampler": len(a["samplers"]) - 1, "target": {"node": names["Spear"], "path": path}})
     save(model, j, bin_)
     json.dump(meta, open(meta_p, "w", encoding="utf-8"), ensure_ascii=False)
 

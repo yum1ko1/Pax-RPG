@@ -82,5 +82,6 @@
 		"Attack3": 0.06,
 		"ComboEnd": 0.2
 	},
-	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку."
+	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку.",
+	"swing_tilt": 0.0
 }
