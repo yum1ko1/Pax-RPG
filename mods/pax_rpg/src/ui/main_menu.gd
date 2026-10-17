@@ -304,15 +304,14 @@ func _button(text: String, fn: Callable) -> Control:
 		tw.tween_property(lab, "position:x", 46.0 if on else 34.0, 0.25)
 		tw.tween_property(lab, "theme_override_colors/font_color", Color(1.0, 0.96, 0.97) if on else (st.col as Color), 0.18)
 		tw.tween_property(lab, "theme_override_colors/font_shadow_color", Color(1.0, 0.18, 0.28, 0.8) if on else (st.shadow as Color), 0.2)
-		if on:
-			burst.position = Vector2(22.0 + w, 33.0)
-			get_tree().create_timer(0.22).timeout.connect(burst.restart)
 		_hot_want = 1.0 if on else 0.0
 	box.mouse_entered.connect(hover.bind(true))
 	box.mouse_exited.connect(hover.bind(false))
 	box.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			burst.position = Vector2(82.0 + lab.get_minimum_size().x, 33.0)   # искры — при нажатии, не при наведении
+			burst.restart()
 			var tw := box.create_tween()
 			tw.tween_property(stroke, "modulate", Color(1.8, 1.8, 1.8), 0.06)
 			tw.tween_property(stroke, "modulate", Color.WHITE, 0.14)
@@ -445,11 +444,11 @@ float fbm(vec2 p) {
 void fragment() {
 	vec2 uv = UV;
 	// параллакс: ближнее (светлое в depth) сдвигается сильнее. Глубина размыта (резкий край силуэта при
-	// большом сдвиге мыши дублировал самурая), сдвиг меньше, второй шаг — уточнение по размытой же глубине.
+	// большом сдвиге мыши дублировал самурая); второй шаг — уточнение по размытой же глубине.
 	float d = dsoft(uv);
-	vec2 off = -mouse * vec2(0.009, 0.006) * (d - 0.25);
+	vec2 off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
 	d = dsoft(uv + off);
-	off = -mouse * vec2(0.009, 0.006) * (d - 0.25);
+	off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
 	// ветер треплет полы одежды самурая: волна идёт вниз по подолу, порывы — медленный шум
 	float rb = texture(robe, uv + off).r;
 	float gust = 0.55 + 0.45 * noise(vec2(time * 0.35, 3.1));
