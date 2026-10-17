@@ -166,7 +166,30 @@ def spear_track(s, sb, j, names, tt):
         if rot and np.dot(q, rot[-1]) < 0:
             q = -q
         rot.append(q)
-    return np.array(pos), np.array(rot)
+    pos = smooth(pos, SPEAR_SIGMA, True)        # копьё: без телепортов и дрожи в руке
+    rot = smooth(rot, SPEAR_SIGMA, True)
+    rot /= np.linalg.norm(rot, axis=1, keepdims=True)
+    return pos, rot
+
+
+def smooth(v, sigma, median=False):
+    """Гладкая кривая по кадрам (оси — столбцы): медиана по 3 кадрам убирает одиночные скачки (телепорт копья),
+    гаусс sigma кадров — дрожь. Края не съезжают (отражение)."""
+    v = np.asarray(v, float)
+    if median and len(v) >= 3:
+        p = np.concatenate([v[:1], v, v[-1:]])
+        v = np.median(np.stack([p[:-2], p[1:-1], p[2:]]), axis=0)
+    if sigma <= 0:
+        return v
+    r = int(np.ceil(sigma * 3))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma) ** 2)
+    k /= k.sum()
+    p = np.concatenate([v[r:0:-1], v, v[-2:-r - 2:-1]]) if len(v) > r + 1 else np.pad(v, ((r, r), (0, 0)), "edge")
+    return np.stack([np.convolve(p[:, c], k, "valid") for c in range(v.shape[1])], 1)
+
+
+ROOT_SIGMA = 4.0                # кадров (30 к/с): ход героя — гладкий, качание таза остаётся в клипе
+SPEAR_SIGMA = 1.2
 
 
 def main():
@@ -208,10 +231,13 @@ def main():
             t, v = hips_t
             hv = np.stack([np.interp(tt, t, v[:, k]) for k in range(3)], 1)
             d = hv - hv[0]
-            off = [[round(float(d[i, 0]), 4), round(float(d[i, 2]), 4)] for i in range(n)]
+            road = smooth(d[:, [0, 2]], ROOT_SIGMA)   # ход героя — гладкий (без качания таза: иначе «плывёт»)
+            road -= road[0]
+            road += np.linspace(0.0, 1.0, n)[:, None] * (d[-1, [0, 2]] - road[-1])   # весь путь клипа — как в анимации
+            off = [[round(float(road[i, 0]), 4), round(float(road[i, 1]), 4)] for i in range(n)]
             home = j["nodes"][names["Hips"]].get("translation", [0.0, 0.0, 0.0])
-            hv[:, 0] = home[0]                      # клипы — отрезки одной серии: таз — в покое модели, ход — в json
-            hv[:, 2] = home[2]
+            hv[:, 0] = home[0] + d[:, 0] - road[:, 0]   # таз — в покое модели + качание вокруг хода (в клипе)
+            hv[:, 2] = home[2] + d[:, 2] - road[:, 1]
             samp.append({"input": write(j, bin_, tt, "SCALAR"), "output": write(j, bin_, hv, "VEC3"),
                          "interpolation": "LINEAR"})
             ch.append({"sampler": len(samp) - 1, "target": {"node": names["Hips"], "path": "translation"}})
