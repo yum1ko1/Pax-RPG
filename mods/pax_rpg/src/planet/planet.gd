@@ -339,7 +339,7 @@ func restore() -> void:
 func _free_markers() -> void:
 	for n: Node in _markers:
 		if is_instance_valid(n):
-			n.queue_free()
+			n.free()                                       # вне дерева — queue_free не сработает
 	for n: Node in _labels:
 		if is_instance_valid(n):
 			n.queue_free()
@@ -404,7 +404,8 @@ func _make_markers() -> void:
 		var anchor := Node3D.new()
 		anchor.position = dir_of(float(city.get("lat", 0.0)), float(city.get("lon", 0.0))) * MARKER_LIFT
 		anchor.set_meta(&"pax_rpg_city", city)
-		_node.add_child(anchor)
+		# Не в дерево под планету игры: её детей обходят потоки игры и модов (кварталы, границы) — наш узел,
+		# добавленный в этот миг, ронял игру. Якорь — просто точка в осях планеты (_show_markers).
 		_markers.append(anchor)
 		var lb := Label.new()
 		var capital := bool(city.get("capital", false))
@@ -494,7 +495,7 @@ func _show_markers(on: bool) -> void:
 		var lb: Label = _labels[i] if i < _labels.size() else null
 		if not is_instance_valid(mk) or not is_instance_valid(lb):
 			continue
-		var p := mk.global_position
+		var p := _node.global_transform * mk.position if is_instance_valid(_node) else mk.position
 		var see := on and cam != null and not cam.is_position_behind(p) and (p - centre).dot(cam.global_position - p) > 0.0
 		if see:
 			# значок (◆/•) — ровно на месте города, текст — справа от него, как у подписей игры

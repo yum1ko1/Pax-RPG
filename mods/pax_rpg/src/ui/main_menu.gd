@@ -14,7 +14,7 @@ const IMG := Vector2(3840.0, 2176.0)             # размер фона (дол
 var mod: PaxMod
 var _find: Callable                              # () -> меню игры (Menu.gd) или null
 var _menu_ref: WeakRef                           # найденное меню; обход всего дерева — не чаще раза в секунду
-var _seek_t := 0.0
+var _away := false                               # нажата наша кнопка — дальше видны, только когда меню игры на главном
 var _items: Array = []                           # [[ключ перевода, Callable]]
 var _root: Control
 var _bg: TextureRect
@@ -316,8 +316,19 @@ func _button(text: String, fn: Callable) -> Control:
 			var tw := box.create_tween()
 			tw.tween_property(stroke, "modulate", Color(1.8, 1.8, 1.8), 0.06)
 			tw.tween_property(stroke, "modulate", Color.WHITE, 0.14)
-			tw.tween_callback(fn))
+			tw.tween_callback(_leave.bind(fn)))
 	return box
+
+
+## Нажата наша кнопка: меню игры ищем один раз сейчас (оно на месте, игра ничего не грузит) — по нему потом
+## узнаём, что игрок вернулся на главный экран (из настроек, загрузки или из партии).
+func _leave(fn: Callable) -> void:
+	_away = true
+	var m: Variant = _menu_ref.get_ref() if _menu_ref != null else null
+	if m == null:
+		m = _find.call()
+		_menu_ref = weakref(m) if m != null else null
+	fn.call()
 
 
 ## Малое кольцо слева от пункта — как кольцо в небе: дуга прорисовывается по progress, со свечением.
@@ -363,41 +374,14 @@ void fragment() {
 }"""
 
 
-## Меню игры на главном шаге — значит, мы на экране; другой шаг (загрузка, настройки, партия) — прячемся.
-func _on_node_added(n: Node) -> void:
-	if n is Button:                                  # наша кнопка в меню игры: меню — её предок (meta ставят следом)
-		_check_button.call_deferred(weakref(n))
-	elif n.has_method("_country_choice_screen") and n.has_method("_start_game"):
-		_menu_ref = weakref(n)
-
-
-func _check_button(w: WeakRef) -> void:
-	var b: Node = w.get_ref()
-	if b == null or str(b.get_meta("menu_id", "")) != "mod:pax_rpg_continue":
-		return
-	var p := b.get_parent()
-	while p != null:
-		if p.has_method("_country_choice_screen") and p.has_method("_start_game"):
-			_menu_ref = weakref(p)
-			return
-		p = p.get_parent()
-
-
+## Своё меню — сразу при запуске, поверх меню игры, без поиска: дерево сцены не трогаем вовсе (обход его на
+## загрузке игры ронял её с 0.31.4). После нашей кнопки — прячемся, пока меню игры (найдено в _leave) снова
+## не на главном шаге.
 func _on_main() -> bool:
-	# Раньше здесь каждый кадр обходилось ВСЁ дерево сцены. С 0.31.4 игра на загрузке мира достраивает дерево
-	# в своих потоках (кварталы, экономика) — обход в этот миг ронял игру (след: последним был этот _process).
-	# Меню не ищем обходом дерева совсем (на загрузке мира и тот, раз в секунду, ронял игру на ~90 %): один обход
-	# при старте мода, дальше новое меню ловим сигналом node_added.
+	if not _away:
+		return true
 	var menu: Variant = _menu_ref.get_ref() if _menu_ref != null else null
-	if menu == null or (menu as Node).is_queued_for_deletion():
-		if _seek_t >= 0.0:
-			_seek_t = -1.0
-			menu = _find.call()
-			_menu_ref = weakref(menu) if menu != null else null
-			get_tree().node_added.connect(_on_node_added)
-		else:
-			return false
-	if menu == null or not (menu as CanvasItem).is_visible_in_tree():
+	if menu == null or (menu as Node).is_queued_for_deletion() or not (menu as CanvasItem).is_visible_in_tree():
 		return false
 	var scr: Node = menu.screen
 	if scr == null:
