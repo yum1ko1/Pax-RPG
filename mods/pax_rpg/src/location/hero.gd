@@ -1230,7 +1230,8 @@ func _trail_tick(delta: float) -> void:
 		return
 	_clock += delta
 	var life := _f("trail_life", 0.2)
-	if _active() and _sword_hand.visible and _sword_hand.is_inside_tree() and delta > 0.0:
+	if _active() and _sword_hand.visible and _sword_hand.is_inside_tree() and delta > 0.0 \
+			and bool(_mod.get_setting("combat_fx", true)):     # настройки → «Боевые эффекты»
 		var g := _sword_hand.global_transform
 		var tip := g * _tip
 		var base := g * (_tip * _f("trail_from", 0.66))       # след — только конец клинка, не вся длина
@@ -1252,7 +1253,8 @@ func _trail_tick(delta: float) -> void:
 		var k := clampf(1.0 - (_clock - float(p[0])) / life, 0.0, 1.0)
 		_trail_mesh.surface_set_color(Color(c, 0.05 * k))
 		_trail_mesh.surface_add_vertex(p[1])
-		_trail_mesh.surface_set_color(Color(c, _f("trail_alpha", 0.6) * k * k))
+		var gain := 1.0 + _f("trail_combo_gain", 0.0) * float(_combo_i)   # серия разгоняется — след ярче
+		_trail_mesh.surface_set_color(Color(c, minf(1.0, _f("trail_alpha", 0.6) * gain) * k * k))
 		_trail_mesh.surface_add_vertex(p[2])
 	_trail_mesh.surface_end()
 
@@ -2136,7 +2138,8 @@ func _hit(out: Dictionary) -> void:
 		if _hits_done < ts.size() and _pos() >= float(ts[_hits_done]):
 			_hits_done += 1
 			out["hit"] = {"range": _per("hit_range", action, 2.6), "arc": _per("hit_arc", action, 0.35),
-				"damage": _per("hit_damage", action, 15.0), "knock": false}
+				"damage": _per("hit_damage", action, 15.0), "knock": false, "step": _combo_i,
+				"final": _combo_i == ATTACKS.size() - 1 and _hits_done == ts.size()}   # финал серии — свой акцент
 		return
 	if _hit_done or action not in ATTACKS:
 		return

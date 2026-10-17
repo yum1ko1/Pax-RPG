@@ -286,5 +286,10 @@
 	"pax_rpg_ult_spear_sub": "Ultimate · Crimson Sunset Spear",
 	"pax_rpg_wskill_spear_ult": "Crimson Sunset (G)",
 	"pax_rpg_wskill_spear_ult_desc": "A thrust stuns the target, a spinning blow knocks it back; sliding with the spear scraping the ground, the hero trips the foe and strikes its back as it rises.",
-	"pax_rpg_ult_no_clip": "This hero cannot use this weapon's technique"
+	"pax_rpg_ult_no_clip": "This hero cannot use this weapon's technique",
+	"pax_rpg_set_combat_fx": "Combat effects (crimson mana, flashes)",
+	"pax_rpg_set_combat_cam": "Combat camera (combo push-in, finisher accent)",
+	"pax_rpg_menu_continue": "Continue",
+	"pax_rpg_menu_load": "Load",
+	"pax_rpg_menu_settings": "Settings"
 }

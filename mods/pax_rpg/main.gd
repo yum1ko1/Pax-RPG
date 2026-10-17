@@ -29,10 +29,13 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
-	Pax.hide_menu_item("new_game")                 # своя «Новая игра»: сценарий Юрума сам, выбор только страны
-	Pax.hide_menu_item("presets")
-	Pax.add_menu_item("pax_rpg_new", tr_key("pax_rpg_menu_new"), _rpg_new_game)
-	Pax.add_menu_item("pax_rpg_test", tr_key("pax_rpg_menu_test"), _open_test_arena)
+	# Временное меню (по просьбе автора): только «Продолжить», «Загрузить», «Настройки» и «Выход» игры.
+	# Новая игра Pax RPG (_rpg_new_game) и тестовая арена — в коде, в меню вернём, когда понадобятся.
+	for id: String in ["load", "new_game", "presets", "network", "settings"]:
+		Pax.hide_menu_item(id)
+	Pax.add_menu_item("pax_rpg_continue", tr_key("pax_rpg_menu_continue"), _menu_continue)
+	Pax.add_menu_item("pax_rpg_load", tr_key("pax_rpg_menu_load"), _menu_screen.bind("_loading_screen"))
+	Pax.add_menu_item("pax_rpg_settings", tr_key("pax_rpg_menu_settings"), _menu_screen.bind("_settings_screen"))
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
 	Pax.register_command("rpg_orc", _orc_command, "rpg_orc — орк-чемпион перед героем (тест боя)")
@@ -90,6 +93,31 @@ func _rpg_new_game() -> void:
 			for c: Dictionary in (b as Button).pressed.get_connections():
 				(b as Button).pressed.disconnect(c.callable)
 			(b as Button).pressed.connect(go)
+
+
+## Экран меню игры (загрузка, настройки) — тем же методом, что её кнопки.
+func _menu_screen(which: String) -> void:
+	var menu: Variant = _find_menu(get_tree().root)
+	if menu == null:
+		return
+	if which == "_loading_screen":
+		menu._loading_screen()
+	else:
+		menu._settings_screen()
+
+
+## «Продолжить» — последнее сохранение: экран загрузки (сохранения там от новых к старым) и первая «Играть».
+func _menu_continue() -> void:
+	var menu: Variant = _find_menu(get_tree().root)
+	if menu == null:
+		return
+	menu._loading_screen()
+	var want := [str(menu.t_("save_play")), str(menu.t_("save_continue"))]
+	for b: Node in (menu.screen as Node).find_children("*", "Button", true, false):
+		if (b as Button).text in want and (b as Button).visible:
+			(b as Button).pressed.emit()
+			return
+	log_warning("Pax RPG: нет сохранений — «Продолжить» оставляет экран загрузки")
 
 
 static func _find_menu(n: Node) -> Variant:

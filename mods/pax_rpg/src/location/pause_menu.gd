@@ -136,6 +136,17 @@ func _build_settings(serif: Font) -> void:
 		AudioBus.set_volume(AudioBus.SFX, v))
 	_slider(_mod.tr_key("pax_rpg_set_mouse"), "mouse_sens", 1.0, 0.3, 2.5, func(v: float) -> void:
 		sens_changed.emit(v))
+	# бой: алая мана и блики (combat_fx), подъезд камеры в серии и акцент финала (combat_cam) — можно выключить
+	for kv: Array in [["pax_rpg_set_combat_fx", "combat_fx"], ["pax_rpg_set_combat_cam", "combat_cam"]]:
+		var r := HBoxContainer.new()
+		r.add_child(_label(str(kv[0])))
+		var c := CheckButton.new()
+		c.focus_mode = Control.FOCUS_NONE
+		var key := str(kv[1])
+		c.button_pressed = bool(_mod.get_setting(key, true))
+		c.toggled.connect(func(on: bool) -> void: _mod.set_setting(key, on))
+		r.add_child(c)
+		_settings.add_child(r)
 	# реплики врагов голосом ИИ: выкл. по умолчанию — каждая реплика — запрос к нейросети (токены)
 	var row := HBoxContainer.new()
 	row.add_child(_label("pax_rpg_set_foe_voice"))

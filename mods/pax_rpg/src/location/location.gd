@@ -1938,6 +1938,7 @@ func _physics_body(delta: float) -> void:
 		_player.velocity = Vector3.ZERO
 	var tc := Time.get_ticks_usec()
 	_follow_camera(delta)
+	_flash_tick(delta)
 	Prof.add("камера", tc)
 	if is_instance_valid(_arena):
 		_arena.tick()
@@ -2055,6 +2056,14 @@ func _follow_camera(delta := 0.0) -> void:
 		hand = _cam.global_transform.basis * hand
 		pos += hand
 		look += hand * 0.35
+	if delta > 0.0 and _hero != null:
+		# серия ударов: камера чуть ближе к герою (доля дистанции), после серии — обратно; игрок двинул мышь — гаснет
+		var in_combo := bool(mod.get_setting("combat_cam", true)) and _hero.action in ["Attack1", "Attack2", "Attack3"]
+		_combo_cam = move_toward(_combo_cam, 1.0 if in_combo else 0.0, delta / (0.35 if in_combo else 0.6))
+		var e := smoothstep(0.0, 1.0, _combo_cam)
+		pos = look + (pos - look) * (1.0 - _hf("cam_combo_push", 0.12) * e)
+		_fov_punch = maxf(0.0, _fov_punch - delta / 0.28)
+		_cam.fov = _cam_fov0() - _hf("cam_final_fov", 5.0) * sin(_fov_punch * PI * 0.5)
 	if _sult != null and _sult.active():             # кат-сцена ульты копья — своя камера
 		var cc: Array = _sult.camera()
 		pos = cc[0]
@@ -2063,6 +2072,15 @@ func _follow_camera(delta := 0.0) -> void:
 		pos = _cam_collide(pos, delta)
 	_cam.position = pos
 	_cam.look_at(look, Vector3.UP.rotated((look - pos).normalized(), _cam_roll) if (look - pos).length() > 0.01 else Vector3.UP)
+
+
+var _fov0 := -1.0
+
+
+func _cam_fov0() -> float:
+	if _fov0 < 0.0:
+		_fov0 = _cam.fov
+	return _fov0
 
 
 ## Камера в движении: покачивание в такт шагам (вверх-вниз дважды за цикл шагов, вбок — раз), ходьба — легко,
@@ -2140,6 +2158,65 @@ func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
 	_shake_amp = (_hf("shake_heavy", 0.09) if heavy else _hf("shake", 0.045)) * clampf(heft, 0.6, 1.8)
 
 
+## Боевые эффекты удара (настройки → «Боевые эффекты», герой с mana_fx — Тянь Лун): алая мана из точки попадания,
+## к финалу серии гуще; финал — алый блик по краям экрана. Камера (настройки → «Камера в бою»): толчок, у финала —
+## на миг уже кадр и крен. Ничего не забирает управление: только смещение вокруг камеры игрока, гаснет само.
+var _flash: ColorRect
+var _flash_t := 0.0
+var _fov_punch := 0.0
+var _combo_cam := 0.0
+
+
+func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
+	var final := bool(hit.get("final", false))
+	var step := float(hit.get("step", 0))
+	if bool(mod.get_setting("combat_fx", true)) and bool(hero_cfg.get("mana_fx", false)):
+		var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+		var c := Color(float(col[0]), float(col[1]), float(col[2]))
+		var to := (gob.global_position - _player.global_position)
+		to.y = 0.0
+		var at := gob.global_position + Vector3(0.0, 1.0, 0.0) - to.normalized() * 0.3
+		_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
+		if final:
+			_mana_burst(gob.global_position + Vector3(0.0, 0.9, 0.0), c)
+			_flash_t = _hf("fx_flash_time", 0.22)
+	if final and bool(mod.get_setting("combat_cam", true)):
+		_fov_punch = 1.0
+		_cam_roll += _hf("cam_final_roll", 0.045) * (1.0 if randf() < 0.5 else -1.0)
+
+
+## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.
+func _flash_tick(delta: float) -> void:
+	if _flash_t <= 0.0 and not is_instance_valid(_flash):
+		return
+	if not is_instance_valid(_flash):
+		_flash = ColorRect.new()
+		_flash.name = "PaxRpgComboFlash"
+		_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sh := Shader.new()
+		sh.code = FLASH
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		_flash.material = m
+		add_child(_flash)
+		move_child(_flash, _box.get_index() + 1 if is_instance_valid(_box) else 0)
+	_flash_t = maxf(0.0, _flash_t - delta)
+	var a := _flash_t / maxf(_hf("fx_flash_time", 0.22), 0.01)
+	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+	(_flash.material as ShaderMaterial).set_shader_parameter("tint", Color(float(col[0]), float(col[1]), float(col[2]), a * a))
+	_flash.visible = a > 0.001
+
+
+const FLASH := """shader_type canvas_item;
+uniform vec4 tint = vec4(1.0, 0.1, 0.2, 0.0);
+void fragment() {
+	vec2 d = UV - vec2(0.5);
+	float v = smoothstep(0.3, 0.75, length(d * vec2(1.0, 0.8)));
+	COLOR = vec4(tint.rgb, v * tint.a * 0.55);
+}"""
+
+
 ## Удар героя по врагам рядом: в пределах range и перед ним (arc — косинус полуугла; -1 — по кругу, удар о землю).
 func _strike(hit: Dictionary) -> void:
 	var fwd := -_body_mesh.global_transform.basis.z
@@ -2166,6 +2243,7 @@ func _strike(hit: Dictionary) -> void:
 		_impact_feel(gob, bool(hit.get("knock", false)), _mass_hit(gob, 0.0, bool(hit.get("knock", false))))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
+		_combat_fx_hit(gob, hit)
 
 
 ## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —
