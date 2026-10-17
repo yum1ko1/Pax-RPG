@@ -356,6 +356,14 @@ float n(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y);
 }
+// глубина, размытая по 9 точкам: плавные края — без «лестницы» в тумане и двоения силуэта
+float dsoft(vec2 uv) {
+	float s = 0.0;
+	for (int x = -1; x <= 1; x++)
+		for (int y = -1; y <= 1; y++)
+			s += texture(depth, uv + vec2(float(x), float(y)) * vec2(0.006, 0.009)).r;
+	return s / 9.0;
+}
 void fragment() {
 	vec2 uv = UV;
 	// мазок: толще слева, к концу тоньше и рвётся; края и «волоски» кисти — шум
@@ -436,11 +444,12 @@ float fbm(vec2 p) {
 }
 void fragment() {
 	vec2 uv = UV;
-	// параллакс: ближнее (светлое в depth) сдвигается сильнее
-	float d = texture(depth, uv).r;
-	vec2 off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
-	d = texture(depth, uv + off).r;
-	off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
+	// параллакс: ближнее (светлое в depth) сдвигается сильнее. Глубина размыта (резкий край силуэта при
+	// большом сдвиге мыши дублировал самурая), сдвиг меньше, второй шаг — уточнение по размытой же глубине.
+	float d = dsoft(uv);
+	vec2 off = -mouse * vec2(0.009, 0.006) * (d - 0.25);
+	d = dsoft(uv + off);
+	off = -mouse * vec2(0.009, 0.006) * (d - 0.25);
 	// ветер треплет полы одежды самурая: волна идёт вниз по подолу, порывы — медленный шум
 	float rb = texture(robe, uv + off).r;
 	float gust = 0.55 + 0.45 * noise(vec2(time * 0.35, 3.1));
@@ -452,7 +461,7 @@ void fragment() {
 	vec2 p = vec2(uv.x * 2.4 + time * 0.012, uv.y * 5.0);
 	vec2 q = vec2(fbm(p + vec2(time * 0.02, 0.0)), fbm(p + vec2(5.2, 1.3) - vec2(time * 0.015, 0.0)));
 	float f1 = smoothstep(0.35, 0.85, fbm(p + 1.8 * q));
-	float valley = smoothstep(0.4, 0.58, uv.y) * (1.0 - smoothstep(0.84, 1.0, uv.y)) * (1.0 - d * 0.85);
+	float valley = smoothstep(0.4, 0.58, uv.y) * (1.0 - smoothstep(0.84, 1.0, uv.y)) * (1.0 - smoothstep(0.1, 0.9, d) * 0.85);
 	c = mix(c, vec3(0.66, 0.55, 0.74), valley * f1 * 0.42);
 	vec2 p2 = vec2(uv.x * 1.6 + time * 0.035, uv.y * 3.0 + 4.0);
 	float f2 = smoothstep(0.45, 0.9, fbm(p2 + fbm(p2 * 1.3 - time * 0.03)));

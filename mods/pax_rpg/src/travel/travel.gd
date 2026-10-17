@@ -21,6 +21,7 @@ var loading: Loading
 var hero_id := ""                  # кем играем в этом мире; как в Terraria — герой не привязан к сохранению:
                                    # выбор при каждом заходе в мир (start), последний выбор — настройка мода «character»
 var _picker: CharSelect
+var pick_next := false                           # main.gd: нажата «Новая игра», «Продолжить» или «Загрузить»
 var _rng := RandomNumberGenerator.new()   # свой — общий randf() игры не трогаем (повторяемость мира)
 
 
@@ -40,7 +41,9 @@ func start(g: PaxGame) -> void:
 	game = g
 	hero_id = ""                                      # новый заход в мир (новая игра или загрузка) — герой выбирается заново
 	location.game = g
-	_pick_hero(func() -> void: pass)                  # выбор героя — сразу при входе в мир, а не у ворот города
+	if pick_next:                                     # выбор героя — только после «Новая игра», «Продолжить», «Загрузить»
+		pick_next = false                             # (за главным меню игры тоже стоит мир — там не спрашиваем)
+		_pick_hero(func() -> void: pass)
 
 
 func _line(prefix: String, count: int, city_name: String) -> String:

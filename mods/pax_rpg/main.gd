@@ -80,6 +80,7 @@ const PRESET := "Юрума"
 
 
 func _rpg_new_game() -> void:
+	travel.pick_next = true
 	var menu: Variant = _find_menu(get_tree().root)
 	if menu == null:
 		log_warning("Pax RPG: главное меню не найдено — открываю обычную новую игру")
@@ -114,6 +115,7 @@ func _menu_screen(which: String) -> void:
 	if menu == null:
 		return
 	if which == "_loading_screen":
+		travel.pick_next = true
 		menu._loading_screen()
 	elif which == "_network_screen":
 		menu._network_screen()
@@ -125,6 +127,7 @@ func _menu_screen(which: String) -> void:
 
 ## «Продолжить» — последнее сохранение: экран загрузки (сохранения там от новых к старым) и первая «Играть».
 func _menu_continue() -> void:
+	travel.pick_next = true
 	var menu: Variant = _find_menu(get_tree().root)
 	if menu == null:
 		return
