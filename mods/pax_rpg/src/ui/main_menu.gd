@@ -85,6 +85,8 @@ func _build() -> void:
 	_mat.set_shader_parameter("ring", RING)
 	_mat.set_shader_parameter("tip", TIP)
 	_mat.set_shader_parameter("robe", mod.texture("textures/menu/robe.png"))
+	_mat.set_shader_parameter("plate", mod.texture("textures/menu/plate.jpg"))      # фон без скалы с самураем
+	_mat.set_shader_parameter("fgmask", mod.texture("textures/menu/fgmask.png"))    # передний план: скала, самурай
 	_bg.material = _mat
 	_root.add_child(_bg)
 	_make_rocks()
@@ -418,6 +420,8 @@ func _process(delta: float) -> void:
 const BG := """shader_type canvas_item;
 uniform sampler2D depth : filter_linear;
 uniform sampler2D robe : filter_linear;
+uniform sampler2D plate : filter_linear;
+uniform sampler2D fgmask : filter_linear;
 uniform vec2 mouse = vec2(0.0);
 uniform vec2 ring = vec2(0.766, 0.195);
 uniform vec2 tip = vec2(0.1276, 0.4476);
@@ -443,19 +447,19 @@ float dsoft(vec2 uv) {
 }
 void fragment() {
 	vec2 uv = UV;
-	// параллакс: ближнее (светлое в depth) сдвигается сильнее. Глубина размыта (резкий край силуэта при
-	// большом сдвиге мыши дублировал самурая); второй шаг — уточнение по размытой же глубине.
-	float d = dsoft(uv);
-	vec2 off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
-	d = dsoft(uv + off);
-	off = -mouse * vec2(0.018, 0.012) * (d - 0.25);
+	// параллакс: за мышью сдвигается только передний план — скала с самураем (fgmask.png); город, горы и небо
+	// стоят. Под сдвинутой скалой — plate.jpg (тот же фон, скала и самурай закрашены), без двоения силуэта.
+	vec2 off = -mouse * vec2(0.0135, 0.009);
 	// ветер треплет полы одежды самурая: волна идёт вниз по подолу, порывы — медленный шум
 	float rb = texture(robe, uv + off).r;
 	float gust = 0.55 + 0.45 * noise(vec2(time * 0.35, 3.1));
 	off.x += rb * gust * 0.0016 * sin(time * 2.1 - uv.y * 70.0);
 	off.y += rb * gust * 0.0004 * sin(time * 1.7 - uv.y * 50.0 + 1.3);
-	vec2 suv = clamp(uv + off, vec2(0.001), vec2(0.999));
-	vec3 c = texture(TEXTURE, suv).rgb;
+	vec2 fuv = clamp(uv + off, vec2(0.001), vec2(0.999));
+	float a = texture(fgmask, fuv).r;
+	vec3 c = mix(texture(plate, uv).rgb, texture(TEXTURE, fuv).rgb, a);
+	float d = dsoft(uv);
+	vec2 suv = uv;
 	// туман: слои с искривлением (domain warp) плывут по долине, ближний — быстрее и прозрачнее
 	vec2 p = vec2(uv.x * 2.4 + time * 0.012, uv.y * 5.0);
 	vec2 q = vec2(fbm(p + vec2(time * 0.02, 0.0)), fbm(p + vec2(5.2, 1.3) - vec2(time * 0.015, 0.0)));
@@ -473,7 +477,7 @@ void fragment() {
 	glow += exp(-r * 9.0) * 0.12 * hot;
 	c += vec3(1.0, 0.45, 0.55) * glow;
 	// алый кончик копья тлеет
-	float t = length((suv - tip) * vec2(1.77, 1.0));
+	float t = length((fuv - tip) * vec2(1.77, 1.0));
 	c += vec3(1.0, 0.15, 0.2) * exp(-t * 260.0) * (0.6 + 0.4 * sin(time * 2.6)) * 1.4;
 	// огни города чуть мерцают
 	float lit = smoothstep(0.55, 0.85, max(c.r, c.g)) * step(0.5, uv.y);
