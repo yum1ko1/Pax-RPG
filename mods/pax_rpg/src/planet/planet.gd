@@ -1,4 +1,5 @@
 extends Node
+const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 ## Юрума вместо Земли и города на ней. Свой шейдер ставится на материал домашней планеты игры (её узел, сетка и
 ## провинции остаются игровыми — меняется только то, как она нарисована); облачная оболочка Земли прячется —
 ## облака маны уже нарисованы на карте Юрумы. Города — экранные подписи того же вида, что подписи игры на
@@ -68,11 +69,16 @@ func start(g: PaxGame) -> void:
 func _process(delta: float) -> void:
 	if game == null:
 		return
+	if Engine.get_process_frames() % 30 == 0:
+		Trace.mark("planet: frame")           # кадры идут — если след оборвался после этого, упало вне мода
 	_check -= delta
 	if _check <= 0.0:
 		_check = CHECK_EVERY
+		Trace.mark("planet: attach")
 		_attach()
+		Trace.mark("planet: feed map")
 		_feed_flat_map()          # заранее, чтобы карта открылась уже правильной
+		Trace.mark("planet: feed done")
 	_hide_clouds()
 	_map_feed -= delta
 	if _map_feed <= 0.0 and _flat_map_open():
@@ -153,9 +159,12 @@ func _attach() -> void:
 		_mat.shader = _shader
 		_mat.set_shader_parameter("surface_map", _surface)
 		mod.log_info("Pax RPG: Yuruma is on the planet")
+		Trace.mark("planet: shader swapped")
 	if node != _node or _markers.is_empty():
 		_node = node
+		Trace.mark("planet: markers")
 		_make_markers()
+	Trace.mark("planet: clouds")
 	_find_clouds(node)
 
 
@@ -245,7 +254,9 @@ func _feed_water(sm: ShaderMaterial) -> bool:
 			var rm: Variant = sm.get_shader_parameter("region_map")
 			if not (rm is Texture2D):
 				return false
+			Trace.mark("planet: region_map.get_image")
 			var src := (rm as Texture2D).get_image()
+			Trace.mark("planet: get_image done %s" % ("null" if src == null else str(src.get_size())))
 			if src == null or src.is_empty():
 				return false
 			_water_task = WorkerThreadPool.add_task(_build_water.bind(src), false, "pax_rpg water mask")
@@ -264,6 +275,7 @@ func _feed_water(sm: ShaderMaterial) -> bool:
 
 ## В потоке: id провинции — R + G·256; ноль — вода.
 func _build_water(src: Image) -> void:
+	Trace.mark("planet: water mask start")
 	var img := src.duplicate() as Image
 	if img.is_compressed():
 		img.decompress()
@@ -285,6 +297,7 @@ func _build_water(src: Image) -> void:
 		alb[i * 3 + 2] = c[2]
 	var o := Image.create_from_data(WATER_W, WATER_H, false, Image.FORMAT_L8, ocean)
 	var a := Image.create_from_data(WATER_W, WATER_H, false, Image.FORMAT_RGB8, alb)
+	Trace.mark("planet: water mask done")
 	_set_water.call_deferred(o, a)
 
 

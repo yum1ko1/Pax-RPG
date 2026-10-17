@@ -8,6 +8,7 @@ const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
 const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
+const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 const MainMenu := preload("res://mods/pax_rpg/src/ui/main_menu.gd")
 
 var planet: Planet
@@ -153,9 +154,11 @@ func _mod_unloaded() -> void:
 
 
 func _world_ready(g: PaxGame) -> void:
+	Trace.mark("main: world_ready")
 	planet.start(g)
 	travel.start(g)
-	location.prewarm()                    # горы и степь городов — в потоке, пока игрок на глобусе
+	location.prewarm()
+	Trace.mark("main: world_ready done")                    # горы и степь городов — в потоке, пока игрок на глобусе
 
 
 ## Консоль F8: rpg_arena.

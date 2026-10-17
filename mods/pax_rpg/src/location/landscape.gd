@@ -1,4 +1,5 @@
 extends RefCounted
+const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 ## Мир за частоколом: степь холмами до горизонта (shaders/steppe.gdshader — текстура земли, волны ветра, тени облаков),
 ## горные хребты кольцом (ridged-шум, shaders/mountain.gdshader — скалы слоями, снег по высоте и уклону; дымка
 ## тумана делает их синими и далёкими), кочевые юрты на холмах. Без коллизий — герой за стену не выходит. Высоты — шум
@@ -53,7 +54,13 @@ static func request(area: Rect2) -> void:
 
 ## Сопрограмма: поток считает, кадры идут; ответ — в _cache (ошибка в потоке — считаем здесь).
 static func _run_request(area: Rect2, key: String) -> void:
-	var res: Variant = await Bg.run(func() -> Variant: return compute(area))
+	Trace.mark("landscape: request " + key)
+	var res: Variant = await Bg.run(func() -> Variant:
+		Trace.mark("landscape: compute " + key)
+		var r: Variant = compute(area)
+		Trace.mark("landscape: computed " + key)
+		return r)
+	Trace.mark("landscape: done " + key)
 	_cache[key] = res if res is Dictionary else compute(area)
 	_pending.erase(key)
 
