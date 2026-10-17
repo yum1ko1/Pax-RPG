@@ -7,7 +7,6 @@ extends CanvasLayer
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
-const GOLD := Color(0.93, 0.78, 0.5)
 const RING := Vector2(0.766, 0.195)              # кольцо в небе — доля картинки
 
 var mod: PaxMod
@@ -23,6 +22,9 @@ var _hot_want := 0.0
 var _mouse := Vector2.ZERO
 var _t := 0.0
 var _shown := false
+var _brush: FontFile                             # Katsuno (только латиница) — заголовок и пункты по-английски
+const EN := {"pax_rpg_menu_continue": "Continue", "pax_rpg_menu_new": "New Game", "pax_rpg_menu_load": "Load",
+	"pax_rpg_menu_mp": "Multiplayer", "pax_rpg_menu_settings": "Settings", "pax_rpg_menu_exit": "Exit"}
 
 
 func setup(m: PaxMod, find_menu: Callable, items: Array) -> void:
@@ -89,9 +91,9 @@ func _build() -> void:
 	_root.add_child(shade)
 	var title := Label.new()
 	title.text = "PAX RPG"
-	var ff := FontFile.new()
-	ff.data = mod.read_bytes("fonts/katsuno_demo.ttf")
-	title.add_theme_font_override("font", ff)
+	_brush = FontFile.new()
+	_brush.data = mod.read_bytes("fonts/katsuno_demo.ttf")
+	title.add_theme_font_override("font", _brush)
 	title.add_theme_font_size_override("font_size", 84)
 	title.add_theme_color_override("font_color", Color(0.98, 0.93, 0.95))
 	title.add_theme_color_override("font_shadow_color", Color(CRIMSON, 0.55))
@@ -102,45 +104,65 @@ func _build() -> void:
 	title.name = "Title"
 	_root.add_child(title)
 	var sub := Label.new()
-	sub.text = mod.tr_key("pax_rpg_menu_sub")
-	sub.add_theme_font_override("font", _serif())
+	sub.text = "Yuruma  ·  Year MXLVII of the Shattered Sky"
+	sub.add_theme_font_override("font", _brush)
 	sub.add_theme_font_size_override("font_size", 22)
-	sub.add_theme_color_override("font_color", Color(GOLD, 0.85))
+	_glow_text(sub, 3, 8)
 	sub.position = Vector2(80, 206)
 	_root.add_child(sub)
 	_col = VBoxContainer.new()
-	_col.position = Vector2(70, 262)
+	_col.position = Vector2(60, 272)
 	_col.add_theme_constant_override("separation", 2)
 	_root.add_child(_col)
 	for it: Array in _items:
-		_col.add_child(_button(mod.tr_key(str(it[0])), it[1] as Callable))
+		_col.add_child(_button(str(EN.get(str(it[0]), it[0])), it[1] as Callable))
 
 
 func _serif() -> Font:
 	return Hud._sys(["Cormorant Garamond", "Georgia", "Palatino Linotype", "Times New Roman"], 600)
 
 
-## Пункт: текст и черта под ним; наведение — сдвиг вправо, алый цвет, черта растёт, искры; нажатие — действие.
+## Надпись как у заголовка: светлая, с алым отливом снизу.
+func _glow_text(l: Label, dy: int, blur: int) -> void:
+	l.add_theme_color_override("font_color", Color(0.98, 0.93, 0.95))
+	l.add_theme_color_override("font_shadow_color", Color(CRIMSON, 0.6))
+	l.add_theme_constant_override("shadow_offset_x", 0)
+	l.add_theme_constant_override("shadow_offset_y", dy)
+	l.add_theme_constant_override("shadow_outline_size", blur)
+
+
+## Пункт: кисть Katsuno заглавными, с алым отливом. Наведение — из-за левого края выезжает косая алая полоса-мазок,
+## текст сдвигается и светлеет, слева загорается ромб, с конца полосы летят искры; нажатие — действие.
 func _button(text: String, fn: Callable) -> Control:
 	var box := Control.new()
-	box.custom_minimum_size = Vector2(380, 48)
+	box.custom_minimum_size = Vector2(420, 64)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var bar := Polygon2D.new()                       # косой мазок под текстом: яркий слева, тает вправо
+	bar.polygon = PackedVector2Array([Vector2(0, 14), Vector2(400, 14), Vector2(378, 56), Vector2(-16, 56)])
+	bar.vertex_colors = PackedColorArray([Color(CRIMSON, 0.85), Color(CRIMSON, 0.0), Color(CRIMSON, 0.0), Color(CRIMSON, 0.85)])
+	bar.scale = Vector2(0.0, 1.0)
+	box.add_child(bar)
+	var mark := Label.new()                          # ромб слева
+	mark.text = "◆"
+	mark.add_theme_font_size_override("font_size", 16)
+	mark.add_theme_color_override("font_color", Color(1.0, 0.75, 0.78))
+	mark.position = Vector2(-6, 22)
+	mark.modulate.a = 0.0
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(mark)
 	var lab := Label.new()
-	lab.text = text
-	lab.add_theme_font_override("font", _serif())
-	lab.add_theme_font_size_override("font_size", 30)
-	lab.add_theme_color_override("font_color", Color(0.94, 0.9, 0.92))
-	lab.add_theme_color_override("font_outline_color", Color(0.05, 0.02, 0.06, 0.8))
-	lab.add_theme_constant_override("outline_size", 6)
+	lab.text = text.to_upper()
+	lab.add_theme_font_size_override("font_size", 34)
+	lab.add_theme_constant_override("outline_size", 0)
+	_glow_text(lab, 3, 10)
+	var fv := FontVariation.new()                    # кисть Katsuno, чуть вразрядку
+	fv.base_font = _brush
+	fv.spacing_glyph = 3
+	lab.add_theme_font_override("font", fv)
+	lab.position = Vector2(18, 0)
 	lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(lab)
-	var line := ColorRect.new()
-	line.color = CRIMSON
-	line.position = Vector2(0, 42)
-	line.size = Vector2(0, 2)
-	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(line)
 	var burst := CPUParticles2D.new()
 	burst.emitting = false
 	burst.one_shot = true
@@ -158,7 +180,7 @@ func _button(text: String, fn: Callable) -> Control:
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	burst.material = add
-	burst.position = Vector2(0, 43)
+	bar.material = add
 	box.add_child(burst)
 	var tw_ref := [null]
 	var hover := func(on: bool) -> void:
@@ -166,11 +188,12 @@ func _button(text: String, fn: Callable) -> Control:
 			(tw_ref[0] as Tween).kill()
 		var tw := box.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw_ref[0] = tw
-		tw.tween_property(lab, "position:x", 22.0 if on else 0.0, 0.22)
-		tw.tween_property(lab, "theme_override_colors/font_color", Color(1.0, 0.55, 0.55) if on else Color(0.94, 0.9, 0.92), 0.18)
-		tw.tween_property(line, "size:x", lab.get_minimum_size().x + 40.0 if on else 0.0, 0.3)
+		tw.tween_property(bar, "scale:x", 1.0 if on else 0.0, 0.28 if on else 0.2)
+		tw.tween_property(lab, "position:x", 34.0 if on else 18.0, 0.22)
+		tw.tween_property(mark, "modulate:a", 1.0 if on else 0.0, 0.18)
+		tw.tween_property(lab, "theme_override_colors/font_shadow_color", Color(1.0, 0.25, 0.3, 0.95) if on else Color(CRIMSON, 0.6), 0.2)
 		if on:
-			burst.position.x = 22.0 + lab.get_minimum_size().x
+			burst.position = Vector2(34.0 + lab.get_minimum_size().x + 10.0, 36.0)
 			burst.restart()
 		_hot_want = 1.0 if on else 0.0
 	box.mouse_entered.connect(hover.bind(true))
@@ -179,8 +202,8 @@ func _button(text: String, fn: Callable) -> Control:
 		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 			var tw := box.create_tween()
-			tw.tween_property(lab, "scale", Vector2(0.96, 0.96), 0.05)
-			tw.tween_property(lab, "scale", Vector2.ONE, 0.08)
+			tw.tween_property(bar, "modulate", Color(2.0, 2.0, 2.0), 0.06)
+			tw.tween_property(bar, "modulate", Color.WHITE, 0.12)
 			tw.tween_callback(fn))
 	return box
 
@@ -221,7 +244,7 @@ func _process(delta: float) -> void:
 	_sparks.emission_rect_extents = Vector2(vs.x * 0.18, 20.0)
 	var title: Control = _root.get_node("Title")
 	title.position = Vector2(70, 26) - _mouse * 6.0
-	_col.position = Vector2(70, 262) - _mouse * 4.0
+	_col.position = Vector2(60, 272) - _mouse * 4.0
 
 
 const BG := """shader_type canvas_item;
