@@ -1901,6 +1901,7 @@ func _physics_body(delta: float) -> void:
 		var step: Vector3 = r.root
 		if r.has("hit"):
 			_strike(r.hit)
+			_combat_fx_swing(r.hit)
 		if r.has("blade"):
 			_blade_strike(r.blade)
 		if step != Vector3.ZERO and delta > 0.0:
@@ -2219,6 +2220,26 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 	if final and bool(mod.get_setting("combat_cam", true)):
 		_fov_punch = 1.0
 		_cam_roll += _hf("cam_final_roll", 0.045) * (1.0 if randf() < 0.5 else -1.0)
+
+
+## Каждый удар по hit_times — алая вспышка маны на острие, попал он или нет (видно, что удар был).
+func _combat_fx_swing(hit: Dictionary) -> void:
+	var tip: Vector3 = hit.get("tip", Vector3.INF)
+	if tip == Vector3.INF or not bool(mod.get_setting("combat_fx", true)) or not bool(hero_cfg.get("mana_fx", false)):
+		return
+	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+	var c := Color(float(col[0]), float(col[1]), float(col[2]))
+	var step := float(hit.get("step", 0))
+	_sparks(tip, c, int(8 + 4 * step), 3.5 + step)
+	var glow := OmniLight3D.new()                    # миг алого света вокруг острия
+	glow.light_color = c
+	glow.light_energy = 3.0 + step
+	glow.omni_range = 2.5
+	_view.add_child(glow)
+	glow.global_position = tip
+	var tw := glow.create_tween()
+	tw.tween_property(glow, "light_energy", 0.0, 0.18)
+	tw.tween_callback(glow.queue_free)
 
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.

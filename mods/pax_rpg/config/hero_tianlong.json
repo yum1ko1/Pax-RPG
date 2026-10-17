@@ -122,5 +122,7 @@
 		0.18
 	],
 	"trail_alpha": 0.75,
-	"trail_combo_gain": 0.35
+	"trail_combo_gain": 0.35,
+	"trail_speed": 1.5,
+	"trail_life": 0.28
 }

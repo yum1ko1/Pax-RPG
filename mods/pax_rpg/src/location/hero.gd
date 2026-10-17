@@ -2139,7 +2139,8 @@ func _hit(out: Dictionary) -> void:
 			_hits_done += 1
 			out["hit"] = {"range": _per("hit_range", action, 2.6), "arc": _per("hit_arc", action, 0.35),
 				"damage": _per("hit_damage", action, 15.0), "knock": false, "step": _combo_i,
-				"final": _combo_i == ATTACKS.size() - 1 and _hits_done == ts.size()}   # финал серии — свой акцент
+				"final": _combo_i == ATTACKS.size() - 1 and _hits_done == ts.size(),   # финал серии — свой акцент
+				"tip": (_sword_hand.global_transform * _tip) if _sword_hand != null and _sword_hand.is_inside_tree() else Vector3.INF}
 		return
 	if _hit_done or action not in ATTACKS:
 		return
