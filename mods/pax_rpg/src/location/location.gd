@@ -14,6 +14,7 @@ const ARENA_START := Vector3(0.0, 1.2, 8.0)
 var START := ARENA_START           # точка появления (у города — из его планировки)
 var _gate_radius := GATE_RADIUS
 const Hero := preload("res://mods/pax_rpg/src/location/hero.gd")
+const NetSync := preload("res://mods/pax_rpg/src/location/net_sync.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const SpearUlt := preload("res://mods/pax_rpg/src/location/spear_ult.gd")
@@ -180,6 +181,9 @@ func setup(m: PaxMod) -> void:
 	hero_cfg = hp if hp is Dictionary else {}
 	_w = Weight.new(hero_cfg.get("weight", {}))
 	Pax.days_passed.connect(_on_world_days)               # время мира пошло, пока мы на локации — снова пауза
+	_net = NetSync.new()                                   # сетевая игра: герои других игроков в том же городе
+	_net.setup(m, net_pose, hero_cfg_of)
+	add_child(_net)
 
 
 func _f(key: String, fallback: float) -> float:
@@ -280,6 +284,7 @@ func build(city: Dictionary) -> void:
 	test_mode = false
 	_hp = _hp_max()
 	_city_name = mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
+	_city_id = str(city.get("id", ""))
 	_box = SubViewportContainer.new()
 	_box.stretch = true
 	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -376,6 +381,8 @@ func build(city: Dictionary) -> void:
 		_weather.setup.call_deferred(mod, weather_kind, _env, _sky_mat, _cam, _daynight.day_amount() if _daynight.has_method("day_amount") else 1.0,
 			_city_lights)
 	_make_player()
+	if _net != null:
+		_net.enter(_view)
 	if not layout.is_empty():                          # ветер с порывами и листопад — в городе
 		var wind := Wind.new()
 		wind.setup(mod, _player)
@@ -567,6 +574,8 @@ func _warmup() -> void:
 
 func clear() -> void:
 	_build_gen += 1                                  # недостроенный город бросает стройку
+	if _net != null:
+		_net.leave()
 	if _sult != null:
 		_sult.stop()
 	building = false
@@ -924,6 +933,33 @@ func _make_portal() -> void:
 	label.modulate = Color(1.0, 0.85, 0.95)
 	label.position = _gate_pos + Vector3(0.0, 6.6, 0.0)
 	_view.add_child(label)
+
+
+## Сеть (net_sync.gd): где мой герой — город, место, поворот, клип и его время, меч, персонаж; {} — не в городе.
+var _net: NetSync
+var _city_id := ""
+
+
+func net_pose() -> Dictionary:
+	if not active or _hero == null or not is_instance_valid(_player) or _hero.anim == null:
+		return {}
+	var p := _player.global_position
+	return {"city": _city_id, "hero": str(mod.get_setting("character", "black_knight")), "x": p.x, "y": p.y,
+		"z": p.z, "yaw": _body_mesh.rotation.y, "clip": _hero.anim.current_animation,
+		"at": _hero.anim.current_animation_position, "armed": _hero.armed}
+
+
+## Настройки героя по id персонажа (как _apply_character, но для чужого героя в сети).
+func hero_cfg_of(id: String) -> Dictionary:
+	var base := _hero_base if not _hero_base.is_empty() else hero_cfg
+	var merged := base.duplicate(true)
+	var chars: Variant = base.get("characters", {})
+	var path: Variant = (chars as Dictionary).get(id, "") if chars is Dictionary else ""
+	if path is String and path != "":
+		var p: Variant = JSON.parse_string(mod.read_text(str(path)))
+		if p is Dictionary:
+			merged.merge(p as Dictionary, true)
+	return merged
 
 
 func _make_player() -> void:
@@ -2161,7 +2197,7 @@ func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
 ## Боевые эффекты удара (настройки → «Боевые эффекты», герой с mana_fx — Тянь Лун): алая мана из точки попадания,
 ## к финалу серии гуще; финал — алый блик по краям экрана. Камера (настройки → «Камера в бою»): толчок, у финала —
 ## на миг уже кадр и крен. Ничего не забирает управление: только смещение вокруг камеры игрока, гаснет само.
-var _flash: ColorRect
+var _cflash: ColorRect
 var _flash_t := 0.0
 var _fov_punch := 0.0
 var _combo_cam := 0.0
@@ -2187,25 +2223,25 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.
 func _flash_tick(delta: float) -> void:
-	if _flash_t <= 0.0 and not is_instance_valid(_flash):
+	if _flash_t <= 0.0 and not is_instance_valid(_cflash):
 		return
-	if not is_instance_valid(_flash):
-		_flash = ColorRect.new()
-		_flash.name = "PaxRpgComboFlash"
-		_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-		_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not is_instance_valid(_cflash):
+		_cflash = ColorRect.new()
+		_cflash.name = "PaxRpgComboFlash"
+		_cflash.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_cflash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var sh := Shader.new()
 		sh.code = FLASH
 		var m := ShaderMaterial.new()
 		m.shader = sh
-		_flash.material = m
-		add_child(_flash)
-		move_child(_flash, _box.get_index() + 1 if is_instance_valid(_box) else 0)
+		_cflash.material = m
+		add_child(_cflash)
+		move_child(_cflash, _box.get_index() + 1 if is_instance_valid(_box) else 0)
 	_flash_t = maxf(0.0, _flash_t - delta)
 	var a := _flash_t / maxf(_hf("fx_flash_time", 0.22), 0.01)
 	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
-	(_flash.material as ShaderMaterial).set_shader_parameter("tint", Color(float(col[0]), float(col[1]), float(col[2]), a * a))
-	_flash.visible = a > 0.001
+	(_cflash.material as ShaderMaterial).set_shader_parameter("tint", Color(float(col[0]), float(col[1]), float(col[2]), a * a))
+	_cflash.visible = a > 0.001
 
 
 const FLASH := """shader_type canvas_item;

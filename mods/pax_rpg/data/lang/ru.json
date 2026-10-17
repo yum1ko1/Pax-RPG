@@ -291,5 +291,6 @@
 	"pax_rpg_set_combat_cam": "Камера в бою (подъезд в серии, акцент финала)",
 	"pax_rpg_menu_continue": "Продолжить",
 	"pax_rpg_menu_load": "Загрузить",
-	"pax_rpg_menu_settings": "Настройки"
+	"pax_rpg_menu_settings": "Настройки",
+	"pax_rpg_menu_mp": "Мультиплеер"
 }

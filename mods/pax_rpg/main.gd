@@ -29,12 +29,15 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
-	# Временное меню (по просьбе автора): только «Продолжить», «Загрузить», «Настройки» и «Выход» игры.
-	# Новая игра Pax RPG (_rpg_new_game) и тестовая арена — в коде, в меню вернём, когда понадобятся.
+	# Временное меню (по просьбе автора): «Продолжить», «Новая игра», «Загрузить», «Мультиплеер», «Настройки», «Выход».
+	# Тестовая арена — в коде (команда rpg_arena), в меню вернём, когда понадобится. Мультиплеер — сеть игры
+	# (её лобби и серверы); в городе герои игроков видят друг друга (src/location/net_sync.gd).
 	for id: String in ["load", "new_game", "presets", "network", "settings"]:
 		Pax.hide_menu_item(id)
 	Pax.add_menu_item("pax_rpg_continue", tr_key("pax_rpg_menu_continue"), _menu_continue)
+	Pax.add_menu_item("pax_rpg_new", tr_key("pax_rpg_menu_new"), _rpg_new_game)
 	Pax.add_menu_item("pax_rpg_load", tr_key("pax_rpg_menu_load"), _menu_screen.bind("_loading_screen"))
+	Pax.add_menu_item("pax_rpg_mp", tr_key("pax_rpg_menu_mp"), _menu_screen.bind("_network_screen"))
 	Pax.add_menu_item("pax_rpg_settings", tr_key("pax_rpg_menu_settings"), _menu_screen.bind("_settings_screen"))
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
@@ -102,6 +105,8 @@ func _menu_screen(which: String) -> void:
 		return
 	if which == "_loading_screen":
 		menu._loading_screen()
+	elif which == "_network_screen":
+		menu._network_screen()
 	else:
 		menu._settings_screen()
 
