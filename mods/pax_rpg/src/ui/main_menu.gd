@@ -62,7 +62,7 @@ func _load_font(rel: String) -> FontFile:
 
 
 func _build() -> void:
-	st = STYLES.get(str(mod.get_setting("menu_style", "A")), STYLES["A"])
+	st = STYLES.get(str(mod.get_setting("menu_style", "B")), STYLES["B"])
 	_item_font = _load_font(str(st.font))
 	_sub_font = _load_font("fonts/cormorant_garamond.ttf")
 	_root = Control.new()
@@ -396,9 +396,6 @@ func _process(delta: float) -> void:
 	_rocks_tick(vs)
 	_sparks.position = Vector2(vs.x * 0.16, vs.y * 0.78) - _mouse * 18.0
 	_sparks.emission_rect_extents = Vector2(vs.x * 0.18, 20.0)
-	var title: Control = _root.get_node("Title")
-	title.position = Vector2(70, 26) - _mouse * 6.0
-	_col.position = Vector2(60, 272) - _mouse * 4.0
 
 
 const BG := """shader_type canvas_item;
