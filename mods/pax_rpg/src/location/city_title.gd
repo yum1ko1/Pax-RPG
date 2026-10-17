@@ -144,6 +144,7 @@ func _once(key: String, at: float, fn: Callable) -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("city_title._process")
 	if _t < -100.0:
 		return
 	_t += delta * (1.0 if _t < 0.0 else _speed(_t))

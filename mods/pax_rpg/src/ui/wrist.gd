@@ -68,6 +68,7 @@ func _row_rect(i: int) -> Rect2:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("wrist._process")
 	if not visible:
 		return
 	_t += delta

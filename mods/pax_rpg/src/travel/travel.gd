@@ -112,6 +112,7 @@ var _hold := 0.0
 
 ## На глобусе мир стоит: игра на паузе, пока игрок не пошёл куда-то (время — только в пути).
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("travel._process")
 	_hold -= delta
 	if _hold <= 0.0:
 		_hold = 0.5

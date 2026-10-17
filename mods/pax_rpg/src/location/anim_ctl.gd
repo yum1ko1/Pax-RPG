@@ -236,6 +236,7 @@ func hitstopped() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("anim_ctl._physics_process")
 	if tree == null:
 		return
 	var k := 1.0

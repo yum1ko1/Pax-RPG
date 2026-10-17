@@ -452,6 +452,7 @@ func footprint(pos: Vector3, yaw: float, left: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("weather._process")
 	var t0 := Time.get_ticks_usec()
 	if is_instance_valid(_cam):
 		var cp := _cam.global_position

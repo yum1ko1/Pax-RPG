@@ -47,6 +47,7 @@ func toggle() -> void:
 
 
 func _process(_delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("city_map._process")
 	if visible:
 		queue_redraw()
 

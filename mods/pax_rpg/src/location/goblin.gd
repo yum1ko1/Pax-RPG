@@ -620,6 +620,7 @@ func hitstop(t: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("goblin._physics_process")
 	_hurt_cd -= delta
 	if in_combat() and not dead:                          # в бою время от времени выкрикивает
 		_bark_t -= delta

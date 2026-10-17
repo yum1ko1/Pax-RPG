@@ -174,6 +174,7 @@ func _set_reveal(r: float) -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("loading._process")
 	if not visible:
 		return
 	if _waiting and (not _wait.is_valid() or bool(_wait.call())):

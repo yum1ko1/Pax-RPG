@@ -68,6 +68,7 @@ func start(g: PaxGame) -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("planet._process")
 	if game == null:
 		return
 	if Engine.get_process_frames() % 30 == 0:
@@ -87,6 +88,7 @@ func _process(delta: float) -> void:
 		_feed_flat_map()
 	_show_markers(enabled and game.focused_body() == game.home_body() and not _flat_map_open())
 	_update_tip()
+	Trace.tick("planet._process end")
 
 
 ## Навёл мышь на город — рядом табличка «Утро · 07:40»: какое время суток застанешь, войдя в него.

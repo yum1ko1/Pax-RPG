@@ -1235,6 +1235,7 @@ func _typing() -> bool:
 
 
 func _physics_process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("location._physics_process")
 	if not active or not is_instance_valid(_player) or paused():
 		return
 	var t0 := Time.get_ticks_usec()
@@ -2926,6 +2927,7 @@ var _tab_was := false
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("location._process")
 	# TAB — ещё и опросом: если событие клавиши перехватил кто-то из игры раньше _input, инвентарь всё равно откроется
 	var tab := active and Input.is_physical_key_pressed(KEY_TAB) and not _typing()
 	if tab and not _tab_was and not (is_instance_valid(_pause) and _pause.visible):

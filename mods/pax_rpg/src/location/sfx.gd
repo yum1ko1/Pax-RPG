@@ -206,6 +206,7 @@ func land() -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("sfx._process")
 	if is_instance_valid(_at):                       # плееры — дети простого Node: позиция = мировая
 		var pos := _at.global_position
 		for c: Node in get_children():

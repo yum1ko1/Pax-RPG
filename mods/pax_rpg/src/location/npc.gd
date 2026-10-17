@@ -118,6 +118,7 @@ func _play(c: String) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("npc._physics_process")
 	var t0 := Time.get_ticks_usec()
 	_tick += 1
 	_phys_acc += delta
@@ -128,6 +129,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("npc._process")
 	if _anim == null:
 		return
 	var cam := get_viewport().get_camera_3d()

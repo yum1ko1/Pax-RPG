@@ -376,6 +376,7 @@ func _on_main() -> bool:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("main_menu._process")
 	var want := _on_main()
 	if want != _shown:
 		_shown = want

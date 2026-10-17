@@ -149,6 +149,7 @@ func interrupt() -> bool:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("iai._process")
 	if not active:
 		return
 	_t += delta

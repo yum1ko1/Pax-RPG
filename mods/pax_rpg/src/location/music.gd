@@ -34,6 +34,7 @@ func setup(m: PaxMod, in_city: bool) -> void:
 
 
 func _process(_delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("music._process")
 	var want := _want()
 	if want != _now and not (want == "" and _now != ""):
 		_play(want)

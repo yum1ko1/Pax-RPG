@@ -72,6 +72,7 @@ const STEP := 2.0
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("daynight._process")
 	var t0 := Time.get_ticks_usec()
 	_proc(delta)
 	Prof.add("день/ночь", t0)

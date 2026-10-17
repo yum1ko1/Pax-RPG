@@ -30,6 +30,7 @@ var _gust_up := 0.0                 # сколько ещё секунд пор�
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("wind._process")
 	var t0 := Time.get_ticks_usec()
 	_proc(delta)
 	Prof.add("ветер", t0)

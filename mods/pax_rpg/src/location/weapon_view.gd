@@ -107,6 +107,7 @@ func close() -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("weapon_view._process")
 	if not visible:
 		return
 	_idle += delta

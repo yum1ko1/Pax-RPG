@@ -202,6 +202,7 @@ func close() -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("inventory._process")
 	if not visible:
 		if _pv.render_target_update_mode != SubViewport.UPDATE_DISABLED:
 			_pv.render_target_update_mode = SubViewport.UPDATE_DISABLED   # закрыт — превью героя не рисуется

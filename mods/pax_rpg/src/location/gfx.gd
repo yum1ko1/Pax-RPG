@@ -404,6 +404,7 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("gfx._process")
 	var t0 := Time.get_ticks_usec()
 	_time += delta
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_time", _time)
@@ -641,6 +642,7 @@ var _sun_blocked := false
 
 ## Заслонено ли солнце (луч по коллизиям города) — в такте физики: вне его пространство физики может быть занято.
 func _physics_process(_delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("gfx._physics_process")
 	if not is_instance_valid(cam) or not is_instance_valid(sun) or not is_instance_valid(view) or view.world_3d == null:
 		return
 	var to_sun := sun.global_transform.basis.z.normalized()

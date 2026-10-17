@@ -6,3 +6,11 @@ extends RefCounted
 static func mark(what: String) -> void:
 	var th := "" if OS.get_thread_caller_id() == OS.get_main_thread_id() else " [поток]"
 	printerr("[pax_rpg trace] %d f%d%s %s" % [Time.get_ticks_msec(), Engine.get_process_frames(), th, what])
+
+
+static var armed_until := -1          # main.gd: на 300 кадров после world_ready пишем каждый _process мода
+
+
+static func tick(who: String) -> void:
+	if Engine.get_process_frames() <= armed_until:
+		mark(who)

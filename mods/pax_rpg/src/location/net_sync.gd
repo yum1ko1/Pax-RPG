@@ -49,6 +49,7 @@ func _clear() -> void:
 
 
 func _process(delta: float) -> void:
+	preload("res://mods/pax_rpg/src/trace.gd").tick("net_sync._process")
 	if not Pax.net.active() or _view == null or not is_instance_valid(_view):
 		return
 	_send_t += delta
