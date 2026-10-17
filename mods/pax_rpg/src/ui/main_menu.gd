@@ -364,17 +364,25 @@ void fragment() {
 
 
 ## Меню игры на главном шаге — значит, мы на экране; другой шаг (загрузка, настройки, партия) — прячемся.
+func _on_node_added(n: Node) -> void:
+	if n is CanvasItem and n.has_method("_country_choice_screen") and n.has_method("_start_game"):
+		_menu_ref = weakref(n)
+
+
 func _on_main() -> bool:
 	# Раньше здесь каждый кадр обходилось ВСЁ дерево сцены. С 0.31.4 игра на загрузке мира достраивает дерево
 	# в своих потоках (кварталы, экономика) — обход в этот миг ронял игру (след: последним был этот _process).
+	# Меню не ищем обходом дерева совсем (на загрузке мира и тот, раз в секунду, ронял игру на ~90 %): один обход
+	# при старте мода, дальше новое меню ловим сигналом node_added.
 	var menu: Variant = _menu_ref.get_ref() if _menu_ref != null else null
 	if menu == null or (menu as Node).is_queued_for_deletion():
-		_seek_t -= get_process_delta_time()
-		if _seek_t > 0.0:
+		if _seek_t >= 0.0:
+			_seek_t = -1.0
+			menu = _find.call()
+			_menu_ref = weakref(menu) if menu != null else null
+			get_tree().node_added.connect(_on_node_added)
+		else:
 			return false
-		_seek_t = 1.0
-		menu = _find.call()
-		_menu_ref = weakref(menu) if menu != null else null
 	if menu == null or not (menu as CanvasItem).is_visible_in_tree():
 		return false
 	var scr: Node = menu.screen
