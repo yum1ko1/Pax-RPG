@@ -13,7 +13,6 @@ const IMG := Vector2(3840.0, 2176.0)             # размер фона (дол
 
 var mod: PaxMod
 var _find: Callable                              # () -> меню игры (Menu.gd) или null
-var game: PaxGame                                # main.gd (world_ready): пока у партии есть камера — меню не ищем
 var _menu_ref: WeakRef                           # найденное меню; обход всего дерева — не чаще раза в секунду
 var _seek_t := 0.0
 var _items: Array = []                           # [[ключ перевода, Callable]]
@@ -368,8 +367,6 @@ void fragment() {
 func _on_main() -> bool:
 	# Раньше здесь каждый кадр обходилось ВСЁ дерево сцены. С 0.31.4 игра на загрузке мира достраивает дерево
 	# в своих потоках (кварталы, экономика) — обход в этот миг ронял игру (след: последним был этот _process).
-	if game != null and game.camera() != null:
-		return false
 	var menu: Variant = _menu_ref.get_ref() if _menu_ref != null else null
 	if menu == null or (menu as Node).is_queued_for_deletion():
 		_seek_t -= get_process_delta_time()

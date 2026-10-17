@@ -3,7 +3,12 @@ extends RefCounted
 ## поэтому после падения в конце лога — последнее, что успел сделать мод. Метки из потоков — [поток].
 
 
+const ON := false                     # включить, чтобы снова искать вылет
+
+
 static func mark(what: String) -> void:
+	if not ON:
+		return
 	var th := "" if OS.get_thread_caller_id() == OS.get_main_thread_id() else " [поток]"
 	printerr("[pax_rpg trace] %d f%d%s %s" % [Time.get_ticks_msec(), Engine.get_process_frames(), th, what])
 

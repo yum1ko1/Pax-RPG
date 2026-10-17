@@ -157,8 +157,6 @@ func _mod_unloaded() -> void:
 
 func _world_ready(g: PaxGame) -> void:
 	Trace.mark("main: world_ready")
-	if is_instance_valid(_mm):
-		_mm.game = g
 	Trace.armed_until = Engine.get_process_frames() + 300
 	planet.start(g)
 	travel.start(g)
