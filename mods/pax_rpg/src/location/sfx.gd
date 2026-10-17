@@ -76,9 +76,9 @@ func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) ->
 
 
 ## 3D-плеер: слышит камера локации (audio_listener_enable_3d), громкость падает с расстоянием.
-## Пока 3D выключено (настройка sfx_3d, по умолчанию нет): после него игра падала при входе в город.
+## 3D-звук шагов и ткани (настройка sfx_3d; выключить — обычный плоский звук).
 func _player() -> Node:
-	if not bool(_mod.get_setting("sfx_3d", false)):
+	if not bool(_mod.get_setting("sfx_3d", true)):
 		return AudioStreamPlayer.new()
 	var p := AudioStreamPlayer3D.new()
 	_place(p)

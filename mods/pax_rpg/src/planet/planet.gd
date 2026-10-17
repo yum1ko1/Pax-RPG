@@ -141,9 +141,8 @@ func _attach() -> void:
 	var mat_v: Variant = _pick(body, ["material", "мат", "mat"])
 	if not (mat_v is ShaderMaterial) and node is MeshInstance3D:
 		mat_v = (node as MeshInstance3D).material_override
-	# После обновления игры 18.10 она падает через 2 с после подмены шейдера планеты — пока подмена выключена
-	# (настройка planet_skin), пока не найдём, что изменилось.
-	if mat_v is ShaderMaterial and (mat_v as ShaderMaterial).shader != _shader and bool(mod.get_setting("planet_skin", false)):
+	# planet_skin: выключить подмену шейдера, если она с чем-то конфликтует (вылет 18.10 — встроенная «Экономика»).
+	if mat_v is ShaderMaterial and (mat_v as ShaderMaterial).shader != _shader and bool(mod.get_setting("planet_skin", true)):
 		_mat = mat_v
 		_orig_shader = _mat.shader
 		_orig_params.clear()
