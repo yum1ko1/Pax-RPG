@@ -355,14 +355,6 @@ float n(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y);
 }
-// глубина, размытая по 9 точкам: плавные края — без «лестницы» в тумане и двоения силуэта
-float dsoft(vec2 uv) {
-	float s = 0.0;
-	for (int x = -1; x <= 1; x++)
-		for (int y = -1; y <= 1; y++)
-			s += texture(depth, uv + vec2(float(x), float(y)) * vec2(0.006, 0.009)).r;
-	return s / 9.0;
-}
 void fragment() {
 	vec2 uv = UV;
 	// мазок: толще слева, к концу тоньше и рвётся; края и «волоски» кисти — шум
@@ -440,6 +432,14 @@ float fbm(vec2 p) {
 	float s = 0.0; float a = 0.5;
 	for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
 	return s;
+}
+// глубина, размытая по 9 точкам: плавные края — без «лестницы» в тумане и двоения силуэта
+float dsoft(vec2 uv) {
+	float s = 0.0;
+	for (int x = -1; x <= 1; x++)
+		for (int y = -1; y <= 1; y++)
+			s += texture(depth, uv + vec2(float(x), float(y)) * vec2(0.006, 0.009)).r;
+	return s / 9.0;
 }
 void fragment() {
 	vec2 uv = UV;
