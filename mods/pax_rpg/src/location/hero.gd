@@ -1475,8 +1475,8 @@ var _clip := ""                       # клип разового действи
 ## Клип удара серии по стороне врага: первые два удара — взмахи в разные стороны (Attack1 справа налево, Attack2 слева
 ## направо, по клинку в knight.glb), берём тот, что идёт ко врагу; финальный — всегда свой.
 func _side_clip(i: int) -> String:
-	if i >= 2 or swing_side == 0:
-		return ATTACKS[i]
+	if i >= 2 or swing_side == 0 or not bool(cfg.get("side_swings", true)):
+		return ATTACKS[i]                    # своя серия (Тянь Лун) — удары всегда по порядку
 	return "Attack1" if swing_side < 0 else "Attack2"
 
 
@@ -1556,6 +1556,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	lunge_t = maxf(0.0, lunge_t - delta)
 	if blocking:
 		_block_t += delta
+	if action == "ComboEnd" and moving and _frac() >= _per("combo_end_free", "ComboEnd", 0.35):
+		_end_action()                        # выход из комбо: пошёл — сразу ходьба
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
 	if action != "" and action != "Iai" and action != "Ultimate" and not anim.is_playing():
@@ -1568,7 +1570,11 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 			var nxt := _side_clip(_combo_i)
 			_play_once(nxt, _per("combo_skip", nxt, 0.0))
 		elif not _queued and _frac() >= _per("attack_end", action, 0.5):
-			_end_action()                    # без продолжения — сразу в стойку, управление вернулось
+			if bool(cfg.get("combo_end", false)) and has("ComboEnd"):
+				_end_action()                # серия оборвалась — выход из комбо своим клипом (обратно в стойку)
+				_play_once("ComboEnd")
+			else:
+				_end_action()                # без продолжения — сразу в стойку, управление вернулось
 	if action in ATTACKS:
 		# прыжок удара (air: [с, по, во сколько медленнее]) — герой дольше висит в воздухе
 		var air: Variant = (cfg.get("air", {}) as Dictionary).get(action, [])

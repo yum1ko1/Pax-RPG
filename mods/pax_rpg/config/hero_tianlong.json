@@ -16,7 +16,8 @@
 		"Dodge": 1.0,
 		"DodgeArmed": 1.0,
 		"Ultimate": 1.0,
-		"UltSpear": 1.0
+		"UltSpear": 1.0,
+		"ComboEnd": 1.0
 	},
 	"swing_peaks": {
 		"Attack1": 0.5,
@@ -63,5 +64,23 @@
 		"Ultimate": 1.0,
 		"Dodge": 1.0,
 		"DodgeArmed": 1.0
-	}
+	},
+	"side_swings": false,
+	"combo_end": true,
+	"combo_cancel": {
+		"Attack1": 0.75,
+		"Attack2": 0.75
+	},
+	"attack_end": {
+		"Attack1": 0.92,
+		"Attack2": 0.92,
+		"Attack3": 0.95
+	},
+	"blend_in": {
+		"Attack1": 0.12,
+		"Attack2": 0.06,
+		"Attack3": 0.06,
+		"ComboEnd": 0.2
+	},
+	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку."
 }
