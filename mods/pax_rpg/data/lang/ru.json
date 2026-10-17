@@ -292,5 +292,7 @@
 	"pax_rpg_menu_continue": "Продолжить",
 	"pax_rpg_menu_load": "Загрузить",
 	"pax_rpg_menu_settings": "Настройки",
-	"pax_rpg_menu_mp": "Мультиплеер"
+	"pax_rpg_menu_mp": "Мультиплеер",
+	"pax_rpg_menu_exit": "Выход",
+	"pax_rpg_menu_sub": "Юрума · 1047 год Эры Расколотого Неба"
 }

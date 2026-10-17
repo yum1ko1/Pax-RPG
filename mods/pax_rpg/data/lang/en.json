@@ -292,5 +292,7 @@
 	"pax_rpg_menu_continue": "Continue",
 	"pax_rpg_menu_load": "Load",
 	"pax_rpg_menu_settings": "Settings",
-	"pax_rpg_menu_mp": "Multiplayer"
+	"pax_rpg_menu_mp": "Multiplayer",
+	"pax_rpg_menu_exit": "Exit",
+	"pax_rpg_menu_sub": "Yuruma · year 1047 of the Shattered Sky"
 }

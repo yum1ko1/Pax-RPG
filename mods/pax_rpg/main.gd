@@ -8,6 +8,7 @@ const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
 const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
+const MainMenu := preload("res://mods/pax_rpg/src/ui/main_menu.gd")
 
 var planet: Planet
 var location: Location
@@ -39,6 +40,12 @@ func _mod_loaded() -> void:
 	Pax.add_menu_item("pax_rpg_load", tr_key("pax_rpg_menu_load"), _menu_screen.bind("_loading_screen"))
 	Pax.add_menu_item("pax_rpg_mp", tr_key("pax_rpg_menu_mp"), _menu_screen.bind("_network_screen"))
 	Pax.add_menu_item("pax_rpg_settings", tr_key("pax_rpg_menu_settings"), _menu_screen.bind("_settings_screen"))
+	var mm := MainMenu.new()                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
+	mm.setup(self, func() -> Variant: return _find_menu(get_tree().root), [
+		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game],
+		["pax_rpg_menu_load", _menu_screen.bind("_loading_screen")], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen")],
+		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen")], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
+	add_child(mm)
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
 	Pax.register_command("rpg_orc", _orc_command, "rpg_orc — орк-чемпион перед героем (тест боя)")
@@ -107,6 +114,8 @@ func _menu_screen(which: String) -> void:
 		menu._loading_screen()
 	elif which == "_network_screen":
 		menu._network_screen()
+	elif which == "_to_launcher":
+		menu._to_launcher()
 	else:
 		menu._settings_screen()
 
