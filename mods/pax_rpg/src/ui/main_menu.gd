@@ -106,13 +106,13 @@ func _build() -> void:
 	var sub := Label.new()
 	sub.text = "Yuruma  ·  Year MXLVII of the Shattered Sky"
 	sub.add_theme_font_override("font", _brush)
-	sub.add_theme_font_size_override("font_size", 22)
+	sub.add_theme_font_size_override("font_size", 17)
 	_glow_text(sub, 3, 8)
 	sub.position = Vector2(80, 206)
 	_root.add_child(sub)
 	_col = VBoxContainer.new()
 	_col.position = Vector2(60, 272)
-	_col.add_theme_constant_override("separation", 2)
+	_col.add_theme_constant_override("separation", 14)
 	_root.add_child(_col)
 	for it: Array in _items:
 		_col.add_child(_button(str(EN.get(str(it[0]), it[0])), it[1] as Callable))
@@ -131,70 +131,77 @@ func _glow_text(l: Label, dy: int, blur: int) -> void:
 	l.add_theme_constant_override("shadow_outline_size", blur)
 
 
-## Пункт: кисть Katsuno заглавными, с алым отливом. Наведение — из-за левого края выезжает косая алая полоса-мазок,
-## текст сдвигается и светлеет, слева загорается ромб, с конца полосы летят искры; нажатие — действие.
+## Пункт: кисть Katsuno заглавными, с алым отливом. Наведение — в мотиве кольца в небе: слева прорисовывается
+## малое алое кольцо, под текстом кисть проводит рваный мазок (шейдер BRUSH: края — шум, по мазку бежит блик),
+## с конца мазка — искры; текст сдвигается и чуть разгорается. Нажатие — вспышка мазка и действие.
 func _button(text: String, fn: Callable) -> Control:
 	var box := Control.new()
-	box.custom_minimum_size = Vector2(420, 64)
+	box.custom_minimum_size = Vector2(440, 56)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var bar := Polygon2D.new()                       # косой мазок под текстом: яркий слева, тает вправо
-	bar.polygon = PackedVector2Array([Vector2(0, 14), Vector2(400, 14), Vector2(378, 56), Vector2(-16, 56)])
-	bar.vertex_colors = PackedColorArray([Color(CRIMSON, 0.85), Color(CRIMSON, 0.0), Color(CRIMSON, 0.0), Color(CRIMSON, 0.85)])
-	bar.scale = Vector2(0.0, 1.0)
-	box.add_child(bar)
-	var mark := Label.new()                          # ромб слева
-	mark.text = "◆"
-	mark.add_theme_font_size_override("font_size", 16)
-	mark.add_theme_color_override("font_color", Color(1.0, 0.75, 0.78))
-	mark.position = Vector2(-6, 22)
-	mark.modulate.a = 0.0
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(mark)
+	var stroke := ColorRect.new()
+	stroke.position = Vector2(26, 4)
+	stroke.size = Vector2(430, 56)
+	stroke.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sm := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = BRUSH
+	sm.shader = sh
+	sm.set_shader_parameter("seed", randf() * 10.0)
+	stroke.material = sm
+	box.add_child(stroke)
+	var ring := Ring.new()
+	ring.position = Vector2(14, 33)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(ring)
 	var lab := Label.new()
 	lab.text = text.to_upper()
-	lab.add_theme_font_size_override("font_size", 34)
-	lab.add_theme_constant_override("outline_size", 0)
+	lab.add_theme_font_size_override("font_size", 28)
 	_glow_text(lab, 3, 10)
-	var fv := FontVariation.new()                    # кисть Katsuno, чуть вразрядку
+	var fv := FontVariation.new()
 	fv.base_font = _brush
 	fv.spacing_glyph = 3
 	lab.add_theme_font_override("font", fv)
-	lab.position = Vector2(18, 0)
+	lab.position = Vector2(34, 0)
 	lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(lab)
 	var burst := CPUParticles2D.new()
 	burst.emitting = false
 	burst.one_shot = true
-	burst.amount = 18
-	burst.lifetime = 0.7
-	burst.explosiveness = 0.9
-	burst.direction = Vector2(1, -0.6)
-	burst.spread = 50.0
-	burst.gravity = Vector2(0, -40)
-	burst.initial_velocity_min = 60.0
-	burst.initial_velocity_max = 180.0
-	burst.scale_amount_min = 1.5
-	burst.scale_amount_max = 3.0
-	burst.color = Color(1.0, 0.3, 0.3)
+	burst.amount = 22
+	burst.lifetime = 0.8
+	burst.explosiveness = 0.85
+	burst.direction = Vector2(1, -0.4)
+	burst.spread = 60.0
+	burst.gravity = Vector2(0, -30)
+	burst.initial_velocity_min = 50.0
+	burst.initial_velocity_max = 170.0
+	burst.scale_amount_min = 1.2
+	burst.scale_amount_max = 2.6
+	burst.color = Color(1.0, 0.35, 0.35)
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	burst.material = add
-	bar.material = add
 	box.add_child(burst)
 	var tw_ref := [null]
+	var set_p := func(v: float) -> void: sm.set_shader_parameter("progress", v)
+	var cur := [0.0]
 	var hover := func(on: bool) -> void:
 		if tw_ref[0] != null:
 			(tw_ref[0] as Tween).kill()
 		var tw := box.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw_ref[0] = tw
-		tw.tween_property(bar, "scale:x", 1.0 if on else 0.0, 0.28 if on else 0.2)
-		tw.tween_property(lab, "position:x", 34.0 if on else 18.0, 0.22)
-		tw.tween_property(mark, "modulate:a", 1.0 if on else 0.0, 0.18)
-		tw.tween_property(lab, "theme_override_colors/font_shadow_color", Color(1.0, 0.25, 0.3, 0.95) if on else Color(CRIMSON, 0.6), 0.2)
+		var w := lab.get_minimum_size().x + 60.0
+		stroke.size.x = w
+		tw.tween_method(func(v: float) -> void:
+			cur[0] = v
+			set_p.call(v), cur[0], 1.0 if on else 0.0, 0.32 if on else 0.22)
+		tw.tween_property(ring, "progress", 1.0 if on else 0.0, 0.35 if on else 0.2)
+		tw.tween_property(lab, "position:x", 46.0 if on else 34.0, 0.25)
+		tw.tween_property(lab, "theme_override_colors/font_shadow_color", Color(1.0, 0.25, 0.32, 0.95) if on else Color(CRIMSON, 0.6), 0.2)
 		if on:
-			burst.position = Vector2(34.0 + lab.get_minimum_size().x + 10.0, 36.0)
-			burst.restart()
+			burst.position = Vector2(22.0 + w, 33.0)
+			get_tree().create_timer(0.22).timeout.connect(burst.restart)
 		_hot_want = 1.0 if on else 0.0
 	box.mouse_entered.connect(hover.bind(true))
 	box.mouse_exited.connect(hover.bind(false))
@@ -202,10 +209,53 @@ func _button(text: String, fn: Callable) -> Control:
 		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 			var tw := box.create_tween()
-			tw.tween_property(bar, "modulate", Color(2.0, 2.0, 2.0), 0.06)
-			tw.tween_property(bar, "modulate", Color.WHITE, 0.12)
+			tw.tween_property(stroke, "modulate", Color(1.8, 1.8, 1.8), 0.06)
+			tw.tween_property(stroke, "modulate", Color.WHITE, 0.14)
 			tw.tween_callback(fn))
 	return box
+
+
+## Малое кольцо слева от пункта — как кольцо в небе: дуга прорисовывается по progress, со свечением.
+class Ring extends Control:
+	var progress := 0.0:
+		set(v):
+			progress = v
+			queue_redraw()
+
+	func _draw() -> void:
+		if progress <= 0.001:
+			return
+		var a0 := -PI * 0.5
+		var a1 := a0 + TAU * progress
+		draw_arc(Vector2.ZERO, 9.0, a0, a1, 40, Color(1.0, 0.2, 0.3, 0.35 * progress), 6.0, true)
+		draw_arc(Vector2.ZERO, 9.0, a0, a1, 40, Color(1.0, 0.85, 0.88, progress), 1.8, true)
+
+
+const BRUSH := """shader_type canvas_item;
+render_mode blend_add;
+uniform float progress = 0.0;
+uniform float seed = 0.0;
+float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n(vec2 p) {
+	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y);
+}
+void fragment() {
+	vec2 uv = UV;
+	// мазок: толще слева, к концу тоньше и рвётся; края и «волоски» кисти — шум
+	float x = uv.x;
+	float thick = mix(0.48, 0.3, x);
+	float edge = (n(vec2(x * 22.0 + seed, 0.0)) - 0.5) * 0.18;
+	float d = abs(uv.y - 0.52 - edge * 0.5);
+	float body = smoothstep(thick, thick - 0.1, d);
+	float hair = smoothstep(0.35, 0.75, n(vec2(x * 3.0 + seed, uv.y * 40.0)));
+	body *= mix(0.78, 1.0, hair);
+	body *= smoothstep(1.0, 0.7, x) * smoothstep(0.0, 0.04, x);           // хвост мазка тает
+	float reveal = smoothstep(progress * 1.08, progress * 1.08 - 0.08, x);  // кисть ведёт слева направо
+	float shine = exp(-pow((x - fract(TIME * 0.45) * 1.3 + 0.15) * 7.0, 2.0)) * 0.6;   // бегущий блик
+	vec3 c = mix(vec3(0.75, 0.04, 0.12), vec3(1.0, 0.3, 0.38), smoothstep(0.0, 0.6, 1.0 - x)) + vec3(1.0, 0.6, 0.65) * shine;
+	COLOR = vec4(c, body * reveal * 0.95);
+}"""
 
 
 ## Меню игры на главном шаге — значит, мы на экране; другой шаг (загрузка, настройки, партия) — прячемся.
