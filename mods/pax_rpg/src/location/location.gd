@@ -464,7 +464,7 @@ func build(city: Dictionary) -> void:
 	add_child(_help)
 	_sfx = Sfx.new()
 	_sfx.setup(mod, not layout.is_empty())
-	add_child(_sfx)
+	_view.add_child(_sfx)                           # 3D-плееры шагов — в мире вида локации (вне мира 3D-звук роняет игру)
 	_sfx.hero(hero_cfg if _hero != null else {}, _player)   # шаги героя — 3D, от него
 	AudioBus.ensure(mod)
 	_sens = float(mod.get_setting("mouse_sens", 1.0))
