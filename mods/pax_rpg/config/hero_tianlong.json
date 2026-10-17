@@ -68,13 +68,13 @@
 	"side_swings": false,
 	"combo_end": true,
 	"combo_cancel": {
-		"Attack1": 0.75,
-		"Attack2": 0.75
+		"Attack1": 0.55,
+		"Attack2": 0.55
 	},
 	"attack_end": {
-		"Attack1": 0.92,
-		"Attack2": 0.92,
-		"Attack3": 0.95
+		"Attack1": 0.97,
+		"Attack2": 0.97,
+		"Attack3": 0.97
 	},
 	"blend_in": {
 		"Attack1": 0.12,
@@ -83,5 +83,33 @@
 		"ComboEnd": 0.2
 	},
 	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку.",
-	"swing_tilt": 0.0
+	"swing_tilt": 0.0,
+	"hit_times": {
+		"Attack1": [
+			0.13,
+			0.48,
+			0.67
+		],
+		"Attack2": [
+			0.43,
+			0.63
+		],
+		"Attack3": [
+			0.17,
+			1.0
+		]
+	},
+	"hit_range": {
+		"Attack1": 2.8,
+		"Attack2": 2.8,
+		"Attack3": 2.8
+	},
+	"hit_damage": {
+		"Attack1": 12.0,
+		"Attack2": 14.0,
+		"Attack3": 18.0
+	},
+	"combo_grace": 1.0,
+	"combo_end_resume": 0.5,
+	"_note_hits": "hit_times — моменты ударов клипа, с (по вытяжению острия копья в анимации Cascadeur): каждый — отдельный удар по площади перед героем (hit_range м, hit_arc — косинус полуугла). Окно комбо: следующий ЛКМ можно жать весь удар, после удара ещё combo_grace с, и в первой половине выхода из комбо (combo_end_resume)."
 }

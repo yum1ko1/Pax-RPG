@@ -57,6 +57,7 @@ var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wa
 var _swing_done := false
 var _impact_done := false
 var _hit_done := false              # удар этого взмаха уже нанесён (tick вернул hit)
+var _hits_done := 0                  # сколько ударов по hit_times клипа уже нанесено (у копья — несколько за клип)
 var _skel: Skeleton3D
 var _owner_body: PhysicsBody3D       # капсула персонажа — с ней ткань не сталкивается
 var _items: Dictionary = {}          # config/items.json → items: что вообще можно надеть
@@ -1202,7 +1203,8 @@ func _active() -> bool:
 
 func _blade_out(out: Dictionary) -> void:
 	var imp: Dictionary = meta.get("impact", {})
-	if not _active() or imp.has(action) or action == "Launcher" or _sword_hand == null or not _sword_hand.is_inside_tree():
+	if not _active() or imp.has(action) or action == "Launcher" or _sword_hand == null or not _sword_hand.is_inside_tree() \
+			or (cfg.get("hit_times", {}) as Dictionary).has(action):           # удары по hit_times — не ещё и клинком
 		_blade_prev = []
 		_swing_action = ""
 		return
@@ -1389,6 +1391,8 @@ func attack(on_floor: bool) -> void:
 	blocking = false
 	if anim == null or not has("Attack1"):
 		return
+	if action == "ComboEnd" and _combo_left > 0.0 and _frac() < _per("combo_end_resume", "ComboEnd", 0.5):
+		action = ""                         # выход из комбо ещё в начале — ЛКМ продолжает серию
 	if action == "" and on_floor:
 		if not armed:
 			toggle_sword(on_floor)          # меч за спиной — сперва достать
@@ -1489,6 +1493,7 @@ func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	_swing_action = n
 	_swing_done = false
 	_hit_done = false
+	_hits_done = 0
 	_impact_done = false
 	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
 	anim.play(_clip, _per("blend_in", n, 0.15))
@@ -2124,6 +2129,14 @@ func _hit(out: Dictionary) -> void:
 			_hit_done = true
 			out["hit"] = {"range": _per("hit_range", action, 2.3), "arc": 0.3, "damage": _per("hit_damage", action, 18.0),
 				"knock": false}
+		return
+	var times: Variant = (cfg.get("hit_times", {}) as Dictionary).get(action, null)
+	if times is Array:                               # свои моменты ударов клипа (с): каждый — отдельный удар
+		var ts := times as Array
+		if _hits_done < ts.size() and _pos() >= float(ts[_hits_done]):
+			_hits_done += 1
+			out["hit"] = {"range": _per("hit_range", action, 2.6), "arc": _per("hit_arc", action, 0.35),
+				"damage": _per("hit_damage", action, 15.0), "knock": false}
 		return
 	if _hit_done or action not in ATTACKS:
 		return
