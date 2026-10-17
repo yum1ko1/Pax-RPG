@@ -1,4 +1,5 @@
 extends Node
+const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 ## Юрума вместо Земли и города на ней. Свой шейдер ставится на материал домашней планеты игры (её узел, сетка и
 ## провинции остаются игровыми — меняется только то, как она нарисована); облачная оболочка Земли прячется —
@@ -250,7 +251,7 @@ func _feed_water(sm: ShaderMaterial) -> bool:
 		if _water_img != null:
 			_ocean_tex = ImageTexture.create_from_image(_water_img)
 			_albedo_tex = ImageTexture.create_from_image(_albedo_img)
-		elif _water_task < 0:
+		elif _water_task == -1:
 			var rm: Variant = sm.get_shader_parameter("region_map")
 			if not (rm is Texture2D):
 				return false
@@ -259,7 +260,11 @@ func _feed_water(sm: ShaderMaterial) -> bool:
 			Trace.mark("planet: get_image done %s" % ("null" if src == null else str(src.get_size())))
 			if src == null or src.is_empty():
 				return false
-			_water_task = WorkerThreadPool.add_task(_build_water.bind(src), false, "pax_rpg water mask")
+			if Bg.THREADS:
+				_water_task = WorkerThreadPool.add_task(_build_water.bind(src), false, "pax_rpg water mask")
+			else:
+				_water_task = -2                     # без потока (см. Bg.THREADS): считаем сейчас, ответ — в _set_water
+				_build_water(src)
 			return false
 		else:
 			return false
