@@ -16,6 +16,7 @@ var location: Location
 var loading: Loading
 var travel: Travel
 var _autostart_city := ""
+var _mm: MainMenu
 
 
 func _mod_loaded() -> void:
@@ -41,7 +42,8 @@ func _mod_loaded() -> void:
 	Pax.add_menu_item("pax_rpg_load", tr_key("pax_rpg_menu_load"), _menu_screen.bind("_loading_screen"))
 	Pax.add_menu_item("pax_rpg_mp", tr_key("pax_rpg_menu_mp"), _menu_screen.bind("_network_screen"))
 	Pax.add_menu_item("pax_rpg_settings", tr_key("pax_rpg_menu_settings"), _menu_screen.bind("_settings_screen"))
-	var mm := MainMenu.new()                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
+	var mm := MainMenu.new()
+	_mm = mm                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
 	mm.setup(self, func() -> Variant: return _find_menu(get_tree().root), [
 		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game],
 		["pax_rpg_menu_load", _menu_screen.bind("_loading_screen")], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen")],
@@ -155,6 +157,8 @@ func _mod_unloaded() -> void:
 
 func _world_ready(g: PaxGame) -> void:
 	Trace.mark("main: world_ready")
+	if is_instance_valid(_mm):
+		_mm.game = g
 	Trace.armed_until = Engine.get_process_frames() + 300
 	planet.start(g)
 	travel.start(g)

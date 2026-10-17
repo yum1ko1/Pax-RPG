@@ -150,8 +150,8 @@ func _attach() -> void:
 	var mat_v: Variant = _pick(body, ["material", "мат", "mat"])
 	if not (mat_v is ShaderMaterial) and node is MeshInstance3D:
 		mat_v = (node as MeshInstance3D).material_override
-	# planet_skin (пока выкл.): после обновления игры 0.31.4 она падает через 1–2 с после подмены шейдера планеты.
-	if mat_v is ShaderMaterial and (mat_v as ShaderMaterial).shader != _shader and bool(mod.get_setting("planet_skin", false)):
+	# planet_skin: выключить подмену шейдера планеты (настройка мода).
+	if mat_v is ShaderMaterial and (mat_v as ShaderMaterial).shader != _shader and bool(mod.get_setting("planet_skin", true)):
 		_mat = mat_v
 		_orig_shader = _mat.shader
 		_orig_params.clear()
