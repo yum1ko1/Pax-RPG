@@ -365,8 +365,22 @@ void fragment() {
 
 ## Меню игры на главном шаге — значит, мы на экране; другой шаг (загрузка, настройки, партия) — прячемся.
 func _on_node_added(n: Node) -> void:
-	if n is CanvasItem and n.has_method("_country_choice_screen") and n.has_method("_start_game"):
+	if n is Button:                                  # наша кнопка в меню игры: меню — её предок (meta ставят следом)
+		_check_button.call_deferred(weakref(n))
+	elif n.has_method("_country_choice_screen") and n.has_method("_start_game"):
 		_menu_ref = weakref(n)
+
+
+func _check_button(w: WeakRef) -> void:
+	var b: Node = w.get_ref()
+	if b == null or str(b.get_meta("menu_id", "")) != "mod:pax_rpg_continue":
+		return
+	var p := b.get_parent()
+	while p != null:
+		if p.has_method("_country_choice_screen") and p.has_method("_start_game"):
+			_menu_ref = weakref(p)
+			return
+		p = p.get_parent()
 
 
 func _on_main() -> bool:
