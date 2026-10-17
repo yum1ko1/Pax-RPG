@@ -7,22 +7,27 @@ const STEPS := 10
 const GEAR := 7
 const CITY := 13
 
-var _step: AudioStreamPlayer
-var _gear: AudioStreamPlayer
+var _step: AudioStreamPlayer3D
+var _gear: AudioStreamPlayer3D
 var _bed: AudioStreamPlayer
-var _far: AudioStreamPlayer
-var _impact: AudioStreamPlayer
+var _far: AudioStreamPlayer3D
+var _impact: AudioStreamPlayer3D
 var _walked := 0.0
 var soft := false                     # location.gd: под ногами песок/земля (лес, яма арены) — мягкий шаг
-var _sand: AudioStreamPlayer
+var _sand: AudioStreamPlayer3D
 var puddle := false                   # location.gd: герой стоит в луже — шаг хлюпает
-var _splash: AudioStreamPlayer
+var _splash: AudioStreamPlayer3D
 var _next_far := 4.0
 var _left := false
 var city := false
 
 
 var _mod: PaxMod
+var _at: Node3D                       # где звучат шаги и ткань — герой (3D: громче, когда камера ближе)
+var _cloth: AudioStreamPlayer3D       # резкий хлопок ткани (взмах, уклон)
+var _rustle: AudioStreamPlayer3D      # шорох одежды на шаге
+var _skirt: AudioStreamPlayer3D       # юбка — тихо, «издалека» (запись у микрофона: срез верхов, эхо)
+var _land_db := -4.0
 
 
 func setup(mod: PaxMod, in_city: bool) -> void:
@@ -50,7 +55,7 @@ func setup(mod: PaxMod, in_city: bool) -> void:
 			_bed.play()
 
 
-func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) -> AudioStreamPlayer:
+func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) -> AudioStreamPlayer3D:
 	var rnd := AudioStreamRandomizer.new()
 	rnd.playback_mode = AudioStreamRandomizer.PLAYBACK_RANDOM_NO_REPEATS
 	rnd.random_pitch = 1.0 + pitch
@@ -61,13 +66,60 @@ func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) ->
 			rnd.add_stream(-1, st)
 	if rnd.streams_count == 0:
 		return null
-	var p := AudioStreamPlayer.new()
+	var p := AudioStreamPlayer3D.new()
+	_place(p)
 	p.stream = rnd
 	p.volume_db = volume
 	p.max_polyphony = 3
 	p.bus = "PaxRpgSfx"
 	add_child(p)
 	return p
+
+
+## 3D-плеер: слышит камера локации (audio_listener_enable_3d), громкость падает с расстоянием.
+func _place(p: AudioStreamPlayer3D) -> void:
+	p.unit_size = 5.0
+	p.max_distance = 70.0
+	p.attenuation_filter_cutoff_hz = 9000.0          # издалека — глуше
+	p.attenuation_filter_db = -12.0
+
+
+## Звуки героя из его конфига: sfx_steps "heel" — каблуки (камень / мягкий грунт), sfx_gear false — без лязга
+## доспеха, sfx_cloth — шорох одежды на шаге и хлопки ткани на взмахах.
+func hero(cfg: Dictionary, at: Node3D) -> void:
+	_at = at
+	if str(cfg.get("sfx_steps", "")) == "heel":
+		for p: Node in [_step, _sand]:
+			if p != null:
+				p.queue_free()
+		_step = _rand(_mod, "sounds/heel_step_%d.wav", 10, 0.06, -9.0)    # нарезка «на каблуках по каменному полу»
+		_sand = _rand(_mod, "sounds/heel_soft_%d.wav", 10, 0.08, -9.0)    # тот же каблук глуше + хруст песка
+		_land_db = -2.0
+	if not bool(cfg.get("sfx_gear", true)) and _gear != null:
+		_gear.queue_free()
+		_gear = null
+	if bool(cfg.get("sfx_cloth", false)):
+		_cloth = _rand(_mod, "sounds/cloth_snap_%d.wav", 6, 0.1, -6.0)
+		_rustle = _rand(_mod, "sounds/cloth_rustle_%d.wav", 8, 0.1, -20.0)
+		_skirt = _rand(_mod, "sounds/skirt_%d.wav", 8, 0.08, -16.0)
+
+
+## Резкий хлопок ткани (взмах копья, уклон) — у героев с sfx_cloth.
+func cloth(db: float) -> void:
+	if _cloth != null:
+		_cloth.volume_db = db + randf_range(-2.0, 0.0)
+		_cloth.play()
+
+
+## Приземление в ударе (step_times клипа): каблук о землю, чуть громче шага.
+func land_step() -> void:
+	var p := _sand if soft and _sand != null else _step
+	if p != null:
+		p.volume_db = _land_db
+		p.play()
+	if _rustle != null:
+		_rustle.volume_db = -16.0
+		_rustle.play()
 
 
 ## Каждый кадр физики: сколько герой прошёл по земле. Шаг — каждые stride м; бряцание — на каждый второй шаг
@@ -90,6 +142,12 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 	elif _step != null:
 		_step.volume_db = -6.0 if running else -9.0
 		_step.play()
+	if _rustle != null:
+		_rustle.volume_db = -17.0 if running else -21.0
+		_rustle.play()
+	if _skirt != null and _left:                         # юбка — на каждый второй шаг, тихо
+		_skirt.volume_db = -14.0 if running else -17.0
+		_skirt.play()
 	if _gear != null:                                    # доспех лязгает на каждом шаге — в такт ногам
 		_gear.volume_db = (-9.0 if running else -13.0) + (1.5 if armed else 0.0)
 		_gear.pitch_scale = 1.08 if running else 1.0
@@ -109,15 +167,16 @@ func impact() -> void:
 		_impact.play()
 
 
-var _land_armor: AudioStreamPlayer
-var _smash: AudioStreamPlayer
+var _land_armor: AudioStreamPlayer3D
+var _smash: AudioStreamPlayer3D
 
 
-func _one(mod_path: String, db: float) -> AudioStreamPlayer:
+func _one(mod_path: String, db: float) -> AudioStreamPlayer3D:
 	var st: AudioStream = _mod.sound(mod_path) if _mod != null else null
 	if st == null:
 		return null
-	var p := AudioStreamPlayer.new()
+	var p := AudioStreamPlayer3D.new()
+	_place(p)
 	p.stream = st
 	p.volume_db = db
 	p.bus = "PaxRpgSfx"
@@ -133,13 +192,18 @@ func land() -> void:
 		_land_armor.pitch_scale = randf_range(0.95, 1.05)
 		_land_armor.play()
 	if _step != null:
-		_step.volume_db = -4.0
+		_step.volume_db = _land_db
 		_step.play()
 	if _gear != null:
 		_gear.play()
 
 
 func _process(delta: float) -> void:
+	if is_instance_valid(_at):                       # плееры — дети простого Node: позиция = мировая
+		var pos := _at.global_position
+		for c: Node in get_children():
+			if c is AudioStreamPlayer3D:
+				(c as AudioStreamPlayer3D).position = pos
 	if not city or _far == null:
 		return
 	_next_far -= delta

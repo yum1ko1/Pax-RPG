@@ -57,6 +57,7 @@ var _impact: AudioStreamPlayer      # удар о землю (sounds/impact_*.wa
 var _swing_done := false
 var _impact_done := false
 var _hit_done := false              # удар этого взмаха уже нанесён (tick вернул hit)
+var _lands_done := 0                 # сколько приземлений клипа (step_times) уже озвучено
 var _hits_done := 0                  # сколько ударов по hit_times клипа уже нанесено (у копья — несколько за клип)
 var _skel: Skeleton3D
 var _owner_body: PhysicsBody3D       # капсула персонажа — с ней ткань не сталкивается
@@ -1496,6 +1497,7 @@ func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	_swing_done = false
 	_hit_done = false
 	_hits_done = 0
+	_lands_done = 0
 	_impact_done = false
 	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
 	anim.play(_clip, _per("blend_in", n, 0.15))
@@ -1601,6 +1603,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	if action != "":
 		_sounds()
 		_hit(out)
+		_land_steps(out)
 		out.root = _root_step()
 	else:
 		_loop(moving, speed, running)
@@ -2121,6 +2124,14 @@ func deathblow() -> bool:
 	blocking = false
 	_play_once("Deathblow")
 	return true
+
+
+## Приземления в клипе (cfg step_times: клип → [с]): out.land_step — location.gd проигрывает шаг (каблук).
+func _land_steps(out: Dictionary) -> void:
+	var times: Variant = (cfg.get("step_times", {}) as Dictionary).get(action, null)
+	if times is Array and _lands_done < (times as Array).size() and _pos() >= float((times as Array)[_lands_done]):
+		_lands_done += 1
+		out["land_step"] = true
 
 
 ## Миг удара: середина взмаха (swing_peaks), у финального — касание земли (impact). tick вернёт

@@ -465,6 +465,7 @@ func build(city: Dictionary) -> void:
 	_sfx = Sfx.new()
 	_sfx.setup(mod, not layout.is_empty())
 	add_child(_sfx)
+	_sfx.hero(hero_cfg if _hero != null else {}, _player)   # шаги героя — 3D, от него
 	AudioBus.ensure(mod)
 	_sens = float(mod.get_setting("mouse_sens", 1.0))
 	_music = Music.new()
@@ -1755,6 +1756,8 @@ func _physics_body(delta: float) -> void:
 			if dir != "":
 				_face_now(ty)
 		if _hero.dodge(on_floor, dir):
+			if is_instance_valid(_sfx):
+				_sfx.cloth(-4.0)
 			if _hero.side_dodge():
 				pass                                     # уклон — лицом к врагу, смещение ведёт root motion клипа
 			elif wish.length() > 0.01:
@@ -1902,6 +1905,10 @@ func _physics_body(delta: float) -> void:
 		if r.has("hit"):
 			_strike(r.hit)
 			_combat_fx_swing(r.hit)
+			if is_instance_valid(_sfx):
+				_sfx.cloth(-6.0)                     # взмах — резкий хлопок ткани
+		if r.has("land_step") and is_instance_valid(_sfx):
+			_sfx.land_step()
 		if r.has("blade"):
 			_blade_strike(r.blade)
 		if step != Vector3.ZERO and delta > 0.0:
