@@ -302,6 +302,29 @@ for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
     if i % 2 == 0:                                        # дым из трубы
         proxy("smoke", side * 11.5, 6.4, zc + 1.0)
 
+# итерация 10: мелкое наполнение — кучками там, где пользуются (у дверей, в углах, у цоколя), не россыпью
+CLUTTER = ["basket", "sack_grain", "crate", "barrel_water", "barrel_kumis", "crate_saerith", "@bucket_set"]
+for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
+    xw = side * (FRONT_X - 0.45)                         # у стены дома
+    for j in range(random.randint(2, 4)):                 # кучка у двери
+        dz = random.choice((-1, 1)) * random.uniform(1.6, 3.2)
+        if free(xw, zc + dz, 0.45):
+            add(random.choice(CLUTTER), xw + random.uniform(-0.2, 0.2), zc + dz, random.uniform(0, 360),
+                s=random.uniform(0.7, 0.95), c=True, rad=0.45)
+    for j in range(5):                                    # сорная трава у цоколя
+        add("grass_tuft", side * (FRONT_X - 0.15), zc + random.uniform(-3.5, 3.5), random.uniform(0, 360),
+            s=random.uniform(0.5, 0.8), c=False)
+    if i % 3 == 1:                                        # хозяйственный угол: дрова, вёдра, сено
+        add("wood_pile", xw, zc + 3.4, 90, s=0.8, c=True, rad=0.8)
+        add("hay_bale", xw + side * -0.2, zc + 2.4, random.uniform(0, 360), s=0.7, c=True, rad=0.6)
+for z in [zz * 1.0 for zz in range(32, 78, 3)]:           # мусор у бордюров: щепки, черепки, бумага, солома
+    for side in (-1, 1):
+        if random.random() < 0.7:
+            proxy("debris", side * random.uniform(4.6, 5.0), 0, z + random.uniform(-1.2, 1.2), random.uniform(0, 360),
+                  n=random.randint(4, 9))
+for x, z in ((-3.2, 87.0), (3.2, 87.0), (-12.5, 96.0), (14.6, 99.0), (-6.0, 92.5)):   # снаружи: солома, навоз, щепа
+    proxy("debris", x, 0, z, random.uniform(0, 360), n=8, kind="straw")
+
 # --- снаружи: церемониальная дорога к Вратам Клыка
 box([9.0, 0.05, 26.0], 0, 0.025, 99.0, "stone_cut", c=False)              # мощёный подход
 box([0.3, 0.16, 26.0], -4.6, 0.08, 99.0, "stone_dark", c=False)

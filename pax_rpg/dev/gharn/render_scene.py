@@ -270,6 +270,16 @@ def proxy(e, p, r):
     elif k == "petals":                           # лепестки сакуры пятном на земле
         prim("cyl", L + Vector((0, 0, 0.025)), (e.get("w", 3.0), e.get("w", 3.0) * 0.8, 0.01), rot,
              pmat("petals", "noise", (0.12, 0.06, 0.07), (0.75, 0.35, 0.45), 6))
+    elif k == "debris":                           # мусор: щепки, черепки, обрывки бумаги / солома
+        straw = e.get("kind") == "straw"
+        for i in range(int(e.get("n", 6))):
+            q = L + Vector((rnd.uniform(-0.7, 0.7), rnd.uniform(-0.7, 0.7), 0.02))
+            if straw:
+                prim("cube", q, (rnd.uniform(0.2, 0.5), 0.02, 0.01), (0, 0, rnd.uniform(0, 6.3)), mat("straw", (0.55, 0.42, 0.18)))
+            else:
+                c_ = rnd.choice([(0.25, 0.15, 0.08), (0.45, 0.2, 0.12), (0.75, 0.7, 0.6), (0.12, 0.1, 0.09)])
+                prim("cube", q, (rnd.uniform(0.06, 0.3), rnd.uniform(0.04, 0.14), 0.015), (0, 0, rnd.uniform(0, 6.3)),
+                     mat("deb_%d" % int(c_[0] * 100), c_))
     elif k == "puddle":
         prim("cyl", L + Vector((0, 0, 0.03)), (e.get("w", 2.0), e.get("d", 1.2), 0.01), rot, mat("water", (0.02, 0.02, 0.03), rough=0.05))
     elif k == "ruts":                             # колеи: две тёмные полосы, e["len"]
