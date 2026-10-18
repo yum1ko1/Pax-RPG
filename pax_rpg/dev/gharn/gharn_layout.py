@@ -189,50 +189,61 @@ add("hitching_post", 66, 32, 90, c=True)
 #      и товаром на тротуарах, гирлянды фонарей ритмом (через 6 м, свет — у каждой второй), не облаком.
 #   3) В конце аллеи — арка из клыков с жаровнями: рамка, через которую видна площадь Круга (точка притяжения взгляда).
 ALLEY_ROWS = [(76.5, 61.0), (54.0, 31.5)]              # отрезки фасадов (между ними — переулок z 57.5)
-ALLEY_MODELS = ["@house_bal_a", "@house_shop_a", "@house_bal_b", "@house_timber_a", "@house_bal_c", "@house_shop_c"]   # балконы — через один
+ALLEY_MODELS = ["@house_bal_a", "@house_timber_a", "@house_bal_b", "@house_timber_b", "@house_bal_c", "@house_shop_b"]   # узкие, 7.5–8.5 м; балконы — через один
 FOOT = {"house_two_b": (5.22, 4.92), "house_shop_a": (5.11, 4.13), "house_shop_b": (4.24, 4.06),
         "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71),
         "house_bal_a": (4.2, 3.15), "house_bal_b": (3.81, 4.47), "house_bal_c": (4.08, 4.62)}
 ALLEY_HOUSES = []                                       # (z центра, сторона, модель) — для вывесок и лавок
-for side in (-1, 1):                                    # ряд домов на отрезок: на один больше, чем влезает, и
-    k = 0 if side < 0 else 3                            # весь ряд ужат до длины отрезка — фасад сплошной, без дыр
+FRONT_X = 7.3                                           # линия фасадов: улица-каньон (фасад ≈ ширине улицы)
+for side in (-1, 1):                                    # ряд домов в натуральную величину; что не влезло — узкий
+    k = 0 if side < 0 else 3                            # проход между домами (забор, бочки) — как в живом городе
     for z0, z1 in ALLEY_ROWS:
         seg, row = z0 - z1, []
-        while sum(2 * FOOT[m.lstrip("@")][0] + 0.3 for m in row) < seg:
-            row.append(ALLEY_MODELS[k % len(ALLEY_MODELS)])
+        while True:                                     # добавляем, пока ряд не длиннее отрезка (можно ужать до 0.9)
+            m = ALLEY_MODELS[k % len(ALLEY_MODELS)]
+            w_ = sum(2 * FOOT[mm.lstrip("@")][0] for mm in row) + 2 * FOOT[m.lstrip("@")][0]
+            if w_ > seg / 0.9:
+                break
+            row.append(m)
             k += 1
-        tot = sum(2 * FOOT[m.lstrip("@")][0] + 0.3 for m in row)
-        sc = max(0.72, seg / tot)
+        tot = sum(2 * FOOT[mm.lstrip("@")][0] for mm in row)
+        sc = min(1.0, seg / tot)
+        gap = (seg - tot * sc) / max(1, len(row) - 1) if len(row) > 1 else 0
         z = z0
-        for m in row:
-            fx, fz = FOOT[m.lstrip("@")]
-            zc = z - fx * sc
-            add(m, side * (8.1 + fz * sc), zc, 90 if side < 0 else -90, s=round(sc, 3), c=True, rad=fx * sc + 0.2)
+        for j, m in enumerate(row):
+            fx, fz = FOOT[m.lstrip("@")][0] * sc, FOOT[m.lstrip("@")][1] * sc
+            zc = z - fx
+            add(m, side * (FRONT_X + fz), zc, 90 if side < 0 else -90, s=round(sc, 3), c=True, rad=fx + 0.2)
             ALLEY_HOUSES.append((zc, side, m))
-            z -= (2 * fx + 0.3) * sc
+            z -= 2 * fx + gap
+            if j < len(row) - 1 and gap > 0.9:          # проход между домами
+                gz = z + gap / 2
+                add("fence_wood", side * (FRONT_X + 1.6), gz, 0 if True else 0, c=True)
+                add(random.choice(["barrel_water", "wood_pile", "crate"]), side * (FRONT_X + 0.5), gz, random.uniform(0, 360),
+                    s=0.9, c=True, rad=0.5)
 for side in (-1, 1):                                    # тротуары по обе стороны; у переулка (z 57.5) — разрыв
-    box([3.0, 0.06, 23.0], side * 6.5, 0.03, 43.0, "stone_cut", c=False)   # низкий, без коллизии — герой не спотыкается
-    box([3.0, 0.06, 16.0], side * 6.5, 0.03, 69.0, "stone_cut", c=False)
+    box([2.2, 0.06, 23.0], side * 6.2, 0.03, 43.0, "stone_cut", c=False)   # узкий, низкий, без коллизии
+    box([2.2, 0.06, 16.0], side * 6.2, 0.03, 69.0, "stone_cut", c=False)
     box([0.25, 0.14, 23.0], side * 5.05, 0.07, 43.0, "stone_dark", c=False)   # бордюр — тёмная кромка, читается линия
     box([0.25, 0.14, 16.0], side * 5.05, 0.07, 69.0, "stone_dark", c=False)
 for z in (38, 50, 64, 74):                              # каменные фонари у бордюра — реже, ритмом 12 м
     for side in (-1, 1):
-        add("stone_lantern", side * 5.6, z, 90 if side < 0 else -90, rad=0.6)
+        add("stone_lantern", side * 5.3, z, 90 if side < 0 else -90, rad=0.6)
 for k, z in enumerate(range(34, 77, 6)):                # гирлянды: через 6 м, под карнизами (4.0…4.6), на столбах
     h = (5.9, 6.2, 5.6, 6.0)[k % 4]                     # высокие праздничные столбы: низ фонаря ≥ 4 м, у карнизов
-    items.append({"lanterns": [-7.4, z, 7.4, z + 0.8, h, 1 if k % 2 == 0 else 0, 1], "seed": int(z * 13 + k), "p": [0, 0, z],
+    items.append({"lanterns": [-6.9, z, 6.9, z + 0.8, h, 1 if k % 2 == 0 else 0, 1], "seed": int(z * 13 + k), "p": [0, 0, z],
                   "c": False})
 for i, (zc, side, m) in enumerate(ALLEY_HOUSES):        # у каждой второй лавки — прилавок под навесом и товар
-    if i % 2:
-        continue
-    x = side * 7.15
+    if i % 3:
+        continue                                         # прилавки — у каждой третьей: тротуар узкий
+    x = side * 6.45
     add("@market_stall_hide", x, zc + 1.2, 90 if side < 0 else -90, c=True, rad=1.6)
     for j, pm in enumerate(random.sample(["crate", "barrel_kumis", "sack_grain", "basket", "crate_saerith"], 3)):
         add(pm, x + side * 0.3, zc - 1.4 - j * 0.85, random.uniform(0, 360), s=0.85, c=True, rad=0.5)
 for i in range(len(ALLEY_HOUSES) - 1):                   # знамёна кланов в стыках домов — вертикальный ритм
     (z1_, s1_, _), (z2_, s2_, _) = ALLEY_HOUSES[i], ALLEY_HOUSES[i + 1]
     if s1_ == s2_ and abs(z1_ - z2_) < 12 and i % 2 == 0:
-        add("banner_clan", s1_ * 7.7, (z1_ + z2_) / 2, 90 if s1_ < 0 else -90, s=1.2, c=True, rad=0.4)
+        add("banner_clan", s1_ * 6.9, (z1_ + z2_) / 2, 90 if s1_ < 0 else -90, s=1.2, c=True, rad=0.4)
 for side in (-1, 1):                                     # карман у переулка (z 57.5): скамьи и кадка сакуры
     add("bench_long", side * 9.0, 55.6, 90 if side < 0 else -90, c=True)
     box([2.4, 0.9, 2.4], side * 9.6, 0.45, 59.6, "stone_cut", c=True)        # кадка сакуры (как planter ниже)
@@ -285,9 +296,9 @@ for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
     yaw = 90 if side < 0 else -90
     for dz in (-1.5, 1.5):                               # тёплые окна второго этажа
         if (i + (dz > 0)) % 3:
-            proxy("window", side * 8.12, 3.6, zc + dz, yaw)
-    proxy("noren", side * 8.0, 0.0, zc, yaw, c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])  # занавес над дверью лавки
-    proxy("hang_sign", side * 7.6, 0.0, zc - 2.4, yaw)    # вывеска на кронштейне — над тротуаром
+            proxy("window", side * (FRONT_X + 0.05), 4.2, zc + dz, yaw)
+    proxy("noren", side * (FRONT_X - 0.1), 0.0, zc, yaw, c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])  # занавес над дверью лавки
+    proxy("hang_sign", side * (FRONT_X - 0.5), 0.0, zc - 2.4, yaw)    # вывеска на кронштейне — над тротуаром
     if i % 2 == 0:                                        # дым из трубы
         proxy("smoke", side * 11.5, 6.4, zc + 1.0)
 
@@ -647,7 +658,7 @@ for i, (x, z, rad) in enumerate(YURTS):
 SIGNS = [("酒", "Кумыс и брага"), ("武", "Оружие"), ("薬", "Зелья и травы"), ("肉", "Мясо"), ("布", "Ткани"),
          ("鉄", "Кузня"), ("革", "Кожа и сёдла"), ("茶", "Чайная"), ("宝", "Добыча"), ("骨", "Обереги")]
 for i, (zc, side, m) in enumerate(ALLEY_HOUSES):      # вывески лавок Аллеи — у дверей, лицом к улице
-    items.append({"sign": list(SIGNS[i % len(SIGNS)]), "p": [side * 7.7, 0.0, zc - 2.6 * side], "r": 90.0 * -side,
+    items.append({"sign": list(SIGNS[i % len(SIGNS)]), "p": [side * 6.9, 0.0, zc - 2.6 * side], "r": 90.0 * -side,
                   "c": True})
 for i, (x, z, rad) in enumerate(YURTS):                 # верёвки с бельём и шкурами у юрт
     if i % 3 != 1:
