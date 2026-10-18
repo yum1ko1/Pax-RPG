@@ -177,15 +177,20 @@ def spear_track(s, sb, j, bin_, names, tt, ai, t0=0.0):
             SPEAR_K = np.eye(4)                     # калибровка по хвату модели поворачивала его на ~90° во всём клипе
     kc = None                                       # SPEAR_BLEND=last|first: к этому концу клипа копьё сводится к хвату
     bl = os.environ.get("SPEAR_BLEND", "")          # модели (стойка, удары) — Draw: за спиной как в Cascadeur → в хват
-    if bl:
-        tc = tt[-1] if bl == "last" else tt[0]
-        kc = np.linalg.inv(spear_w(tc)) @ ortho(mk.world(hand, tc)) @ rest
+    if bl:                                          # both — с обоих концов (конец серии: из удара → в стойку)
+        kf = np.linalg.inv(spear_w(tt[0])) @ ortho(mk.world(hand, tt[0])) @ rest
+        kl = np.linalg.inv(spear_w(tt[-1])) @ ortho(mk.world(hand, tt[-1])) @ rest
+        kc = kl if bl == "last" else kf
     pos, rot = [], []
     for k, t in enumerate(tt):
         K = SPEAR_K
         if kc is not None:
             u = k / max(1, len(tt) - 1)
-            w = float(np.clip((u - 0.25) / 0.6, 0.0, 1.0)) if bl == "last" else float(np.clip((0.75 - u) / 0.6, 0.0, 1.0))
+            if bl == "both":
+                kc = kf if u < 0.5 else kl
+                w = float(np.clip((0.3 - u) / 0.25, 0.0, 1.0)) if u < 0.5 else float(np.clip((u - 0.7) / 0.25, 0.0, 1.0))
+            else:
+                w = float(np.clip((u - 0.25) / 0.6, 0.0, 1.0)) if bl == "last" else float(np.clip((0.75 - u) / 0.6, 0.0, 1.0))
             w = w * w * (3 - 2 * w)
             qa, qb = m2q(SPEAR_K[:3, :3]), m2q(kc[:3, :3])
             if np.dot(qa, qb) < 0:
