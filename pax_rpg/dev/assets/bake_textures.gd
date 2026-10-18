@@ -4,7 +4,8 @@ extends SceneTree
 ## и t<N>_lo.dds (512 px — грузится сразу, полное подменяет вблизи: assets.gd). N — порядок текстуры при обходе
 ## сцены (MeshInstance3D по порядку, поверхности, слоты материала) — тот же обход делает игра.
 ## Запуск (редакторская сборка Godot — в игре сжатия нет):
-##   godot --headless --path <любой проект> -s bake_textures.gd -- <папка исходных glb> <папка models мода>
+##   godot --headless --path <любой проект> -s bake_textures.gd -- <папка исходных glb> <папка models мода> [bc5]
+## bc5 — карты нормалей в BC5 (RGTC: два канала по 8 бит, без «кубиков» BC1; z восстанавливает шейдер).
 ## Исходники (с JPEG внутри) лежат в pax_rpg/dev/models_src/, в мод уходят glb без картинок (strip_glb.py).
 
 const SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ORM,
@@ -32,6 +33,21 @@ static func textures_of(scene: Node) -> Array:
 	return out
 
 
+static func normals_of(scene: Node) -> Array:
+	var out: Array = []
+	for mi: Node in scene.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for s: int in m.mesh.get_surface_count():
+			var mat := m.get_surface_override_material(s)
+			if mat == null:
+				mat = m.mesh.surface_get_material(s)
+			if mat is BaseMaterial3D and (mat as BaseMaterial3D).normal_texture != null:
+				out.append((mat as BaseMaterial3D).normal_texture)
+	return out
+
+
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var src_dir := args[0]
@@ -46,6 +62,7 @@ func _initialize() -> void:
 			continue
 		var scene := doc.generate_scene(st)
 		var texs := textures_of(scene)
+		var normals := normals_of(scene) if args.size() > 2 and args[2] == "bc5" else []
 		if texs.is_empty():
 			scene.free()
 			continue
@@ -67,22 +84,28 @@ func _initialize() -> void:
 				img.clear_mipmaps()
 			var alpha := img.detect_alpha() != Image.ALPHA_NONE
 			img.convert(Image.FORMAT_RGBA8 if alpha else Image.FORMAT_RGB8)
-			_save(img, hi_max, out_dir.path_join("t%d.dds" % n))
+			var nm := normals.has(texs[n])
+			if nm:
+				img.convert(Image.FORMAT_RGB8)
+			_save(img, hi_max, out_dir.path_join("t%d.dds" % n), nm)
 			if big:
-				_save(img, LO, out_dir.path_join("t%d_lo.dds" % n))
+				_save(img, LO, out_dir.path_join("t%d_lo.dds" % n), nm)
 		print("%s: %d текстур, %s, %d мс" % [rel, texs.size(), ("%d+512" % hi_max) if big else "512", Time.get_ticks_msec() - t0])
 		scene.free()
 	quit()
 
 
-func _save(src: Image, max_px: int, path: String) -> void:
+func _save(src: Image, max_px: int, path: String, normal := false) -> void:
 	var img := src.duplicate() as Image
 	var m := maxi(img.get_width(), img.get_height())
 	if m > max_px:
 		var k := float(max_px) / m
 		img.resize(maxi(4, int(img.get_width() * k)), maxi(4, int(img.get_height() * k)), Image.INTERPOLATE_LANCZOS)
 	img.generate_mipmaps()
-	img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_GENERIC)
+	if normal:
+		img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL)   # S3TC + normal → RGTC (BC5)
+	else:
+		img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_GENERIC)
 	img.save_dds(path)
 
 

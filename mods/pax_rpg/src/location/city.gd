@@ -1,6 +1,7 @@
 extends RefCounted
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
+const HouseDetail := preload("res://mods/pax_rpg/src/location/house_detail.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py):
@@ -1070,6 +1071,11 @@ var _lod := 0                                            # 0 — обычная,
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
+## Ячейка у входа в город — Аллея Сакур (|x| < 24, z 24…96): там дома в материале house_detail.gd.
+func _entrance(cell: Vector2i) -> bool:
+	return absi(cell.x * 2 + 1) * CELL * 0.5 < 30.0 and cell.y * CELL >= 24.0 and cell.y * CELL < 96.0
+
+
 func _place(path: String, list: Array) -> void:
 	var src := Assets.model(mod, path)
 	if src == null:
@@ -1115,6 +1121,10 @@ func _place(path: String, list: Array) -> void:
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
+			if path.contains("house_two") and _entrance(key) and mesh.get_surface_count() > 0:   # дома у входа — детали камня и дерева
+				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
+				if hm != null:
+					mi.material_override = hm
 			if fol != null:
 				mi.material_override = fol
 				mi.extra_cull_margin = 1.5
