@@ -116,7 +116,7 @@ w.use_nodes = True
 bg = w.node_tree.nodes["Background"]
 bg.inputs[0].default_value = (0.035, 0.03, 0.08, 1)
 bg.inputs[1].default_value = 1.0
-if os.environ.get("FOG", "1") == "1":            # туман по глубине: планы сцены (главный инструмент ночи)
+if os.environ.get("FOG", "0") == "1":            # туман по глубине: планы сцены (главный инструмент ночи)
     vol = w.node_tree.nodes.new("ShaderNodeVolumePrincipled")
     vol.inputs["Color"].default_value = (0.35, 0.3, 0.55, 1)
     vol.inputs["Density"].default_value = float(os.environ.get("FOG_D", "0.003"))
