@@ -198,13 +198,18 @@ SPEAR_SIGMA = 1.2
 
 def main():
     model, meta_p = sys.argv[1], sys.argv[2]
-    pairs = [p.split("=", 1) for p in sys.argv[3:]]   # Имя=клип.glb[:mirror] — mirror: зеркально (лево↔право)
+    pairs = [p.split("=", 1) for p in sys.argv[3:]]   # Имя=клип.glb[@a-b][:mirror] — mirror: зеркально (лево↔право),
+    # @a-b — только кадры a…b исходника (один glb бега → RunStart / Run / RunStop)
     j, bin_ = load(model)
     meta = json.load(open(meta_p, encoding="utf-8"))
     names = {n.get("name"): i for i, n in enumerate(j["nodes"])}
     for clip, src in pairs:
         mirror = src.endswith(":mirror")
         src = src[:-7] if mirror else src
+        f0 = f1 = None
+        if "@" in src:
+            src, rng = src.rsplit("@", 1)
+            f0, f1 = (int(x) for x in rng.split("-"))
         s, sb = load(src)
         sa = s["animations"][0]
         ch, samp = [], []
@@ -223,6 +228,9 @@ def main():
             sp = sa["samplers"][c["sampler"]]
             t = read(s, sb, sp["input"])[:, 0]
             v = read(s, sb, sp["output"])
+            if f0 is not None:
+                keep = (t >= f0 / FPS - 1e-4) & (t <= f1 / FPS + 1e-4)
+                t, v = t[keep] - f0 / FPS, v[keep]
             t_end = max(t_end, float(t[-1]))
             if nm == "Hips" and path == "rotation":
                 v = qmul(QX, v)
@@ -251,7 +259,7 @@ def main():
             samp.append({"input": write(j, bin_, tt, "SCALAR"), "output": write(j, bin_, hv, "VEC3"),
                          "interpolation": "LINEAR"})
             ch.append({"sampler": len(samp) - 1, "target": {"node": names["Hips"], "path": "translation"}})
-        sp_ = None if mirror else spear_track(s, sb, j, names, tt)   # зеркальный — копьё в хвате модели
+        sp_ = None if mirror else spear_track(s, sb, j, names, tt + (f0 / FPS if f0 is not None else 0.0))   # зеркальный — копьё в хвате модели
         if sp_ is not None:
             ti = write(j, bin_, tt, "SCALAR")
             for path, v, typ in (("translation", sp_[0], "VEC3"), ("rotation", sp_[1], "VEC4")):

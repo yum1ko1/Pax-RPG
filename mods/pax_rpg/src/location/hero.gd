@@ -1662,7 +1662,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		out.root = _root_step()
 	else:
 		_loop(moving, speed, running)
-		_loop_steps(out, moving and on_floor)
+		_loop_steps(out, (moving or anim.current_animation == "RunStop") and on_floor)
 	_on_floor = on_floor
 	_show_sword(delta)
 	_face_tick(delta)
@@ -1703,6 +1703,14 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 		if running:
 			want = "RunArmed" if armed and has("RunArmed") else "Run"
 			stride = _f("stride_run_armed", 3.2) if want == "RunArmed" else _f("stride_run", 4.0)
+			if want == "Run" and has("RunStart"):        # вход в бег: с места или с шага — разгон, потом цикл
+				var cur := anim.current_animation
+				if (cur == "RunStart" and anim.is_playing()) or (cur not in ["Run", "RunStart", "RunStop"]):
+					want = "RunStart"
+	elif not blocking and has("RunStop") and not armed:  # выход из бега: остановился на бегу — торможение до стойки
+		var cur := anim.current_animation
+		if cur in ["Run", "RunStart"] or (cur == "RunStop" and anim.is_playing()):
+			want = "RunStop"
 		elif (armed and anim.has_space("Lock")) or (lock_on and anim.has_space("LockU")):
 			# шаг лицом к цели (с мечом — всегда: тело смотрит туда же, куда камера; без меча — в захвате):
 			# клипы вперёд / назад / влево / вправо смешиваются по направлению шага, как в соулсах
@@ -1726,8 +1734,16 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			if want == "" or not has(want):
 				want = "WalkArmed" if armed and has("WalkArmed") else "Walk"
 				stride = _f("stride_walk_armed", 1.3) if want == "WalkArmed" else _f("stride_walk", 1.5)
+	if want in ["RunStart", "RunStop"]:
+		if anim.current_animation != want:
+			anim.play(want, _f("blend_run_edge", 0.15))
+		anim.speed_scale = 1.0                         # разгон и торможение — в темпе клипа
+		_still = -1.0
+		return
 	if anim.current_animation != want or not anim.is_playing():
 		var bl := _f("blend_loop", 0.3)
+		if anim.current_animation == "RunStart" and want == "Run":
+			bl = _f("blend_run_in", 0.06)        # конец разгона = начало цикла — почти без смешивания
 		if want == "RunArmed" or anim.current_animation == "RunArmed":
 			bl = _f("blend_run_armed", 0.5)      # рука с мечом уходит вниз-назад — не рывком
 		elif want == "CombatIdle" or anim.current_animation == "CombatIdle":
