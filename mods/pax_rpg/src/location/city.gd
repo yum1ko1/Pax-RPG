@@ -376,7 +376,7 @@ func _fountain_water(t: Transform3D) -> void:
 	var dm := StandardMaterial3D.new()
 	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	dm.albedo_texture = mod.texture("textures/vfx/glow.png")
-	dm.albedo_color = Color(1.3, 1.6, 1.9, 0.55)
+	dm.albedo_color = Color(1.0, 1.25, 1.5, 0.32)
 	dm.vertex_color_use_as_albedo = true
 	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -384,47 +384,49 @@ func _fountain_water(t: Transform3D) -> void:
 	dm.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	dm.billboard_keep_scale = true
 	var drop := QuadMesh.new()
-	drop.size = Vector2(0.05, 0.32)
+	drop.size = Vector2(0.022, 0.24)                      # тонкие штрихи воды, не «конфетти»
 	drop.material = dm
 	var jet := CPUParticles3D.new()                       # струи веером из пасти вниз в чашу
 	jet.mesh = drop
 	jet.particle_flag_align_y = true                      # штрих — вдоль полёта
-	jet.amount = 320
-	jet.lifetime = 1.3
+	jet.amount = 260
+	# гаснут на уровне воды: из пасти (4·sc) до зеркала чаши (1.48·sc) — ~1 с падения; веер узкий — капли
+	# ложатся в чашу (r ≈ 0.7 м), а не летят сквозь бортик
+	jet.lifetime = sqrt(2.0 * (4.0 - 1.48) * sc / 9.8) + 0.12
 	jet.local_coords = false
 	jet.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	jet.emission_sphere_radius = 0.12 * sc
 	jet.direction = Vector3.UP
-	jet.spread = 70.0
-	jet.initial_velocity_min = 1.6 * sc
-	jet.initial_velocity_max = 2.4 * sc
+	jet.spread = 24.0
+	jet.initial_velocity_min = 0.9
+	jet.initial_velocity_max = 1.5
 	jet.gravity = Vector3(0, -9.8, 0)
 	jet.scale_amount_min = 0.7
 	jet.scale_amount_max = 1.4
 	var jr := Gradient.new()
 	jr.set_color(0, Color(1, 1, 1, 0.9))
-	jr.set_color(1, Color(1, 1, 1, 0.4))
+	jr.set_color(1, Color(1, 1, 1, 0.15))
 	jet.color_ramp = jr
 	jet.position = t.origin + Vector3(0, 4.0 * sc, 0)
 	root.add_child(jet)
 	var splash := CPUParticles3D.new()                    # брызги, отскочившие от воды — короткие штрихи
 	splash.mesh = drop
 	splash.particle_flag_align_y = true
-	splash.amount = 110
+	splash.amount = 60
 	splash.lifetime = 0.45
 	splash.local_coords = false
 	splash.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	splash.emission_ring_axis = Vector3.UP
-	splash.emission_ring_radius = 1.5 * sc
-	splash.emission_ring_inner_radius = 0.6 * sc
+	splash.emission_ring_radius = 0.9 * sc
+	splash.emission_ring_inner_radius = 0.2 * sc   # там, где падают капли
 	splash.emission_ring_height = 0.05
 	splash.direction = Vector3.UP
-	splash.spread = 40.0
-	splash.initial_velocity_min = 0.8
-	splash.initial_velocity_max = 1.8
+	splash.spread = 22.0
+	splash.initial_velocity_min = 0.35
+	splash.initial_velocity_max = 0.9
 	splash.gravity = Vector3(0, -9.8, 0)
-	splash.scale_amount_min = 0.25
-	splash.scale_amount_max = 0.55
+	splash.scale_amount_min = 0.12
+	splash.scale_amount_max = 0.28
 	splash.position = t.origin + Vector3(0, 1.48 * sc, 0)
 	root.add_child(splash)
 	var mist := vfx.smoke(root, t.origin + Vector3(0, 1.7 * sc, 0), 1.1 * sc, Color(0.85, 0.93, 1.0, 0.16), 10, 0.25)
