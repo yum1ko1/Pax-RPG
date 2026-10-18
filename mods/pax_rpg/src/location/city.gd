@@ -1105,6 +1105,8 @@ func _place(path: String, list: Array) -> void:
 				mi.visibility_range_end_margin = 6.0
 				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 			else:                                         # дальше FAR_DRAW м всё равно в дымке — не рисуем
+				if absi(key.x) * CELL > 96 or key.y * CELL > 88 or (key.y + 1) * CELL < -100:
+					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # слобода за стеной — силуэт без тени
 				mi.visibility_range_end = FAR_DRAW
 				mi.visibility_range_end_margin = 20.0
 			root.add_child(mi)
