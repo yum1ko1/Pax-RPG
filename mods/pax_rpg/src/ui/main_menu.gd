@@ -60,6 +60,7 @@ func setup(m: PaxMod, find_menu: Callable, items: Array) -> void:
 	layer = 60
 	visible = false
 	_build()
+	ready.connect(func() -> void: get_tree().node_added.connect(_on_any_node))
 
 
 func _load_font(rel: String) -> FontFile:
@@ -241,6 +242,18 @@ func attach(menu: Node) -> void:
 		(scr as Node).child_entered_tree.connect(_on_screen_child)
 	if _want:                                        # наш экран на месте — меню игры не показываем
 		_game_menu(false)
+	if scr is Node:                                  # главный шаг уже построен (выход из партии) — наш экран сразу
+		for c: Node in (scr as Node).get_children():
+			if c is Button and str(c.get_meta("menu_id", "")) == "mod:pax_rpg_continue":
+				show_menu(true)
+				break
+
+
+## Любая новая кнопка в дереве — только проверка её метки (событие игры, без обхода дерева): меню игры могли
+## собрать заново (выход из партии на глобусе) — тогда это его главный шаг, и снова наш экран.
+func _on_any_node(n: Node) -> void:
+	if n is Button and str(n.get_meta("menu_id", "")) == "mod:pax_rpg_continue":
+		_check_back.call_deferred(weakref(n))
 
 
 func _on_screen_child(n: Node) -> void:
@@ -251,6 +264,11 @@ func _on_screen_child(n: Node) -> void:
 func _check_back(w: WeakRef) -> void:
 	var b: Object = w.get_ref()
 	if b != null and str(b.get_meta("menu_id", "")) == "mod:pax_rpg_continue":
+		var m: Node = (b as Node).get_parent()
+		while m != null and not (m is CanvasLayer and m.has_method("_start_game")):
+			m = m.get_parent()
+		if m != null and m != _menu:
+			attach(m)
 		show_menu(true)
 
 
