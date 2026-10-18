@@ -153,6 +153,7 @@ func _slots() -> Array:
 
 
 func _open_slot(slot: String) -> void:
+	MainMenu.off()
 	var m: Variant = _main_root()
 	if m == null:
 		log_warning("Pax RPG: корень игры не найден — сохранение не открыть")

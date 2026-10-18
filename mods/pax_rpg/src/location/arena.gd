@@ -284,7 +284,7 @@ func _build_bowl(view: Node) -> void:
 	if m == null:
 		mod.log_warning("Pax RPG arena: no models/gharn/arena_pit.glb")
 		return
-	m.position = center
+	m.position = center + Vector3(0.0, 0.02, 0.0)       # кольцо мостовой у края — над землёй города, без мерцания
 	view.add_child(m)
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var g := mi as MeshInstance3D

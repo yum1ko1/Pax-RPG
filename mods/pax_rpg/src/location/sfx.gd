@@ -106,6 +106,10 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 		_sand = _rand(_mod, "sounds/heel_soft_%d.wav", 10, 0.08, -9.0)    # тот же каблук глуше + хруст песка
 		_land_db = -9.0
 		_step_db = -3.0
+		for p: Variant in [_step, _sand]:                 # свои шаги — без «издалека глуше»: фильтр 3D срезал щелчок
+			if p is AudioStreamPlayer3D:                  # каблука (он весь выше 3 кГц), и камень звучал как земля
+				(p as AudioStreamPlayer3D).attenuation_filter_db = 0.0
+				(p as AudioStreamPlayer3D).unit_size = 12.0
 	if not bool(cfg.get("sfx_gear", true)) and _gear != null:
 		_gear.queue_free()
 		_gear = null

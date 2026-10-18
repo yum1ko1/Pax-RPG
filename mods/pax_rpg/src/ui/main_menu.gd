@@ -235,6 +235,7 @@ func _saves_items() -> void:
 ## main.gd на world_ready: меню игры. Его главный экран — сигнал о новой кнопке на нём (наша «Continue» —
 ## значит, игрок вернулся на главный шаг меню: из настроек, сети или из партии). Ни опроса, ни обхода дерева.
 func attach(menu: Node) -> void:
+	active = self
 	if menu == null or menu == _menu:
 		return
 	_menu = menu
@@ -271,6 +272,16 @@ func _check_back(w: WeakRef) -> void:
 		if m != null and m != _menu:
 			attach(m)
 		show_menu(true)
+
+
+## Игрок ушёл в мир (город, глобус, загрузка сохранения) любым путём — наш экран и его музыка гаснут, меню игры
+## не трогаем. Раньше «Загрузить» из нашего списка оставлял _want — колыбельная играла поверх музыки города.
+static var active: CanvasLayer
+
+
+static func off() -> void:
+	if is_instance_valid(active):
+		active.set("_want", false)
 
 
 func show_menu(on: bool) -> void:

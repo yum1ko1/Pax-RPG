@@ -28,6 +28,8 @@ YURTS = []                                      # (x, z, радиус) — дв�
 
 def add(m, x, z, r=0.0, s=1.0, c=None, y=0.0, rad=0.0):
     name = m.lstrip("@")
+    if y == 0.0:
+        y = 0.02                                 # основания, ковры, плиты — над землёй города: без мерцания (z-fighting)
     for wx, wy, wz, wyaw, ww, wh in WINDOWS.get(name, []):     # стёкла в нарисованные окна (в осях здания)
         a = math.radians(r)
         lx, lz = wx * s, wz * s
@@ -237,6 +239,12 @@ occupied.append((-55, -45, 16))
 
 # --- Склон шаманов (северо-восток): холм, кристаллы, туры, флажки
 box([24, 4, 20], 66, 2, -66, "stone_dark")
+# подъём на склон: каменный пандус с юга (от гоблинского закоулка), туги по краям
+items.append({"box": [7, 0.4, 12.8], "mat": "stone", "p": [62, 2.0, -50.0], "r": 0, "rx": 18.2, "c": True})
+add("tug_banner", 58, -44.5)
+add("tug_banner", 66, -44.5)
+occupied.append((62, -50, 5))
+ROADS.append(("rect", 58.5, 65.5, -56, -43))
 for i in range(6):
     add("mana_crystal", 58 + random.uniform(0, 16), -72 + random.uniform(0, 12), random.uniform(0, 360), y=4.0)
     add("ovoo_cairn", 58 + random.uniform(0, 16), -72 + random.uniform(0, 12), y=4.0)
@@ -304,10 +312,177 @@ def quarter(x0, x1, z0, z1, n):
                     px, pz, random.uniform(0, 360), rad=0.6)
 
 
-quarter(-86, -20, 34, 80, 22)
-quarter(20, 86, 40, 80, 20)
-quarter(-86, -24, 14, 30, 5)
+# --- Жилые слободы: запад — кочевые курени кланов, восток — оседлая Улица Мастеров (districts() ниже)
 
+
+
+# ===================== жилые слободы =====================
+FOOT = {"yurt_large": (4.2, 4.2), "yurt_small": (2.7, 2.7), "house_timber_a": (3.8, 4.6), "house_timber_b": (4.1, 3.8),
+        "house_shop_a": (5.2, 4.2), "house_shop_b": (4.3, 4.1), "house_shop_c": (5.8, 4.3),
+        "house_two_a": (4.4, 4.6), "house_two_b": (5.4, 4.6)}
+RECTS = []                                       # (x0, x1, z0, z1) занятых построек слобод — без самопересечений
+
+
+def fits(x0, x1, z0, z1):
+    return all(x1 <= a0 or x0 >= a1 or z1 <= b0 or z0 >= b1 for a0, a1, b0, b1 in RECTS) and \
+        all(not (x0 - rr < a < x1 + rr and z0 - rr < b < z1 + rr) for a, b, rr in occupied)
+
+
+def place(m, x, z, r, pad=0.4, **kw):
+    """Постройка по габариту модели (r кратен 90°): не ставится, если задевает уже стоящее."""
+    hx, hz = FOOT[m.lstrip("@")]
+    if int(round(r / 90.0)) % 2:
+        hx, hz = hz, hx
+    box_ = (x - hx - pad, x + hx + pad, z - hz - pad, z + hz + pad)
+    if not fits(*box_):
+        return False
+    RECTS.append(box_)
+    add(m, x, z, r, c=True, **kw)
+    return True
+
+
+TWO = os.path.exists(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "house_two_a.glb"))
+
+
+def clan_camp(cx, cz, k):
+    """Курень кочевого клана: большая юрта главы на севере, три юрты родни кольцом — двери к общему очагу; у очага
+    вертел и котёл, у входа (юг) туг клана и коновязь, бельё между юртами, гирлянда над очагом."""
+    place("yurt_large", cx, cz - 6.8, 0)
+    for a in (150, 210, 90) if k % 2 else (150, 210, 270):
+        ra = math.radians(a)
+        place("yurt_small", cx + math.sin(ra) * 6.8, cz - math.cos(ra) * 6.8, 0)
+    add("firepit", cx, cz, 0, c=False, rad=1.2)
+    add("@spit_roast" if k % 2 == 0 else "cauldron", cx + 1.9, cz + 0.6, 90, c=True)
+    add("bench_long", cx - 2.2, cz + 1.2, 70)
+    add("bench_long", cx + 0.3, cz - 2.4, 0)
+    add("tug_banner", cx - 1.6, cz + 7.6)
+    add("hitching_post", cx + 2.4, cz + 8.0, 0, c=True)
+    add("hay_bale", cx + 4.4, cz + 8.2, random.uniform(0, 360), c=True)
+    add(random.choice(["barrel_kumis", "barrel_water"]), cx - 5.6, cz - 1.4)
+    add("basket", cx - 5.0, cz - 0.4)
+    add("wood_pile", cx + 5.6, cz - 2.0, 60, c=True)
+    items.append({"lanterns": [cx - 3.6, cz - 4.4, cx + 3.6, cz + 4.4, 3.6], "seed": int(cx * 3 + cz), "p": [cx, 0, cz],
+                  "c": False})
+    sx, sz = cx - 7.2, cz + 3.4
+    items.append({"laundry": [sx, sz, sx + 1.6, sz + 4.2], "seed": k, "p": [sx, 0, sz], "c": False})
+    TRAILS.append(("disc", cx, cz, 4.5))
+    occupied.append((cx, cz, 4.0))
+
+
+def craft_lot(x, z, side, k):
+    """Участок мастера на Улице Мастеров: дом фасадом к улице (двухэтажный, где есть модель), за домом — свой двор:
+    у гончара кувшины и корзины, у кожевника рамы со шкурой, у плотника дрова и телега, у пивовара бочки кумыса."""
+    r = 0 if side < 0 else 180
+    if TWO and k % 3 != 2:
+        m = "@house_two_a" if k % 2 else "@house_two_b"
+    else:
+        m = ["@house_timber_a", "@house_shop_b", "@house_timber_b", "@house_shop_a"][k % 4]
+    if not place(m, x, z, r):
+        return
+    by = z + side * 8.6                              # задний двор
+    craft = k % 4
+    if craft == 0:
+        add("@hide_frame", x - 1.5, by, 0, c=True)
+        add("barrel_water", x + 2.0, by)
+    elif craft == 1:
+        add("wood_pile", x - 2.0, by, 0, c=True)
+        add("cart", x + 2.2, by, 90, c=True)
+    elif craft == 2:
+        for i in range(4):
+            add("barrel_kumis", x - 2.0 + i * 1.0, by)
+    else:
+        add("basket", x - 1.6, by)
+        add("@bucket_set", x + 1.2, by, 0, c=False)
+        add("sack_grain", x + 2.6, by)
+    for i in (-1, 1):                                # плетень вокруг двора
+        add("fence_wood", x + i * 4.6, by, 90, c=True)
+    add("fence_wood", x - 2.4, by + side * 2.4, 0, c=True)
+    add("fence_wood", x + 2.4, by + side * 2.4, 0, c=True)
+    if k % 3 == 0:                                   # огород: сакура и травы
+        add("@flame_tree", x, by + side * 4.8, random.uniform(0, 360), s=0.7, rad=1.5)
+    TRAILS.append(("rect", x - 4.4, x + 4.4, min(by, by + side * 2.2) - 1.2, max(by, by + side * 2.2) + 1.2))
+
+
+def districts():
+    # запад: шесть куреней, между ними переулки к Тракту (z 57.5 — проход между лавками) и к Аллее
+    k = 0
+    for cz in (46.5, 70.0):
+        for cx in (-76.0, -54.0, -32.0):
+            clan_camp(cx, cz, k)
+            k += 1
+    TRAILS.extend([("rect", -88, -14, 56.6, 59.4), ("rect", -66.4, -63.6, 30, 82), ("rect", -44.4, -41.6, 30, 82)])
+    # восток: Улица Мастеров (мостовая z 57.5 от Тракта до стены), переулок к таверне (x 55), колодец на перекрёстке
+    ROADS.append(("rect", 14, 88, 55.8, 59.2))
+    TRAILS.append(("rect", 53.4, 56.6, 33, 82))
+    k = 0
+    for x in (23.0, 33.0, 43.0, 66.0, 76.0, 86.0):
+        for side in (-1, 1):
+            craft_lot(x if x < 86 else 85.0, 57.5 + side * 6.4, side, k)
+            k += 1
+    add("trough", 55, 57.5, 0, c=True)
+    add("barrel_water", 56.6, 56.4)
+    for sx in (-1, 1):
+        add("stone_lantern", 55 + sx * 3.2, 54.6, 0)
+        add("stone_lantern", 55 + sx * 3.2, 60.4, 0)
+    add("@totem_pole", 52.2, 61.0, 0, c=True)
+    for x in (23.0, 33.0, 43.0, 66.0, 76.0):         # гирлянды через улицу между фасадами — на высоте второго этажа
+        items.append({"lanterns": [x + 4.0, 52.8, x + 4.0, 62.2, 5.0], "seed": int(x), "p": [x, 0, 57.5], "c": False})
+    for x in (19.0, 38.0, 71.0):
+        add("tug_banner", x, 55.2)
+
+
+districts()
+
+
+def north_zones():
+    # Курганы Предков (северо-запад): аллея героев от Счётного двора — по обе стороны каменные волки-стражи и туги,
+    # в конце — великий тур (обо) с костяными знамёнами; по сторонам курганы павших ханов (тур + тотем + жаровня)
+    ax = -62.0
+    for z in range(-62, -86, -6):
+        add("@guardian_statue", ax - 3.2, z, 90, c=True)
+        add("@guardian_statue", ax + 3.2, z, -90, c=True)
+        add("tug_banner", ax - 4.6, z - 3)
+        add("tug_banner", ax + 4.6, z - 3)
+    TRAILS.append(("rect", ax - 2.0, ax + 2.0, -88, -58))
+    add("ovoo_cairn", ax, -89, 0, s=2.2, c=True, rad=3)
+    for x in (ax - 4.5, ax + 4.5):
+        add("@bone_banner", x, -89, 0, c=True)
+    for cx, cz in ((-80, -66), (-80, -80), (-44, -68), (-44, -82)):
+        add("ovoo_cairn", cx, cz, random.uniform(0, 360), s=1.5, c=True, rad=2)
+        add("@totem_pole", cx + 2.4, cz, 0, c=True)
+        add("@brazier_tusk", cx - 2.4, cz + 1.0, 0, c=True)
+        add("stone_lantern", cx, cz + 3.0, 0)
+    # Сад Хаана (за дворцом): ряды сакуры вдоль дорожки, каменные фонари, скамьи, Камень Клятвы в центре
+    TRAILS.append(("rect", -24, 24, -84.5, -81.5))
+    for x in range(-22, 24, 8):
+        add("@flame_tree", x, -77.0, random.uniform(0, 360), s=0.9, rad=1.5)
+        add("@flame_tree", x + 4, -89.0, random.uniform(0, 360), s=0.9, rad=1.5)
+        add("stone_lantern", x + 2, -80.4, 0)
+        add("stone_lantern", x + 2, -85.6, 180)
+    add("bench_long", -6, -86.2, 0)
+    add("bench_long", 6, -86.2, 0)
+    add("ovoo_cairn", 0, -83, 0, s=1.4, c=True)
+    items.append({"lanterns": [-20, -83, 20, -83, 3.4], "seed": 911, "p": [0, 0, -83], "c": False})
+    # Волчьи Псарни (северо-восток, у склона шаманов): загоны из плетня, клетки, вертел с мясом, стойки для сбруи
+    for px, pz in ((28, -66), (42, -66), (28, -82), (42, -82)):
+        for i in range(3):
+            add("fence_wood", px - 4 + i * 4, pz - 5, 0, c=True)
+            add("fence_wood", px - 4 + i * 4, pz + 5, 0, c=True) if i != 1 else None
+        add("fence_wood", px - 6, pz - 3, 90, c=True)
+        add("fence_wood", px - 6, pz + 3, 90, c=True)
+        add("fence_wood", px + 6, pz - 3, 90, c=True)
+        add("fence_wood", px + 6, pz + 3, 90, c=True)
+        add("@beast_cage", px, pz - 2, 0, c=True)
+        add("trough", px + 3, pz + 2, 0, c=True)
+        add("hay_bale", px - 3.5, pz + 2.5, random.uniform(0, 360), c=True)
+        TRAILS.append(("rect", px - 6, px + 6, pz - 5, pz + 5))
+    add("@spit_roast", 35, -74, 0, c=True)
+    add("@spear_rack", 35, -88, 0, c=True)
+    add("wood_pile", 50, -74, 90, c=True)
+    TRAILS.append(("rect", 33, 37, -90, -60))
+
+
+north_zones()
 
 # --- деталь столицы: дворы у юрт, быт, телеги, навесы у лавок, фонари Аллеи, зелень
 def on_road(x, z, m=1.5):
@@ -427,9 +602,6 @@ for x in (-7.5, 7.5):
 for x, z in ((-24, -11), (24, 11), (-24, 11)):
     if free(x, z, 0.8):
         add("@totem_pole", x, z, random.uniform(0, 360), c=True)
-for x, z in ((-36, 46), (30, 52), (-62, 66)):
-    if free(x, z, 1.4):
-        add("@spit_roast", x, z, random.uniform(0, 360), c=True, rad=1.4)
 # буйволиный двор: вход — арка клыков
 add("@tusk_arch", 22.6, 33.5, 90, c=True)
 
@@ -483,19 +655,24 @@ for hx, hz in ((80.5, 13.5), (81.2, 15), (80.6, 29)):
     add("hay_bale", hx, hz, random.uniform(0, 360), c=True)
 add("sack_grain", 71.5, 29.5)
 
-LANDMARKS_V3 = [["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48]]
+LANDMARKS_V3 = [["pax_rpg_lm_kurgans", -62, -76], ["pax_rpg_lm_garden", 0, -83], ["pax_rpg_lm_kennels", 35, -74],
+                ["pax_rpg_lm_masters", 55, 57], ["pax_rpg_lm_clans", -54, 58], ["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48]]
 
 grass, rocks, bushes = 0, 0, 0
 tries = 0
-while (grass < 1800 or rocks < 140 or bushes < 90) and tries < 60000:
+while (grass < 900 or rocks < 120 or bushes < 70) and tries < 60000:
     tries += 1
     x, z = random.uniform(-91, 91), random.uniform(-94, 82)
     if on_road(x, z, 0.6) or not free(x, z, 0.4) or (-70 < x < 70 and -96 < z < -40 and abs(x) < 28) \
             or any(sh[1] < x < sh[2] and sh[3] < z < sh[4] for sh in YARDS):
         continue
-    edge = abs(x) > 80 or z > 74 or z < -84            # у частокола — гуще
+    edge = abs(x) > 80 or z > 76 or z < -84            # у частокола — гуще
+    if not edge and random.random() < 0.85:          # в городе трава — лишь редкими кустами, не полями
+        continue
+    if any(a0 - 0.6 < x < a1 + 0.6 and b0 - 0.6 < z < b1 + 0.6 for a0, a1, b0, b1 in RECTS):
+        continue
     k = random.random()
-    if grass < 1800 and k < (0.9 if edge else 0.8):
+    if grass < 900 and k < (0.9 if edge else 0.8):
         add("grass_tuft", x, z, random.uniform(0, 360), s=round(random.uniform(0.7, 1.4), 2), c=False)
         grass += 1
         if random.random() < 0.6:                    # пучки кучками
@@ -515,7 +692,7 @@ LANDMARKS = [["pax_rpg_lm_gate", 0, 80], ["pax_rpg_lm_trakt", 0, 52], ["pax_rpg_
              ["pax_rpg_lm_khan", 0, -56], ["pax_rpg_lm_arena", AX, AZ], ["pax_rpg_lm_alley", -52, 0],
              ["pax_rpg_lm_fountain", 34, 0], ["pax_rpg_lm_guild", 54, -22], ["pax_rpg_lm_tavern", 54, 24],
              ["pax_rpg_lm_bazaar", -54, 14], ["pax_rpg_lm_barracks", -55, -45], ["pax_rpg_lm_shamans", 66, -66],
-             ["pax_rpg_lm_buffalo", 32, 33], ["pax_rpg_lm_yurts", -52, 58]] + LANDMARKS_V3
+             ["pax_rpg_lm_buffalo", 32, 33], ] + LANDMARKS_V3
 # маршруты мирных жителей (ломаные по улицам), сколько их
 paths = [
     [[0, 80], [0, 50], [0, 24]],                                        # Тракт
@@ -531,8 +708,13 @@ paths = [
     [[-24, -10], [-46, -10], [-47, -26], [-42, -40], [-40, -54]],       # к Счётному двору (в обход Арены)
     [[0, 26], [0, 10]],                                                 # в Арену через южный вход
     [[24, -10], [44, -12], [54, -8]],                                   # к гильдии
+    [[6, 57.5], [55, 57.5], [84, 57.5]],                                # Улица Мастеров
+    [[55, 34], [55, 57.5], [55, 80]],                                   # переулок к таверне
+    [[-6, 58], [-43, 58], [-65, 58], [-86, 58]],                        # переулок куреней
+    [[-62, -58], [-62, -86]],                                           # аллея Курганов
+    [[-20, -83], [20, -83]],                                            # Сад Хаана
 ]
-npcs = 32
+npcs = 40
 # ракурсы для превью: [камера xyz, куда смотрит xyz] — консоль rpg_cam N
 shots = [
     [[0, 9, 96], [0, 6, 20]],            # 1 через Врата Клыка на Тракт и Ставку
@@ -643,7 +825,6 @@ def fill_voids():
     print("дворики:", n)
 
 
-fill_voids()
 
 
 # --- внешний город: слобода за стеной — юрты кочевников, срубы, вышки и туги. Земля там ровная (data "outer"),

@@ -267,6 +267,7 @@ func prewarm() -> void:
 	for c: Variant in (parsed as Dictionary).get("cities", []):
 		var layout := _city_layout(str((c as Dictionary).get("id", "")))
 		if not layout.is_empty() and bool(layout.get("landscape", true)):
+			_sink_arena(layout)                               # вырез ямы — как у города, иначе степь заранее строится
 			var hl: Array = layout.get("hole", [])            # тот же ключ, что у города (city.gd): яма и внешний пояс
 			Landscape.hole = Vector3(float(hl[0]), float(hl[1]), float(hl[2])) if hl.size() >= 3 else Vector3.ZERO
 			Landscape.outer = float(layout.get("outer", 0.0))
@@ -275,6 +276,7 @@ func prewarm() -> void:
 
 ## Сопрограмма для города (строится несколько кадров, экран загрузки живой); арена без города — сразу.
 func build(city: Dictionary) -> void:
+	preload("res://mods/pax_rpg/src/ui/main_menu.gd").off()   # в городе музыка меню не звучит
 	clear()
 	_apply_character()
 	_input_first()

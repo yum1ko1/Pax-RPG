@@ -339,7 +339,7 @@ func has(n: String) -> bool:
 
 
 func locks_move() -> bool:
-	return action != "" and action != "Jump" and action != "Hurt" and action not in ON_THE_GO
+	return action != "" and action != "Jump" and action != "Hurt" and action != "ComboEnd" and action not in ON_THE_GO
 
 
 ## Достаёт или убирает меч на ходу — бежать нельзя, только шаг.
@@ -1399,6 +1399,8 @@ func attack(on_floor: bool) -> void:
 		return
 	if action == "ComboEnd" and _combo_left > 0.0 and _frac() < _per("combo_end_resume", "ComboEnd", 0.5):
 		action = ""                         # выход из комбо ещё в начале — ЛКМ продолжает серию
+	elif action == "ComboEnd":
+		_end_action()                       # позже — новая серия сразу, без ожидания конца клипа
 	if action == "" and on_floor:
 		if not armed:
 			toggle_sword(on_floor)          # меч за спиной — сперва достать
@@ -1420,6 +1422,8 @@ func attack(on_floor: bool) -> void:
 ## вбок (клипы DodgeBack / DodgeL / DodgeR; нет клипа — обычный кувырок).
 func dodge(on_floor: bool, dir := "") -> bool:
 	_cancel_hurt()
+	if action == "ComboEnd":
+		_end_action()                       # выход из комбо — не помеха: уворот сразу
 	_cancel_recovery()
 	if anim == null or not on_floor or action != "":
 		return false
@@ -1470,6 +1474,8 @@ func hurt() -> void:
 ## Прыжок: анимация с момента отрыва (без долгого приседа), отрыв — сразу (tick вернёт jump).
 func jump(on_floor: bool) -> bool:
 	_cancel_hurt()
+	if action == "ComboEnd":
+		_end_action()
 	if anim == null or not on_floor or (action != "" and action != "Jump"):
 		return false
 	if has("Jump"):
@@ -1568,7 +1574,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	lunge_t = maxf(0.0, lunge_t - delta)
 	if blocking:
 		_block_t += delta
-	if action == "ComboEnd" and moving and _frac() >= _per("combo_end_free", "ComboEnd", 0.35):
+	if action == "ComboEnd" and moving:
 		_end_action()                        # выход из комбо: пошёл — сразу ходьба
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
@@ -1755,6 +1761,8 @@ func set_block(on: bool) -> void:
 	if on and not blocking:
 		_cancel_hurt()
 		_cancel_recovery()                           # из отката удара — сразу в блок (как в Sekiro)
+		if action == "ComboEnd":
+			_end_action()
 		if not armed or (action != "" and action not in ["Jump"]):
 			return
 		blocking = true
