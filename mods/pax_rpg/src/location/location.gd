@@ -752,8 +752,30 @@ func _spawn_merchants() -> void:
 		_npcs.append(npc)
 
 
+## Жители на местах из убранства улиц (proxy guard/crier/person в планировке): стража у ворот и арки — хобгоблины
+## крупнее, зазывалы у прилавков, караванщики у костра. Номера — после маршрутных (задания и отношения по номеру).
+func _spawn_dressing_npcs(layout: Dictionary) -> void:
+	var roles := {"guard": "guard", "crier": "merchant", "person": ""}
+	var n := int(layout.get("npcs", 0))
+	for it: Variant in layout.get("items", []):
+		var d: Dictionary = it
+		var k := str(d.get("proxy", ""))
+		if not roles.has(k):
+			continue
+		var p: Array = d.get("p", [0, 0, 0])
+		var npc := Npc.new()
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, n * 7919 + 13)
+		npc.set("npc_index", n)
+		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n, int(npc.get("relation"))))
+		_view.add_child(npc)
+		npc.stand(deg_to_rad(float(d.get("r", 0.0))), str(roles[k]), 1.3 if k == "guard" else randf_range(0.85, 1.05))
+		_npcs.append(npc)
+		n += 1
+
+
 ## Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
 func _spawn_npcs(layout: Dictionary) -> void:
+	_spawn_dressing_npcs(layout)
 	var paths: Array = layout.get("paths", [])
 	if paths.is_empty():
 		return

@@ -214,10 +214,15 @@ for side in (-1, 1):                                    # ряд домов в �
             fx, fz = FOOT[m.lstrip("@")][0] * sc, FOOT[m.lstrip("@")][1] * sc
             zc = z - fx
             add(m, side * (FRONT_X + fz), zc, 90 if side < 0 else -90, s=round(sc, 3), c=True, rad=fx + 0.2)
+            if j == len(row) // 2:                         # неровная линия крыш: средний дом ряда выше на 18 %
+                items[-1]["sv"] = [1.0, 1.18, 1.0]
             ALLEY_HOUSES.append((zc, side, m))
             z -= 2 * fx + gap
             if j < len(row) - 1 and gap > 0.9:          # проход между домами
                 gz = z + gap / 2
+                if side < 0 and j == 0 and z0 > 60:          # в первом проходе слева — тележка
+                    add("cart", side * (FRONT_X + 1.2), gz, 90, s=0.8, c=True, rad=0.8)
+                    continue
                 add("fence_wood", side * (FRONT_X + 1.6), gz, 0 if True else 0, c=True)
                 add(random.choice(["barrel_water", "wood_pile", "crate"]), side * (FRONT_X + 0.5), gz, random.uniform(0, 360),
                     s=0.9, c=True, rad=0.5)
@@ -280,11 +285,15 @@ proxy("person", 12.2, 0, 95.0, 110)                       # погонщик у 
 for i, (zc, side, m) in enumerate(ALLEY_HOUSES[::2]):    # зазывалы у прилавков и покупатели
     proxy("crier", side * 5.9, 0, zc + 0.4, 90 if side > 0 else -90)
     proxy("person", side * 4.4, 0, zc - 0.8, 90 if side > 0 else -90)
-for z, x in ((70, -1.6), (66, 2.2), (61, 0.4), (51, -2.4), (46, 1.2), (40, -0.4), (36, 2.6)):   # прохожие
-    proxy("person", x, 0, z, random.uniform(0, 360))
-for k, z in enumerate(range(37, 77, 12)):                  # полотнища поперёк улицы — между гирляндами
-    for x in (-3.0, 3.0):
-        proxy("banner_x", x, 5.6, z, 0, ln=1.8, c2=(0, 1, 3, 2)[(k + (x > 0)) % 4])
+ALLEY_WALK = [[[-2.6, 80], [-2.4, 58], [-2.8, 33]], [[2.6, 33], [2.4, 57], [2.8, 80]],   # прохожие аллеи: туда и обратно
+              [[-4.4, 76], [-4.2, 40]], [[4.3, 40], [4.4, 74]]]
+for k, z in enumerate(range(34, 77, 6)):                   # полотнища — на верёвках гирлянд, через одну
+    if k % 2:
+        h = (5.9, 6.2, 5.6, 6.0)[k % 4]
+        for x in (-2.8, 2.8):
+            proxy("banner_x", x, h - 0.28, z + 0.4 + x / 7.0 * 0.4, 0, ln=1.6, c2=(0, 1, 3, 2)[(k + (x > 0)) % 4])
+for z in (43.0, 55.0, 67.0):                              # бельё поперёк улицы — от фасада к фасаду, низ ≥ 3.4 м
+    items.append({"laundry": [-FRONT_X + 0.2, z, FRONT_X - 0.2, z + 0.5, 4.8, 0], "seed": int(z), "p": [0, 0, z], "c": False})
 # итерация 6: контровой свет (тянет вперёд), лепестки у сакур
 proxy("glow", 0, 0, 24.0, w=2200, h=5.0)                  # зарево площади за аркой — силуэт арки, цель пути
 proxy("glow", 0, 0, 74.0, w=900, h=6.0)                   # тёплый свет улицы за воротами — виден с подхода
@@ -298,7 +307,7 @@ for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
         if (i + (dz > 0)) % 3:
             proxy("window", side * (FRONT_X + 0.05), 4.2, zc + dz, yaw)
     proxy("noren", side * (FRONT_X - 0.1), 0.0, zc, yaw, c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])  # занавес над дверью лавки
-    proxy("hang_sign", side * (FRONT_X - 0.5), 0.0, zc - 2.4, yaw)    # вывеска на кронштейне — над тротуаром
+    proxy("hang_sign", side * (FRONT_X - 0.5), 0.0, zc - 2.4, yaw, glyph="酒武薬肉布鉄革茶宝骨"[(i + 3) % 10])    # вывеска на кронштейне — над тротуаром
     if i % 2 == 0:                                        # дым из трубы
         proxy("smoke", side * 11.5, 6.4, zc + 1.0)
 
@@ -997,7 +1006,8 @@ paths = [
     [[-62, -58], [-62, -86]],                                           # аллея Курганов
     [[-20, -83], [20, -83]],                                            # Сад Хаана
 ]
-npcs = 40
+paths += ALLEY_WALK
+npcs = 44                                   # + маршруты прохожих аллеи (ALLEY_WALK)
 # ракурсы для превью: [камера xyz, куда смотрит xyz] — консоль rpg_cam N
 shots = [
     [[0, 9, 96], [0, 6, 20]],            # 1 через Врата Клыка на Тракт и Ставку

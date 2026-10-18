@@ -2,6 +2,7 @@ extends RefCounted
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const HouseDetail := preload("res://mods/pax_rpg/src/location/house_detail.gd")
+const Dressing := preload("res://mods/pax_rpg/src/location/dressing.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Сборка города из планировки (config/<город>.json, генератор — pax_rpg/dev/gharn/gharn_layout.py):
@@ -21,6 +22,7 @@ var vfx: Vfx
 var leaves: Array = []
 var lights: Array = []         # [OmniLight3D, энергия ночью] — ими управляет daynight.gd
 var glass: Array = []
+var _dress = null
 var paper_mats: Array = []     # бумажные фонари рынка — своё, мягкое свечение          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
 
@@ -86,7 +88,11 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
 		if hole.size() >= 3 and not d.has("ramp") and Vector2(pos.x - float(hole[0]), pos.z - float(hole[1])).length() < float(hole[2]) + 1.5:
 			continue
-		if d.has("proxy"):                                # заглушка концепта (левел-дизайн в Blender) — в игре пока нет
+		if d.has("proxy"):                                # убранство улиц (dressing.gd); люди — location.gd
+			if not str(d.proxy) in ["guard", "crier", "person"]:
+				if _dress == null:
+					_dress = Dressing.new(self)
+				_dress.add(d, pos)
 			continue
 		if d.has("box") and d.has("ramp"):                # невидимый пандус под ступенями: только коллизия
 			var rb: Array = d.box
@@ -515,8 +521,9 @@ func _laundry(l: Array, seed_v: int) -> void:
 	rng.seed = seed_v
 	var wood := StandardMaterial3D.new()
 	wood.albedo_color = Color(0.25, 0.17, 0.11)
-	var top := 2.3
-	for p: Vector3 in [a, b]:
+	var top := float(l[4]) if l.size() > 4 else 2.3        # бельё над улицей — выше, от фасада к фасаду
+	var posts := not (l.size() > 5 and int(l[5]) == 0)
+	for p: Vector3 in ([a, b] if posts else []):
 		var mi := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
 		cm.top_radius = 0.04

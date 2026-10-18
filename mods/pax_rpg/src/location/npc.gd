@@ -179,6 +179,16 @@ func show_prompt(on: bool) -> void:
 		_prompt.visible = on
 
 
+## Житель на месте (убранство улиц, location.gd): лицом по yaw (рад), своё ремесло, рост (хобгоблин-стражник крупнее).
+func stand(yaw: float, as_role: String, size := 1.0) -> void:
+	if as_role != "":
+		role = as_role
+	if _model != null:
+		_model.rotation.y = yaw
+		_model.scale = Vector3.ONE * size
+	_play("idle")
+
+
 ## Разговор: стоит и смотрит на героя (look — куда).
 func talk(on: bool, look := Vector3.ZERO) -> void:
 	talking = on
@@ -199,7 +209,8 @@ func _phys(delta: float) -> void:
 	if talking:
 		velocity = Vector3.ZERO
 		return
-	if _path.size() < 2:
+	if _path.size() < 2:                              # стоит на посту (стража, зазывала, караванщик) — покой
+		_play("idle")
 		return
 	var fall := velocity.y - 20.0 * delta if not is_on_floor() else -0.5      # по пандусам и ступеням — с землёй
 	if _wait > 0.0:
