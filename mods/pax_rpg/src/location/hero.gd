@@ -1695,7 +1695,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 
 func _loop(moving: bool, speed: float, running: bool) -> void:
 	var want := "IdleArmed" if armed and has("IdleArmed") else "Idle"
-	if armed and combat and has("CombatIdle"):
+	if armed and combat and has("CombatIdle") and bool(cfg.get("combat_stance", true)):   # Тян Лун — без: стойка = конец Draw и ComboEnd
 		want = "CombatIdle"
 	var stride := 1.0
 	if blocking and has("Block"):
