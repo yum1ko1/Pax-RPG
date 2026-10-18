@@ -44,7 +44,7 @@ func _mod_loaded() -> void:
 	Pax.add_menu_item("pax_rpg_settings", tr_key("pax_rpg_menu_settings"), _menu_screen.bind("_settings_screen"))
 	var mm := MainMenu.new()
 	_mm = mm                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
-	mm.setup(self, func() -> Variant: return _find_menu(get_tree().root), [
+	mm.setup(self, func() -> Variant: return _menu(), [
 		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game],
 		["pax_rpg_menu_load", _menu_screen.bind("_loading_screen")], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen")],
 		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen")], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
@@ -89,7 +89,7 @@ func _world_going() -> void:
 func _rpg_new_game() -> void:
 	travel.pick_next = true
 	_world_going()
-	var menu: Variant = _find_menu(get_tree().root)
+	var menu: Variant = _menu()
 	if menu == null:
 		log_warning("Pax RPG: главное меню не найдено — открываю обычную новую игру")
 		return
@@ -119,7 +119,7 @@ func _rpg_new_game() -> void:
 
 ## Экран меню игры (загрузка, настройки) — тем же методом, что её кнопки.
 func _menu_screen(which: String) -> void:
-	var menu: Variant = _find_menu(get_tree().root)
+	var menu: Variant = _menu()
 	if menu == null:
 		return
 	if which == "_loading_screen":
@@ -138,7 +138,7 @@ func _menu_screen(which: String) -> void:
 func _menu_continue() -> void:
 	travel.pick_next = true
 	_world_going()
-	var menu: Variant = _find_menu(get_tree().root)
+	var menu: Variant = _menu()
 	if menu == null:
 		return
 	menu._loading_screen()
@@ -150,14 +150,20 @@ func _menu_continue() -> void:
 	log_warning("Pax RPG: нет сохранений — «Продолжить» оставляет экран загрузки")
 
 
-static func _find_menu(n: Node) -> Variant:
-	if n.has_method("_country_choice_screen") and n.has_method("_start_game"):
-		return n
-	for c: Node in n.get_children():
-		var f: Variant = _find_menu(c)
-		if f != null:
-			return f
-	return null
+## Меню игры (Menu.gd) — свойство menu_node корня игры. Раньше искали обходом ВСЕГО дерева сцены: с 0.31.4 это
+## роняло игру на любой кнопке меню (дерево игры живёт и в её потоках). Корень — из world_ready: за главным
+## меню игры уже стоит мир.
+var _game: PaxGame
+
+
+func _menu() -> Variant:
+	if _game == null:
+		return null
+	var m: Variant = _game.main
+	if not (m is Object) or not is_instance_valid(m):
+		return null
+	var mn: Variant = (m as Object).get("menu_node")
+	return mn if mn is Node and is_instance_valid(mn) else null
 
 
 func _mod_unloaded() -> void:
@@ -170,6 +176,7 @@ func _mod_unloaded() -> void:
 
 func _world_ready(g: PaxGame) -> void:
 	Trace.mark("main: world_ready")
+	_game = g
 	Trace.armed_until = Engine.get_process_frames() + 300
 	planet.start(g)
 	travel.start(g)
