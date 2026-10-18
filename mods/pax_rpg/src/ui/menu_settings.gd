@@ -20,6 +20,10 @@ var _tabs: VBoxContainer
 var _rows: VBoxContainer
 var _tab := "GRAPHICS"
 var _tab_labels := {}
+var _mat: ShaderMaterial
+var _embers: CPUParticles2D
+var _mouse := Vector2.ZERO
+var _t := 0.0
 
 const TABS := ["GRAPHICS", "CITY", "COMBAT", "AUDIO", "CONTROLS"]
 
@@ -38,7 +42,7 @@ func setup(m: PaxMod, item_font: FontFile, value_font: FontFile, find_menu: Call
 	_value_font = vv
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bg_tex: Texture2D = mod.texture("textures/menu/settings_bg.jpg")   # пока — фон меню, приглушённый (замена — арт)
+	var bg_tex: Texture2D = mod.texture("textures/menu/settings_bg.jpg")   # самурай молится на выступе, катана на коленях
 	if bg_tex != null:
 		var bg := TextureRect.new()
 		bg.texture = bg_tex
@@ -46,7 +50,38 @@ func setup(m: PaxMod, item_font: FontFile, value_font: FontFile, find_menu: Call
 		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sh := Shader.new()
+		sh.code = BG
+		_mat = ShaderMaterial.new()
+		_mat.shader = sh
+		_mat.set_shader_parameter("plate", mod.texture("textures/menu/settings_plate.jpg"))   # фон без скалы
+		_mat.set_shader_parameter("fgmask", mod.texture("textures/menu/settings_fg.png"))     # скала с самураем
+		bg.material = _mat
 		add_child(bg)
+	_embers = CPUParticles2D.new()                   # искры пламени снизу справа: лёгкие, поднимаются и гаснут
+	_embers.amount = 46
+	_embers.lifetime = 7.0
+	_embers.preprocess = 7.0
+	_embers.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_embers.direction = Vector2(-0.35, -1.0)
+	_embers.spread = 22.0
+	_embers.gravity = Vector2(-6.0, -10.0)
+	_embers.initial_velocity_min = 18.0
+	_embers.initial_velocity_max = 60.0
+	_embers.scale_amount_min = 1.0
+	_embers.scale_amount_max = 2.6
+	_embers.orbit_velocity_min = -0.004
+	_embers.orbit_velocity_max = 0.004
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1.0, 0.55, 0.25, 0.0))
+	ramp.add_point(0.12, Color(1.0, 0.5, 0.22, 0.95))
+	ramp.add_point(0.6, Color(1.0, 0.2, 0.22, 0.6))
+	ramp.set_color(ramp.get_point_count() - 1, Color(0.9, 0.1, 0.2, 0.0))
+	_embers.color_ramp = ramp
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_embers.material = add
+	add_child(_embers)
 	var veil := TextureRect.new()                    # тёмная колонка слева — под текстом, к середине тает
 	var g := Gradient.new()
 	g.set_color(0, Color(0.03, 0.01, 0.06, 0.92))
@@ -107,6 +142,54 @@ func setup(m: PaxMod, item_font: FontFile, value_font: FontFile, find_menu: Call
 	_rows.add_theme_constant_override("separation", 14)
 	scroll.add_child(_rows)
 	_open(_tab)
+
+
+func _process(delta: float) -> void:
+	_t += delta
+	var vs := get_viewport_rect().size
+	if vs.x <= 0.0:
+		return
+	var m := (get_local_mouse_position() / vs - Vector2(0.5, 0.5)) * 2.0
+	_mouse = _mouse.lerp(m.clamp(Vector2(-1, -1), Vector2(1, 1)), 1.0 - exp(-delta * 3.0))
+	if _mat != null:
+		_mat.set_shader_parameter("mouse", _mouse)
+		_mat.set_shader_parameter("time", _t)
+	if _embers != null:
+		_embers.position = Vector2(vs.x * 0.86, vs.y + 12.0) - _mouse * 14.0
+		_embers.emission_rect_extents = Vector2(vs.x * 0.16, 10.0)
+
+
+## Фон настроек: скала с самураем сдвигается за мышью (маска settings_fg.png поверх settings_plate.jpg — фон без
+## неё), горы и небо стоят; туман ползёт у подножия, кольцо в небе дышит.
+const BG := """shader_type canvas_item;
+uniform sampler2D plate : filter_linear;
+uniform sampler2D fgmask : filter_linear;
+uniform vec2 mouse = vec2(0.0);
+uniform float time = 0.0;
+uniform vec2 ring = vec2(0.2405, 0.1827);
+float n2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(n2(i), n2(i + vec2(1, 0)), f.x), mix(n2(i + vec2(0, 1)), n2(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) {
+	float s = 0.0; float a = 0.5;
+	for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+	return s;
+}
+void fragment() {
+	vec2 uv = UV;
+	vec2 fuv = clamp(uv - mouse * vec2(0.012, 0.008), vec2(0.001), vec2(0.999));
+	float a = texture(fgmask, fuv).r;
+	vec3 c = mix(texture(plate, uv).rgb, texture(TEXTURE, fuv).rgb, a);
+	vec2 p = vec2(uv.x * 2.2 + time * 0.014, uv.y * 4.0);
+	float f = smoothstep(0.4, 0.9, fbm(p + fbm(p * 1.3 - time * 0.02)));
+	float low = smoothstep(0.55, 0.95, uv.y) * (1.0 - a);
+	c = mix(c, vec3(0.62, 0.5, 0.68), low * f * 0.35);
+	float r = length((uv - ring) * vec2(1.77, 1.0));
+	c += vec3(1.0, 0.5, 0.58) * exp(-pow((r - 0.04) * 40.0, 2.0)) * (0.12 + 0.07 * sin(time * 1.3));
+	COLOR = vec4(c, 1.0);
+}"""
 
 
 func _open(t: String) -> void:
