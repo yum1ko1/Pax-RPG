@@ -695,8 +695,8 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	light.light_energy = 0.8
 	light.omni_range = 7.0
 	light.distance_fade_enabled = true
-	light.distance_fade_begin = 45.0
-	light.distance_fade_length = 10.0
+	light.distance_fade_begin = 75.0
+	light.distance_fade_length = 20.0
 	light.position = a.lerp(b, 0.5) + Vector3(0, hgt - 0.8, 0)
 	root.add_child(light)
 	lights.append([light, 2.2])
@@ -945,8 +945,8 @@ func _lights(path: String, list: Array) -> void:
 		l.light_energy = 1.6
 		l.omni_range = 9.0
 		l.distance_fade_enabled = true                    # дальние огни не считаем
-		l.distance_fade_begin = 45.0
-		l.distance_fade_length = 10.0
+		l.distance_fade_begin = 75.0
+		l.distance_fade_length = 20.0
 		l.position = t * off
 		root.add_child(l)
 		lights.append([l, 2.8])

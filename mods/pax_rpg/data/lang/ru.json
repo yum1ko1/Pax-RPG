@@ -320,5 +320,10 @@
 	"pax_rpg_menu_settings": "Настройки",
 	"pax_rpg_menu_mp": "Мультиплеер",
 	"pax_rpg_menu_exit": "Выход",
-	"pax_rpg_menu_sub": "Юрума · 1047 год Эры Расколотого Неба"
+	"pax_rpg_menu_sub": "Юрума · 1047 год Эры Расколотого Неба",
+	"pax_rpg_voice_no_mic": "Голос недоступен: распознавание речи игры не готово",
+	"pax_rpg_voice_listening": "Слушаю… (отпустите B)",
+	"pax_rpg_voice_thinking": "Распознаю…",
+	"pax_rpg_voice_silence": "Ничего не расслышал",
+	"pax_rpg_voice_nobody": "Никто не откликнулся — назовите жителя по имени"
 }

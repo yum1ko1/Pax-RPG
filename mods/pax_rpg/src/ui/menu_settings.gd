@@ -268,6 +268,8 @@ func _open(t: String) -> void:
 				AudioBus.set_volume(AudioBus.SFX, v))
 			_toggle("3D sound", bool(mod.get_setting("sfx_3d", true)), func(on: bool) -> void:
 				mod.set_setting("sfx_3d", on))
+			_toggle("Voice talk with townsfolk (experimental, hold B, say the name)", bool(mod.get_setting("voice_talk", false)), func(on: bool) -> void:
+				mod.set_setting("voice_talk", on))
 		"CONTROLS":
 			_slider("Mouse sensitivity", float(mod.get_setting("mouse_sens", 1.0)), 0.3, 2.5, 0.05, false,
 				func(v: float) -> void: mod.set_setting("mouse_sens", v))

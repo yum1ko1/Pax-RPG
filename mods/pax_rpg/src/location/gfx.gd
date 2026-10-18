@@ -491,19 +491,34 @@ func _lamp_shadows() -> void:
 		# от покачивания камеры включала и выключала тени — они прыгали. Яркость — базовая (без мерцания огня)
 		var d := ol.global_position.distance_to(hp)
 		if ol.shadow_enabled:
-			d -= 6.0                                     # запас: огонь с тенью держит её, пока не станет заметно дальше
+			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
 		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 35.0:
 			near.append([d, ol])
-		elif ol.shadow_enabled:
-			ol.shadow_enabled = false
+		else:
+			ol.set_meta("pax_rpg_sh_want", false)
 	near.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
 	for i: int in near.size():
 		var lo := near[i][1] as OmniLight3D
 		var want := i < n
-		if lo.shadow_enabled != want:                    # переключаем только то, что правда сменилось
-			lo.shadow_enabled = want
+		lo.set_meta("pax_rpg_sh_want", want)
+	# тень не щёлкает: включается с нулевой силы и разгорается, гаснет плавно и только потом выключается
+	var dt := get_process_delta_time()
+	for l: Array in lights:
+		var so := l[0] as OmniLight3D
+		if not is_instance_valid(so):
+			continue
+		var w := bool(so.get_meta("pax_rpg_sh_want", false))
+		if w and not so.shadow_enabled:
+			so.shadow_opacity = 0.0
+			so.shadow_enabled = true
+		if so.shadow_enabled:
+			var o := move_toward(so.shadow_opacity, 1.0 if w else 0.0, dt * 0.8)
+			if not is_equal_approx(o, so.shadow_opacity):
+				so.shadow_opacity = o
+			if not w and o <= 0.0:
+				so.shadow_enabled = false
 
 
 ## Двигающиеся тела (герой, враги, жители) — динамические для отражённого света; новые (волны арены) — тоже.

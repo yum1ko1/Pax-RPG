@@ -150,6 +150,8 @@ var _gfx: Gfx                       # качество картинки (gfx.gd,
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var _inv: Inventory                # инвентарь (TAB)
 var _wrist: Wrist                  # наручный терминал (TAB / Esc): инвентарь, карта, меню
+const VoiceTalk := preload("res://mods/pax_rpg/src/location/voice_talk.gd")
+var _vtalk: VoiceTalk                   # голосом к жителю по имени (эксперимент, настройка voice_talk)
 var _talk: Talk                    # разговор с жителем (E рядом) — через нейросеть игры
 var _talk_npc: Node                # ближайший житель в 2.5 м (ему — подсказка «E · имя»)
 var _npcs: Array = []
@@ -455,6 +457,10 @@ func build(city: Dictionary) -> void:
 	_talk = Talk.new()
 	_talk.setup(mod, _hud)
 	add_child(_talk)
+	_vtalk = VoiceTalk.new()
+	add_child(_vtalk)
+	_vtalk.setup(mod, game)
+	_vtalk.heard.connect(_on_voice)
 	_talk.closed.connect(_end_talk)
 	_talk.quest_changed.connect(_mark_giver)
 	_talk.rewarded.connect(func(coins: int) -> void:
@@ -662,7 +668,7 @@ func _make_sky() -> void:
 	env.fog_enabled = true                           # розовая дымка маны вдали
 	env.fog_light_color = Color(0.95, 0.62, 0.8)
 	env.fog_density = 0.0016                         # реже: за стеной видны холмы и горы в дымке
-	env.fog_aerial_perspective = 0.6
+	env.fog_aerial_perspective = 0.3
 	env.fog_sky_affect = 0.3
 	env.ssr_enabled = fplus                          # стёкла окон и лужи отражают город
 	env.ssr_max_steps = 24
@@ -1181,6 +1187,21 @@ func _talk_scan(delta: float) -> void:
 		_talk_npc = best
 	if is_instance_valid(_talk_npc) and not (is_instance_valid(_talk) and _talk.visible):
 		_talk_npc.call("show_prompt", true)
+
+
+func _on_voice(text: String) -> void:
+	var hit: Array = _vtalk.addressee(text, _npcs, _player.global_position)
+	if hit.is_empty():
+		_vtalk.hint(mod.tr_key("pax_rpg_voice_nobody"))
+		return
+	var npc: Node = hit[0]
+	if not (is_instance_valid(_talk) and _talk.visible and _talk_npc == npc):
+		if is_instance_valid(_talk) and _talk.visible:
+			_talk.close()
+		_talk_npc = npc
+		_start_talk()
+	if is_instance_valid(_talk) and _talk.visible and str(hit[1]).strip_edges() != "":
+		_talk.say_text(str(hit[1]))
 
 
 func _start_talk() -> void:
@@ -3044,6 +3065,8 @@ var _tab_was := false
 
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("location._process")
+	if is_instance_valid(_vtalk):
+		_vtalk.tick(active and not _typing() and not (is_instance_valid(_pause) and _pause.visible))
 	# TAB — ещё и опросом: если событие клавиши перехватил кто-то из игры раньше _input, инвентарь всё равно откроется
 	var tab := active and Input.is_physical_key_pressed(KEY_TAB) and not _typing()
 	if tab and not _tab_was and not (is_instance_valid(_pause) and _pause.visible):

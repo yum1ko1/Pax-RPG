@@ -60,7 +60,7 @@ void fragment() {
 	vec3 n = normalize(vec3(an.xy + dn.xy, an.z * dn.z));   // whiteout: швы атласа + волокна и сколы деталей
 	NORMAL_MAP = n * 0.5 + 0.5;
 	ROUGHNESS = mix(0.92, 0.8, wood) - (l - 1.0) * 0.08 * k;
-	SPECULAR = 0.3;
+	SPECULAR = mix(0.12, 0.3, k);              // вдали без бликов — дома не белеют
 }
 """
 

@@ -320,5 +320,10 @@
 	"pax_rpg_menu_settings": "Settings",
 	"pax_rpg_menu_mp": "Multiplayer",
 	"pax_rpg_menu_exit": "Exit",
-	"pax_rpg_menu_sub": "Yuruma · year 1047 of the Shattered Sky"
+	"pax_rpg_menu_sub": "Yuruma · year 1047 of the Shattered Sky",
+	"pax_rpg_voice_no_mic": "Voice unavailable: the game's speech recognition isn't ready",
+	"pax_rpg_voice_listening": "Listening… (release B)",
+	"pax_rpg_voice_thinking": "Recognizing…",
+	"pax_rpg_voice_silence": "Didn't catch that",
+	"pax_rpg_voice_nobody": "Nobody answered — call a townsperson by name"
 }

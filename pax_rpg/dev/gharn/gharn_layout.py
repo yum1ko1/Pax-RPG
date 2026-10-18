@@ -231,9 +231,10 @@ for side in (-1, 1):                                    # тротуары по 
     box([2.2, 0.06, 16.0], side * 6.2, 0.03, 69.0, "stone_cut", c=False)
     box([0.25, 0.14, 23.0], side * 5.05, 0.07, 43.0, "stone_dark", c=False)   # бордюр — тёмная кромка, читается линия
     box([0.25, 0.14, 16.0], side * 5.05, 0.07, 69.0, "stone_dark", c=False)
-for z in (38, 50, 64, 74):                              # каменные фонари у бордюра — реже, ритмом 12 м
-    for side in (-1, 1):
-        add("stone_lantern", side * 5.3, z, 90 if side < 0 else -90, rad=0.6)
+for i in range(len(ALLEY_HOUSES) - 1):                   # каменные фонари у бордюра — в стыках домов, не у дверей
+    (z1_, s1_, _), (z2_, s2_, _) = ALLEY_HOUSES[i], ALLEY_HOUSES[i + 1]
+    if s1_ == s2_ and abs(z1_ - z2_) < 12:
+        add("stone_lantern", s1_ * 5.3, (z1_ + z2_) / 2, 90 if s1_ < 0 else -90, rad=0.6)
 for k, z in enumerate(range(34, 77, 6)):                # гирлянды: через 6 м, под карнизами (4.0…4.6), на столбах
     h = (5.9, 6.2, 5.6, 6.0)[k % 4]                     # высокие праздничные столбы: низ фонаря ≥ 4 м, у карнизов
     items.append({"lanterns": [-6.9, z, 6.9, z + 0.8, h, 1 if k % 2 == 0 else 0, 1], "seed": int(z * 13 + k), "p": [0, 0, z],
@@ -299,8 +300,7 @@ proxy("glow", 0, 0, 24.0, w=2200, h=5.0)                  # зарево пло�
 proxy("glow", 0, 0, 74.0, w=900, h=6.0)                   # тёплый свет улицы за воротами — виден с подхода
 for x, z in ((-7.6, 106.5), (7.6, 106.5), (-9.6, 59.6), (9.6, 59.6)):
     proxy("petals", x, 0, z, random.uniform(0, 180), w=random.uniform(2.6, 3.6))
-for x, z, w_ in ((-2.5, 63, 2.2), (2.8, 44, 1.6), (1.0, 96, 2.6)):   # лужи — в них отражаются фонари
-    proxy("puddle", x, 0, z, random.uniform(0, 180), w=w_, d=w_ * 0.55)
+# лужи — пока нет: без отражения воды они выглядели чёрными дырами в мостовой
 for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
     yaw = 90 if side < 0 else -90
     for dz in (-1.5, 1.5):                               # тёплые окна второго этажа
@@ -787,7 +787,7 @@ for i in range(0, len(YURTS) - 1, 2):
 SOUNDS = [("forge", -32, 2.0, -22, -2.0, 38), ("market", -54, 2.0, 14, -4.0, 46), ("tavern", 54, 2.0, 22, -3.0, 34),
           ("shaman_drum", 68, 7.0, -66, -3.0, 55), ("water", 34, 1.0, 0, -6.0, 18), ("stable", 76, 1.5, 21, -6.0, 24),
           ("flags", 64, 6.0, -62, -10.0, 26), ("fire", -20, 4.0, -37.5, -8.0, 14),
-          ("fire", 20, 4.0, -37.5, -8.0, 14), ("fire", -25, 1.0, -16.5, -8.0, 12), ("market", 0, 2.0, 50, -10.0, 34)]
+          ("fire", 20, 4.0, -37.5, -8.0, 14), ("fire", -25, 1.0, -16.5, -8.0, 12)]   # гул рынка с аллеи убран — шумом звучал как ураган
 for name, x, y, z, db, rng_ in SOUNDS:
     items.append({"sound": "sounds/amb/%s.ogg" % name, "p": [x, y, z], "db": db, "range": rng_, "c": False})
 
@@ -1178,6 +1178,35 @@ def fields():
 fields()
 
 outer_belt()
+
+
+# --- Вход: мелочь (бочки, ящики, мешки) не залезает под вывески, лотки, фонари и друг в друга.
+SMALL = {"crate", "crate_saerith", "barrel_kumis", "sack_grain", "basket", "wood_pile", "hay_bale", "bucket_set",
+         "war_drum", "trough", "hitching_post"}
+def declutter():
+    def nm(i):
+        return i["m"].split("/")[-1][:-4] if "m" in i else None
+    zone = lambda i: "p" in i and 25 < i["p"][2] < 110 and abs(i["p"][0]) < 9
+    anchors = [i for i in items if zone(i) and nm(i) not in SMALL and nm(i) not in ("grass_tuft", "window_glass")
+               and i.get("proxy", i.get("k")) not in ("debris", "petals", "ruts", "glow", "window", "guard", "crier", "person")
+               and not ("box" in i and (max(i["box"][0], i["box"][2]) > 2.5 or i["box"][1] < 0.3))]
+    keep, put = [], []
+    free = lambda x, z: not any((a["p"][0] - x) ** 2 + (a["p"][2] - z) ** 2 < 1.4 ** 2 for a in anchors) and \
+        not any((q["p"][0] - x) ** 2 + (q["p"][2] - z) ** 2 < 0.9 ** 2 for q in put)
+    moved = 0
+    for i in items:
+        if zone(i) and nm(i) in SMALL:
+            x, z = i["p"][0], i["p"][2]
+            spot = next((dz for dz in (0, 1.6, -1.6, 2.4, -2.4, 3.2, -3.2) if free(x, z + dz)), None)
+            if spot is None:
+                continue
+            moved += spot != 0
+            i["p"][2] = round(z + spot, 2)
+            put.append(i)
+        keep.append(i)
+    print("мелочь у входа: сдвинуто", moved, "убрано", len(items) - len(keep))
+    items[:] = keep
+declutter()
 
 
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))

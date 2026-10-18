@@ -201,6 +201,11 @@ func _guess(t: String) -> String:
 	return "question"
 
 
+## Реплика героя снаружи (голосом — voice_talk.gd): как набранная в поле ввода.
+func say_text(text: String) -> void:
+	_say(text)
+
+
 func _say(text: String) -> void:
 	text = text.strip_edges()
 	if text == "" or _waiting or not is_instance_valid(_npc):
