@@ -143,8 +143,8 @@ func _menu_continue() -> void:
 	if list.is_empty():
 		log_warning("Pax RPG: нет сохранений — «Продолжить» ничего не открывает")
 		return
-	var m: Variant = _game.main if _game != null else null
-	var cur := str((m as Object).get("slot")) if m is Object and is_instance_valid(m) else ""
+	var m: Variant = _main_root()
+	var cur := str((m as Object).get("slot")) if m != null else ""
 	_open_slot(cur if list.has(cur) else str(list.back()))
 
 
@@ -153,8 +153,9 @@ func _slots() -> Array:
 
 
 func _open_slot(slot: String) -> void:
-	var m: Variant = _game.main if _game != null else null
-	if not (m is Object) or not is_instance_valid(m):
+	var m: Variant = _main_root()
+	if m == null:
+		log_warning("Pax RPG: корень игры не найден — сохранение не открыть")
 		return
 	travel.pick_next = true
 	_world_going()
@@ -167,11 +168,18 @@ func _open_slot(slot: String) -> void:
 var _game: PaxGame
 
 
+## Корень игры (Main): из world_ready, а если его ещё не было — текущая сцена (у главного меню бывает без мира).
+func _main_root() -> Variant:
+	var m: Variant = _game.main if _game != null else null
+	if m is Object and is_instance_valid(m):
+		return m
+	var cs := get_tree().current_scene
+	return cs if cs != null and "menu_node" in cs else null
+
+
 func _menu() -> Variant:
-	if _game == null:
-		return null
-	var m: Variant = _game.main
-	if not (m is Object) or not is_instance_valid(m):
+	var m: Variant = _main_root()
+	if m == null:
 		return null
 	var mn: Variant = (m as Object).get("menu_node")
 	return mn if mn is Node and is_instance_valid(mn) else null

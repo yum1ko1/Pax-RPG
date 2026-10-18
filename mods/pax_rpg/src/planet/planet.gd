@@ -83,8 +83,13 @@ func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("planet._process")
 	if game == null:
 		return
-	if Engine.get_process_frames() % 30 == 0:
-		Trace.mark("planet: frame")           # кадры идут — если след оборвался после этого, упало вне мода
+	if Engine.get_process_frames() % 120 == 0:
+		var vis := 0
+		for lb: Label in _labels:
+			if is_instance_valid(lb) and lb.visible:
+				vis += 1
+		Trace.mark("planet: frame enabled=%s home=%s markers=%d visible=%d node=%s" % [enabled,
+			game.focused_body() == game.home_body(), _markers.size(), vis, is_instance_valid(_node)])           # кадры идут — если след оборвался после этого, упало вне мода
 	_check -= delta
 	if _check <= 0.0:
 		_check = CHECK_EVERY
