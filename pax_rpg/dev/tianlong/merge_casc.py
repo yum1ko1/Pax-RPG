@@ -3,6 +3,7 @@
 Spine2↔Spine, Neck↔neck), таз — в оси модели (см → м), его ход по горизонтали вынимается в anim.json (root_motion,
 30 к/с), клип — на месте. Клипы с тем же именем в модели заменяются.
     python3 merge_casc.py <model.glb> <anim.json> Имя=<клип.glb> [...]
+    SPEAR_HAND=<кадр> — копьё весь клип жёстко в кисти, хват — с этого кадра (удары: в Cascadeur можно не анимировать копьё)
 """
 import json
 import os
@@ -181,6 +182,12 @@ def spear_track(s, sb, j, bin_, names, tt, ai, t0=0.0):
         kf = np.linalg.inv(spear_w(tt[0])) @ ortho(mk.world(hand, tt[0])) @ rest
         kl = np.linalg.inv(spear_w(tt[-1])) @ ortho(mk.world(hand, tt[-1])) @ rest
         kc = kl if bl == "last" else kf
+    lock = os.environ.get("SPEAR_HAND")             # копьё всё время в руке (удары, стойки): хват — с кадра SPEAR_HAND,
+    if lock is not None:                            # дальше жёстко в кисти: и двигается, и вращается с ней (AI Cascadeur
+        tl = tt[min(len(tt) - 1, max(0, int(lock)))]   # двигает копьё без поворота — тут это не важно)
+        L0 = np.linalg.inv(ortho(mk.world(hand, tl))) @ spear_w(tl) @ SPEAR_K @ sh_inv
+        q0 = m2q(L0[:3, :3])
+        return np.repeat(L0[None, :3, 3], len(tt), 0), np.repeat(q0[None, :], len(tt), 0)
     pos, rot = [], []
     for k, t in enumerate(tt):
         K = SPEAR_K
