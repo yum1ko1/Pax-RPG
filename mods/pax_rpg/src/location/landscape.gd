@@ -223,6 +223,7 @@ func build(m: PaxMod, parent: Node3D, area: Rect2) -> void:
 	for arr: Variant in data.get("mountains", []):
 		_add_mesh(arr as Array, mount, "Mountains")
 	_camps()
+	_backdrop()
 
 
 func _add_mesh(arrays: Array, mat: Material, nm: String) -> void:
@@ -310,3 +311,135 @@ func _camps() -> void:
 
 func yurt_y(x: float, z: float) -> float:
 	return minf(minf(height(x - 2.0, z), height(x + 2.0, z)), minf(height(x, z - 2.0), height(x, z + 2.0)))
+
+
+## Фон за стеной (без деталей, только силуэты в дымке): три тракта от ворот и концов Аллеи уходят в степь,
+## вдоль них деревни (срубы и юрты — лёгкие LOD-копии), по холмам — рощи дубов и сакуры. Всё одним MultiMesh на
+## модель, без теней и коллизий, дальше BACK_FAR м не рисуется.
+const BACK_FAR := 700.0
+const YURT := "models/gharn/props/yurt_large.glb"
+
+
+func _backdrop() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var c := _flat.get_center()
+	var half := _flat.size * 0.5
+	var places := {}                                     # путь модели → [Transform3D]
+	var put := func(path: String, x: float, z: float, s: float, yaw: float) -> void:
+		if not places.has(path):
+			places[path] = []
+		(places[path] as Array).append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), Vector3(x, yurt_y(x, z) - 0.15, z)))
+	# тракты: от ворот на юг, от концов Аллеи на запад и восток — лёгкий изгиб, дальше 600 м
+	var roads: Array = []
+	for start: Array in [[Vector2(c.x, c.y + half.y + 8.0), Vector2(0, 1)], [Vector2(c.x - half.x - 8.0, c.y), Vector2(-1, 0)],
+			[Vector2(c.x + half.x + 8.0, c.y), Vector2(1, 0)]]:
+		var p: Vector2 = start[0]
+		var d: Vector2 = start[1]
+		var pts: Array = [p]
+		for i: int in 30:
+			d = d.rotated(rng.randf_range(-0.12, 0.12)).normalized()
+			p += d * 20.0
+			pts.append(p)
+		roads.append(pts)
+		_road_strip(pts, 5.0)
+	# деревни у трактов: дома фасадом к дороге по обе стороны
+	var houses := ["models/gharn/house_timber_a_lo.glb", "models/gharn/house_timber_b_lo.glb", "models/gharn/house_two_b_lo.glb"]
+	for pts: Array in roads:
+		for vi: int in [8, 17, 26]:
+			var a: Vector2 = pts[vi]
+			var b: Vector2 = pts[vi + 1]
+			var dir := (b - a).normalized()
+			var nrm := Vector2(-dir.y, dir.x)
+			for k: int in rng.randi_range(5, 8):
+				var t := rng.randf_range(-30.0, 30.0)
+				var side := 1.0 if k % 2 == 0 else -1.0
+				var q := a + dir * t + nrm * side * rng.randf_range(11.0, 16.0)
+				var yaw := atan2(-nrm.x * side, -nrm.y * side)
+				if rng.randf() < 0.65:
+					put.call(houses[rng.randi() % houses.size()], q.x, q.y, 1.0, yaw)
+				else:
+					put.call(YURT, q.x, q.y, 1.0, rng.randf() * TAU)
+	# рощи по холмам: кучки деревьев, гуще к центру рощи; не на трактах и не у стены
+	var trees := ["models/nature/oak_big_1.glb", "models/nature/oak_big_2.glb", "models/nature/oak_medium_1.glb",
+		"models/nature/oak_medium_2.glb", "models/gharn/flame_tree.glb"]
+	for grove: int in 22:
+		var ang := rng.randf() * TAU
+		var r := rng.randf_range(170.0, 560.0)
+		var gc := c + Vector2(cos(ang), sin(ang)) * r
+		var n := rng.randi_range(18, 45)
+		for k: int in n:
+			var q := gc + Vector2(rng.randfn(0.0, 22.0), rng.randfn(0.0, 22.0))
+			var near_road := false
+			for pts: Array in roads:
+				for v: Variant in pts:
+					if (v as Vector2).distance_squared_to(q) < 100.0:
+						near_road = true
+			if near_road or (absf(q.x - c.x) < half.x + 60.0 and absf(q.y - c.y) < half.y + 60.0):
+				continue
+			put.call(trees[rng.randi() % trees.size()], q.x, q.y, rng.randf_range(0.9, 1.5), rng.randf() * TAU)
+	for path: String in places:
+		var src := Assets.model(mod, path)
+		if src == null:
+			continue
+		var list: Array = places[path]
+		for mi: Node in src.find_children("*", "MeshInstance3D", true, false):
+			var g := mi as MeshInstance3D
+			if g.mesh == null:
+				continue
+			var rel := src.global_transform.affine_inverse() * g.global_transform if src.is_inside_tree() else _rel(src, g)
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = g.mesh
+			mm.instance_count = list.size()
+			for i: int in list.size():
+				mm.set_instance_transform(i, (list[i] as Transform3D) * rel)
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+			mmi.visibility_range_end = BACK_FAR
+			root.add_child(mmi)
+		src.free()
+
+
+func _rel(top: Node3D, n: Node3D) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	var cur: Node = n
+	while cur != null and cur != top:
+		if cur is Node3D:
+			t = (cur as Node3D).transform * t
+		cur = cur.get_parent()
+	return t
+
+
+## Тракт в степи: лента 5 м по рельефу (чуть выше земли), утоптанная глина.
+func _road_strip(pts: Array, w: float) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i: int in pts.size() - 1:
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var nrm := (b - a).normalized().orthogonal() * w * 0.5
+		var seg := 4
+		for k: int in seg:
+			var p0 := a.lerp(b, float(k) / seg)
+			var p1 := a.lerp(b, float(k + 1) / seg)
+			var v := [p0 - nrm, p0 + nrm, p1 + nrm, p1 - nrm]
+			var v3: Array = []
+			for q: Vector2 in v:
+				v3.append(Vector3(q.x, height(q.x, q.y) + 0.9, q.y))   # сетка степи 10 м — выше, чтобы не тонула
+			for idx: int in [0, 1, 2, 0, 2, 3]:
+				st.set_normal(Vector3.UP)
+				st.add_vertex(v3[idx])
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.42, 0.31, 0.22)
+	mat.roughness = 1.0
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mi := MeshInstance3D.new()
+	mi.name = "BackRoad"
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	root.add_child(mi)
