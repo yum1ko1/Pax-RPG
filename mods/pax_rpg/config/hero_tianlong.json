@@ -92,7 +92,7 @@
 	"swing_tilt": 0.0,
 	"_note_thrust": "thrust_clips — прямые выпады: на них вместо swing_N звучит sfx_thrust.",
 	"sfx_thrust": "sounds/spear_thrust.ogg",
-	"thrust_clips": ["Attack3"],
+	"thrust_clips": ["Attack1", "Attack3"],
 	"sfx_finish": "sounds/spear_magic_finish.ogg",
 	"final_push": 6.5,
 	"final_push_up": 2.2,
