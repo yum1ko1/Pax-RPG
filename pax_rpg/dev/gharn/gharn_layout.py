@@ -272,7 +272,12 @@ for z, x in ((70, -1.6), (66, 2.2), (61, 0.4), (51, -2.4), (46, 1.2), (40, -0.4)
     proxy("person", x, 0, z, random.uniform(0, 360))
 for k, z in enumerate(range(37, 77, 12)):                  # полотнища поперёк улицы — между гирляндами
     for x in (-3.0, 3.0):
-        proxy("banner_x", x, 6.2, z, 0, c2=k + (x > 0))
+        proxy("banner_x", x, 6.2, z, 0, c2=(0, 1, 3, 2)[(k + (x > 0)) % 4])
+# итерация 6: контровой свет (тянет вперёд), лепестки у сакур
+proxy("glow", 0, 0, 24.0, w=2200, h=5.0)                  # зарево площади за аркой — силуэт арки, цель пути
+proxy("glow", 0, 0, 74.0, w=900, h=6.0)                   # тёплый свет улицы за воротами — виден с подхода
+for x, z in ((-7.6, 106.5), (7.6, 106.5), (-9.6, 59.6), (9.6, 59.6)):
+    proxy("petals", x, 0, z, random.uniform(0, 180), w=random.uniform(2.6, 3.6))
 for x, z, w_ in ((-2.5, 63, 2.2), (2.8, 44, 1.6), (1.0, 96, 2.6)):   # лужи — в них отражаются фонари
     proxy("puddle", x, 0, z, random.uniform(0, 180), w=w_, d=w_ * 0.55)
 for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
@@ -280,7 +285,7 @@ for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
     for dz in (-1.5, 1.5):                               # тёплые окна второго этажа
         if (i + (dz > 0)) % 3:
             proxy("window", side * 8.12, 3.6, zc + dz, yaw)
-    proxy("noren", side * 8.0, 0.0, zc, yaw, c2=i % 5)  # занавес над дверью лавки
+    proxy("noren", side * 8.0, 0.0, zc, yaw, c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])  # занавес над дверью лавки
     proxy("hang_sign", side * 7.6, 0.0, zc - 2.4, yaw)    # вывеска на кронштейне — над тротуаром
     if i % 2 == 0:                                        # дым из трубы
         proxy("smoke", side * 11.5, 6.4, zc + 1.0)

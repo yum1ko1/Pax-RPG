@@ -74,7 +74,7 @@ def pmat(name, kind, c1, c2, scale=4.0, emit=0.0, rough=0.85):
     nt = m.node_tree
     b = nt.nodes["Principled BSDF"]
     b.inputs["Roughness"].default_value = rough
-    tc = nt.nodes.new("ShaderNodeTexCoord")
+    tc = nt.nodes.new("ShaderNodeNewGeometry")           # мировые координаты: масштаб рисунка — в метрах
     ramp = nt.nodes.new("ShaderNodeValToRGB")
     ramp.color_ramp.elements[0].color = (*c1, 1)
     ramp.color_ramp.elements[1].color = (*c2, 1)
@@ -82,7 +82,7 @@ def pmat(name, kind, c1, c2, scale=4.0, emit=0.0, rough=0.85):
         v = nt.nodes.new("ShaderNodeTexVoronoi")
         v.feature = "DISTANCE_TO_EDGE"
         v.inputs["Scale"].default_value = scale
-        nt.links.new(tc.outputs["Object"], v.inputs["Vector"])
+        nt.links.new(tc.outputs["Position"], v.inputs["Vector"])
         ramp.color_ramp.elements[0].position = 0.02
         ramp.color_ramp.elements[1].position = 0.12
         nt.links.new(v.outputs["Distance"], ramp.inputs["Fac"])
@@ -94,13 +94,13 @@ def pmat(name, kind, c1, c2, scale=4.0, emit=0.0, rough=0.85):
         w_ = nt.nodes.new("ShaderNodeTexWave")
         w_.inputs["Scale"].default_value = scale
         w_.inputs["Distortion"].default_value = 6.0
-        nt.links.new(tc.outputs["Object"], w_.inputs["Vector"])
+        nt.links.new(tc.outputs["Position"], w_.inputs["Vector"])
         nt.links.new(w_.outputs["Fac"], ramp.inputs["Fac"])
     else:
         n_ = nt.nodes.new("ShaderNodeTexNoise")
         n_.inputs["Scale"].default_value = scale
         n_.inputs["Detail"].default_value = 8.0
-        nt.links.new(tc.outputs["Object"], n_.inputs["Vector"])
+        nt.links.new(tc.outputs["Position"], n_.inputs["Vector"])
         nt.links.new(n_.outputs["Fac"], ramp.inputs["Fac"])
     nt.links.new(ramp.outputs["Color"], b.inputs["Base Color"])
     if emit:
@@ -192,7 +192,7 @@ def light(loc, w, col=(1.0, 0.5, 0.2), rad=0.1):
     sc.collection.objects.link(lt)
 
 
-CLOTH = [(0.45, 0.05, 0.05), (0.08, 0.1, 0.3), (0.5, 0.35, 0.1), (0.1, 0.25, 0.15), (0.35, 0.3, 0.25)]
+CLOTH = [(0.5, 0.04, 0.03), (0.04, 0.035, 0.035), (0.55, 0.38, 0.08), (0.42, 0.02, 0.02), (0.08, 0.2, 0.2)]   # киноварь, чёрный, золото; бирюза — редкий акцент
 
 
 def proxy(e, p, r):
@@ -245,6 +245,11 @@ def proxy(e, p, r):
     elif k == "banner_x":                         # полотнище поперёк улицы: вертикальная ткань с верёвки
         cm = pmat("bx_%d" % e.get("c2", 0), "noise", (0.2, 0.01, 0.01), CLOTH[e.get("c2", 0) % len(CLOTH)], 2)
         prim("cube", L + Vector((0, 0, -1.1)), (0.7, 0.03, 2.2), rot, cm)
+    elif k == "glow":                             # контровое зарево: тёплый большой свет за аркой/воротами
+        light(L + Vector((0, 0, e.get("h", 4.0))), e.get("w", 1500), (1.0, 0.45, 0.15), 3.0)
+    elif k == "petals":                           # лепестки сакуры пятном на земле
+        prim("cyl", L + Vector((0, 0, 0.025)), (e.get("w", 3.0), e.get("w", 3.0) * 0.8, 0.01), rot,
+             pmat("petals", "noise", (0.12, 0.06, 0.07), (0.75, 0.35, 0.45), 6))
     elif k == "puddle":
         prim("cyl", L + Vector((0, 0, 0.03)), (e.get("w", 2.0), e.get("d", 1.2), 0.01), rot, mat("water", (0.02, 0.02, 0.03), rough=0.05))
     elif k == "ruts":                             # колеи: две тёмные полосы, e["len"]
