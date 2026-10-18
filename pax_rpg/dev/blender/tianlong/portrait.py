@@ -17,6 +17,8 @@ sc = bpy.context.scene
 arm = [o for o in sc.objects if o.type == "ARMATURE"][0]
 if arm.animation_data:
     arm.animation_data.action = None
+arm.data.pose_position = "REST"                      # поза покоя: голова прямо, лицо не под волосами
+FACE = float(A[2]) if len(A) > 2 else -1.0            # куда смотрит модель по Y (−1 — как рыцарь)
 for o in sc.objects:                                   # мечи и прочее — не в кадр
     if o.type == "MESH" and o.name.startswith("Sword"):
         o.hide_render = True
@@ -30,7 +32,7 @@ hb = next(b for k, b in pb.items() if k.endswith("head") and "top" not in k and 
 nb = next(b for k, b in pb.items() if k.endswith("neck") or k.endswith("neck1"))
 head = arm.matrix_world @ hb.head
 neck = arm.matrix_world @ nb.head
-c = head + (head - neck) * 0.6
+c = head + (head - neck) * 0.35
 sc.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in [e.identifier for e in
     bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items] else "BLENDER_EEVEE"
 sc.render.resolution_x = sc.render.resolution_y = 512
@@ -44,8 +46,8 @@ cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
 sc.collection.objects.link(cam)
 sc.camera = cam
 cam.data.lens = 85
-d = Vector((-0.55, -1.0, 0.12)).normalized()          # рыцарь смотрит на −Y: камера спереди-слева
-cam.location = c + d * 1.25
+d = Vector((-0.45 * -FACE, FACE, 0.05)).normalized()  # камера спереди-сбоку, чуть выше глаз
+cam.location = c + d * 1.7
 cam.rotation_euler = (c - cam.location).to_track_quat("-Z", "Y").to_euler()
 for name, col, en, pos in (("rim", (1.0, 0.45, 0.75), 70, (0.9, 0.9, 0.5)), ("fill", (0.45, 0.75, 1.0), 14, (-1.2, -1.0, 0.2)),
                            ("key", (1.0, 0.9, 0.85), 22, (-0.4, -1.2, 0.9))):
@@ -54,7 +56,7 @@ for name, col, en, pos in (("rim", (1.0, 0.45, 0.75), 70, (0.9, 0.9, 0.5)), ("fi
     l.data.energy = en
     l.data.size = 0.6
     sc.collection.objects.link(l)
-    l.location = c + Vector(pos)
+    l.location = c + Vector((pos[0] * -FACE, pos[1] * -FACE, pos[2]))
     l.rotation_euler = (c - l.location).to_track_quat("-Z", "Y").to_euler()
 sc.world.color = (0.03, 0.03, 0.08)
 sc.render.filepath = OUT
