@@ -126,7 +126,7 @@ func apply() -> void:
 		sky_mat.set_shader_parameter("day", day)
 		sky_mat.set_shader_parameter("dusk", dusk)
 	if env != null:
-		env.ambient_light_energy = lerpf(0.06, 0.42, day)
+		env.ambient_light_energy = lerpf(0.1, 0.42, day)        # ночью — лунный подсвет: силуэты читаются
 		var fog_night := Color(0.18, 0.14, 0.32)
 		env.fog_light_color = fog_night.lerp(fog_day, day).lerp(Color(1.0, 0.56, 0.46), dusk * 0.4)
 		env.tonemap_exposure = lerpf(0.95, 0.9, day)
@@ -142,7 +142,7 @@ func apply() -> void:
 	for pm: Variant in paper:
 		var m2 := pm as BaseMaterial3D
 		if m2 != null:
-			m2.emission_energy_multiplier = lerpf(0.15, 0.9, night)
+			m2.emission_energy_multiplier = lerpf(0.12, 0.5, night)   # бумага ночью — тёплая, без пересвета в ореол
 	for g: Variant in glass:
 		var m := g as BaseMaterial3D
 		if m != null:
