@@ -90,6 +90,12 @@
 	},
 	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку.",
 	"swing_tilt": 0.0,
+	"_note_thrust": "thrust_clips — прямые выпады: на них вместо swing_N звучит sfx_thrust.",
+	"sfx_thrust": "sounds/spear_thrust.ogg",
+	"thrust_clips": ["Attack3"],
+	"sfx_finish": "sounds/spear_magic_finish.ogg",
+	"final_push": 6.5,
+	"final_push_up": 2.2,
 	"hit_times": {
 		"Attack1": [
 			0.533

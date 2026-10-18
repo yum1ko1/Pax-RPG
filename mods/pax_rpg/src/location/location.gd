@@ -1975,7 +1975,7 @@ func _physics_body(delta: float) -> void:
 			_combat_fx_swing(r.hit)
 			if is_instance_valid(_sfx):
 				_sfx.cloth(-15.0)                    # взмах — хлопок ткани (тихо, под свистом)
-				_sfx.whoosh()                        # свист копья в воздухе
+				_sfx.whoosh(_hero.action, bool(r.hit.get("final", false)))            # свист копья в воздухе
 		if r.has("land_step") and is_instance_valid(_sfx):
 			_sfx.land_step()
 		if is_instance_valid(_sfx):
@@ -2321,11 +2321,14 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
 	var c := Color(float(col[0]), float(col[1]), float(col[2]))
 	var step := float(hit.get("step", 0))
-	_sparks(tip, c, int(8 + 4 * step), 3.5 + step)
+	var final := bool(hit.get("final", false))
+	_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
+	if final:
+		_mana_burst(tip, c)                          # финал серии — чёткий всплеск алой энергии на острие
 	var glow := OmniLight3D.new()                    # миг алого света вокруг острия
 	glow.light_color = c
-	glow.light_energy = 3.0 + step
-	glow.omni_range = 2.5
+	glow.light_energy = 3.0 + step + (5.0 if final else 0.0)
+	glow.omni_range = 4.5 if final else 2.5
 	_view.add_child(glow)
 	glow.global_position = tip
 	var tw := glow.create_tween()
@@ -2392,6 +2395,9 @@ func _strike(hit: Dictionary) -> void:
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
 		_combat_fx_hit(gob, hit)
+		if bool(hit.get("final", false)) and gob.is_alive() and not gob.boss:   # финал серии — алой энергией отбрасывает
+			var away := to / d if d > 0.3 else fwd
+			gob.launch(away * _hf("final_push", 6.5) + Vector3(0.0, _hf("final_push_up", 2.2), 0.0))
 
 
 ## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —

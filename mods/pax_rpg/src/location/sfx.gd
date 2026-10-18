@@ -26,6 +26,9 @@ var _mod: PaxMod
 var _at: Node3D                       # где звучат шаги и ткань — герой (3D: громче, когда камера ближе)
 var _cloth       # резкий хлопок ткани (взмах, уклон)
 var _whoosh                         # свист оружия в воздухе на ударе (sounds/swing_N.wav) — у героев с sfx_whoosh
+var _thrust                         # прямой выпад копья (sfx_thrust) — резкий короткий свист, клипы из thrust_clips
+var thrust_clips: Array = []
+var _finish                          # последний удар серии — магический свист с алым шлейфом (sfx_finish)
 var _step_db := 0.0                   # поправка громкости шага героя (каблуки тише)
 var _rustle      # шорох одежды на шаге
 var _skirt       # юбка — тихо, «издалека» (запись у микрофона: срез верхов, эхо)
@@ -64,7 +67,7 @@ func _rand(mod: PaxMod, pattern: String, n: int, pitch: float, volume: float) ->
 	rnd.random_pitch = 1.0 + pitch
 	rnd.random_volume_offset_db = 2.0
 	for i: int in n:
-		var st: AudioStream = mod.sound(pattern % i)
+		var st: AudioStream = mod.sound(pattern % i if "%" in pattern else pattern)
 		if st != null:
 			rnd.add_stream(-1, st)
 	if rnd.streams_count == 0:
@@ -117,6 +120,11 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 		_gear = null
 	if bool(cfg.get("sfx_whoosh", false)):
 		_whoosh = _rand(_mod, "sounds/swing_%d.wav", 7, 0.12, -6.0)
+	if cfg.has("sfx_thrust"):
+		_thrust = _rand(_mod, str(cfg.sfx_thrust), 1, 0.08, -6.0)
+		thrust_clips = cfg.get("thrust_clips", [])
+	if cfg.has("sfx_finish"):
+		_finish = _rand(_mod, str(cfg.sfx_finish), 1, 0.05, -4.0)
 	if bool(cfg.get("sfx_cloth", false)):
 		_cloth = _rand(_mod, "sounds/cloth_snap_%d.wav", 6, 0.1, -6.0)
 		if bool(cfg.get("sfx_rustle", false)):        # шорох одежды на каждом шаге — шершавый, по умолчанию выключен
@@ -133,7 +141,15 @@ func cloth(db: float) -> void:
 
 
 ## Свист копья на ударе.
-func whoosh() -> void:
+func whoosh(clip := "", final := false) -> void:
+	if final and _finish != null:
+		_finish.volume_db = randf_range(-4.0, -2.0)
+		_finish.play()
+		return
+	if _thrust != null and clip in thrust_clips:
+		_thrust.volume_db = randf_range(-6.0, -3.0)
+		_thrust.play()
+		return
 	if _whoosh != null:
 		_whoosh.volume_db = randf_range(-7.0, -4.0)
 		_whoosh.play()
