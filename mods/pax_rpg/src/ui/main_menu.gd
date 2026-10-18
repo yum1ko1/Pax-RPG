@@ -7,6 +7,7 @@ extends CanvasLayer
 ## настройки, сеть; вернулся игрок на главный шаг меню — снова наш экран.
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const MenuSettings := preload("res://mods/pax_rpg/src/ui/menu_settings.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
 const RING := Vector2(0.766, 0.195)              # кольцо в небе — доля картинки
 const TIP := Vector2(0.1276, 0.4476)             # алый кончик копья
@@ -184,7 +185,35 @@ func _main_items() -> void:
 		var fn: Callable = it[1]
 		if key == "pax_rpg_menu_load":
 			fn = _saves_items
+		elif key == "pax_rpg_menu_settings":
+			_col.add_child(_button(str(EN.get(key, key)), _open_settings, false, true))
+			continue
 		_col.add_child(_button(str(EN.get(key, key)), fn, it.size() > 2 and bool(it[2])))
+
+
+## «Settings» — свои настройки (menu_settings.gd) на месте пунктов и названия; «Back» — назад.
+var _settings: Control
+
+
+func _open_settings() -> void:
+	for n: String in ["Title", "Sub"]:
+		var c := _root.get_node_or_null(n)
+		if c != null:
+			(c as CanvasItem).visible = false
+	_col.visible = false
+	_settings = MenuSettings.new()
+	_settings.setup(mod, _item_font, _sub_font, _find, _close_settings)
+	_root.add_child(_settings)
+
+
+func _close_settings() -> void:
+	if is_instance_valid(_settings):
+		_settings.queue_free()
+	for n: String in ["Title", "Sub"]:
+		var c := _root.get_node_or_null(n)
+		if c != null:
+			(c as CanvasItem).visible = true
+	_col.visible = true
 
 
 ## «Load» — свой список сохранений (новые сверху), «Back» — назад к пунктам.
@@ -387,6 +416,8 @@ func _button(text: String, fn: Callable, game_menu := false, stay := false) -> C
 ## Нажата наша кнопка: меню игры ищем один раз сейчас (оно на месте, игра ничего не грузит) — по нему потом
 ## узнаём, что игрок вернулся на главный экран (из настроек, загрузки или из партии).
 func _leave(fn: Callable, game_menu: bool, stay: bool) -> void:
+	if _menu == null and _find.is_valid():             # на world_ready меню игры ещё не было — берём сейчас
+		attach(_find.call())
 	if not stay:
 		_want = false
 		if game_menu:                                # экран меню игры нужен (новая игра, настройки, сеть)

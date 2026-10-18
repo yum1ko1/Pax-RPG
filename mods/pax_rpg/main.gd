@@ -193,8 +193,21 @@ func _world_ready(g: PaxGame) -> void:
 	Trace.armed_until = Engine.get_process_frames() + 300
 	planet.start(g)
 	travel.start(g)
-	location.prewarm()
-	Trace.mark("main: world_ready done")                    # горы и степь городов — в потоке, пока игрок на глобусе
+	location.prewarm()                    # горы и степь городов — в потоке, пока игрок на глобусе
+	Trace.mark("main: world_ready done")
+
+
+## Загружен сейв: игра собирает мир заново, но world_ready при этом может не прийти («Продолжить» и «Загрузить»
+## через open_slot) — тогда без этого глобус оставался без городов, а выбор героя не предлагался.
+func _game_loaded(g: PaxGame, _state: Dictionary) -> void:
+	Trace.mark("main: game_loaded")
+	_world_ready(g)
+
+
+## Время пошло, а мод всё ещё «ждёт мир» (ни world_ready, ни game_loaded не пришли) — подхватываем партию тут.
+func _days_starting(g: PaxGame, _from_day: int, _days: int) -> void:
+	if planet.game == null:
+		_world_ready(g)
 
 
 ## Консоль F8: rpg_arena.
