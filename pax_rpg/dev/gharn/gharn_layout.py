@@ -454,16 +454,15 @@ def north_zones():
         add("@brazier_tusk", cx - 2.4, cz + 1.0, 0, c=True)
         add("stone_lantern", cx, cz + 3.0, 0)
     # Сад Хаана (за дворцом): ряды сакуры вдоль дорожки, каменные фонари, скамьи, Камень Клятвы в центре
-    TRAILS.append(("rect", -24, 24, -84.5, -81.5))
+    TRAILS.append(("rect", -26, 26, -86, -80))           # дорожка 6 м — жители гуляют парами
     for x in range(-22, 24, 8):
-        add("@flame_tree", x, -77.0, random.uniform(0, 360), s=0.9, rad=1.5)
-        add("@flame_tree", x + 4, -89.0, random.uniform(0, 360), s=0.9, rad=1.5)
-        add("stone_lantern", x + 2, -80.4, 0)
-        add("stone_lantern", x + 2, -85.6, 180)
-    add("bench_long", -6, -86.2, 0)
-    add("bench_long", 6, -86.2, 0)
-    add("ovoo_cairn", 0, -83, 0, s=1.4, c=True)
-    items.append({"lanterns": [-20, -83, 20, -83, 3.4], "seed": 911, "p": [0, 0, -83], "c": False})
+        add("@flame_tree", x, -75.5, random.uniform(0, 360), s=0.9, rad=1.5)
+        add("@flame_tree", x + 4, -91.0, random.uniform(0, 360), s=0.9, rad=1.5)
+    for i, x in enumerate(range(-18, 24, 16)):           # фонари редко и по очереди: тёплые пятна, не световая стена
+        add("stone_lantern", x, -79.2 if i % 2 else -86.8, 0 if i % 2 else 180)
+    for x in (-10, 10):
+        add("bench_long", x, -87.4, 0)
+    add("ovoo_cairn", 0, -88.5, 0, s=1.4, c=True)
     # Волчьи Псарни (северо-восток, у склона шаманов): загоны из плетня, клетки, вертел с мясом, стойки для сбруи
     for px, pz in ((28, -66), (42, -66), (28, -82), (42, -82)):
         for i in range(3):
@@ -679,6 +678,10 @@ while (grass < 900 or rocks < 120 or bushes < 70) and tries < 60000:
             or any(sh[1] < x < sh[2] and sh[3] < z < sh[4] for sh in YARDS):
         continue
     edge = abs(x) > 80 or z > 76 or z < -84            # у частокола — гуще
+    if any((sh[0] == "rect" and sh[1] - 0.8 < x < sh[2] + 0.8 and sh[3] - 0.8 < z < sh[4] + 0.8) or
+           (sh[0] == "line" and _seg_d(x, z, sh[1]) < sh[2] / 2 + 0.8) or
+           (sh[0] == "disc" and math.hypot(x - sh[1], z - sh[2]) < sh[3] + 0.8) for sh in TRAILS):
+        continue                                     # на тропах и дорожках — без травы: по ним ходят
     if not edge and random.random() < 0.85:          # в городе трава — лишь редкими кустами, не полями
         continue
     if any(a0 - 0.6 < x < a1 + 0.6 and b0 - 0.6 < z < b1 + 0.6 for a0, a1, b0, b1 in RECTS):
