@@ -2083,9 +2083,23 @@ func _physics_body(delta: float) -> void:
 		_was_floor = fl
 		_sfx.puddle = is_instance_valid(_weather) and _weather.puddle_at(_player.global_position)
 		var pg := _player.global_position                    # лес, песок ямы арены, степь за стенами — мягкий шаг
-		var on_road := _city != null and _city._road_at(pg) > 0.25
-		_sfx.soft = not on_road and (str(city_data.get("id", "")) == "forest" or pg.y < -1.5
-			or Vector2(pg.x, pg.z).length() > _hf("city_soft_from", 95.0))
+		var on_road := _city != null and _city._road_at(pg) > 0.4
+		# по тому, на чём стоит нога: земля — по маске (кладка R твёрдая, тропа и грунт мягкие); доски, плиты,
+		# мостки и ступени (любое другое тело) — твёрдо; не узнали — по старой зоне
+		var under: Object = null
+		if fl:
+			for ci: int in _player.get_slide_collision_count():
+				var sc := _player.get_slide_collision(ci)
+				if sc.get_normal().y > 0.6:
+					under = sc.get_collider()
+					break
+		if under is Node and (under as Node).has_meta("pax_rpg_ground"):
+			_sfx.soft = not on_road
+		elif under is StaticBody3D or under is CSGShape3D:
+			_sfx.soft = false
+		else:
+			_sfx.soft = not on_road and (str(city_data.get("id", "")) == "forest" or pg.y < -1.5
+				or Vector2(pg.x, pg.z).length() > _hf("city_soft_from", 95.0))
 		_sfx.walk(d.length(), running, _hero != null and _hero.armed, fl)
 		if fl and is_instance_valid(_weather):              # следы: шаг ~0.8 м (бег — реже)
 			_step_acc += d.length()

@@ -198,6 +198,7 @@ static func make_ground(mod: PaxMod, parent: Node3D, t: Dictionary) -> void:
 	mi.mesh = mesh
 	parent.add_child(mi)
 	var body := StaticBody3D.new()                        # коллизия — та же сетка высот
+	body.set_meta("pax_rpg_ground", true)
 	var shape := CollisionShape3D.new()
 	var hm := HeightMapShape3D.new()
 	hm.map_width = w

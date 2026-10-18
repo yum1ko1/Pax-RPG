@@ -219,6 +219,7 @@ func _ground(size: Vector2, center: Vector2, gm: Dictionary, hole: Array = []) -
 	mi.position = Vector3(center.x, 0.0, center.y)
 	root.add_child(mi)
 	var body := StaticBody3D.new()
+	body.set_meta("pax_rpg_ground", true)               # шаги: по маске дорог под ногой (location.gd)
 	var cs := CollisionShape3D.new()
 	if hole.size() >= 3:                                 # земля с ямой арены: коллизия — та же сетка
 		cs.shape = pm.create_trimesh_shape()
@@ -1181,8 +1182,12 @@ func _place(path: String, list: Array) -> void:
 				bs.size = Vector3(float(col[0]), float(col[1]), float(col[2])) * sc
 				sh.position = Vector3(0, bs.size.y / 2, 0)
 			else:
-				bs.size = aabb.size * sc * 0.92
-				sh.position = aabb.get_center() * sc
+				var bb := _body_box(parts)                # по тому, что на высоте тела, а не по кроне, навесу и подолу
+				if bb.size == Vector3.ZERO:
+					bb = AABB(aabb.position + aabb.size * 0.04, aabb.size * 0.92)
+				bb = AABB(Vector3(bb.position.x, aabb.position.y, bb.position.z), Vector3(bb.size.x, aabb.size.y, bb.size.z))   # в высоту — вся модель
+				bs.size = bb.size * sc
+				sh.position = bb.get_center() * sc
 			sh.shape = bs
 			body.add_child(sh)
 			body.transform = Transform3D(t.basis.orthonormalized(), t.origin)
@@ -1393,6 +1398,40 @@ func _off_road(p: Vector3) -> Vector3:
 
 ## Рамка нижнего метра модели (кадка у дерева): по вершинам сеток, в осях модели. Пусто — если не вышло.
 var _base_cache := {}
+
+
+## Коробка по вершинам на высоте тела героя (0.25–1.9 м над низом модели): крона дерева, свес крыши, полотнища
+## и раскинутые корни выше колен не держат героя за метр от того, во что он упирается глазами.
+var _body_cache := {}
+func _body_box(parts: Array) -> AABB:
+	if parts.is_empty():
+		return AABB()
+	var key := str((parts[0] as Array)[0])
+	if _body_cache.has(key):
+		return _body_cache[key]
+	var lo := INF
+	for pr: Array in parts:
+		lo = minf(lo, ((pr[1] as Transform3D) * (pr[0] as Mesh).get_aabb()).position.y)
+	var box := AABB()
+	var got := false
+	for pr: Array in parts:
+		var mesh: Mesh = pr[0]
+		var xf: Transform3D = pr[1]
+		for si: int in mesh.get_surface_count():
+			var verts: PackedVector3Array = mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]
+			for v: Vector3 in verts:
+				var w := xf * v
+				if w.y >= lo + 0.25 and w.y <= lo + 1.9:
+					if got:
+						box = box.expand(w)
+					else:
+						box = AABB(w, Vector3.ZERO)
+						got = true
+	if got:
+		box = AABB(Vector3(box.position.x + box.size.x * 0.04, lo, box.position.z + box.size.z * 0.04),
+			Vector3(box.size.x * 0.92, maxf(box.end.y - lo, 1.9), box.size.z * 0.92))
+	_body_cache[key] = box
+	return box
 
 
 func _base_box(parts: Array) -> AABB:

@@ -309,6 +309,29 @@ func _camps() -> void:
 				(g as GeometryInstance3D).visibility_range_end = 320.0
 
 
+## Высота сетки степи (как её рисует меш: клетки по STEPPE_SIZE / STEPPE_N м, билинейно) — на гребнях холмов
+## меш ниже шума, и поставленное по шуму дерево издалека висело в воздухе.
+func mesh_h(x: float, z: float) -> float:
+	var step := STEPPE_SIZE / STEPPE_N
+	var c := _flat.get_center()
+	var fx := (x - (c.x - STEPPE_SIZE * 0.5)) / step
+	var fz := (z - (c.y - STEPPE_SIZE * 0.5)) / step
+	var ix := floorf(fx)
+	var iz := floorf(fz)
+	var gx := c.x - STEPPE_SIZE * 0.5 + ix * step
+	var gz := c.y - STEPPE_SIZE * 0.5 + iz * step
+	var a := height(gx, gz)
+	var b := height(gx + step, gz)
+	var d := height(gx, gz + step)
+	var e := height(gx + step, gz + step)
+	return lerpf(lerpf(a, b, fx - ix), lerpf(d, e, fx - ix), fz - iz)
+
+
+## Дерево: по самой низкой из сетки и шума вокруг ствола — корни в земле, а не над склоном.
+func tree_y(x: float, z: float) -> float:
+	return minf(yurt_y(x, z), minf(mesh_h(x, z), minf(mesh_h(x - 1.5, z), mesh_h(x + 1.5, z)))) - 0.5
+
+
 func yurt_y(x: float, z: float) -> float:
 	return minf(minf(height(x - 2.0, z), height(x + 2.0, z)), minf(height(x, z - 2.0), height(x, z + 2.0)))
 
@@ -329,7 +352,8 @@ func _backdrop() -> void:
 	var put := func(path: String, x: float, z: float, s: float, yaw: float) -> void:
 		if not places.has(path):
 			places[path] = []
-		(places[path] as Array).append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), Vector3(x, yurt_y(x, z) - 0.15, z)))
+		var y := tree_y(x, z) if path.contains("/nature/") else yurt_y(x, z) - 0.15
+		(places[path] as Array).append(Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * s), Vector3(x, y, z)))
 	# тракты: от ворот на юг, от концов Аллеи на запад и восток — лёгкий изгиб, дальше 600 м
 	var roads: Array = []
 	for start: Array in [[Vector2(c.x, c.y + half.y + 8.0), Vector2(0, 1)], [Vector2(c.x - half.x - 8.0, c.y), Vector2(-1, 0)],
@@ -362,14 +386,15 @@ func _backdrop() -> void:
 					put.call(YURT, q.x, q.y, 1.0, rng.randf() * TAU)
 	# рощи по холмам: кучки деревьев, гуще к центру рощи; не на трактах и не у стены
 	var trees := ["models/nature/oak_big_1.glb", "models/nature/oak_big_2.glb", "models/nature/oak_medium_1.glb",
-		"models/nature/oak_medium_2.glb", "models/gharn/flame_tree.glb"]
-	for grove: int in 14:                                # рощи — 3.4M треугольников в кадре было при 22×(18–45)
+		"models/nature/oak_medium_2.glb", "models/nature/oak_medium_3.glb", "models/nature/oak_small_1.glb",
+		"models/nature/oak_small_2.glb"]                 # лес, а не сакура из горшка
+	for grove: int in 20:                                # рощи — 3.4M треугольников в кадре было при 22×(18–45)
 		var ang := rng.randf() * TAU
 		var r := rng.randf_range(170.0, 560.0)
 		var gc := c + Vector2(cos(ang), sin(ang)) * r
-		var n := rng.randi_range(10, 26)
+		var n := rng.randi_range(18, 34)
 		for k: int in n:
-			var q := gc + Vector2(rng.randfn(0.0, 22.0), rng.randfn(0.0, 22.0))
+			var q := gc + Vector2(rng.randfn(0.0, 18.0), rng.randfn(0.0, 18.0))   # гуще — лес, а не одиночки
 			var near_road := false
 			for pts: Array in roads:
 				for v: Variant in pts:
