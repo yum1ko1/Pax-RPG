@@ -332,6 +332,12 @@ for l, seed in lanterns:
         o.scale.z = 0.86 / 0.76
         o.location = g2b((q.x, h - sag - 0.55 * s, q.z))
         o.data.materials.append(paper)
+    if not (len(l) > 6 and int(l[6]) == 0):           # столбы на концах (как в игре)
+        for q in (a, b):
+            bpy.ops.mesh.primitive_cylinder_add(radius=0.08, depth=h + 0.3)
+            o = bpy.context.object
+            o.location = g2b((q.x, (h + 0.3) / 2, q.z))
+            o.data.materials.append(pmat("post", "wood", (0.08, 0.05, 0.03), (0.22, 0.14, 0.08), 6))
     bpy.ops.mesh.primitive_cylinder_add(radius=0.028, depth=d.length)   # верёвка
     o = bpy.context.object
     m_ = a.lerp(b, 0.5)
