@@ -1242,8 +1242,22 @@ func _set_inventory(on: bool) -> void:
 	_lmb_queued = false
 
 
+## Вернулись в окно игры (Alt+Tab, особенно во время загрузки): мышь — снова камере, фокус — не на поле ввода.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN and active and not paused():
+		var f := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+		if f != null and not (f is LineEdit and f.is_visible_in_tree()):
+			get_viewport().gui_release_focus()
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
 func _typing() -> bool:
 	var focus := get_viewport().gui_get_focus_owner()
+	# фокус на скрытом поле (окно свернули во время загрузки — поле ввода игры или имени осталось в фокусе
+	# невидимым) — не печать: иначе клавиши героя молчат, работает одно колесо мыши
+	if (focus is LineEdit or focus is TextEdit) and not focus.is_visible_in_tree():
+		get_viewport().gui_release_focus()
+		return false
 	return focus is LineEdit or focus is TextEdit
 
 

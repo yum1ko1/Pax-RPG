@@ -85,6 +85,9 @@ static func steppe_h(n: FastNoiseLite, flat: Rect2, x: float, z: float) -> float
 	var dx := maxf(0.0, absf(x - flat.get_center().x) - flat.size.x * 0.5)
 	var dz := maxf(0.0, absf(z - flat.get_center().y) - flat.size.y * 0.5)
 	var d := sqrt(dx * dx + dz * dz)
+	var inner := minf(flat.size.x * 0.5 - absf(x - flat.get_center().x), flat.size.y * 0.5 - absf(z - flat.get_center().y))
+	if inner > 12.0:
+		return -3.0                                    # под землёй города — глубже: на 0.4 м вдали мерцало (z-fighting)
 	var t := smoothstep(4.0 + outer, 90.0 + outer, d)   # outer — ровный пояс внешнего города вокруг стены
 	var hills := (n.get_noise_2d(x, z) * 0.5 + 0.5) * 55.0 + n.get_noise_2d(x * 3.1, z * 3.1) * 5.0
 	return lerpf(-0.4, hills + d * 0.02, t)

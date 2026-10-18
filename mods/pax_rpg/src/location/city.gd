@@ -152,7 +152,15 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if k.ends_with("banner_clan.glb"):
 			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
 			continue
-		_place(k, groups[k])
+		var lo := k.trim_suffix(".glb") + "_lo.glb"
+		if LOD_COPIES and not mod.read_bytes(lo).is_empty():
+			_lod = 1                                   # тяжёлая модель (100k): вблизи — она, дальше LOD_NEAR — лёгкая копия
+			_place(k, groups[k])
+			_lod = 2
+			_place(lo, groups[k])
+			_lod = 0
+		else:
+			_place(k, groups[k])
 		_lights(k, groups[k])
 		if Time.get_ticks_msec() - tg > 150:
 			print("[pax_rpg] load: slow group %s ×%d — %d ms" % [k.get_file(), (groups[k] as Array).size(), Time.get_ticks_msec() - tg])
@@ -1049,6 +1057,13 @@ func _small_prop(path: String) -> float:
 	return 0.0
 
 
+## LOD-копии тяжёлых построек: <name>_lo.glb (pax_rpg/dev/blender/gharn/make_lod.py, ~12k граней) рисуется дальше
+## LOD_NEAR м, сама модель — ближе. У копии нет коллизий и окклюдеров — они у основной.
+const LOD_COPIES := true
+const LOD_NEAR := 38.0
+var _lod := 0                                            # 0 — обычная, 1 — полная (ближе LOD_NEAR), 2 — лёгкая копия
+
+
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
 func _place(path: String, list: Array) -> void:
 	var src := Assets.model(mod, path)
@@ -1104,6 +1119,14 @@ func _place(path: String, list: Array) -> void:
 				mi.visibility_range_end = small
 				mi.visibility_range_end_margin = 6.0
 				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+			elif _lod == 1:
+				mi.visibility_range_end = LOD_NEAR
+				mi.visibility_range_end_margin = 4.0
+			elif _lod == 2:
+				mi.visibility_range_begin = LOD_NEAR
+				mi.visibility_range_begin_margin = 4.0
+				mi.visibility_range_end = FAR_DRAW
+				mi.visibility_range_end_margin = 20.0
 			else:                                         # дальше FAR_DRAW м всё равно в дымке — не рисуем
 				if absi(key.x) * CELL > 96 or key.y * CELL > 88 or (key.y + 1) * CELL < -100:
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # слобода за стеной — силуэт без тени
@@ -1114,10 +1137,10 @@ func _place(path: String, list: Array) -> void:
 		count += 1
 		var t: Transform3D = e[0]
 		var cl: Array = e[2]
-		if bool(e[1]) and not first and cl.size() > 0 and cl[0] is Array:
+		if bool(e[1]) and not first and _lod != 2 and cl.size() > 0 and cl[0] is Array:
 			_boxes(t, cl)                                 # несколько коробок (ворота: две башни, проход свободен)
 			continue
-		if bool(e[1]) and not first:
+		if bool(e[1]) and not first and _lod != 2:
 			var body := StaticBody3D.new()
 			var sh := CollisionShape3D.new()
 			var bs := BoxShape3D.new()
@@ -1139,7 +1162,7 @@ func _place(path: String, list: Array) -> void:
 			root.add_child(body)
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
-	if not first and _occludes(path):                    # дома, юрты, стены — заслоняют то, что за ними (окклюзия)
+	if not first and _lod != 2 and _occludes(path):                    # дома, юрты, стены — заслоняют то, что за ними (окклюзия)
 		for e: Array in list:
 			_occluder(e[0] as Transform3D, aabb, Vector3(0.8, 0.85, 0.8))
 	var pts: Array = []
