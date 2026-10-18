@@ -14,6 +14,7 @@ const IMG := Vector2(3840.0, 2176.0)             # размер фона (дол
 var mod: PaxMod
 var _find: Callable                              # () -> меню игры (Menu.gd) или null
 var _menu_ref: WeakRef                           # найденное меню; обход всего дерева — не чаще раза в секунду
+var _music: AudioStreamPlayer                     # музыка главного меню (sounds/music/mana_lullaby.ogg, по кругу)
 var _away := false                               # нажата наша кнопка — дальше видны, только когда меню игры на главном
 var _items: Array = []                           # [[ключ перевода, Callable]]
 var _root: Control
@@ -393,6 +394,28 @@ func _on_main() -> bool:
 	return false
 
 
+## Музыка меню: на показ — нарастает за 2 с, на уход в игру — гаснет за 1 с.
+func _menu_music(on: bool) -> void:
+	if _music == null:
+		var st: AudioStream = mod.sound("sounds/music/mana_lullaby.ogg")
+		if st == null:
+			return
+		if st is AudioStreamOggVorbis:
+			(st as AudioStreamOggVorbis).loop = true
+		_music = AudioStreamPlayer.new()
+		_music.stream = st
+		_music.volume_db = -60.0
+		add_child(_music)
+	var tw := create_tween()
+	if on:
+		if not _music.playing:
+			_music.play()
+		tw.tween_property(_music, "volume_db", -9.0, 2.0)
+	else:
+		tw.tween_property(_music, "volume_db", -60.0, 1.0)
+		tw.tween_callback(_music.stop)
+
+
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("main_menu._process")
 	var want := _on_main()
@@ -402,6 +425,7 @@ func _process(delta: float) -> void:
 		if want:
 			_root.modulate.a = 0.0
 			create_tween().tween_property(_root, "modulate:a", 1.0, 0.5)
+		_menu_music(want)
 	if not visible:
 		return
 	_t += delta

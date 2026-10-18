@@ -37,6 +37,11 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 	location.exit_requested.connect(leave)
 
 
+func suspend() -> void:                           # мир пересобирается (см. Planet.suspend)
+	game = null
+	location.game = null
+
+
 func start(g: PaxGame) -> void:
 	game = g
 	hero_id = ""                                      # новый заход в мир (новая игра или загрузка) — герой выбирается заново

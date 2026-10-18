@@ -79,8 +79,16 @@ func _mod_loaded() -> void:
 const PRESET := "Юрума"
 
 
+## Мир сейчас сменится: до нового world_ready мод мира игры не трогает (с 0.31.4 опрос планеты и материала,
+## пока игра их разбирает в своих потоках, ронял её на «Продолжить» и «Загрузить»).
+func _world_going() -> void:
+	planet.suspend()
+	travel.suspend()
+
+
 func _rpg_new_game() -> void:
 	travel.pick_next = true
+	_world_going()
 	var menu: Variant = _find_menu(get_tree().root)
 	if menu == null:
 		log_warning("Pax RPG: главное меню не найдено — открываю обычную новую игру")
@@ -116,6 +124,7 @@ func _menu_screen(which: String) -> void:
 		return
 	if which == "_loading_screen":
 		travel.pick_next = true
+		_world_going()
 		menu._loading_screen()
 	elif which == "_network_screen":
 		menu._network_screen()
@@ -128,6 +137,7 @@ func _menu_screen(which: String) -> void:
 ## «Продолжить» — последнее сохранение: экран загрузки (сохранения там от новых к старым) и первая «Играть».
 func _menu_continue() -> void:
 	travel.pick_next = true
+	_world_going()
 	var menu: Variant = _find_menu(get_tree().root)
 	if menu == null:
 		return

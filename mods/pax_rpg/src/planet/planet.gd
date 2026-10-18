@@ -62,6 +62,18 @@ func setup(m: PaxMod) -> void:
 		m.log_error("Pax RPG: shaders/yuruma.gdshader or textures/yuruma_surface.png did not load")
 
 
+## Игрок нажал «Продолжить» / «Загрузить» / «Новая игра»: игра сейчас разберёт мир и соберёт новый (в своих
+## потоках). До следующего world_ready мир не трогаем вовсе — ни планету, ни её материал, ни облака.
+func suspend() -> void:
+	game = null
+	for lb: Label in _labels:
+		if is_instance_valid(lb):
+			lb.visible = false
+	_clouds.clear()
+	_node = null
+	_mat = null
+
+
 func start(g: PaxGame) -> void:
 	game = g
 	_check = 0.0
