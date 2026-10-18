@@ -1707,10 +1707,6 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 				var cur := anim.current_animation
 				if (cur == "RunStart" and anim.is_playing()) or (cur not in ["Run", "RunStart", "RunStop"]):
 					want = "RunStart"
-	elif not blocking and has("RunStop") and not armed:  # выход из бега: остановился на бегу — торможение до стойки
-		var cur := anim.current_animation
-		if cur in ["Run", "RunStart"] or (cur == "RunStop" and anim.is_playing()):
-			want = "RunStop"
 		elif (armed and anim.has_space("Lock")) or (lock_on and anim.has_space("LockU")):
 			# шаг лицом к цели (с мечом — всегда: тело смотрит туда же, куда камера; без меча — в захвате):
 			# клипы вперёд / назад / влево / вправо смешиваются по направлению шага, как в соулсах
@@ -1734,6 +1730,10 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			if want == "" or not has(want):
 				want = "WalkArmed" if armed and has("WalkArmed") else "Walk"
 				stride = _f("stride_walk_armed", 1.3) if want == "WalkArmed" else _f("stride_walk", 1.5)
+	elif not blocking and has("RunStop") and not armed:  # выход из бега: остановился на бегу — торможение до стойки
+		var cur := anim.current_animation
+		if cur in ["Run", "RunStart"] or (cur == "RunStop" and anim.is_playing()):
+			want = "RunStop"
 	if want in ["RunStart", "RunStop"]:
 		if anim.current_animation != want:
 			anim.play(want, _f("blend_run_edge", 0.15))
