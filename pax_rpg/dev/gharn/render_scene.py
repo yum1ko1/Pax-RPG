@@ -85,6 +85,7 @@ gnd.scale = (RECT[2] - RECT[0] + 80, RECT[3] - RECT[1] + 80, 1)
 gnd.data.materials.append(mat("ground", (0.16, 0.13, 0.12), rough=0.95))
 
 cache = {}
+TEX = int(os.environ.get("TEX", "1024"))
 
 
 def model(rel):
@@ -97,6 +98,13 @@ def model(rel):
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=path)
     new = [o for o in bpy.data.objects if o not in before]
+    for img in bpy.data.images:                 # превью: текстуры 1K — 4K всего города не влезают в память
+        if img.size[0] > TEX and not img.get("small"):
+            try:
+                img.scale(TEX, max(1, int(img.size[1] * TEX / img.size[0])))
+            except Exception:
+                pass
+            img["small"] = 1
     col = bpy.data.collections.new(rel)
     for o in new:
         for c in o.users_collection:
