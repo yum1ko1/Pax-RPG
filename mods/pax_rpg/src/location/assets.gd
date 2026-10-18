@@ -13,7 +13,7 @@ const SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, Ba
 const LOD_MIN_TRIS := 3000           # сетки проще — без LOD
 const NEAR := 70.0                   # дальше — реже переключение лёгких/полных текстур на глазах (видеопамяти хватает)
 const FAR := 95.0
-const SWAPS := 2
+const SWAPS := 8                      # было 2: при сотне моделей полные текстуры вблизи подгружались по десятку секунд — стены «мылились»
 
 static var _cache := {}              # путь → образец (вне дерева)
 static var _streams: Array = []      # {tex: ImageTexture, hi, lo, pts: Array[Vector3], nodes: Array, hi_on: bool}
@@ -188,13 +188,17 @@ static func _pbr(m: BaseMaterial3D) -> void:
 		m.metallic_specular = 0.3
 
 
-## LOD для неподвижных сеток (у скинованных — нет: их меньше и они близко).
+## LOD для сеток: у неподвижных и у скинованных (жители-гоблины по 37k треугольников ×40 — 1.5M в кадре без LOD;
+## у скинованных LOD — только другой список индексов, кости и веса те же). С морфами — без LOD.
+const SKIN_LOD := true
 static func _lods(m: Node3D) -> void:
 	if _lod_ok < 0:
 		return
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
-		if inst.mesh == null or not (inst.mesh is ArrayMesh) or inst.skin != null:
+		if inst.mesh == null or not (inst.mesh is ArrayMesh):
+			continue
+		if inst.skin != null and not SKIN_LOD:
 			continue
 		var am := inst.mesh as ArrayMesh
 		var tris := 0

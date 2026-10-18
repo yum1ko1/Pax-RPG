@@ -316,7 +316,7 @@ func yurt_y(x: float, z: float) -> float:
 ## Фон за стеной (без деталей, только силуэты в дымке): три тракта от ворот и концов Аллеи уходят в степь,
 ## вдоль них деревни (срубы и юрты — лёгкие LOD-копии), по холмам — рощи дубов и сакуры. Всё одним MultiMesh на
 ## модель, без теней и коллизий, дальше BACK_FAR м не рисуется.
-const BACK_FAR := 700.0
+const BACK_FAR := 520.0
 const YURT := "models/gharn/props/yurt_large.glb"
 
 
@@ -363,11 +363,11 @@ func _backdrop() -> void:
 	# рощи по холмам: кучки деревьев, гуще к центру рощи; не на трактах и не у стены
 	var trees := ["models/nature/oak_big_1.glb", "models/nature/oak_big_2.glb", "models/nature/oak_medium_1.glb",
 		"models/nature/oak_medium_2.glb", "models/gharn/flame_tree.glb"]
-	for grove: int in 22:
+	for grove: int in 14:                                # рощи — 3.4M треугольников в кадре было при 22×(18–45)
 		var ang := rng.randf() * TAU
 		var r := rng.randf_range(170.0, 560.0)
 		var gc := c + Vector2(cos(ang), sin(ang)) * r
-		var n := rng.randi_range(18, 45)
+		var n := rng.randi_range(10, 26)
 		for k: int in n:
 			var q := gc + Vector2(rng.randfn(0.0, 22.0), rng.randfn(0.0, 22.0))
 			var near_road := false

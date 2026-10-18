@@ -1,6 +1,6 @@
 {
 	"_note_walk": "Шаг: Walk — 21 кадр (0.7 с на два шага), на месте. Раньше герой шёл 2.4 м/с при stride 1.24 — клип крутился почти вдвое быстрее, ноги семенили. Теперь скорость шага и шаг клипа совпадают (speed_scale ≈ 1).",
-	"walk_speed": 1.7, "stride_walk": 1.7, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "sfx_stride_walk": 0.6, "sheathe_from_draw": false,
+	"walk_speed": 1.7, "stride_walk": 1.7, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "sfx_stride_walk": 0.6, "sheathe_from_draw": false, "sword_back_from_model": true,
 	"sfx_steps": "heel", "sfx_gear": false, "sfx_cloth": true, "sfx_whoosh": true,
 	"combo_end_free": 0.05,
 	"clip_speed": {"Dodge": 1.0, "DodgeArmed": 1.0, "Hurt": 1.5, "DodgeBack": 1.0, "DodgeL": 1.0, "DodgeR": 1.0, "JumpLand": 1.2, "BlockHit": 1.0, "Draw": 1.0, "Sheathe": 1.0},
@@ -34,7 +34,7 @@
 	"character": {
 		"id": "tian_long",
 		"name_key": "pax_rpg_char_tian_long_name",
-		"portrait": "",
+		"portrait": "textures/chars/swordswoman.png",
 		"main_stat": "agility",
 		"passive": "",
 		"weapon": {

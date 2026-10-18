@@ -180,21 +180,27 @@ add("hitching_post", 66, 32, 90, c=True)
 # кроны наклонены к оси и смыкаются над дорогой (падают лепестки), между стволами — каменные фонари. За деревьями —
 # сплошные фасады двухэтажных домов и лавок (фасадом к улице), через улицу между домами — гирлянды бумажных фонарей
 # на высоте второго этажа. Переулок z 57.5 — к Куреням (запад) и Улице Мастеров (восток).
-ALLEY_TREES = [38, 48, 66, 76]                          # у переулка (z 57.5) — без деревьев: проход
-for z in ALLEY_TREES:
+# по референсу автора: улица-«каньон» — сплошные двух-трёхэтажные фасады вплотную к тротуару, гирлянды красных
+# фонарей через каждые 3.5 м на разной высоте уходят вдаль к Арене, вывески у дверей; деревьев на проезде нет.
+for side in (-1, 1):                                    # тротуары: каменный бордюр по обе стороны мостовой
+    box([3.0, 0.14, 50.0], side * 6.5, 0.07, 55.5, "stone_cut", c=True)
+for z in (36, 46, 64, 74):                              # фонари на тротуаре у бордюра
     for side in (-1, 1):
-        add("@flame_tree", side * 7.6, z, 90 if side < 0 else -90, s=0.8, rad=1.2)
-        items[-1]["tilt"] = 13.0                         # клонится к оси улицы
-for z in (43, 71):
-    for side in (-1, 1):
-        add("stone_lantern", side * 7.6, z, 90 if side < 0 else -90, rad=0.6)
-FRONT = [("@house_two_b", "@house_two_a"), ("@house_two_a", "@house_shop_b"), ("@house_shop_c", "@house_two_b"),
-         ("@house_two_b", "@house_two_a")]
-ALLEY_HOUSES = [34.5, 45.5, 66.5, 76.5]
+        add("stone_lantern", side * 5.6, z, 90 if side < 0 else -90, rad=0.6)
+FRONT = [("@house_two_b", "@house_two_a"), ("@house_two_a", "@house_two_b"), ("@house_two_b", "@house_two_a"),
+         ("@house_two_a", "@house_two_b")]
+ALLEY_HOUSES = [33.0, 43.6, 65.3, 75.0]
 for i, z in enumerate(ALLEY_HOUSES):
-    add(FRONT[i][0], -14.6, z, 90, c=True, rad=5.4)     # фасадом к улице (+X)
-    add(FRONT[i][1], 14.6, z, -90, c=True, rad=5.4)
-    items.append({"lanterns": [-9.6, z, 9.6, z + 1.2, 5.8], "seed": int(z * 7), "p": [0, 0, z], "c": False})
+    a_, b_ = FRONT[i]
+    for m, side in ((a_, -1), (b_, 1)):
+        hx = 3.6 if "two_a" in m else 4.9                # половина ширины фасада после поворота на 90°
+        add(m, side * (8.1 + hx), z, 90 if side < 0 else -90, c=True, rad=5.4)
+for k, z in enumerate(range(30, 81, 3)):                 # гирлянды: высота 4.6…6.8, свет — у каждой третьей
+    h = (5.4, 6.6, 4.8, 6.0)[k % 4]
+    items.append({"lanterns": [-8.0, z, 8.0, z + 0.6, h, 1 if k % 3 == 0 else 0, 0], "seed": int(z * 13 + k), "p": [0, 0, z],
+                  "c": False})
+for side in (-1, 1):                                     # карман у переулка (z 57.5): скамьи и кадки
+    add("bench_long", side * 9.0, 52.0, 90 if side < 0 else -90, c=True)
 add("hitching_post", -5.6, 80, 0, c=True)               # у ворот: коновязь и поилка для всадников
 add("trough", 5.6, 80, 0, c=True)
 
@@ -521,8 +527,8 @@ for i, (x, z, rad) in enumerate(YURTS):
 SIGNS = [("酒", "Кумыс и брага"), ("武", "Оружие"), ("薬", "Зелья и травы"), ("肉", "Мясо"), ("布", "Ткани"),
          ("鉄", "Кузня"), ("革", "Кожа и сёдла"), ("茶", "Чайная"), ("宝", "Добыча"), ("骨", "Обереги")]
 for i, z in enumerate(ALLEY_HOUSES):                     # вывески лавок Аллеи Сакур — у дверей, лицом к улице
-    items.append({"sign": list(SIGNS[i * 2]), "p": [-9.4, 0.0, z + 3.6], "r": 90.0, "c": True})
-    items.append({"sign": list(SIGNS[i * 2 + 1]), "p": [9.4, 0.0, z - 3.6], "r": -90.0, "c": True})
+    items.append({"sign": list(SIGNS[i * 2]), "p": [-7.6, 0.0, z + 3.6], "r": 90.0, "c": True})
+    items.append({"sign": list(SIGNS[i * 2 + 1]), "p": [7.6, 0.0, z - 3.6], "r": -90.0, "c": True})
 for i, (x, z, rad) in enumerate(YURTS):                 # верёвки с бельём и шкурами у юрт
     if i % 3 != 1:
         continue
@@ -599,7 +605,6 @@ for x, z in ((-86, -90), (86, -90), (-86, 78), (86, 78)):
     add("@watch_tower", x, z, random.uniform(0, 360), c=True, rad=3)
 for x in (-7.5, 7.5):
     add("@bone_banner", x, 75, 180 if x < 0 else 0, c=True)
-    add("@totem_pole", x * 1.25, 71, 0, c=True)
 # тотемы по Аллее у арены и вертела в кварталах
 for x, z in ((-24, -11), (24, 11), (-24, 11)):
     if free(x, z, 0.8):
@@ -618,7 +623,7 @@ for i in range(0, len(YURTS) - 1, 2):
 # 3D-звуки мест (заглушки sounds/amb/*.ogg — pax_rpg/dev/sfx/gharn_amb.py)
 SOUNDS = [("forge", -32, 2.0, -22, -2.0, 38), ("market", -54, 2.0, 14, -4.0, 46), ("tavern", 54, 2.0, 22, -3.0, 34),
           ("shaman_drum", 68, 7.0, -66, -3.0, 55), ("water", 34, 1.0, 0, -6.0, 18), ("stable", 76, 1.5, 21, -6.0, 24),
-          ("flags", 64, 6.0, -62, -10.0, 26), ("flags", 0, 4.0, 52, -12.0, 30), ("fire", -20, 4.0, -37.5, -8.0, 14),
+          ("flags", 64, 6.0, -62, -10.0, 26), ("fire", -20, 4.0, -37.5, -8.0, 14),
           ("fire", 20, 4.0, -37.5, -8.0, 14), ("fire", -25, 1.0, -16.5, -8.0, 12), ("market", 0, 2.0, 50, -10.0, 34)]
 for name, x, y, z, db, rng_ in SOUNDS:
     items.append({"sound": "sounds/amb/%s.ogg" % name, "p": [x, y, z], "db": db, "range": rng_, "c": False})

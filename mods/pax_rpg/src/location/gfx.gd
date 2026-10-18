@@ -311,10 +311,12 @@ func apply_camera(c: Camera3D, s: DirectionalLight3D) -> void:
 	cam = c
 	if not is_instance_valid(c) or not c.is_inside_tree():
 		return
-	if _b("clouds", false) and Pax.graphics.available("clouds"):   # выкл.: с отдельным потоком рендера вешали игру
+	# И-51: с отдельным потоком рендера облака вешали игру; при безопасном потоке (thread_model 1) — включены сами
+	var safe := int(ProjectSettings.get_setting("rendering/driver/threads/thread_model", 1)) == 1
+	if _b("clouds", safe) and safe and Pax.graphics.available("clouds"):
 		print("[pax_rpg] fx: clouds…")
 		_clouds = Pax.graphics.clouds(c, {"clouds_coverage": _f("clouds_coverage", 0.42)})
-	if _b("lens", false) and Pax.graphics.available("lens"):
+	if _b("lens", safe) and safe and Pax.graphics.available("lens"):
 		print("[pax_rpg] fx: lens…")
 		_lens = Pax.graphics.lens(c, {"sun_color": Color(1.0, 0.82, 0.64, 0.22)}, s)
 	var mb := _f("motion_blur", 0.0)                     # свои блики и размытие — в lens.gdshader (flare, cam_blur)
@@ -354,6 +356,24 @@ func apply_sun(s: DirectionalLight3D) -> void:
 
 
 ## Глобальные настройки теней — на время локации (атлас солнца, мягкий фильтр); restore_globals() возвращает.
+## Настройки проекта игры, которые локация меняет через RenderingServer (ключ → значение Godot по умолчанию).
+const PS_KEYS := {
+	"rendering/environment/ssao/quality": 2, "rendering/environment/ssao/half_size": true,
+	"rendering/environment/ssao/adaptive_target": 0.5, "rendering/environment/ssao/blur_passes": 2,
+	"rendering/environment/ssao/fadeout_from": 50.0, "rendering/environment/ssao/fadeout_to": 300.0,
+	"rendering/environment/ssil/quality": 2, "rendering/environment/ssil/half_size": true,
+	"rendering/environment/ssil/adaptive_target": 0.5, "rendering/environment/ssil/blur_passes": 4,
+	"rendering/environment/ssil/fadeout_from": 50.0, "rendering/environment/ssil/fadeout_to": 300.0,
+	"rendering/environment/screen_space_reflection/roughness_quality": 1,
+	"rendering/global_illumination/sdfgi/probe_ray_count": 1,
+	"rendering/environment/glow/upscale_mode": 1,
+	"rendering/environment/volumetric_fog/use_filter": 1, "rendering/environment/volumetric_fog/volume_size": 64,
+	"rendering/environment/volumetric_fog/volume_depth": 64,
+	"rendering/environment/subsurface_scattering/subsurface_scattering_quality": 1,
+	"rendering/textures/decals/filter": 3, "rendering/textures/light_projectors/filter": 3,
+}
+
+
 func push_globals() -> void:
 	if not _saved.is_empty():
 		return
@@ -364,6 +384,8 @@ func push_globals() -> void:
 		"dq": int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", 2)),
 		"pq": int(ProjectSettings.get_setting("rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality", 2)),
 	}
+	for k: String in PS_KEYS:                                # И-50: всё, что меняем ниже, — запомнить как было в игре
+		_saved[k] = ProjectSettings.get_setting(k, PS_KEYS[k])
 	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)), true)
 	# качество эффектов движка (рендер Godot): полное разрешение SSAO/SSIL, гладкие шероховатые отражения, больше лучей
 	# SDFGI, бикубический ореол, сглаженный объёмный туман, SSS кожи, анизотропные декали
@@ -385,6 +407,10 @@ func push_globals() -> void:
 	RenderingServer.positional_soft_shadow_filter_set_quality(q)
 
 
+func _ps(k: String) -> Variant:
+	return _saved.get(k, PS_KEYS[k])
+
+
 func restore_globals() -> void:
 	if _saved.is_empty():
 		return
@@ -393,6 +419,21 @@ func restore_globals() -> void:
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(int(_saved["upd"]) as RenderingServer.EnvironmentSDFGIFramesToUpdateLight)
 	RenderingServer.directional_soft_shadow_filter_set_quality(int(_saved["dq"]) as RenderingServer.ShadowQuality)
 	RenderingServer.positional_soft_shadow_filter_set_quality(int(_saved["pq"]) as RenderingServer.ShadowQuality)
+	var e := "rendering/environment/"
+	RenderingServer.environment_set_ssao_quality(int(_ps(e + "ssao/quality")) as RenderingServer.EnvironmentSSAOQuality,
+		bool(_ps(e + "ssao/half_size")), float(_ps(e + "ssao/adaptive_target")), int(_ps(e + "ssao/blur_passes")),
+		float(_ps(e + "ssao/fadeout_from")), float(_ps(e + "ssao/fadeout_to")))
+	RenderingServer.environment_set_ssil_quality(int(_ps(e + "ssil/quality")) as RenderingServer.EnvironmentSSILQuality,
+		bool(_ps(e + "ssil/half_size")), float(_ps(e + "ssil/adaptive_target")), int(_ps(e + "ssil/blur_passes")),
+		float(_ps(e + "ssil/fadeout_from")), float(_ps(e + "ssil/fadeout_to")))
+	RenderingServer.environment_set_ssr_roughness_quality(int(_ps(e + "screen_space_reflection/roughness_quality")) as RenderingServer.EnvironmentSSRRoughnessQuality)
+	RenderingServer.environment_set_sdfgi_ray_count(int(_ps("rendering/global_illumination/sdfgi/probe_ray_count")) as RenderingServer.EnvironmentSDFGIRayCount)
+	RenderingServer.environment_glow_set_use_bicubic_upscale(int(_ps(e + "glow/upscale_mode")) == 1)
+	RenderingServer.environment_set_volumetric_fog_filter_active(bool(_ps(e + "volumetric_fog/use_filter")))
+	RenderingServer.environment_set_volumetric_fog_volume_size(int(_ps(e + "volumetric_fog/volume_size")), int(_ps(e + "volumetric_fog/volume_depth")))
+	RenderingServer.sub_surface_scattering_set_quality(int(_ps(e + "subsurface_scattering/subsurface_scattering_quality")) as RenderingServer.SubSurfaceScatteringQuality)
+	RenderingServer.decals_set_filter(int(_ps("rendering/textures/decals/filter")) as RenderingServer.DecalFilter)
+	RenderingServer.light_projectors_set_filter(int(_ps("rendering/textures/light_projectors/filter")) as RenderingServer.LightProjectorFilter)
 	_saved = {}
 
 

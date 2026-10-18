@@ -44,11 +44,13 @@ func suspend() -> void:                           # мир пересобира�
 
 func start(g: PaxGame) -> void:
 	game = g
-	hero_id = ""                                      # новый заход в мир (новая игра или загрузка) — герой выбирается заново
+	# герой — из главного меню («Персонаж»), запоминается; спрашиваем при входе в мир, только если не выбран ни разу
+	hero_id = str(mod.get_setting("character", ""))
 	location.game = g
-	if pick_next:                                     # выбор героя — только после «Новая игра», «Продолжить», «Загрузить»
-		pick_next = false                             # (за главным меню игры тоже стоит мир — там не спрашиваем)
-		_pick_hero(func() -> void: pass)
+	if pick_next:
+		pick_next = false
+		if hero_id == "":
+			_pick_hero(func() -> void: pass)
 
 
 func _line(prefix: String, count: int, city_name: String) -> String:
@@ -134,11 +136,18 @@ func _back_on_map() -> void:
 	planet.refresh_quest()                               # задание выдано / найдено / сдано — точка на глобусе
 
 
+## Выбор героя из главного меню (кнопка «Персонаж»): поверх меню, выбор запоминается (character).
+func pick_from_menu() -> void:
+	_pick_hero(func() -> void: pass)
+
+
 ## Экран выбора героя (при входе в мир); после выбора — then. Карточка — из config/hero.json → character.
 func _pick_hero(then: Callable) -> void:
 	if is_instance_valid(_picker):
 		return
-	var ch: Variant = location.hero_cfg.get("character", {})
+	# первая карточка — всегда рыцарь из config/hero.json (hero_cfg — уже выбранный герой: была Тянь Лун дважды)
+	var base: Variant = JSON.parse_string(mod.read_text("config/hero.json"))
+	var ch: Variant = (base as Dictionary).get("character", {}) if base is Dictionary else location.hero_cfg.get("character", {})
 	_picker = CharSelect.new()
 	_picker.setup(mod, ch if ch is Dictionary else {})
 	add_child(_picker)

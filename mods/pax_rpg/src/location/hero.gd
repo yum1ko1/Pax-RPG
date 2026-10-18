@@ -131,6 +131,9 @@ func _retune_swords() -> void:
 			s.transform = Transform3D(s.transform.basis.scaled_local(Vector3.ONE * k), s.transform.origin)
 	if _sword_back == null or not (_sword_back.get_parent() is BoneAttachment3D):
 		return
+	if bool(cfg.get("sword_back_from_model", false)):   # место за спиной — из модели (1-й кадр Draw), не из чисел;
+		_sword_back.transform = Transform3D(_sword_back.transform.basis.scaled_local(Vector3.ONE * k), _sword_back.transform.origin)
+		return                                           # размер — как у копья в руке, чтобы смена не прыгала
 	var ba := _sword_back.get_parent() as BoneAttachment3D
 	var sk := ba.get_parent() as Skeleton3D
 	if sk == null:
@@ -290,7 +293,8 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 		_skel.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
 	_owner_body = owner_body
 	# меч за спиной — чуть дальше от спины, поверх плаща (иначе клинок тонет в ткани)
-	if _sword_back != null and _sword_back.is_inside_tree() and _sword_back.get_parent() is Node3D:
+	if _sword_back != null and _sword_back.is_inside_tree() and _sword_back.get_parent() is Node3D \
+			and not bool(cfg.get("sword_back_from_model", false)):
 		var spine := _skel.find_bone("Spine02")
 		var back := Vector3.ZERO
 		if spine >= 0:                                    # «наружу» — от позвоночника к мечу, по горизонтали
@@ -1616,8 +1620,8 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 	lunge_t = maxf(0.0, lunge_t - delta)
 	if blocking:
 		_block_t += delta
-	if action == "ComboEnd" and moving:
-		_end_action()                        # выход из комбо: пошёл — сразу ходьба
+	# выход из комбо доигрывается и на ходу (герой уже идёт — управление не забрано, locks_move); оборвать его
+	# могут только удар, уворот, блок и прыжок
 	if action == "Hurt" and moving:
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
 	if action != "" and action != "Iai" and action != "Ultimate" and not anim.is_playing():

@@ -46,7 +46,7 @@ func _mod_loaded() -> void:
 	_mm = mm                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
 	mm.setup(self, func() -> Variant: return _menu(), [
 		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game, true],
-		["pax_rpg_menu_load", Callable()], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen"), true],
+		["pax_rpg_menu_load", Callable()], ["pax_rpg_menu_char", func() -> void: travel.pick_from_menu()], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen"), true],
 		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen"), true], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
 	mm.slots = _slots
 	mm.open_slot = _open_slot

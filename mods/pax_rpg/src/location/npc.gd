@@ -80,6 +80,9 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 		return
 	_model.scale = Vector3.ONE * rng.randf_range(0.85, 1.1)
 	add_child(_model)
+	for g: Node in _model.find_children("*", "GeometryInstance3D", true, false):   # дальше 80 м жителя не видно в дымке
+		(g as GeometryInstance3D).visibility_range_end = 80.0
+		(g as GeometryInstance3D).visibility_range_end_margin = 5.0
 	Assets.track(DIR + "goblin_rigged.glb", _model)
 	_anim = _find(_model)
 	if _anim != null:

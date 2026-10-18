@@ -299,6 +299,7 @@
 	"pax_rpg_set_combat_cam": "Combat camera (combo push-in, finisher accent)",
 	"pax_rpg_menu_continue": "Continue",
 	"pax_rpg_menu_load": "Load",
+	"pax_rpg_menu_char": "Character",
 	"pax_rpg_menu_settings": "Settings",
 	"pax_rpg_menu_mp": "Multiplayer",
 	"pax_rpg_menu_exit": "Exit",

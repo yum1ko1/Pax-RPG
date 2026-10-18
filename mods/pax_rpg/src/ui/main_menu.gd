@@ -48,7 +48,7 @@ const STYLES := {
 var st: Dictionary
 var _item_font: FontFile
 var _sub_font: FontFile
-const EN := {"pax_rpg_menu_continue": "Continue", "pax_rpg_menu_new": "New Game", "pax_rpg_menu_load": "Load",
+const EN := {"pax_rpg_menu_continue": "Continue", "pax_rpg_menu_new": "New Game", "pax_rpg_menu_load": "Load", "pax_rpg_menu_char": "Character",
 	"pax_rpg_menu_mp": "Multiplayer", "pax_rpg_menu_settings": "Settings", "pax_rpg_menu_exit": "Exit"}
 
 
@@ -186,6 +186,9 @@ func _main_items() -> void:
 		var fn: Callable = it[1]
 		if key == "pax_rpg_menu_load":                 # свой список — на месте, наш экран не уходит
 			_col.add_child(_button(str(EN.get(key, key)), _saves_items, false, true))
+			continue
+		elif key == "pax_rpg_menu_char":            # выбор героя — поверх нашего экрана, меню остаётся
+			_col.add_child(_button(str(EN.get(key, key)), fn, false, true))
 			continue
 		elif key == "pax_rpg_menu_settings":
 			_col.add_child(_button(str(EN.get(key, key)), _open_settings, false, true))
@@ -539,7 +542,7 @@ func _process(delta: float) -> void:
 	_hot = move_toward(_hot, _hot_want, delta * 3.0)
 	_mat.set_shader_parameter("mouse", _mouse)
 	_mat.set_shader_parameter("hot", _hot)
-	_mat.set_shader_parameter("time", _t)
+	_mat.set_shader_parameter("time", fmod(_t, 600.0))   # время по кругу: шум тумана без потери точности
 	_rocks_tick(vs)
 	_sparks.position = Vector2(vs.x * 0.16, vs.y * 0.78) - _mouse * 18.0
 	_sparks.emission_rect_extents = Vector2(vs.x * 0.18, 20.0)
@@ -555,7 +558,7 @@ uniform vec2 ring = vec2(0.766, 0.195);
 uniform vec2 tip = vec2(0.1276, 0.4476);
 uniform float hot = 0.0;
 uniform float time = 0.0;
-float n2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float n2(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float noise(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(n2(i), n2(i + vec2(1, 0)), f.x), mix(n2(i + vec2(0, 1)), n2(i + vec2(1, 1)), f.x), f.y);
@@ -585,7 +588,14 @@ void fragment() {
 	off.y += rb * gust * 0.0004 * sin(time * 1.7 - uv.y * 50.0 + 1.3);
 	vec2 fuv = clamp(uv + off, vec2(0.001), vec2(0.999));
 	float a = texture(fgmask, fuv).r;
-	vec3 c = mix(texture(plate, uv).rgb, texture(TEXTURE, fuv).rgb, a);
+	// фон без скалы (plate) — только там, где скала была (маска, расширенная и размытая): plate чуть темнее
+	// оригинала, и по всей площади давал заметный прямоугольник в тумане
+	float m0 = 0.0;
+	for (int x = -2; x <= 2; x++)
+		for (int y = -2; y <= 2; y++)
+			m0 = max(m0, texture(fgmask, uv + vec2(float(x), float(y)) * vec2(0.006, 0.01)).r);
+	vec3 base = mix(texture(TEXTURE, uv).rgb, texture(plate, uv).rgb, smoothstep(0.02, 0.6, m0));
+	vec3 c = mix(base, texture(TEXTURE, fuv).rgb, a);
 	float d = dsoft(uv);
 	vec2 suv = uv;
 	// туман: слои с искривлением (domain warp) плывут по долине, ближний — быстрее и прозрачнее

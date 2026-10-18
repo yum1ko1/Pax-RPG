@@ -634,7 +634,8 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		_rim_mesh.material = dark
 	var wood := StandardMaterial3D.new()
 	wood.albedo_color = Color(0.24, 0.16, 0.1)
-	for p: Vector3 in [a, b]:
+	var posts := not (l.size() > 6 and int(l[6]) == 0)    # 0 — верёвка от фасада к фасаду, без столбов
+	for p: Vector3 in ([a, b] if posts else []):
 		var mi := MeshInstance3D.new()
 		var cm := CylinderMesh.new()
 		cm.top_radius = 0.07
@@ -674,6 +675,9 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 			rim.position = Vector3(0, y * sc, 0)
 			holder.add_child(rim)
 		_swing_node().add(holder, rng.randf_range(0.8, 1.25))   # маятник: ветер и порывы раскачивают фонарь
+	if l.size() > 5 and int(l[5]) == 0:
+		count += 1
+		return                                           # гирлянда без своего света (свет — у соседней): меньше огней в кадре
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.55, 0.25)
 	light.light_energy = 0.8
