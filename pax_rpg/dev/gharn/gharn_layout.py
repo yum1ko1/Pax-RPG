@@ -189,9 +189,10 @@ add("hitching_post", 66, 32, 90, c=True)
 #      и товаром на тротуарах, гирлянды фонарей ритмом (через 6 м, свет — у каждой второй), не облаком.
 #   3) В конце аллеи — арка из клыков с жаровнями: рамка, через которую видна площадь Круга (точка притяжения взгляда).
 ALLEY_ROWS = [(76.5, 61.0), (54.0, 31.5)]              # отрезки фасадов (между ними — переулок z 57.5)
-ALLEY_MODELS = ["@house_two_b", "@house_shop_a", "@house_timber_a", "@house_shop_c", "@house_shop_b", "@house_timber_b"]
+ALLEY_MODELS = ["@house_bal_a", "@house_shop_a", "@house_bal_b", "@house_timber_a", "@house_bal_c", "@house_shop_c"]   # балконы — через один
 FOOT = {"house_two_b": (5.22, 4.92), "house_shop_a": (5.11, 4.13), "house_shop_b": (4.24, 4.06),
-        "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71)}
+        "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71),
+        "house_bal_a": (4.2, 3.15), "house_bal_b": (3.81, 4.47), "house_bal_c": (4.08, 4.62)}
 ALLEY_HOUSES = []                                       # (z центра, сторона, модель) — для вывесок и лавок
 for side in (-1, 1):                                    # ряд домов на отрезок: на один больше, чем влезает, и
     k = 0 if side < 0 else 3                            # весь ряд ужат до длины отрезка — фасад сплошной, без дыр

@@ -1074,7 +1074,7 @@ var _lod := 0                                            # 0 — обычная,
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
 ## Постройки в материале house_detail.gd (атлас Meshy + камень и дерево в мировых метрах).
-const BUILDINGS := ["house_shop", "house_timber", "house_two", "guild_hall", "tavern_hall", "khan_palace", "forge_smithy",
+const BUILDINGS := ["house_shop", "house_timber", "house_two", "house_bal", "guild_hall", "tavern_hall", "khan_palace", "forge_smithy",
 	"stable_hay", "watch_tower", "shaman_tower", "stilt_hut", "gate_fang"]
 
 
