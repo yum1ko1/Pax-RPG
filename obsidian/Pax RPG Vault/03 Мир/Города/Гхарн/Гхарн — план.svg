@@ -223,7 +223,7 @@
 <rect x="702" y="590" width="69" height="69" fill="#9a6a2a" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="456" y="772" width="35" height="29" fill="#7d5a3c" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="463" y="685" width="28" height="30" fill="#7d5a3c" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="549" y="803" width="28" height="31" fill="#7d5a3c" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="549" y="804" width="28" height="30" fill="#7d5a3c" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="549" y="713" width="30" height="31" fill="#c06a3a" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="549" y="654" width="33" height="28" fill="#7d5a3c" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="501" y="636" width="39" height="18" fill="#e0d8c8" stroke="#2b2118" stroke-width="1.5" rx="3"/>
@@ -516,7 +516,7 @@
 <text x="688" y="616" font-size="12" text-anchor="middle">🪑</text>
 <text x="473" y="794" font-size="22" text-anchor="middle">🛖</text>
 <text x="477" y="708" font-size="22" text-anchor="middle">🛖</text>
-<text x="563" y="826" font-size="22" text-anchor="middle">🛖</text>
+<text x="563" y="827" font-size="22" text-anchor="middle">🛖</text>
 <text x="564" y="736" font-size="22" text-anchor="middle">🏪</text>
 <text x="566" y="676" font-size="22" text-anchor="middle">🛖</text>
 <text x="499" y="684" font-size="12" text-anchor="middle">🏮</text>

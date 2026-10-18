@@ -192,7 +192,7 @@ ALLEY_ROWS = [(76.5, 61.0), (54.0, 31.5)]              # отрезки фаса
 ALLEY_MODELS = ["@house_bal_a", "@house_timber_a", "@house_bal_b", "@house_timber_b", "@house_bal_c", "@house_shop_b"]   # узкие, 7.5–8.5 м; балконы — через один
 FOOT = {"house_two_b": (5.22, 4.92), "house_shop_a": (5.11, 4.13), "house_shop_b": (4.24, 4.06),
         "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71),
-        "house_bal_a": (4.2, 3.15), "house_bal_b": (3.81, 4.47), "house_bal_c": (4.08, 4.62)}
+        "house_bal_a": (4.2, 3.14), "house_bal_b": (3.9, 4.48), "house_bal_c": (4.22, 4.61)}
 ALLEY_HOUSES = []                                       # (z центра, сторона, модель) — для вывесок и лавок
 FRONT_X = 7.3                                           # линия фасадов: улица-каньон (фасад ≈ ширине улицы)
 for side in (-1, 1):                                    # ряд домов в натуральную величину; что не влезло — узкий
