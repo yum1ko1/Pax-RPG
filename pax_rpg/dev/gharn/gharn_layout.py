@@ -1019,7 +1019,7 @@ outer_belt()
 
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
-        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "arena": [AX, AZ, PIT, A_IN], "paths": paths, "npcs": npcs, "shots": shots, "outer": OUTER,
+        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "map": "config/gharn_map.json", "arena": [AX, AZ, PIT, A_IN], "paths": paths, "npcs": npcs, "shots": shots, "outer": OUTER,
         "items": items}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))

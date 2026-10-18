@@ -34,7 +34,7 @@
 	"character": {
 		"id": "tian_long",
 		"name_key": "pax_rpg_char_tian_long_name",
-		"portrait": "textures/chars/swordswoman.png",
+		"portrait": "textures/chars/tian_long.png",
 		"main_stat": "agility",
 		"passive": "",
 		"weapon": {
