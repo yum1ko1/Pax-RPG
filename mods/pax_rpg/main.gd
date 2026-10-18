@@ -45,9 +45,11 @@ func _mod_loaded() -> void:
 	var mm := MainMenu.new()
 	_mm = mm                       # свой экран поверх меню игры (фон Юрумы, глубина, эффекты)
 	mm.setup(self, func() -> Variant: return _menu(), [
-		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game],
-		["pax_rpg_menu_load", _menu_screen.bind("_loading_screen")], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen")],
-		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen")], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
+		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game, true],
+		["pax_rpg_menu_load", Callable()], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen"), true],
+		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen"), true], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
+	mm.slots = _slots
+	mm.open_slot = _open_slot
 	add_child(mm)
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
@@ -134,20 +136,29 @@ func _menu_screen(which: String) -> void:
 		menu._settings_screen()
 
 
-## «Продолжить» — последнее сохранение: экран загрузки (сохранения там от новых к старым) и первая «Играть».
+## «Продолжить» — партия, открытая последней (slot корня игры), иначе самое новое сохранение; грузим тем же
+## путём, что и меню игры (mp_session().open_slot — так же его зовёт мост для ИИ-агентов), без экранов меню.
 func _menu_continue() -> void:
+	var list := _slots()
+	if list.is_empty():
+		log_warning("Pax RPG: нет сохранений — «Продолжить» ничего не открывает")
+		return
+	var m: Variant = _game.main if _game != null else null
+	var cur := str((m as Object).get("slot")) if m is Object and is_instance_valid(m) else ""
+	_open_slot(cur if list.has(cur) else str(list.back()))
+
+
+func _slots() -> Array:
+	return load("res://src/save/Save.gd").slots()
+
+
+func _open_slot(slot: String) -> void:
+	var m: Variant = _game.main if _game != null else null
+	if not (m is Object) or not is_instance_valid(m):
+		return
 	travel.pick_next = true
 	_world_going()
-	var menu: Variant = _menu()
-	if menu == null:
-		return
-	menu._loading_screen()
-	var want := [str(menu.t_("save_play")), str(menu.t_("save_continue"))]
-	for b: Node in (menu.screen as Node).find_children("*", "Button", true, false):
-		if (b as Button).text in want and (b as Button).visible:
-			(b as Button).pressed.emit()
-			return
-	log_warning("Pax RPG: нет сохранений — «Продолжить» оставляет экран загрузки")
+	m.mp_session().open_slot(slot)
 
 
 ## Меню игры (Menu.gd) — свойство menu_node корня игры. Раньше искали обходом ВСЕГО дерева сцены: с 0.31.4 это
@@ -177,6 +188,8 @@ func _mod_unloaded() -> void:
 func _world_ready(g: PaxGame) -> void:
 	Trace.mark("main: world_ready")
 	_game = g
+	if is_instance_valid(_mm):
+		_mm.attach(_menu())
 	Trace.armed_until = Engine.get_process_frames() + 300
 	planet.start(g)
 	travel.start(g)

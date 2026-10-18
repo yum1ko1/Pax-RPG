@@ -1,9 +1,10 @@
 extends CanvasLayer
-## Главное меню Pax RPG — свой экран поверх меню игры (пока оно на главном шаге): фон Юрумы (textures/menu/bg.jpg)
+## Главное меню Pax RPG — вместо меню игры (оно спрятано, пока виден наш экран): фон Юрумы (textures/menu/bg.jpg)
 ## с глубиной — карта глубины (depth.png: скала с самураем ближе всего, город, небо дальше) сдвигает слои за мышью
 ## (параллакс в шейдере), туман ползёт по долине, кольцо в небе дышит, алые искры поднимаются от скалы.
-## Кнопки — свои: наведение — сдвиг, алое свечение, растущая черта и искры; пункты зовут те же действия, что и
-## кнопки меню игры (main.gd). Как только игра открыла другой экран (загрузка, настройки, сеть) — прячемся.
+## Кнопки — свои: наведение — сдвиг, алое свечение, растущая черта; нажатие — искры. «Continue» и «Load» грузят
+## партию сами (main.gd → mp_session().open_slot), меню игры показываем только для его экранов: новая игра,
+## настройки, сеть; вернулся игрок на главный шаг меню — снова наш экран.
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
@@ -13,9 +14,11 @@ const IMG := Vector2(3840.0, 2176.0)             # размер фона (дол
 
 var mod: PaxMod
 var _find: Callable                              # () -> меню игры (Menu.gd) или null
-var _menu_ref: WeakRef                           # найденное меню; обход всего дерева — не чаще раза в секунду
+var _menu: Node                                  # меню игры (CanvasLayer) — из main.gd attach(), на старте его ещё нет
+var _want := true                                # наш экран виден (тогда меню игры спрятано)
+var slots: Callable                              # main.gd: () -> имена сохранений
+var open_slot: Callable                          # main.gd: (слот) — загрузить партию
 var _music: AudioStreamPlayer                     # музыка главного меню (sounds/music/mana_lullaby.ogg, по кругу)
-var _away := false                               # нажата наша кнопка — дальше видны, только когда меню игры на главном
 var _items: Array = []                           # [[ключ перевода, Callable]]
 var _root: Control
 var _bg: TextureRect
@@ -168,9 +171,68 @@ func _build() -> void:
 	_col.position = Vector2(60, 272)
 	_col.add_theme_constant_override("separation", int(st.gap))
 	_root.add_child(_col)
-	for it: Array in _items:
-		_col.add_child(_button(str(EN.get(str(it[0]), it[0])), it[1] as Callable))
+	_main_items()
 
+
+## Пункты главного экрана. it[2] — пункту нужен экран меню игры (новая игра, настройки, сеть): тогда меню игры
+## показываем, а своё прячем; без него (продолжить, загрузить, выход) меню игры так и не появляется.
+func _main_items() -> void:
+	for c: Node in _col.get_children():
+		c.queue_free()
+	for it: Array in _items:
+		var key := str(it[0])
+		var fn: Callable = it[1]
+		if key == "pax_rpg_menu_load":
+			fn = _saves_items
+		_col.add_child(_button(str(EN.get(key, key)), fn, it.size() > 2 and bool(it[2])))
+
+
+## «Load» — свой список сохранений (новые сверху), «Back» — назад к пунктам.
+func _saves_items() -> void:
+	for c: Node in _col.get_children():
+		c.queue_free()
+	var list: Array = slots.call() if slots.is_valid() else []
+	list.reverse()
+	for sl: Variant in list.slice(0, 8):
+		var name_s := str(sl)
+		_col.add_child(_button(name_s.to_upper(), func() -> void: open_slot.call(name_s), false, true))
+	if list.is_empty():
+		_col.add_child(_button("NO SAVES", func() -> void: pass, false, true))
+	_col.add_child(_button("BACK", _main_items, false, true))
+
+
+## main.gd на world_ready: меню игры. Его главный экран — сигнал о новой кнопке на нём (наша «Continue» —
+## значит, игрок вернулся на главный шаг меню: из настроек, сети или из партии). Ни опроса, ни обхода дерева.
+func attach(menu: Node) -> void:
+	if menu == null or menu == _menu:
+		return
+	_menu = menu
+	var scr: Variant = menu.get("screen")
+	if scr is Node and not (scr as Node).child_entered_tree.is_connected(_on_screen_child):
+		(scr as Node).child_entered_tree.connect(_on_screen_child)
+	if _want:                                        # наш экран на месте — меню игры не показываем
+		_game_menu(false)
+
+
+func _on_screen_child(n: Node) -> void:
+	if n is Button:
+		_check_back.call_deferred(weakref(n))
+
+
+func _check_back(w: WeakRef) -> void:
+	var b: Object = w.get_ref()
+	if b != null and str(b.get_meta("menu_id", "")) == "mod:pax_rpg_continue":
+		show_menu(true)
+
+
+func show_menu(on: bool) -> void:
+	_want = on
+	_game_menu(not on)
+
+
+func _game_menu(on: bool) -> void:
+	if is_instance_valid(_menu) and _menu is CanvasLayer:
+		(_menu as CanvasLayer).visible = on
 
 ## Летящие обломки скал: вырезаны из фона (config/menu_rocks.json — место и размер в долях картинки), каждый
 ## медленно плывёт вверх-вниз и покачивается в своём ритме; крупные ближе — сильнее сдвигаются за мышью.
@@ -229,7 +291,7 @@ func _glow_text(l: Label, dy: int, blur: int) -> void:
 ## Пункт: кисть Katsuno заглавными, с алым отливом. Наведение — в мотиве кольца в небе: слева прорисовывается
 ## малое алое кольцо, под текстом кисть проводит рваный мазок (шейдер BRUSH: края — шум, по мазку бежит блик),
 ## с конца мазка — искры; текст сдвигается и чуть разгорается. Нажатие — вспышка мазка и действие.
-func _button(text: String, fn: Callable) -> Control:
+func _button(text: String, fn: Callable, game_menu := false, stay := false) -> Control:
 	var box := Control.new()
 	box.custom_minimum_size = Vector2(440, 56)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -318,18 +380,17 @@ func _button(text: String, fn: Callable) -> Control:
 			var tw := box.create_tween()
 			tw.tween_property(stroke, "modulate", Color(1.8, 1.8, 1.8), 0.06)
 			tw.tween_property(stroke, "modulate", Color.WHITE, 0.14)
-			tw.tween_callback(_leave.bind(fn)))
+			tw.tween_callback(_leave.bind(fn, game_menu, stay)))
 	return box
 
 
 ## Нажата наша кнопка: меню игры ищем один раз сейчас (оно на месте, игра ничего не грузит) — по нему потом
 ## узнаём, что игрок вернулся на главный экран (из настроек, загрузки или из партии).
-func _leave(fn: Callable) -> void:
-	_away = true
-	var m: Variant = _menu_ref.get_ref() if _menu_ref != null else null
-	if m == null:
-		m = _find.call()
-		_menu_ref = weakref(m) if m != null else null
+func _leave(fn: Callable, game_menu: bool, stay: bool) -> void:
+	if not stay:
+		_want = false
+		if game_menu:                                # экран меню игры нужен (новая игра, настройки, сеть)
+			_game_menu(true)
 	fn.call()
 
 
@@ -376,24 +437,6 @@ void fragment() {
 }"""
 
 
-## Своё меню — сразу при запуске, поверх меню игры, без поиска: дерево сцены не трогаем вовсе (обход его на
-## загрузке игры ронял её с 0.31.4). После нашей кнопки — прячемся, пока меню игры (найдено в _leave) снова
-## не на главном шаге.
-func _on_main() -> bool:
-	if not _away:
-		return true
-	var menu: Variant = _menu_ref.get_ref() if _menu_ref != null else null
-	if menu == null or (menu as Node).is_queued_for_deletion() or not (menu as CanvasItem).is_visible_in_tree():
-		return false
-	var scr: Node = menu.screen
-	if scr == null:
-		return false
-	for b: Node in scr.get_children():
-		if b is Button and str((b as Button).get_meta("menu_id", "")) == "mod:pax_rpg_continue":
-			return true
-	return false
-
-
 ## Музыка меню: на показ — нарастает за 2 с, на уход в игру — гаснет за 1 с.
 func _menu_music(on: bool) -> void:
 	if _music == null:
@@ -418,7 +461,7 @@ func _menu_music(on: bool) -> void:
 
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("main_menu._process")
-	var want := _on_main()
+	var want := _want
 	if want != _shown:
 		_shown = want
 		visible = want
