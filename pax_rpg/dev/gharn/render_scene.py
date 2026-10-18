@@ -18,7 +18,8 @@ SHOTS = A[4:]
 os.makedirs(OUT, exist_ok=True)
 lay = json.load(open(LAY, encoding="utf-8"))
 MATS = {"stone": (0.49, 0.48, 0.45), "stone_cut": (0.55, 0.53, 0.49), "stone_dark": (0.36, 0.35, 0.33),
-        "earth": (0.6, 0.45, 0.28), "wood": (0.3, 0.2, 0.13), "plaster": (0.75, 0.7, 0.6), "red": (0.55, 0.06, 0.05)}
+        "earth": (0.6, 0.45, 0.28), "wood": (0.3, 0.2, 0.13), "plaster": (0.75, 0.7, 0.6), "red": (0.55, 0.06, 0.05),
+        "arena_wall": (0.2, 0.17, 0.15), "arena_seat": (0.28, 0.22, 0.17), "arena_sand": (0.45, 0.36, 0.25)}
 
 
 def g2b(p):                                   # игра (x, y вверх, z) → Blender (x, −z, y)
@@ -168,7 +169,7 @@ for e in lay["items"]:
         lt.location = g2b((p[0], 1.2, p[2]))
         sc.collection.objects.link(lt)
 
-paper = mat("paper", (0.9, 0.3, 0.1), (1.0, 0.36, 0.08), float(os.environ.get("PAPER", "3.0")))
+paper = mat("paper", (0.9, 0.3, 0.1), (1.0, 0.36, 0.08), float(os.environ.get("PAPER", "1.2")))
 rope = mat("rope", (0.24, 0.16, 0.1))
 for l, seed in lanterns:
     rng = random.Random(seed)
