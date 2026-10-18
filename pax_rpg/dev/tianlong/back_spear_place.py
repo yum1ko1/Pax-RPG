@@ -40,7 +40,7 @@ x /= np.linalg.norm(x)
 y = np.cross(z, x)
 M = np.eye(4)
 M[:3, 0], M[:3, 1], M[:3, 2] = x, y, z
-M[:3, 3] = [0.0, 1.08, zback - half - gap]
+M[:3, 3] = [0.0, 1.25, zback - half - gap]          # центр древка — у лопаток: низ не цепляет ноги и землю
 L = np.linalg.inv(W(par[sb])) @ M
 sc = np.linalg.norm(L[:3, :3], axis=0)
 N[sb]["translation"] = [float(v) for v in L[:3, 3]]
