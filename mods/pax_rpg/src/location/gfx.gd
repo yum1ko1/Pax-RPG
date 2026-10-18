@@ -457,6 +457,10 @@ func _process(delta: float) -> void:
 	if _dyn_t <= 0.0:
 		_dyn_t = 1.0
 		_mark_dynamic()
+	_part_t -= delta
+	if _part_t <= 0.0:
+		_part_t = 0.5
+		_cull_particles()
 	_refresh_probe()
 	_rim_follow()
 	_camera_lens(delta)
@@ -503,6 +507,39 @@ func _lamp_shadows() -> void:
 
 
 ## Двигающиеся тела (герой, враги, жители) — динамические для отражённого света; новые (волны арены) — тоже.
+## Частицы (дым, искры, листья, лепестки — 160+ систем, CPUParticles3D считаются процессором каждый кадр):
+## дальше PART_FAR м от камеры прячутся (спрятанные не считаются), ближе — возвращаются. Прячем только свои
+## (метка pax_rpg_culled), чужие скрытые не трогаем. Список узлов обновляется раз в 5 с.
+const PART_FAR := 45.0
+var _part_t := 0.0
+var _parts: Array = []
+var _parts_age := 99.0
+
+
+func _cull_particles() -> void:
+	if not is_instance_valid(view):
+		return
+	var cam := view.get_camera_3d()
+	if cam == null:
+		return
+	_parts_age += 0.5
+	if _parts_age > 5.0:
+		_parts_age = 0.0
+		_parts = view.find_children("*", "CPUParticles3D", true, false) + view.find_children("*", "GPUParticles3D", true, false)
+	var cp := cam.global_position
+	for n: Variant in _parts:
+		if not is_instance_valid(n):
+			continue
+		var p := n as Node3D
+		var far := p.global_position.distance_squared_to(cp) > PART_FAR * PART_FAR
+		if far and p.visible:
+			p.visible = false
+			p.set_meta("pax_rpg_culled", true)
+		elif not far and not p.visible and p.has_meta("pax_rpg_culled"):
+			p.visible = true
+			p.remove_meta("pax_rpg_culled")
+
+
 func _mark_dynamic() -> void:
 	if not is_instance_valid(view):
 		return

@@ -161,8 +161,48 @@ func refresh() -> void:
 	if key != _deco_key or not visible:
 		_deco_key = key
 		_deco.queue_redraw()
-	_mask.queue_redraw()
-	_map.queue_redraw()
+	# миникарта — сотни многоугольников (каждый — свой вызов отрисовки под маской круга, ~1200 в кадре):
+	# перерисовывать, только когда герой сдвинулся / повернулся или прошло 0.1 с (враги на карте)
+	var me: Vector2 = _g("me", Vector2.ZERO)
+	var yaw := float(_g("yaw", 0.0))
+	var now := Time.get_ticks_msec()
+	if me.distance_to(_map_me) > 0.4 or absf(angle_difference(yaw, _map_yaw)) > 0.03 or now - _map_t > 100:
+		_map_me = me
+		_map_yaw = yaw
+		_map_t = now
+		_mask.queue_redraw()
+		_map.queue_redraw()
+
+
+var _map_mesh: ArrayMesh
+var _map_n := -1
+
+
+func _rects_mesh(rects: Array) -> ArrayMesh:
+	if rects.is_empty():
+		return null
+	var v := PackedVector2Array()
+	var col := PackedColorArray()
+	for rect: Variant in rects:
+		var rr: Array = rect
+		var p: Vector2 = rr[0]
+		var h: Vector2 = (rr[1] as Vector2) * 0.5
+		var cc: Color = rr[2]
+		for q: Vector2 in [Vector2(-h.x, -h.y), Vector2(h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, h.y)]:
+			v.append(p + q)
+			col.append(cc)
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = v
+	arr[Mesh.ARRAY_COLOR] = col
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return m
+
+
+var _map_me := Vector2(INF, INF)
+var _map_yaw := 0.0
+var _map_t := 0
 
 
 func _g(k: String, d: Variant = 0.0) -> Variant:
@@ -705,23 +745,17 @@ func _draw_map() -> void:
 	var to_map := func(w: Vector2) -> Vector2:
 		var d := w - me
 		return c + Vector2(d.dot(right), -d.dot(fwd)) * k
-	# только то, что попадает в круг карты (в городе — сотни коробок; все подряд съедали ~7 мс кадра)
-	var reach := MAP_M * 1.5
-	var pts := PackedVector2Array()
-	pts.resize(4)
+	# все коробки города — одна сетка в мировых метрах (строится один раз): один вызов отрисовки вместо сотен
 	var ax := Vector2(right.x, -fwd.x) * k                # мир → карта: p = c + (d.x * ax + d.y * ay)
 	var ay := Vector2(right.y, -fwd.y) * k
-	for rect: Variant in _g("map_rects", []):
-		var rr: Array = rect
-		var d: Vector2 = (rr[0] as Vector2) - me
-		var half: Vector2 = (rr[1] as Vector2) * 0.5
-		if absf(d.x) - half.x > reach or absf(d.y) - half.y > reach:
-			continue
-		pts[0] = c + (d.x - half.x) * ax + (d.y - half.y) * ay
-		pts[1] = c + (d.x + half.x) * ax + (d.y - half.y) * ay
-		pts[2] = c + (d.x + half.x) * ax + (d.y + half.y) * ay
-		pts[3] = c + (d.x - half.x) * ax + (d.y + half.y) * ay
-		_map.draw_colored_polygon(pts, rr[2])
+	var rects: Array = _g("map_rects", [])
+	if _map_mesh == null or _map_n != rects.size():
+		_map_mesh = _rects_mesh(rects)
+		_map_n = rects.size()
+	if _map_mesh != null:
+		_map.draw_set_transform_matrix(Transform2D(ax, ay, c - me.x * ax - me.y * ay))
+		_map.draw_mesh(_map_mesh, null)
+		_map.draw_set_transform_matrix(Transform2D.IDENTITY)
 	var gate: Vector2 = _g("gate", Vector2.ZERO)
 	_map.draw_arc(to_map.call(gate), 7.0 * _s, 0.0, TAU, 20, c_blue, 2.0 * _s, true)
 	for e: Variant in _g("enemies", []):
