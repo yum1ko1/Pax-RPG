@@ -142,13 +142,14 @@ for x0, x1, z0, z1 in ((-5.0, 5.0, 14, 90), (-78, 78, -8.5, 8.5)):   # мост�
     o.data.materials.append(pmat("cobble", "cobble", (0.03, 0.03, 0.035), (0.17, 0.155, 0.15), 1.6))
 
 cache = {}
+GOBLIN = os.environ.get("GOBLIN", "")               # glb жителя-гоблина (с текстурами) для заглушек людей
 TEX = int(os.environ.get("TEX", "1024"))
 
 
 def model(rel):
     if rel in cache:
         return cache[rel]
-    path = os.path.join(MODELS, rel.replace("models/gharn/", ""))
+    path = rel[len("goblin://"):] if rel.startswith("goblin://") else os.path.join(MODELS, rel.replace("models/gharn/", ""))
     if not os.path.exists(path):
         cache[rel] = None
         return None
@@ -201,6 +202,20 @@ def proxy(e, p, r):
     L = g2b(p)
     rot = (0, 0, r)
     rnd = random.Random(hash((round(p[0], 1), round(p[2], 1))))
+    if k in ("guard", "person", "crier") and GOBLIN and os.path.exists(GOBLIN):   # жители — гоблины (модель игры)
+        col = model("goblin://" + GOBLIN)
+        if col is not None:
+            inst = bpy.data.objects.new("gob", None)
+            inst.instance_type, inst.instance_collection = "COLLECTION", col
+            s_ = 1.25 if k == "guard" else rnd.uniform(0.85, 1.0)
+            inst.location, inst.rotation_euler, inst.scale = L, rot, (s_, s_, s_)
+            sc.collection.objects.link(inst)
+            if k == "guard":
+                prim("cyl", L + Vector((0.4, 0, 1.6)), (0.04, 0.04, 2.6), rot, mat("shaft", (0.1, 0.07, 0.05)))
+            if k == "crier":
+                prim("sph", L + Vector((0.4, 0, 1.0)), (0.22, 0.22, 0.28), rot, mat("paper", (0.9, 0.3, 0.1)))
+                light(L + Vector((0.4, 0, 1.0)), 25)
+            return
     if k in ("guard", "person", "crier"):
         h = 2.0 if k == "guard" else rnd.uniform(1.45, 1.75)
         col = (0.3, 0.05, 0.04) if k == "guard" else CLOTH[rnd.randrange(len(CLOTH))]
