@@ -244,7 +244,8 @@ def proxy(e, p, r):
             prim("cube", L + Vector((0, 0, h_ * j / 3)), (w_, 0.06, 0.06), rot, im)
     elif k == "banner_x":                         # полотнище поперёк улицы: вертикальная ткань с верёвки
         cm = pmat("bx_%d" % e.get("c2", 0), "noise", (0.2, 0.01, 0.01), CLOTH[e.get("c2", 0) % len(CLOTH)], 2)
-        prim("cube", L + Vector((0, 0, -1.1)), (0.7, 0.03, 2.2), rot, cm)
+        ln = e.get("ln", 2.2)
+        prim("cube", L + Vector((0, 0, -ln / 2)), (0.7, 0.03, ln), rot, cm)
     elif k == "glow":                             # контровое зарево: тёплый большой свет за аркой/воротами
         light(L + Vector((0, 0, e.get("h", 4.0))), e.get("w", 1500), (1.0, 0.45, 0.15), 3.0)
     elif k == "petals":                           # лепестки сакуры пятном на земле
