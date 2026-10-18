@@ -91,6 +91,7 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	if old_cape != null:
 		old_cape.get_parent().remove_child(old_cape)
 		old_cape.free()
+	_tone_eyes()
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
 	_sword_drag = model.find_child("Sword_Drag", true, false) as Node3D
@@ -107,6 +108,23 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 	_swing = _player(cfg.get("swing_files", []), _f("swing_pitch_spread", 1.06), _f("swing_volume_db", -4.0))
 	_impact = _player(cfg.get("impact_files", []), 1.04, _f("impact_volume_db", 0.0))
 	return model
+
+
+## Глаза модели (Тян Лун): в материалах свечение (emission) и лак — ночью светились сами, мимо света сцены.
+## Свечение глаз — eye_glow (доля, 0 — нет), у глазниц — нет; лак — слабый блик.
+func _tone_eyes() -> void:
+	for n: Node in model.find_children("Eye*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for si: int in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(si) as BaseMaterial3D
+			if m == null:
+				continue
+			m = m.duplicate() as BaseMaterial3D
+			if m.emission_enabled:
+				m.emission_energy_multiplier *= _f("eye_glow", 0.2) if not mi.name.begins_with("EyeSocket") else 0.0
+				m.emission_enabled = m.emission_energy_multiplier > 0.0
+			m.clearcoat = minf(m.clearcoat, 0.3)
+			mi.set_surface_override_material(si, m)
 
 
 ## Меч крупнее (sword_scale) и на спине — по диагонали, как у Гатса: рукоять над правым плечом, клинок к левому бедру,
