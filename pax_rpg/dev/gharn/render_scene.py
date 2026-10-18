@@ -116,6 +116,11 @@ w.use_nodes = True
 bg = w.node_tree.nodes["Background"]
 bg.inputs[0].default_value = (0.035, 0.03, 0.08, 1)
 bg.inputs[1].default_value = 1.0
+if os.environ.get("FOG", "1") == "1":            # туман по глубине: планы сцены (главный инструмент ночи)
+    vol = w.node_tree.nodes.new("ShaderNodeVolumePrincipled")
+    vol.inputs["Color"].default_value = (0.35, 0.3, 0.55, 1)
+    vol.inputs["Density"].default_value = float(os.environ.get("FOG_D", "0.012"))
+    w.node_tree.links.new(vol.outputs["Volume"], w.node_tree.nodes["World Output"].inputs["Volume"])
 moon = bpy.data.objects.new("moon", bpy.data.lights.new("moon", "SUN"))
 moon.data.energy = 0.35
 moon.data.color = (0.55, 0.6, 1.0)
@@ -218,8 +223,7 @@ def proxy(e, p, r):
         prim("cube", L + Vector((0, 0, 3.4)), (0.06, 0.9, 0.06), rot, mat("shaft", (0.1, 0.07, 0.05)))
         prim("cube", L + Vector((0, 0, 2.85)), (0.06, 0.62, 0.9), rot, pmat("signb", "wood", (0.08, 0.04, 0.02), (0.25, 0.1, 0.05), 3, emit=0.15))
     elif k == "window":                           # тёплое окно
-        prim("cube", L, (0.05, 0.9, 0.7), rot, mat("winglow", (1.0, 0.6, 0.3), (1.0, 0.5, 0.2), 2.5))
-        light(L + Vector((-math.sin(r), math.cos(r), 0)) * 0.0, 15)
+        prim("cube", L, (0.04, 0.55, 0.45), rot, mat("winglow", (0.9, 0.35, 0.1), (1.0, 0.42, 0.12), 0.9))
     elif k == "smoke":                            # дым из трубы
         sm = mat("smoke", (0.4, 0.4, 0.45))
         sm.blend_method = "BLEND" if hasattr(sm, "blend_method") else None
@@ -238,6 +242,11 @@ def proxy(e, p, r):
             prim("cube", L + Vector((math.cos(r), math.sin(r), 0)) * (-w_ / 2 + i * 0.45) + Vector((0, 0, h_ / 2)), (0.07, 0.07, h_), rot, im)
         for j in range(4):
             prim("cube", L + Vector((0, 0, h_ * j / 3)), (w_, 0.06, 0.06), rot, im)
+    elif k == "banner_x":                         # полотнище поперёк улицы: вертикальная ткань с верёвки
+        cm = pmat("bx_%d" % e.get("c2", 0), "noise", (0.2, 0.01, 0.01), CLOTH[e.get("c2", 0) % len(CLOTH)], 2)
+        prim("cube", L + Vector((0, 0, -1.1)), (0.7, 0.03, 2.2), rot, cm)
+    elif k == "puddle":
+        prim("cyl", L + Vector((0, 0, 0.03)), (e.get("w", 2.0), e.get("d", 1.2), 0.01), rot, mat("water", (0.02, 0.02, 0.03), rough=0.05))
     elif k == "ruts":                             # колеи: две тёмные полосы, e["len"]
         ln = e.get("len", 20)
         for sd in (-0.8, 0.8):
