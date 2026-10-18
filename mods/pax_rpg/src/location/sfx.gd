@@ -30,6 +30,7 @@ var _step_db := 0.0                   # поправка громкости ша
 var _rustle      # шорох одежды на шаге
 var _skirt       # юбка — тихо, «издалека» (запись у микрофона: срез верхов, эхо)
 var _land_db := -4.0
+var walk_stride := 0.78               # м на шаг (звук); у героя — sfx_stride_walk из конфига
 
 
 func setup(mod: PaxMod, in_city: bool) -> void:
@@ -110,6 +111,7 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 			if p is AudioStreamPlayer3D:                  # каблука (он весь выше 3 кГц), и камень звучал как земля
 				(p as AudioStreamPlayer3D).attenuation_filter_db = 0.0
 				(p as AudioStreamPlayer3D).unit_size = 12.0
+	walk_stride = float(cfg.get("sfx_stride_walk", 0.78))
 	if not bool(cfg.get("sfx_gear", true)) and _gear != null:
 		_gear.queue_free()
 		_gear = null
@@ -152,7 +154,7 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 	if not on_floor:
 		return
 	_walked += dist
-	var stride := 1.45 if running else 0.78
+	var stride := 1.45 if running else walk_stride
 	if _walked < stride:
 		return
 	_walked = 0.0
