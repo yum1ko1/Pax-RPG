@@ -191,6 +191,7 @@ static func _pbr(m: BaseMaterial3D) -> void:
 ## LOD для сеток: у неподвижных и у скинованных (жители-гоблины по 37k треугольников ×40 — 1.5M в кадре без LOD;
 ## у скинованных LOD — только другой список индексов, кости и веса те же). С морфами — без LOD.
 const SKIN_LOD := true
+const STATIC_LOD := false             # постройки 10–40k треугольников — дёшево и без LOD (было: грани и пятна вблизи)
 static func _lods(m: Node3D) -> void:
 	if _lod_ok < 0:
 		return
@@ -200,6 +201,8 @@ static func _lods(m: Node3D) -> void:
 			continue
 		if inst.skin != null and not SKIN_LOD:
 			continue
+		if inst.skin == null and not STATIC_LOD:
+			continue                                         # дома Meshy: упрощение рвёт швы UV — стены в рваных треугольниках
 		var am := inst.mesh as ArrayMesh
 		var tris := 0
 		for si: int in am.get_surface_count():
