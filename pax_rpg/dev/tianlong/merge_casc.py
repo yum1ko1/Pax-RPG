@@ -194,11 +194,13 @@ SPEAR_SIGMA = 1.2
 
 def main():
     model, meta_p = sys.argv[1], sys.argv[2]
-    pairs = [p.split("=", 1) for p in sys.argv[3:]]
+    pairs = [p.split("=", 1) for p in sys.argv[3:]]   # Имя=клип.glb[:mirror] — mirror: зеркально (лево↔право)
     j, bin_ = load(model)
     meta = json.load(open(meta_p, encoding="utf-8"))
     names = {n.get("name"): i for i, n in enumerate(j["nodes"])}
     for clip, src in pairs:
+        mirror = src.endswith(":mirror")
+        src = src[:-7] if mirror else src
         s, sb = load(src)
         sa = s["animations"][0]
         ch, samp = [], []
@@ -209,6 +211,8 @@ def main():
             if not nm.startswith("mixamorig:"):
                 continue
             nm = MAP.get(nm[10:], nm[10:])
+            if mirror:                       # зеркало: кость левой стороны играет ход правой и наоборот
+                nm = nm.replace("Left", "\0").replace("Right", "Left").replace("\0", "Right")
             path = c["target"]["path"]
             if nm not in names or path == "scale" or (path == "translation" and nm != "Hips"):
                 continue
@@ -218,8 +222,10 @@ def main():
             t_end = max(t_end, float(t[-1]))
             if nm == "Hips" and path == "rotation":
                 v = qmul(QX, v)
+            if mirror and path == "rotation":   # отражение через плоскость YZ: (x, y, z, w) → (x, −y, −z, w)
+                v = v * np.array([1.0, -1.0, -1.0, 1.0], np.float32)
             if nm == "Hips" and path == "translation":
-                hips_t = (t, rotx(v * 100.0))
+                hips_t = (t, rotx(v * 100.0) * (np.array([-1.0, 1.0, 1.0]) if mirror else 1.0))
                 continue
             samp.append({"input": write(j, bin_, t, "SCALAR"), "output": write(j, bin_, v, "VEC4"),
                          "interpolation": sp.get("interpolation", "LINEAR")})
@@ -241,7 +247,7 @@ def main():
             samp.append({"input": write(j, bin_, tt, "SCALAR"), "output": write(j, bin_, hv, "VEC3"),
                          "interpolation": "LINEAR"})
             ch.append({"sampler": len(samp) - 1, "target": {"node": names["Hips"], "path": "translation"}})
-        sp_ = spear_track(s, sb, j, names, tt)
+        sp_ = None if mirror else spear_track(s, sb, j, names, tt)   # зеркальный — копьё в хвате модели
         if sp_ is not None:
             ti = write(j, bin_, tt, "SCALAR")
             for path, v, typ in (("translation", sp_[0], "VEC3"), ("rotation", sp_[1], "VEC4")):
