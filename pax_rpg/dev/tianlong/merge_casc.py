@@ -275,4 +275,5 @@ def main():
     json.dump(meta, open(meta_p, "w", encoding="utf-8"), ensure_ascii=False)
 
 
-main()
+if __name__ == "__main__":
+    main()
