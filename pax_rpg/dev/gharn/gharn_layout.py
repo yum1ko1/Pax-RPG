@@ -575,6 +575,77 @@ def draw_mask(path):
     return [x0, z0, GROUND[0], GROUND[1]]
 
 
+# --- дворики в пустотах: где на 9 м вокруг ничего крупного нет — свой маленький быт, чтобы город был плотным:
+# юртовый двор с котлом, сруб с садом сакуры, пятачок с фонарями и скамьями, мастерская с дровами и телегой.
+SMALL = ("grass_tuft", "rock_small", "bush_dry", "window_glass", "palisade_segment")
+def _big_pts():
+    out = []
+    for it in items:
+        if "m" in it and not any(k in it["m"] for k in SMALL):
+            out.append((it["p"][0], it["p"][2]))
+        elif "box" in it or "brazier" in it or "sign" in it:
+            out.append((it["p"][0], it["p"][2]))
+    return out
+
+
+def _near_path(x, z, m):
+    for pth in paths:
+        for (ax, az), (bx, bz) in zip(pth, pth[1:]):
+            dx, dz = bx - ax, bz - az
+            t = max(0.0, min(1.0, ((x - ax) * dx + (z - az) * dz) / max(dx * dx + dz * dz, 1e-6)))
+            if (x - ax - dx * t) ** 2 + (z - az - dz * t) ** 2 < m * m:
+                return True
+    return False
+
+
+def fill_voids():
+    pts = _big_pts()
+    gx0, gx1 = GROUND[2] - GROUND[0] / 2 + 8, GROUND[2] + GROUND[0] / 2 - 8
+    gz0, gz1 = GROUND[3] - GROUND[1] / 2 + 8, GROUND[3] + GROUND[1] / 2 - 8
+    cells = [(x, z) for x in range(int(gx0), int(gx1), 5) for z in range(int(gz0), int(gz1), 5)]
+    random.shuffle(cells)
+    n = 0
+    for cx, cz in cells:
+        x, z = cx + random.uniform(-2, 2), cz + random.uniform(-2, 2)
+        if on_road(x, z, 3.0) or (x - AX) ** 2 + (z - AZ) ** 2 < 30 ** 2 or (abs(x) < 16 and z < -24):
+            continue
+        if any((x - a) ** 2 + (z - b) ** 2 < 9.0 ** 2 for a, b in pts) or _near_path(x, z, 6.0):
+            continue
+        kind = n % 4
+        r0 = random.uniform(0, 360)
+        if kind == 0:                                   # юртовый двор
+            add("yurt_large", x, z, r0, c=True, rad=4.6)
+            for k in range(3):
+                a = math.radians(r0 + 120 * k)
+                add(random.choice(["barrel_water", "cauldron", "sack_grain", "basket", "hay_bale"]),
+                    x + math.cos(a) * 5.8, z + math.sin(a) * 5.8, random.uniform(0, 360), rad=0.6)
+            add("firepit", x + 6.5, z, 0, c=False)
+        elif kind == 1:                                 # сруб с садом
+            add(random.choice(["@house_timber_a", "@house_timber_b"]), x, z, random.choice([0, 90, 180, 270]), c=True, rad=5.4)
+            for k in range(2):
+                a = random.uniform(0, 2 * math.pi)
+                add("@flame_tree", x + math.cos(a) * 7.0, z + math.sin(a) * 7.0, random.uniform(0, 360),
+                    s=round(random.uniform(0.7, 0.95), 2), rad=1.5)
+            add("@bucket_set", x + 4.0, z + 4.0, r0, c=False)
+        elif kind == 2:                                 # пятачок: фонари, скамьи, тотем
+            add("stone_lantern", x - 2.5, z, r0, rad=0.6)
+            add("stone_lantern", x + 2.5, z, r0, rad=0.6)
+            add("bench_long", x, z + 2.2, r0, rad=1.0)
+            add(random.choice(["@totem_pole", "ovoo_cairn", "@mana_totem"]), x, z - 1.5, r0, rad=1.0)
+            items.append({"lanterns": [x - 2.5, z, x + 2.5, z, 3.2], "seed": int(x * 7 + z), "p": [x, 0, z], "c": False})
+        else:                                           # мастерская
+            add("yurt_small", x, z, r0, c=True, rad=3.0)
+            add("wood_pile", x + 4.0, z, r0, rad=1.0)
+            add(random.choice(["cart", "@hay_wagon"]), x - 4.5, z + 1.0, r0, rad=1.5)
+            add(random.choice(["@hide_frame", "@spear_rack", "training_dummy"]), x, z + 4.5, r0, rad=0.8)
+        pts.append((x, z))
+        n += 1
+    print("дворики:", n)
+
+
+fill_voids()
+
+
 # --- внешний город: слобода за стеной — юрты кочевников, срубы, вышки и туги. Земля там ровная (data "outer"),
 # без коллизии (игрок туда не выходит), дым не идёт — только силуэт, чтобы столица не стояла коробкой в пустыне.
 OUTER = 34.0

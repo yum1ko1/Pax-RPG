@@ -108,6 +108,8 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 			if not (mat is BaseMaterial3D):
 				continue
 			_pbr(mat as BaseMaterial3D)
+			if DETAIL.any(func(k: String) -> bool: return path.contains(k)):
+				_detail(mod, mat as BaseMaterial3D)
 			if path.contains("goblin") or path.contains("orc"):    # кожа — свет просвечивает (уши, пальцы)
 				var bm3 := mat as BaseMaterial3D
 				bm3.subsurf_scatter_enabled = true
@@ -138,6 +140,32 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 					idx.append(_streams.size())
 					_by_path[path] = idx
 					_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+
+
+## Большие постройки Meshy: вся модель — на одном атласе 2048, и вблизи стена из 2–3 пикселей на сантиметр
+## мылится. Поверх — мелкое зерно дерева и камня (textures/detail, трипланарно в мировых метрах, тайл 2 м):
+## яркость ±6 % и рельеф нормалей, цвет и рисунок атласа не меняются.
+const DETAIL := ["house_timber", "watch_tower", "stilt_hut", "forge_smithy", "shaman_tower", "stable_hay",
+	"yurt_noble", "market_stall_hide", "tusk_arch", "guardian_statue"]
+static var _det_a: Texture2D
+static var _det_n: Texture2D
+
+
+static func _detail(mod: PaxMod, m: BaseMaterial3D) -> void:
+	if _det_a == null:
+		_det_a = mod.texture("textures/detail/grain_albedo.png")
+		_det_n = mod.texture("textures/detail/grain_normal.png")
+	if _det_a == null:
+		return
+	m.detail_enabled = true
+	m.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+	m.detail_uv_layer = BaseMaterial3D.DETAIL_UV_2
+	m.detail_albedo = _det_a
+	m.detail_normal = _det_n
+	m.uv2_triplanar = true
+	m.uv2_world_triplanar = true
+	m.uv2_scale = Vector3(0.5, 0.5, 0.5)
+	m.uv2_triplanar_sharpness = 4.0
 
 
 ## PBR моделей Meshy: рассеяние Burley (мягче Lambert на камне, ткани, коже), отражения GGX, нормальная доля зеркальности
