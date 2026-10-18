@@ -323,7 +323,7 @@ for z in [zz * 1.0 for zz in range(32, 78, 3)]:           # мусор у бор
             proxy("debris", side * random.uniform(4.6, 5.0), 0, z + random.uniform(-1.2, 1.2), random.uniform(0, 360),
                   n=random.randint(4, 9))
 for x, z in ((-3.2, 87.0), (3.2, 87.0), (-12.5, 96.0), (14.6, 99.0), (-6.0, 92.5)):   # снаружи: солома, навоз, щепа
-    proxy("debris", x, 0, z, random.uniform(0, 360), n=8, kind="straw")
+    proxy("debris", x, 0, z, random.uniform(0, 360), n=8, mat_="straw")
 
 # --- снаружи: церемониальная дорога к Вратам Клыка
 box([9.0, 0.05, 26.0], 0, 0.025, 99.0, "stone_cut", c=False)              # мощёный подход

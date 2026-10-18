@@ -271,7 +271,7 @@ def proxy(e, p, r):
         prim("cyl", L + Vector((0, 0, 0.025)), (e.get("w", 3.0), e.get("w", 3.0) * 0.8, 0.01), rot,
              pmat("petals", "noise", (0.12, 0.06, 0.07), (0.75, 0.35, 0.45), 6))
     elif k == "debris":                           # мусор: щепки, черепки, обрывки бумаги / солома
-        straw = e.get("kind") == "straw"
+        straw = e.get("mat_") == "straw"
         for i in range(int(e.get("n", 6))):
             q = L + Vector((rnd.uniform(-0.7, 0.7), rnd.uniform(-0.7, 0.7), 0.02))
             if straw:
