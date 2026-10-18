@@ -185,9 +185,6 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	l.light_color = Color(1.0, 0.52, 0.22)
 	l.light_energy = 1.1
 	l.omni_range = 7.0 + size * 3.0
-	l.distance_fade_enabled = true
-	l.distance_fade_begin = 45.0
-	l.distance_fade_length = 10.0
 	l.position = pos + Vector3(0, size * 0.6, 0)
 	parent.add_child(l)
 	return l

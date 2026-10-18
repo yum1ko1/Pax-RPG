@@ -228,7 +228,7 @@ func _open(t: String) -> void:
 			_gtoggle("Indirect light (SSIL)", "ssil", true)
 			_gtoggle("Ambient occlusion", "ssao", true)
 			_gtoggle("Reflections", "ssr", true)
-			_gslider("Lamp shadows", "lamp_shadows", 6.0, 0.0, 8.0, 1.0, false)
+			_gslider("Lamp shadows (nearest lights; farther ones get softer, never vanish)", "lamp_shadows_n", 40.0, 0.0, 40.0, 4.0, false)
 			_slider("Volumetric fog", float(mod.get_setting("vol_fog", 0.5)), 0.0, 1.0, 0.01, true, func(v: float) -> void:
 				mod.set_setting("vol_fog", v))
 			_section("CAMERA")

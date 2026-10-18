@@ -86,7 +86,7 @@ func _f(key: String, fallback: float) -> float:
 
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
-const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows", "glow", "lens_sharpen", "cam_blur",
+const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen", "cam_blur",
 	"flare", "auto_exposure", "grass_density"]
 var _ovr := {}
 var _env: Environment
@@ -137,10 +137,10 @@ func apply_viewport(v: SubViewport) -> void:
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
-	# все ячейки атласа теней огней одного размера (16 × 1024² в 4096²): Godot не перекладывает тени между ячейками
-	# разного размера по мере того, как огни растут и уменьшаются на экране, — тени не скачут по чёткости
+	# тени огней по уровням качества: 8 ближних (крупных на экране) — 1024², ещё 32 — 512²; дальше тень мягчеет
+	# и бледнеет (_lamp_shadows), но огонь не гаснет и тень не пропадает рывком
 	for q: int in 4:
-		v.set_positional_shadow_atlas_quadrant_subdiv(q, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4)
+		v.set_positional_shadow_atlas_quadrant_subdiv(q, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4 if q < 2 else Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_16)
 
 
 ## Апскейл FSR 2 режимами, как у DLSS (DLSS в Godot недоступен — закрытая библиотека NVIDIA, нужен C++-модуль движка):
@@ -472,7 +472,7 @@ func _process(delta: float) -> void:
 
 ## Тени — у ближайших к камере горящих огней; дальние без теней (каждая тень огня — 6 проходов сцены).
 func _lamp_shadows() -> void:
-	var n := int(_f("lamp_shadows", 6))
+	var n := int(_f("lamp_shadows_n", 40))
 	if lights.is_empty() or not is_instance_valid(cam):
 		return
 	if not _fogs_made:
@@ -494,7 +494,7 @@ func _lamp_shadows() -> void:
 			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
-		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 35.0:
+		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0:
 			near.append([d, ol])
 		else:
 			ol.set_meta("pax_rpg_sh_want", false)
@@ -514,7 +514,11 @@ func _lamp_shadows() -> void:
 			so.shadow_opacity = 0.0
 			so.shadow_enabled = true
 		if so.shadow_enabled:
-			var o := move_toward(so.shadow_opacity, 1.0 if w else 0.0, dt * 0.8)
+			var far := clampf((so.global_position.distance_to(hp) - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
+			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
+			if not is_equal_approx(bl, so.shadow_blur):   # присваивание пересчитывает свет — только при смене ступени
+				so.shadow_blur = bl
+			var o := move_toward(so.shadow_opacity, (snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0), dt * 0.8)
 			if not is_equal_approx(o, so.shadow_opacity):
 				so.shadow_opacity = o
 			if not w and o <= 0.0:

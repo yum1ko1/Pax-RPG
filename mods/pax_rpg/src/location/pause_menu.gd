@@ -233,16 +233,16 @@ func _show_gfx(on: bool) -> void:
 
 ## Качество одной кнопкой: значения настроек (ключи gfx.gd; vol_fog — ползунок объёмного тумана).
 const PRESETS := {
-	"low": {"gi": false, "ssil": false, "ssao": false, "ssr": false, "aa": "fsr2", "fsr_scale": 0.77, "lamp_shadows": 0.0,
+	"low": {"gi": false, "ssil": false, "ssao": false, "ssr": false, "aa": "fsr2", "fsr_scale": 0.77, "lamp_shadows_n": 8.0,
 		"glow": 0.3, "lens_sharpen": 0.3, "cam_blur": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0,
 		"vol_fog": 0.0},
-	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 2.0,
+	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 16.0,
 		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.25, "flare": true, "auto_exposure": true, "grass_density": 4.0,
 		"vol_fog": 0.3},
-	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 4.0,
+	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 32.0,
 		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 6.0,
 		"vol_fog": 0.5},
-	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows": 8.0,
+	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 40.0,
 		"glow": 0.45, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 9.0,
 		"vol_fog": 0.6},
 }
@@ -290,7 +290,7 @@ func _fill_gfx() -> void:
 	_choice("pax_rpg_gfx_upscale", "upscale", [["native", "pax_rpg_gfx_up_native"], ["quality", "pax_rpg_gfx_up_quality"],
 		["balanced", "pax_rpg_gfx_up_balanced"], ["performance", "pax_rpg_gfx_up_performance"]], str(_gfx_cfg.get("upscale", "native")))
 	_gslider("pax_rpg_gfx_scale", "fsr_scale", float(_gfx_cfg.get("fsr_scale", 1.0)), 0.5, 1.0, 0.01)
-	_gslider("pax_rpg_gfx_lamps", "lamp_shadows", float(_gfx_cfg.get("lamp_shadows", 6.0)), 0.0, 8.0, 1.0)
+	_gslider("pax_rpg_gfx_lamps", "lamp_shadows_n", float(_gfx_cfg.get("lamp_shadows_n", 40.0)), 0.0, 40.0, 4.0)
 	_slider(_mod.tr_key("pax_rpg_set_volfog"), "vol_fog", 0.5, 0.0, 1.0, func(v: float) -> void:
 		fog_changed.emit(v), _gfx_rows)
 	_gslider("pax_rpg_gfx_glow", "glow", float(_gfx_cfg.get("glow", 0.55)), 0.0, 1.0, 0.01)
