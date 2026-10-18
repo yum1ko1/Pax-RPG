@@ -319,7 +319,7 @@ def quarter(x0, x1, z0, z1, n):
 # ===================== жилые слободы =====================
 FOOT = {"yurt_large": (4.2, 4.2), "yurt_small": (2.7, 2.7), "house_timber_a": (3.8, 4.6), "house_timber_b": (4.1, 3.8),
         "house_shop_a": (5.2, 4.2), "house_shop_b": (4.3, 4.1), "house_shop_c": (5.8, 4.3),
-        "house_two_a": (4.4, 4.6), "house_two_b": (5.4, 4.6)}
+        "house_two_a": (4.0, 3.6), "house_two_b": (5.2, 4.9)}
 RECTS = []                                       # (x0, x1, z0, z1) занятых построек слобод — без самопересечений
 
 
@@ -379,7 +379,7 @@ def craft_lot(x, z, side, k):
         m = ["@house_timber_a", "@house_shop_b", "@house_timber_b", "@house_shop_a"][k % 4]
     if not place(m, x, z, r):
         return
-    by = z + side * 8.6                              # задний двор
+    by = z + side * 9.0                              # задний двор
     craft = k % 4
     if craft == 0:
         add("@hide_frame", x - 1.5, by, 0, c=True)
@@ -415,9 +415,9 @@ def districts():
     ROADS.append(("rect", 14, 88, 55.8, 59.2))
     TRAILS.append(("rect", 53.4, 56.6, 33, 82))
     k = 0
-    for x in (23.0, 33.0, 43.0, 66.0, 76.0, 86.0):
+    for x in (22.0, 33.0, 44.0, 63.0, 74.0, 85.0):
         for side in (-1, 1):
-            craft_lot(x if x < 86 else 85.0, 57.5 + side * 6.4, side, k)
+            craft_lot(x, 57.5 + side * 6.8, side, k)
             k += 1
     add("trough", 55, 57.5, 0, c=True)
     add("barrel_water", 56.6, 56.4)
@@ -425,8 +425,8 @@ def districts():
         add("stone_lantern", 55 + sx * 3.2, 54.6, 0)
         add("stone_lantern", 55 + sx * 3.2, 60.4, 0)
     add("@totem_pole", 52.2, 61.0, 0, c=True)
-    for x in (23.0, 33.0, 43.0, 66.0, 76.0):         # гирлянды через улицу между фасадами — на высоте второго этажа
-        items.append({"lanterns": [x + 4.0, 52.8, x + 4.0, 62.2, 5.0], "seed": int(x), "p": [x, 0, 57.5], "c": False})
+    for x in (22.0, 33.0, 63.0, 74.0):               # гирлянды через улицу между фасадами — на высоте второго этажа
+        items.append({"lanterns": [x + 5.5, 52.4, x + 5.5, 62.6, 5.6], "seed": int(x), "p": [x, 0, 57.5], "c": False})
     for x in (19.0, 38.0, 71.0):
         add("tug_banner", x, 55.2)
 
@@ -838,14 +838,15 @@ def outer_belt():
     while x < gx1 + OUTER - 4:
         z = gz0 - OUTER + 4
         while z < gz1 + OUTER - 4:
-            px, pz = x + random.uniform(-3, 3), z + random.uniform(-3, 3)
+            px, pz = x + random.uniform(-0.6, 0.6), z + random.uniform(-0.6, 0.6)   # слобода — рядами вдоль стены
             inside = gx0 - 5 < px < gx1 + 5 and gz0 - 5 < pz < gz1 + 5
             if not inside and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.9:
                 k = random.random()
                 if k < 0.55:
                     add(random.choice(["yurt_large", "yurt_small", "yurt_small"]), px, pz, random.uniform(0, 360), c=False, y=-0.4)
                 elif k < 0.8:
-                    add(random.choice(["@house_timber_a", "@house_timber_b"]), px, pz, random.choice([0, 90, 180, 270]), c=False, y=-0.4)
+                    face = 0 if pz < gz0 else 180 if pz > gz1 else (90 if px < gx0 else -90)   # фасадом к стене столицы
+                    add(random.choice(["@house_timber_a", "@house_timber_b", "@house_two_b"]), px, pz, face, c=False, y=-0.4)
                 elif k < 0.88:
                     add("@watch_tower", px, pz, random.uniform(0, 360), c=False, y=-0.4)
                 elif k < 0.95:
