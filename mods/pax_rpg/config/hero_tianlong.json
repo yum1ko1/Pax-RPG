@@ -93,7 +93,7 @@
 	"_note_run": "Бег — один клип Cascadeur (Running.glb, 51 кадр), разрезан merge_casc.py @a-b: RunStart 5–12 (разгон), Run — отдельный цикл Running_loop.glb (31 кадр, два цикла шагов, 8.99 м за 1 с; шаги — касания носков 4 13 20 28), RunStop 29–40 (торможение). Шаги автора: 6 · 17 27 · 37. На входе и выходе скорость героя — ход таза клипа (hero.edge_speed).",
 	"_note_thrust": "thrust_clips — прямые выпады: на них вместо swing_N звучит sfx_thrust.",
 	"sfx_thrust": "sounds/spear_thrust.ogg",
-	"thrust_clips": ["Attack1", "Attack3"],
+	"thrust_clips": ["Attack1", "Attack2", "Attack3"],
 	"sfx_finish": "sounds/spear_magic_finish.ogg",
 	"final_push": 6.5,
 	"final_push_up": 2.2,
