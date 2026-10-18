@@ -199,7 +199,8 @@ SPEAR_SIGMA = 1.2
 def main():
     model, meta_p = sys.argv[1], sys.argv[2]
     pairs = [p.split("=", 1) for p in sys.argv[3:]]   # Имя=клип.glb[@a-b][:mirror] — mirror: зеркально (лево↔право),
-    # @a-b — только кадры a…b исходника (один glb бега → RunStart / Run / RunStop)
+    # @a-b — только кадры a…b исходника (один glb бега → RunStart / Run / RunStop); @a-b~N — цикл: последние N
+    # кадров плавно сводятся к первому (шов лупа без скачка ног)
     j, bin_ = load(model)
     meta = json.load(open(meta_p, encoding="utf-8"))
     names = {n.get("name"): i for i, n in enumerate(j["nodes"])}
@@ -207,8 +208,13 @@ def main():
         mirror = src.endswith(":mirror")
         src = src[:-7] if mirror else src
         f0 = f1 = None
+        seam = 0
         if "@" in src:
             src, rng = src.rsplit("@", 1)
+            seam = 0
+            if "~" in rng:
+                rng, seam = rng.split("~")
+                seam = int(seam)
             f0, f1 = (int(x) for x in rng.split("-"))
         s, sb = load(src)
         sa = s["animations"][0]
@@ -230,7 +236,18 @@ def main():
             v = read(s, sb, sp["output"])
             if f0 is not None:
                 keep = (t >= f0 / FPS - 1e-4) & (t <= f1 / FPS + 1e-4)
-                t, v = t[keep] - f0 / FPS, v[keep]
+                t, v = t[keep] - f0 / FPS, v[keep].copy()
+                if seam and len(v) > seam + 1 and (path == "rotation" or (nm == "Hips" and path == "translation")):
+                    n_ = len(v)
+                    for i in range(n_ - seam, n_):
+                        w = (i - (n_ - seam - 1)) / seam
+                        w = w * w * (3 - 2 * w)
+                        if path == "rotation":
+                            q0 = v[0] if np.dot(v[0], v[i]) >= 0 else -v[0]
+                            q = v[i] * (1 - w) + q0 * w
+                            v[i] = q / np.linalg.norm(q)
+                        else:
+                            v[i, 2] = v[i, 2] * (1 - w) + v[0, 2] * w   # таз: качание вверх-вниз (Z исходника; ход вперёд — root)
             t_end = max(t_end, float(t[-1]))
             if nm == "Hips" and path == "rotation":
                 v = qmul(QX, v)

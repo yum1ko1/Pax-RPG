@@ -1,6 +1,6 @@
 {
 	"_note_walk": "Шаг без оружия: Walk из Cascadeur (31 кадр, 1 с на два шага, ход вперёд 1.53 м за цикл, вынут в root motion) — скорость шага = длина цикла, ноги не скользят.",
-	"walk_speed": 1.53, "stride_walk": 1.53, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "sfx_stride_walk": 0.77, "run_speed": 5.5, "stride_run": 3.7, "loop_steps": {"Walk": [9, 20], "RunStart": [6], "Run": [0, 10], "RunStop": [1, 10, 14]}, "sheathe_from_draw": false, "sword_back_from_model": true,
+	"walk_speed": 1.53, "stride_walk": 1.53, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "sfx_stride_walk": 0.77, "run_speed": 5.5, "stride_run": 3.08, "loop_steps": {"Walk": [9, 20], "RunStart": [1], "Run": [5, 15], "RunStop": [8]}, "sheathe_from_draw": false, "sword_back_from_model": true,
 	"sfx_steps": "heel", "sfx_gear": false, "sfx_cloth": true, "sfx_whoosh": true,
 	"combo_end_free": 0.05,
 	"clip_speed": {"Dodge": 1.0, "DodgeArmed": 1.0, "Hurt": 1.5, "DodgeBack": 1.0, "DodgeL": 1.0, "DodgeR": 1.0, "JumpLand": 1.2, "BlockHit": 1.0, "Draw": 1.0, "Sheathe": 1.0},
@@ -90,7 +90,7 @@
 	},
 	"_note_combo": "Серия Тянь Луна (Cascadeur, dev/tianlong/merge_casc.py): Attack1→2→3 — каждый следующий ЛКМ во время удара (с combo_cancel доли клипа); без нажатия к attack_end — ComboEnd (выход из комбо в стойку, ходьба прерывает его с combo_end_free). side_swings false — удары всегда по порядку.",
 	"swing_tilt": 0.0,
-	"_note_run": "Бег — один клип Cascadeur (Running.glb, 51 кадр), разрезан merge_casc.py @a-b: RunStart 0–17 (разгон), Run 17–36 (цикл, 3.7 м), RunStop 36–50 (торможение). Шаги автора: 6 · 17 27 · 37 46 50.",
+	"_note_run": "Бег — один клип Cascadeur (Running.glb, 51 кадр), разрезан merge_casc.py @a-b: RunStart 5–12 (разгон), Run 12–29~4 (цикл 3.08 м, последние 4 кадра сведены к первому — шов без скачка ног), RunStop 29–40 (торможение). Шаги автора: 6 · 17 27 · 37. На входе и выходе скорость героя — ход таза клипа (hero.edge_speed).",
 	"_note_thrust": "thrust_clips — прямые выпады: на них вместо swing_N звучит sfx_thrust.",
 	"sfx_thrust": "sounds/spear_thrust.ogg",
 	"thrust_clips": ["Attack1", "Attack3"],

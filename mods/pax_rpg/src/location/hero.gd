@@ -2364,6 +2364,21 @@ func _root_at(t: float) -> Vector2:
 
 
 ## Смещение тела за кадр из root motion клипа.
+## Вход в бег и выход из него: скорость героя (м/с) — ход таза в клипе на этом кадре, чтобы ноги не скользили;
+## −1 — не эти клипы (скорость задаёт ввод).
+func edge_speed() -> float:
+	if action != "" or anim == null or anim.current_animation not in ["RunStart", "RunStop"] or not anim.is_playing():
+		return -1.0
+	var off: Array = ((meta.get("root_motion", {}) as Dictionary).get(anim.current_animation, {}) as Dictionary) \
+		.get("offset", [])
+	if off.size() < 2:
+		return -1.0
+	var i := clampi(int(_pos() * 30.0), 0, off.size() - 2)
+	var a: Array = off[i]
+	var b: Array = off[i + 1]
+	return Vector2(float(b[0]) - float(a[0]), float(b[1]) - float(a[1])).length() * 30.0
+
+
 func _root_step() -> Vector3:
 	var cur := _root_at(_pos())
 	var d := cur - _prev_off

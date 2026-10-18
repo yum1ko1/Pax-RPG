@@ -1844,6 +1844,11 @@ func _physics_body(delta: float) -> void:
 	var vel := _player.velocity
 	var want_v := Vector2(move.x, move.z) * speed
 	var hv := _w.approach(Vector2(vel.x, vel.z), want_v, delta) if on_floor else want_v   # инерция: a = F/m, стоп — трением
+	var es := _hero.edge_speed() if _hero != null and on_floor else -1.0
+	if es >= 0.0:                                    # разгон / торможение бега — скорость из клипа, по лицу героя
+		var fw := -_body_mesh.global_transform.basis.z
+		var dir2 := Vector2(move.x, move.z).normalized() if move.length() > 0.01 else Vector2(fw.x, fw.z).normalized()
+		hv = dir2 * es
 	vel.x = hv.x
 	vel.z = hv.y
 	var space := Input.is_physical_key_pressed(KEY_SPACE) and not _typing()
