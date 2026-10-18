@@ -581,14 +581,14 @@ OUTER = 34.0
 def outer_belt():
     gx0, gx1 = GROUND[2] - GROUND[0] / 2, GROUND[2] + GROUND[0] / 2
     gz0, gz1 = GROUND[3] - GROUND[1] / 2, GROUND[3] + GROUND[1] / 2
-    step = 11.0
+    step = 9.0
     x = gx0 - OUTER + 4
     while x < gx1 + OUTER - 4:
         z = gz0 - OUTER + 4
         while z < gz1 + OUTER - 4:
             px, pz = x + random.uniform(-3, 3), z + random.uniform(-3, 3)
             inside = gx0 - 5 < px < gx1 + 5 and gz0 - 5 < pz < gz1 + 5
-            if not inside and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.8:
+            if not inside and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.9:
                 k = random.random()
                 if k < 0.55:
                     add(random.choice(["yurt_large", "yurt_small", "yurt_small"]), px, pz, random.uniform(0, 360), c=False, y=-0.4)

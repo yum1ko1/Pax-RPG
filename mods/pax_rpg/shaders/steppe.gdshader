@@ -48,7 +48,7 @@ void fragment() {
 	c *= 1.0 + 0.07 * gust * (1.0 - slope);                        // волны ветра по траве
 	float cl = smoothstep(0.48, 0.62, fbm(p * 0.0016 - wd * pax_rpg_time * 0.012));
 	c *= 1.0 - cl * clouds;
-	ALBEDO = c * vec3(0.8, 0.72, 0.56);                           // степь — охра и сухая трава, не «снег» под солнцем
+	ALBEDO = c * vec3(0.62, 0.5, 0.36);                           // степь — охра и сухая трава, не «снег» под солнцем
 	NORMAL_MAP = mix(texture(g_nrm, u1).rgb, vec3(0.5, 0.5, 1.0), 0.35);
 	ROUGHNESS = 0.93;
 	SPECULAR = 0.25;
