@@ -491,7 +491,18 @@ def on_road(x, z, m=1.5):
             return True
         if sh[0] == "disc" and (x - sh[1]) ** 2 + (z - sh[2]) ** 2 < (sh[3] + m) ** 2:
             return True
+        if sh[0] == "line" and _seg_d(x, z, sh[1]) < sh[2] / 2 + m:
+            return True
     return False
+
+
+def _seg_d(x, z, pts):
+    best = 1e9
+    for (ax, az), (bx, bz) in zip(pts, pts[1:]):
+        dx, dz = bx - ax, bz - az
+        t = max(0.0, min(1.0, ((x - ax) * dx + (z - az) * dz) / max(dx * dx + dz * dz, 1e-6)))
+        best = min(best, math.hypot(x - ax - dx * t, z - az - dz * t))
+    return best
 
 
 for i, (x, z, rad) in enumerate(YURTS):
@@ -687,6 +698,127 @@ while (grass < 900 or rocks < 120 or bushes < 70) and tries < 60000:
         add("bush_dry", x, z, random.uniform(0, 360), s=round(random.uniform(0.8, 1.5), 2), c=False)
         bushes += 1
 
+
+# ===================== дорожная сеть: все точки интереса связаны =====================
+# Мощёные (R маски): Тракт и Аллея были; новые — к Кузне и Счётному двору, к Курганам, вокруг Ставки к Саду Хаана,
+# к гоблинам и склону шаманов, к Псарням, от таверны к Улице Мастеров, мимо конюшни, к Буйволиному двору.
+PAVED = [
+    [(-21.5, -6.5), (-21.5, -34), (-45, -34), (-45, -58), (-62, -58)],          # Аллея → Кузня → Счётный двор → Курганы
+    [(-45, -58), (-36, -72), (-30, -83), (-24, -83)],                            # → Сад Хаана (в обход Ставки, запад)
+    [(34, -6.5), (34, -37), (44, -38.5), (62, -42.5)],                           # Аллея → гоблины → пандус шаманов
+    [(34, -37), (35, -60)],                                                      # → Псарни
+    [(66, 6.5), (66, 56)],                                                       # Аллея → конюшня → Улица Мастеров
+    [(55, 33), (55, 56)],                                                        # таверна → колодец Мастеров
+    [(30, 6.5), (20, 24), (20, 33.5), (22.5, 33.5)],                             # Аллея → Буйволиный двор (ворота)
+]
+DIRT = [
+    [(35, -60), (35, -88)],                                                      # проход между загонами
+    [(24, -83), (30, -83), (35, -80)],                                           # Сад Хаана → Псарни (восток)
+]
+for pl in PAVED:
+    ROADS.append(("line", pl, 4.0))
+for pl in DIRT:
+    TRAILS.append(("line", pl, 3.0))
+ALL_LINES = [(pl, 4.0) for pl in PAVED] + [(pl, 3.0) for pl in DIRT]
+
+# с проезда убрать всё, что не постройка и не дерево: бочки, ящики, плетни, сено, мелочь
+KEEP = ("palisade", "gate_fang", "khan_palace", "guild_hall", "tavern_hall", "house_", "forge_smithy", "stable_hay",
+        "shaman_tower", "watch_tower", "yurt", "stilt_hut", "oath_tree", "fountain", "arena")
+def _on_lines(x, z, m):
+    return any(_seg_d(x, z, pl) < w / 2 + m for pl, w in ALL_LINES)
+kept = []
+removed = 0
+for it in items:
+    pnt = it.get("p")
+    if pnt and not any(k in it.get("m", "") for k in KEEP) and "sound" not in it and "box" not in it \
+            and _on_lines(pnt[0], pnt[2], 0.9):
+        removed += 1
+        continue
+    kept.append(it)
+items[:] = kept
+print("с дорог убрано:", removed)
+for it in items:                                   # постройка на дороге — ошибка планировки, видно сразу
+    if "m" in it and any(k in it["m"] for k in KEEP[:13]) and _on_lines(it["p"][0], it["p"][2], 0.0):
+        print("  ВНИМАНИЕ: постройка на дороге", it["m"], it["p"])
+
+# --- благоустройство вдоль мощёных дорог: скамья + урна каждые ~16 м (сторона чередуется), лицом к дороге;
+# на перекрёстках и поворотах — большие каменные кадки с сакурой (по углам, не на проходе); клумбы на Аллее.
+def _clear(x, z, r):
+    if on_road(x, z, 0.3):
+        return False
+    if any(a0 - r < x < a1 + r and b0 - r < z < b1 + r for a0, a1, b0, b1 in RECTS):
+        return False
+    return all((x - a) ** 2 + (z - b) ** 2 > (r + rr) ** 2 for a, b, rr in occupied) and \
+        all((it["p"][0] - x) ** 2 + (it["p"][2] - z) ** 2 > (r + 0.9) ** 2 for it in items
+            if "m" in it and "grass" not in it["m"] and "window" not in it["m"])
+
+
+def bench_set(x, z, yaw):
+    add("bench_long", x, z, yaw, c=True, rad=1.2)
+    a = math.radians(yaw)
+    add("barrel_kumis", x + math.cos(a) * 1.6, z - math.sin(a) * 1.6, 0, s=0.5, c=True)   # урна у скамьи
+
+
+def planter(x, z):
+    box([2.4, 0.9, 2.4], x, 0.45, z, "stone_cut", c=True)
+    add("@flame_tree", x, z, random.uniform(0, 360), s=0.42, c=False, y=0.9)
+    add("models/nature/plant_flower", x + 0.7, z - 0.6, 0, s=0.9, c=False, y=0.9) if False else None
+    occupied.append((x, z, 1.8))
+
+
+def road_furniture(pl, w, step=16.0):
+    acc, side = 8.0, 1
+    for (ax, az), (bx, bz) in zip(pl, pl[1:]):
+        L = math.hypot(bx - ax, bz - az)
+        ux, uz = (bx - ax) / L, (bz - az) / L
+        nx, nz = -uz, ux
+        t = acc
+        while t < L - 2:
+            off = w / 2 + 1.3
+            x, z = ax + ux * t + nx * off * side, az + uz * t + nz * off * side
+            yaw = math.degrees(math.atan2(-nx * side, -nz * side))   # спинкой от дороги
+            if _clear(x, z, 1.6):
+                bench_set(x, z, yaw)
+            side = -side
+            t += step
+        acc = t - L
+    for (x, z) in pl[1:-1]:                        # повороты: кадки снаружи угла
+        for dx, dz in ((1, 1), (-1, -1), (1, -1), (-1, 1)):
+            px_, pz_ = x + dx * (w / 2 + 2.2), z + dz * (w / 2 + 2.2)
+            if _clear(px_, pz_, 1.8):
+                planter(px_, pz_)
+                break
+
+
+for pl in PAVED:
+    road_furniture(pl, 4.0)
+road_furniture([(0, 26), (0, 80)], 9.0, 22.0)      # Тракт
+for x0, x1 in ((-74, -26), (26, 74)):             # Аллея: скамьи у деревьев
+    road_furniture([(x0, 0), (x1, 0)], 13.0, 18.0)
+# клумбы по оси Аллеи — каменный бордюр, цветы и травы; проход по обе стороны 5 м
+for x in list(range(-66, -28, 12)) + list(range(46, 72, 12)):
+    if any(abs(x - sx) < 4 for sx in (-54, -42)):  # у рядов базара — без клумб
+        continue
+    box([5.0, 0.35, 1.8], x, 0.175, 0, "stone_cut", c=True)
+    for k in range(5):
+        add("grass_tuft", x - 2.0 + k, random.uniform(-0.5, 0.5), random.uniform(0, 360), s=0.8, c=False, y=0.35)
+        add("bush_dry", x - 1.6 + k * 0.8, random.uniform(-0.3, 0.3), random.uniform(0, 360), s=0.6, c=False, y=0.35) \
+            if k % 2 else None
+# у начала и конца каждой дороги (вход к месту) — пара кадок по сторонам
+for pl in PAVED:
+    for (x, z), (x2, z2) in ((pl[0], pl[1]), (pl[-1], pl[-2])):
+        L = math.hypot(x2 - x, z2 - z)
+        ux, uz = (x2 - x) / L, (z2 - z) / L
+        for sd in (-1, 1):
+            px_, pz_ = x + ux * 4.5 - uz * sd * 4.6, z + uz * 4.5 + ux * sd * 4.6
+            if _clear(px_, pz_, 1.8):
+                planter(px_, pz_)
+# вход в город: кадки у ворот и у площади Круга (по сторонам Тракта)
+for x in (-6.8, 6.8):
+    for z in (68, 24.5):
+        if _clear(x, z, 1.8):
+            planter(x, z)
+
 # подписи на карте (M): ключ перевода, x, z
 LANDMARKS = [["pax_rpg_lm_gate", 0, 80], ["pax_rpg_lm_trakt", 0, 52], ["pax_rpg_lm_circle", 15, 21],
              ["pax_rpg_lm_khan", 0, -56], ["pax_rpg_lm_arena", AX, AZ], ["pax_rpg_lm_alley", -52, 0],
@@ -703,9 +835,12 @@ paths = [
     [[0, 20.2], [14.3, 14.3], [20.2, 0], [14.3, -14.3], [0, -20.2], [-14.3, -14.3], [-20.2, 0], [-14.3, 14.3], [0, 20.2]],  # вокруг Арены
     [[0, -20], [0, -32]],                                               # к лестнице Ставки
     [[-60, 2], [-60, 26], [-42, 26], [-42, 2]],                         # по базару
-    [[-30, 30], [-50, 44], [-70, 60], [-50, 74]],                       # западный квартал
-    [[30, 30], [50, 46], [70, 62], [44, 74]],                           # восточный квартал
-    [[-24, -10], [-46, -10], [-47, -26], [-42, -40], [-40, -54]],       # к Счётному двору (в обход Арены)
+    [[-43, 6.5], [-43, 58], [-65, 58], [-65, 80]],                      # переулки куреней
+    [[30, 6.5], [20, 24], [20, 33.5], [22.5, 33.5]],                    # к Буйволиному двору
+    [[66, 6.5], [66, 56], [44, 57.5]],                                  # мимо конюшни на Улицу Мастеров
+    [[-21.5, -6.5], [-21.5, -34], [-45, -34], [-45, -58], [-62, -58]],  # к Кузне, Счётному двору и Курганам
+    [[34, -6.5], [34, -37], [44, -38.5], [62, -42.5]],                  # к гоблинам и шаманам
+    [[-45, -58], [-30, -83], [24, -83], [35, -80], [35, -60]],          # Сад Хаана и Псарни
     [[0, 26], [0, 10]],                                                 # в Арену через южный вход
     [[24, -10], [44, -12], [54, -8]],                                   # к гильдии
     [[6, 57.5], [55, 57.5], [84, 57.5]],                                # Улица Мастеров
@@ -744,6 +879,12 @@ def draw_mask(path):
         for sh in shapes:
             if sh[0] == "rect":
                 dr.rectangle([px(sh[1], sh[3]), px(sh[2], sh[4])], fill=255)
+            elif sh[0] == "line":
+                dr.line([px(x, z) for x, z in sh[1]], fill=255, width=int(sh[2] * MASK_PX), joint="curve")
+                for x, z in sh[1]:
+                    cx, cz = px(x, z)
+                    rr = sh[2] * MASK_PX / 2
+                    dr.ellipse([cx - rr, cz - rr, cx + rr, cz + rr], fill=255)
             else:
                 cx, cz = px(sh[1], sh[2])
                 rr = sh[3] * MASK_PX
