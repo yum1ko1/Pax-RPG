@@ -1,0 +1,10 @@
+{
+  "newFileLocation": "folder",
+  "newFileFolderPath": "08 Задачи",
+  "attachmentFolderPath": "./",
+  "alwaysUpdateLinks": true,
+  "showFrontmatter": true,
+  "readableLineLength": true,
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest"
+}

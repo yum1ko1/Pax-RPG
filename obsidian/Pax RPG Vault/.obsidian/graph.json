@@ -1,0 +1,32 @@
+{
+  "collapse-filter": false,
+  "search": "-path:_Шаблоны",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": true,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {"query": "path:\"00 Главная\"", "color": {"a": 1, "rgb": 16777215}},
+    {"query": "path:\"01 Дизайн-документ\"", "color": {"a": 1, "rgb": 15087180}},
+    {"query": "path:\"02 Лор\"", "color": {"a": 1, "rgb": 10181046}},
+    {"query": "path:\"03 Мир\"", "color": {"a": 1, "rgb": 15105570}},
+    {"query": "path:\"04 Механики\"", "color": {"a": 1, "rgb": 3447003}},
+    {"query": "path:\"05 Персонажи\"", "color": {"a": 1, "rgb": 15277667}},
+    {"query": "path:\"06 Код\"", "color": {"a": 1, "rgb": 9807270}},
+    {"query": "path:\"07 Пайплайн\"", "color": {"a": 1, "rgb": 3066993}},
+    {"query": "path:\"08 Задачи\"", "color": {"a": 1, "rgb": 15844367}},
+    {"query": "path:\"09 Журнал\"", "color": {"a": 1, "rgb": 7506394}}
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": -1,
+  "nodeSizeMultiplier": 1.2,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 12,
+  "linkStrength": 1,
+  "linkDistance": 220,
+  "scale": 0.6
+}
