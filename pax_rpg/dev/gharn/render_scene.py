@@ -83,6 +83,12 @@ cx, cz = (RECT[0] + RECT[2]) / 2, (RECT[1] + RECT[3]) / 2
 gnd.location = g2b((cx, 0, cz))
 gnd.scale = (RECT[2] - RECT[0] + 80, RECT[3] - RECT[1] + 80, 1)
 gnd.data.materials.append(mat("ground", (0.16, 0.13, 0.12), rough=0.95))
+for x0, x1, z0, z1 in ((-5.0, 5.0, 14, 90), (-78, 78, -8.5, 8.5)):   # мостовая (в игре — маска земли): темнее, холоднее
+    bpy.ops.mesh.primitive_plane_add(size=1)
+    o = bpy.context.object
+    o.location = g2b(((x0 + x1) / 2, 0.01, (z0 + z1) / 2))
+    o.scale = (x1 - x0, z1 - z0, 1)
+    o.data.materials.append(mat("cobble", (0.09, 0.085, 0.09), rough=0.9))
 
 cache = {}
 TEX = int(os.environ.get("TEX", "1024"))
@@ -162,7 +168,7 @@ for e in lay["items"]:
         lt.location = g2b((p[0], 1.2, p[2]))
         sc.collection.objects.link(lt)
 
-paper = mat("paper", (1.0, 0.6, 0.3), (1.0, 0.42, 0.12), float(os.environ.get("PAPER", "2.0")))
+paper = mat("paper", (0.9, 0.3, 0.1), (1.0, 0.36, 0.08), float(os.environ.get("PAPER", "3.0")))
 rope = mat("rope", (0.24, 0.16, 0.1))
 for l, seed in lanterns:
     rng = random.Random(seed)
@@ -170,7 +176,7 @@ for l, seed in lanterns:
     b = Vector((l[2], 0, l[3]))
     h = float(l[4]) if len(l) > 4 else 4.2
     d = b - a
-    n = max(2, int(d.length / 2.6))
+    n = max(2, int(d.length / 3.4))
     for i in range(n):
         f = (i + 0.5) / n
         sag = math.sin(f * math.pi) * 0.35
@@ -181,6 +187,12 @@ for l, seed in lanterns:
         o.scale.z = 0.86 / 0.76
         o.location = g2b((q.x, h - sag - 0.55 * s, q.z))
         o.data.materials.append(paper)
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.028, depth=d.length)   # верёвка
+    o = bpy.context.object
+    m_ = a.lerp(b, 0.5)
+    o.location = g2b((m_.x, h, m_.z))
+    o.rotation_euler = (0, math.pi / 2, math.atan2(-d.z, d.x))
+    o.data.materials.append(rope)
     if not (len(l) > 5 and int(l[5]) == 0):
         lt = bpy.data.objects.new("lan", bpy.data.lights.new("lan", "POINT"))
         lt.data.energy = float(os.environ.get("LAN_W", "220"))

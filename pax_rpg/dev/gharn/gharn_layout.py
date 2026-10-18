@@ -228,6 +228,10 @@ for i, (zc, side, m) in enumerate(ALLEY_HOUSES):        # у каждой вто
     add("@market_stall_hide", x, zc + 1.2, 90 if side < 0 else -90, c=True, rad=1.6)
     for j, pm in enumerate(random.sample(["crate", "barrel_kumis", "sack_grain", "basket", "crate_saerith"], 3)):
         add(pm, x + side * 0.3, zc - 1.4 - j * 0.85, random.uniform(0, 360), s=0.85, c=True, rad=0.5)
+for i in range(len(ALLEY_HOUSES) - 1):                   # знамёна кланов в стыках домов — вертикальный ритм
+    (z1_, s1_, _), (z2_, s2_, _) = ALLEY_HOUSES[i], ALLEY_HOUSES[i + 1]
+    if s1_ == s2_ and abs(z1_ - z2_) < 12 and i % 2 == 0:
+        add("banner_clan", s1_ * 7.7, (z1_ + z2_) / 2, 90 if s1_ < 0 else -90, s=1.2, c=True, rad=0.4)
 for side in (-1, 1):                                     # карман у переулка (z 57.5): скамьи и кадка сакуры
     add("bench_long", side * 9.0, 55.6, 90 if side < 0 else -90, c=True)
     box([2.4, 0.9, 2.4], side * 9.6, 0.45, 59.6, "stone_cut", c=True)        # кадка сакуры (как planter ниже)
@@ -252,6 +256,16 @@ for side in (-1, 1):
     add("@brazier_tusk", side * 5.4, 87.4, 0, c=True, rad=1.0)
     items.append({"brazier": True, "p": [side * 5.4, 0.0, 87.4], "c": False})
 add("@tusk_arch", 0, 108.0, 180, s=1.75, c=False)       # внешний порог — первая арка, видна издалека
+for side in (-1, 1):                                     # сакуры у внешней арки и фонари вдоль дороги
+    add("@flame_tree", side * 7.6, 106.5, random.uniform(0, 360), s=0.95, rad=1.5)
+    for z in (92.8, 98.3, 103.8):
+        add("stone_lantern", side * 4.1, z, 90 if side < 0 else -90, rad=0.6)
+for k in range(26):                                       # степь у дороги: камни, кусты, трава — не голая земля
+    side = -1 if k % 2 else 1
+    x, z = side * random.uniform(7.0, 24.0), random.uniform(86.0, 114.0)
+    if free(x, z, 1.2):
+        add(random.choice(["rock_small", "bush_dry", "grass_tuft", "grass_tuft"]), x, z, random.uniform(0, 360),
+            s=random.uniform(0.8, 1.4), c=False)
 add("@hay_wagon", 13.5, 97.0, 20, c=True, rad=2.2)       # караван у обочины
 add("@buffalo", 16.8, 93.5, -70, s=0.9, c=True, rad=2.0)
 add("@buffalo", 15.2, 101.5, 110, s=0.85, c=True, rad=2.0)

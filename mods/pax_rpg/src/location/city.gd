@@ -651,15 +651,15 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	var dir := b - a
 	var rope := MeshInstance3D.new()
 	var rm := CylinderMesh.new()
-	rm.top_radius = 0.015
-	rm.bottom_radius = 0.015
+	rm.top_radius = 0.028                                 # верёвка видна: фонари не «плавают» в воздухе
+	rm.bottom_radius = 0.028
 	rm.height = dir.length()
 	rm.material = wood
 	rope.mesh = rm
 	rope.transform = Transform3D(Basis.looking_at(dir.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5),
 		a.lerp(b, 0.5) + Vector3(0, hgt, 0))
 	root.add_child(rope)
-	var n := maxi(2, int(dir.length() / 2.6))
+	var n := maxi(2, int(dir.length() / 3.4))             # реже: ритм, а не облако шаров
 	for i: int in n:
 		var f := (i + 0.5) / n
 		var sag := sin(f * PI) * 0.35
