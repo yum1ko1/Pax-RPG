@@ -105,7 +105,7 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 		_step = _rand(_mod, "sounds/heel_step_%d.wav", 10, 0.06, -9.0)    # нарезка «на каблуках по каменному полу»
 		_sand = _rand(_mod, "sounds/heel_soft_%d.wav", 10, 0.08, -9.0)    # тот же каблук глуше + хруст песка
 		_land_db = -9.0
-		_step_db = -7.0
+		_step_db = -3.0
 	if not bool(cfg.get("sfx_gear", true)) and _gear != null:
 		_gear.queue_free()
 		_gear = null

@@ -519,6 +519,8 @@ func _rim_follow() -> void:
 	if is_instance_valid(sun):
 		night = 1.0 - clampf(sun.light_energy / 1.1, 0.0, 1.0) * 0.6
 	_rim.light_energy = energy * night
+	if is_instance_valid(sun):                       # цвет — от солнца мира (розовый закат), не свой голубой
+		_rim.light_color = sun.light_color.lerp(Color(0.85, 0.75, 0.9), 0.4)
 
 
 var _fogs_made := false

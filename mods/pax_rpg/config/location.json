@@ -39,7 +39,7 @@
 		"dof_far": 0.0,
 		"dof_far_transition": 70.0,
 		"dof_amount": 0.04,
-		"rim": 0.7,
+		"rim": 0.25,
 		"grass_density": 6.0,
 		"grass_distance": 40.0,
 		"motion_blur": 0.0,
@@ -76,5 +76,5 @@
 		"lens_ghosts": 0.0,
 		"bloom": 0.0
 	},
-	"camera_sway": 0.0
+	"camera_sway": 0.45
 }

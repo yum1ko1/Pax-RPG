@@ -159,6 +159,10 @@ var _journal: Journal              # журнал заданий (J)
 var _gold_flash := 0.0
 var _style := Style.new()           # шкала стиля (D … SSS): очки за попадания, множит награду
 var _weather: Weather
+var _city: City                       # город (city.gd) — маска дорог: на камне дороги шаг каменный и вне стен
+var _contact: Decal                   # мягкая тень под ногами героя (контакт с землёй)
+var _lean := 0.0                      # крен героя в повороте (рад)
+var _cam_follow := Vector3.INF        # точка, за которой идёт камера: догоняет героя с запаздыванием (инерция)
 var weather_kind := "clear"        # погода этого захода (решена до стройки: мокрые материалы — в city.gd)
 var _step_acc := 0.0
 var _step_left := false             # монеты пришли — счётчик золота вспыхивает
@@ -323,6 +327,7 @@ func build(city: Dictionary) -> void:
 		_make_gate()
 	else:                                            # настоящий город: планировка config/<id>.json
 		var c := City.new()
+		_city = c
 		var wh := DayNight.world_hour(cfg)
 		weather_kind = Weather.pick(wh, int(Time.get_unix_time_from_system() / 86400.0))   # погода дня мира
 		_mark("city…")
@@ -604,6 +609,9 @@ func clear() -> void:
 	_hud = null
 	_pause = null
 	_sfx = null
+	_city = null
+	_contact = null
+	_cam_follow = Vector3.INF
 
 
 func _make_sky() -> void:
@@ -1966,7 +1974,9 @@ func _physics_body(delta: float) -> void:
 		_was_floor = fl
 		_sfx.puddle = is_instance_valid(_weather) and _weather.puddle_at(_player.global_position)
 		var pg := _player.global_position                    # лес, песок ямы арены, степь за стенами — мягкий шаг
-		_sfx.soft = str(city_data.get("id", "")) == "forest" or pg.y < -1.5 or Vector2(pg.x, pg.z).length() > _hf("city_soft_from", 95.0)
+		var on_road := _city != null and _city._road_at(pg) > 0.25
+		_sfx.soft = not on_road and (str(city_data.get("id", "")) == "forest" or pg.y < -1.5
+			or Vector2(pg.x, pg.z).length() > _hf("city_soft_from", 95.0))
 		_sfx.walk(d.length(), running, _hero != null and _hero.armed, fl)
 		if fl and is_instance_valid(_weather):              # следы: шаг ~0.8 м (бег — реже)
 			_step_acc += d.length()
@@ -1974,6 +1984,8 @@ func _physics_body(delta: float) -> void:
 				_step_acc = 0.0
 				_step_left = not _step_left
 				_weather.footprint(_player.global_position, _body_mesh.rotation.y, _step_left)
+				_dust(_player.global_position, _sfx.soft, running)
+	_ground_contact(delta)
 	if _hero != null:
 		_hero.cape_wind(_player.velocity)
 	if _lock != null:
@@ -2061,6 +2073,13 @@ func _follow_camera(delta := 0.0) -> void:
 	_cam_lock = move_toward(_cam_lock, want, delta * _f("lock_camera_speed", 2.5)) if delta > 0.0 else want
 	var k := smoothstep(0.0, 1.0, _cam_lock)
 	var target := _player.position + Vector3(0.0, 0.9, 0.0)
+	if delta > 0.0:                                  # камера догоняет героя с запаздыванием — не на жёсткой сцепке
+		if _cam_follow == Vector3.INF or _cam_follow.distance_to(target) > 6.0:
+			_cam_follow = target
+		var kf := _hf("cam_follow", 9.0)
+		_cam_follow = _cam_follow.lerp(target, 1.0 - exp(-delta * kf))
+		_cam_follow.y = lerpf(_cam_follow.y, target.y, 1.0 - exp(-delta * kf * 1.6))
+		target = _cam_follow
 	# колесо: от обычной дали до «боевой» — как за плечом в захвате (высота и даль lock_camera_*)
 	if delta > 0.0:
 		_zoom = lerpf(_zoom, _zoom_want, 1.0 - exp(-delta * _f("zoom_smooth", 3.0)))
@@ -3214,3 +3233,79 @@ func _input(event: InputEvent) -> void:
 			_hero.toggle_slot("back")                # снять / надеть плащ
 		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):
 			_f_queued = true
+
+
+## Контакт с землёй: мягкое тёмное пятно под ногами (Decal, сверху вниз) — тает, когда герой в воздухе; и крен
+## в повороте (на ходу и на бегу герой наклоняется внутрь дуги, как живой, а не едет по рельсам).
+func _ground_contact(delta: float) -> void:
+	if not is_instance_valid(_player) or not is_instance_valid(_body_mesh) or delta <= 0.0:
+		return
+	if _contact == null:
+		_contact = Decal.new()
+		var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+		for y: int in 64:
+			for x: int in 64:
+				var r := Vector2(x - 31.5, y - 31.5).length() / 31.5
+				img.set_pixel(x, y, Color(0.0, 0.0, 0.0, clampf(1.0 - r, 0.0, 1.0) ** 1.6))
+		_contact.texture_albedo = ImageTexture.create_from_image(img)
+		_contact.size = Vector3(1.3, 1.6, 1.3)
+		_contact.modulate = Color(0.0, 0.0, 0.0, 0.55)
+		_contact.normal_fade = 0.4
+		_contact.upper_fade = 0.2
+		_contact.lower_fade = 0.6
+		_view.add_child(_contact)
+	var h := 0.9 if _hero == null else float(hero_cfg.get("capsule_height", 1.8)) * 0.5
+	_contact.global_position = _player.global_position - Vector3(0.0, h - 0.4, 0.0)
+	var air := 0.0 if _player.is_on_floor() else 1.0
+	_contact.modulate.a = lerpf(_contact.modulate.a, 0.55 * (1.0 - air), 1.0 - exp(-delta * 10.0))
+	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
+	var yaw := _body_mesh.rotation.y
+	var turn := wrapf(yaw - float(get_meta("pax_rpg_yaw0", yaw)), -PI, PI) / delta     # рад/с
+	set_meta("pax_rpg_yaw0", yaw)
+	var busy := _hero != null and _hero.action != ""
+	var want := 0.0 if busy or not _player.is_on_floor() else clampf(-turn * hs * _hf("lean", 0.012), -0.12, 0.12)
+	_lean = lerpf(_lean, want, 1.0 - exp(-delta * 6.0))
+	_body_mesh.rotation.z = _lean
+
+
+## Пыль из-под ног: на земле и песке — заметное облачко, на камне — едва видное; на бегу — больше.
+func _dust(at: Vector3, soft: bool, running: bool) -> void:
+	if not bool(mod.get_setting("combat_fx", true)) and not soft:
+		return
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.amount = (14 if running else 8) if soft else 4
+	p.lifetime = 1.1
+	p.direction = Vector3(0.0, 1.0, 0.0)
+	p.spread = 70.0
+	p.initial_velocity_min = 0.2
+	p.initial_velocity_max = 0.7
+	p.gravity = Vector3(0.0, -0.4, 0.0)
+	p.damping_min = 1.5
+	p.damping_max = 2.5
+	p.scale_amount_min = 0.12
+	p.scale_amount_max = 0.3
+	var sm := SphereMesh.new()
+	sm.radius = 0.5
+	sm.height = 1.0
+	sm.radial_segments = 6
+	sm.rings = 3
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	sm.material = mat
+	p.mesh = sm
+	var ramp := Gradient.new()
+	var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
+	ramp.set_color(0, Color(c, 0.0))
+	ramp.add_point(0.15, Color(c, 0.22 if soft else 0.1))
+	ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
+	p.color_ramp = ramp
+	var h := float(hero_cfg.get("capsule_height", 1.8)) * 0.5
+	_view.add_child(p)
+	p.global_position = at - Vector3(0.0, h - 0.05, 0.0)
+	p.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
+
