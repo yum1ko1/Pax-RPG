@@ -51,7 +51,65 @@ ASSETS = {
                      "the ridge end, red door.", 15000),
     "house_shop_c": ("Wide orc smithy house: stone ground floor with a big open forge bay and anvil, chimney, timber "
                      "loft with red shutters, curved tiled roof, weapons on racks under an awning.", 15000),
+    # --- версия 3: облик Орды по референсам (кость, клыки, шкуры, рваные алые знамёна) поверх азиатской крыши
+    "shaman_tower": ("Goblin shaman tower: a tall leaning tower of dark logs and patched hides on a rubble base, "
+                     "crooked balconies, a small curved roof on top crowned with a beast skull and long horns, ropes "
+                     "with colorful cloth mana flags and dangling charms, a glowing pink crystal in a cage at the top.", 25000),
+    "forge_smithy": ("Orc forge: an open stone smithy with a huge rubble-stone chimney and a glowing furnace mouth, "
+                     "a thatched and hide roof on log posts with giant curved tusks at the corners, an anvil on a stump, "
+                     "a quenching barrel, racks of axes and spears, tattered red banner on a pole.", 20000),
+    "watch_tower": ("Orc wooden watchtower: tall log tower on four slanted legs braced with ropes, a covered lookout "
+                    "platform with a small curved roof, sharpened stakes and tusks around the platform, a ladder, hides "
+                    "and a torn red banner hanging down.", 12000),
+    "yurt_noble": ("Large clan chieftain yurt: round felt walls in cream and red, a red conical roof with curved "
+                   "horns at the edge and a big horned beast skull above the wooden door, a wooden porch with two spears "
+                   "and a round clan shield, ropes and horsetail tassels.", 12000),
+    "stilt_hut": ("Goblin stilt hut: a round woven wicker hut with a red cloth roof and horns on top, raised on wooden "
+                  "stilts, a rickety ladder, a wooden platform with railings, strings of small skulls and red rags, "
+                  "clay pots below.", 10000),
+    "stable_hay": ("Orc horse stable: a long open shed with a thick hay roof on rough log posts, wooden stalls with "
+                   "half doors, hay bales, saddles and bridles hanging on pegs, a water trough in front.", 14000),
+    "oath_tree": ("Only a single giant tree, no buildings: an ancient banyan tree with many aerial roots and a wide "
+                  "crown, hundreds of red and white cloth ribbons tied to its branches, small iron bells, a ring of "
+                  "rough stones around the trunk.", 25000),
+    "house_timber_a": ("Orc dwelling house: one and a half storeys, rough rubble-stone plinth, dark log walls, a "
+                       "steep curved roof with a horn ornament, small shuttered windows, a red door, firewood stacked "
+                       "under the eaves, a hide stretched on the wall.", 12000),
+    "house_timber_b": ("Orc family house with a courtyard wall: low stone walls, timber upper part with a red wooden "
+                       "gallery, curved tiled roof with a skull at the ridge, laundry rope with cloth, clay jars by the door.", 12000),
+    "totem_pole": ("A tall carved wooden totem pole with three stacked snarling orc faces painted red and black, a "
+                   "horned skull at the top, tusks sticking out, red ribbons and feathers tied around it.", 4000),
+    "bone_banner": ("War standard: a wooden pole with a crossbar, a horned ram skull on top, a long torn dark-red banner "
+                    "with a pale fang symbol, curved tusks bound with rope around the base of piled stones, hanging chains.", 4000),
+    "guardian_statue": ("A rough carved stone statue of a sitting great wolf guardian on a square plinth, red cloth "
+                        "scarf around its neck, weathered and mossy.", 6000),
+    "loot_pile": ("A pile of war loot: golden temple bowls, jade figurines, a cracked golden dragon mask, coins, an "
+                  "ornate chest and silk, heaped on a hide rug.", 5000),
+    "war_drum": ("A huge orc war drum: a wooden barrel drum with stretched hide, laced with rope, on a wooden frame "
+                 "with tusks, two heavy bone drumsticks.", 4000),
+    "beast_cage": ("A heavy wooden beast cage with iron bands on wooden wheels, thick bars, a chained door, straw "
+                   "inside, a bone hanging from the top.", 4000),
+    "spit_roast": ("Campfire with a roasting spit: a whole beast leg on an iron spit over glowing coals, wooden "
+                   "forked posts, a ring of stones, a cauldron beside it.", 3000),
+    "hay_wagon": ("A rough orc hay wagon: big wooden wheels with iron rims, loaded with hay and sacks, a tarp tied with "
+                  "ropes, a horn charm on the front.", 5000),
+    "tusk_arch": ("Two giant curved beast tusks planted in the ground crossing above to form an arch, bound together "
+                  "with rope and red cloth at the top, a hanging skull charm, stone base.", 3000),
+    "brazier_tusk": ("A large iron fire brazier on three legs with curved tusks rising around the bowl, glowing coals "
+                     "inside, a ring of rough stones at the base.", 3000),
+    "spear_rack": ("A wooden weapon rack with orc spears, axes and round hide shields, a horned skull on top, rope lashings.", 3000),
+    "market_stall_hide": ("A market stall: log frame with a patched hide awning, a plank counter with clay jars, "
+                          "baskets of fruit and dried fish, hanging meat and garlic, a small paper lantern.", 5000),
+    "mana_totem": ("A goblin shaman mana totem: a tripod of bound wooden poles holding a large glowing pink crystal "
+                   "wrapped in cloth strips, colorful rag flags and bone charms hanging on strings.", 4000),
+    "hide_frame": ("A wooden frame of crossed poles with a large beast hide stretched by ropes for drying, a scraping "
+                   "knife and bucket beside it.", 2500),
+    "bucket_set": ("A small group of household items: two wooden buckets with rope handles, a woven wicker basket "
+                   "with vegetables, a clay water jar.", 2000),
 }
+PROPS |= {"oath_tree", "totem_pole", "bone_banner", "guardian_statue", "loot_pile", "war_drum", "beast_cage",
+          "spit_roast", "hay_wagon", "tusk_arch", "brazier_tusk", "spear_rack", "market_stall_hide", "mana_totem",
+          "hide_frame", "bucket_set"}
 
 
 def load():
