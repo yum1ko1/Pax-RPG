@@ -575,9 +575,41 @@ def draw_mask(path):
     return [x0, z0, GROUND[0], GROUND[1]]
 
 
+# --- внешний город: слобода за стеной — юрты кочевников, срубы, вышки и туги. Земля там ровная (data "outer"),
+# без коллизии (игрок туда не выходит), дым не идёт — только силуэт, чтобы столица не стояла коробкой в пустыне.
+OUTER = 34.0
+def outer_belt():
+    gx0, gx1 = GROUND[2] - GROUND[0] / 2, GROUND[2] + GROUND[0] / 2
+    gz0, gz1 = GROUND[3] - GROUND[1] / 2, GROUND[3] + GROUND[1] / 2
+    step = 11.0
+    x = gx0 - OUTER + 4
+    while x < gx1 + OUTER - 4:
+        z = gz0 - OUTER + 4
+        while z < gz1 + OUTER - 4:
+            px, pz = x + random.uniform(-3, 3), z + random.uniform(-3, 3)
+            inside = gx0 - 5 < px < gx1 + 5 and gz0 - 5 < pz < gz1 + 5
+            if not inside and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.8:
+                k = random.random()
+                if k < 0.55:
+                    add(random.choice(["yurt_large", "yurt_small", "yurt_small"]), px, pz, random.uniform(0, 360), c=False, y=-0.4)
+                elif k < 0.8:
+                    add(random.choice(["@house_timber_a", "@house_timber_b"]), px, pz, random.choice([0, 90, 180, 270]), c=False, y=-0.4)
+                elif k < 0.88:
+                    add("@watch_tower", px, pz, random.uniform(0, 360), c=False, y=-0.4)
+                elif k < 0.95:
+                    add("@bone_banner", px, pz, random.uniform(0, 360), c=False, y=-0.4)
+                else:
+                    add("@hay_wagon", px, pz, random.uniform(0, 360), c=False, y=-0.4)
+            z += step
+        x += step
+
+
+outer_belt()
+
+
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
-        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "arena": [AX, AZ, PIT, A_IN], "paths": paths, "npcs": npcs, "shots": shots,
+        "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "arena": [AX, AZ, PIT, A_IN], "paths": paths, "npcs": npcs, "shots": shots, "outer": OUTER,
         "items": items}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))

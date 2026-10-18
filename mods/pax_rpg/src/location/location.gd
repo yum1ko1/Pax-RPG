@@ -267,6 +267,9 @@ func prewarm() -> void:
 	for c: Variant in (parsed as Dictionary).get("cities", []):
 		var layout := _city_layout(str((c as Dictionary).get("id", "")))
 		if not layout.is_empty() and bool(layout.get("landscape", true)):
+			var hl: Array = layout.get("hole", [])            # тот же ключ, что у города (city.gd): яма и внешний пояс
+			Landscape.hole = Vector3(float(hl[0]), float(hl[1]), float(hl[2])) if hl.size() >= 3 else Vector3.ZERO
+			Landscape.outer = float(layout.get("outer", 0.0))
 			Landscape.request(Landscape.area_of(layout))
 
 

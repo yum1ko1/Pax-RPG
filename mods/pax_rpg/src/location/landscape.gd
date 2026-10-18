@@ -13,6 +13,7 @@ const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 
+static var outer := 0.0                 # м ровной земли за стеной (внешние кварталы: layout "outer")
 const STEPPE_SIZE := 1400.0
 const STEPPE_N := 140
 const CHUNKS := 7
@@ -34,7 +35,7 @@ var _flat := Rect2()
 
 ## Площадка города по планировке (как в city.gd: ground = [ширина, глубина, центр X, центр Z]).
 static func _key(area: Rect2) -> String:
-	return str(area) + str(hole)
+	return str(area) + str(hole) + str(outer)
 
 
 static func area_of(layout: Dictionary) -> Rect2:
@@ -84,7 +85,7 @@ static func steppe_h(n: FastNoiseLite, flat: Rect2, x: float, z: float) -> float
 	var dx := maxf(0.0, absf(x - flat.get_center().x) - flat.size.x * 0.5)
 	var dz := maxf(0.0, absf(z - flat.get_center().y) - flat.size.y * 0.5)
 	var d := sqrt(dx * dx + dz * dz)
-	var t := smoothstep(4.0, 90.0, d)
+	var t := smoothstep(4.0 + outer, 90.0 + outer, d)   # outer — ровный пояс внешнего города вокруг стены
 	var hills := (n.get_noise_2d(x, z) * 0.5 + 0.5) * 55.0 + n.get_noise_2d(x * 3.1, z * 3.1) * 5.0
 	return lerpf(-0.4, hills + d * 0.02, t)
 

@@ -61,6 +61,7 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 	if bool(data.get("landscape", true)):
 		var hl: Array = data.get("hole", [])
 		Landscape.hole = Vector3(float(hl[0]), float(hl[1]), float(hl[2])) if hl.size() >= 3 else Vector3.ZERO
+		Landscape.outer = float(data.get("outer", 0.0))
 		Landscape.request(Landscape.area_of(data))         # горы и степь считаются в потоке, пока ставим город
 	var g: Array = data.get("ground", [190, 186, 0, 0])
 	var gm: Dictionary = data.get("ground_mask", {})
@@ -332,6 +333,8 @@ func _smoke_for(path: String, list: Array) -> void:
 		if rng.randf() > float(spec.share):
 			continue
 		var t: Transform3D = e[0]
+		if absf(t.origin.x) > 100.0 or t.origin.z > 92.0 or t.origin.z < -104.0:
+			continue                                   # внешние кварталы за стеной — без дыма (их сотни)
 		var sc := t.basis.get_scale().x
 		var p := vfx.smoke(root, t.origin + Vector3(0, float(spec.y) * sc, 0), float(spec.size) * 1.4, col,
 			maxi(6, int(spec.amount) / 2))
