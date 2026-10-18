@@ -82,7 +82,6 @@ box([12, 0.5, 14], 0, 1.5, -30, "stone_cut", c=False)
 items.append({"box": [10, 0.4, 15], "mat": "stone", "p": [0, 1.4, -29], "r": 0, "rx": 11.5, "c": True})   # пандус
 for i in range(7):
     add("stairs_stone", -3.3 + 0, -24 - i * 0.0, 0, s=1.0) if False else None
-add("stairs_stone", 0, -25, 180, s=3.0)
 add("@khan_palace", 0, -56, 0, c=True, y=3.0, rad=16)
 for x in (-6, 6):
     add("tug_banner", x, -38, y=3.0)
@@ -571,7 +570,7 @@ for x, z in ((46, -40), (43, -50), (51, -52)):
 add("@tusk_arch", 40, -37, 90, c=True)                     # вход в гоблинский закоулок
 add("@mana_totem", 47, -50, 0, c=True)
 # Кузнечный двор (между базаром и Счётным двором): кузня, жаровни, стойки, сохнущие шкуры
-add("@forge_smithy", -32, -24, 90, c=True, rad=6.5)
+add("@forge_smithy", -32, -24, 90, s=0.62, c=True, rad=6.5)   # модель 9 м (крыша на столбах) — до 5.6 м
 add("@spear_rack", -24.5, -19.5, 90, c=True)
 add("@spear_rack", -24.5, -28.5, 90, c=True)
 add("@brazier_tusk", -25, -16.5, 0, c=True)
@@ -585,8 +584,8 @@ add("@hay_wagon", 70, 33, 200, c=True, rad=2.2)
 add("hay_bale", 71, 12, 30, c=True)
 add("hay_bale", 72.2, 13.4, 70, c=True)
 # Ставка Хаана: каменные волки у лестницы, жаровни с клыками, трофеи, барабаны
-add("@guardian_statue", -6.8, -23.5, 180, c=True)
-add("@guardian_statue", 6.8, -23.5, 180, c=True)
+add("@guardian_statue", -8.6, -25.5, 0, c=True)          # волки-стражи по краям лестницы, лицом к городу
+add("@guardian_statue", 8.6, -25.5, 0, c=True)
 for x in (-20, 20):
     add("@brazier_tusk", x, -37.5, 0, c=True, y=3.0)
 add("@loot_pile", -9, -38, 20, c=True, y=3.0)
