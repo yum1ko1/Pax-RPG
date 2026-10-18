@@ -184,8 +184,9 @@ func _main_items() -> void:
 	for it: Array in _items:
 		var key := str(it[0])
 		var fn: Callable = it[1]
-		if key == "pax_rpg_menu_load":
-			fn = _saves_items
+		if key == "pax_rpg_menu_load":                 # свой список — на месте, наш экран не уходит
+			_col.add_child(_button(str(EN.get(key, key)), _saves_items, false, true))
+			continue
 		elif key == "pax_rpg_menu_settings":
 			_col.add_child(_button(str(EN.get(key, key)), _open_settings, false, true))
 			continue

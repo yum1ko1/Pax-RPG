@@ -157,6 +157,14 @@ func _open_slot(slot: String) -> void:
 	if m == null:
 		log_warning("Pax RPG: корень игры не найден — сохранение не открыть")
 		return
+	var menu: Variant = _menu()
+	if menu != null and _game != null and str((m as Object).get("slot")) == slot:
+		# эта партия уже открыта за меню (игра грузит последнюю при запуске): заново её не грузят — просто
+		# закрываем меню, как его «Продолжить», и спрашиваем героя (world_ready сейчас не придёт)
+		travel.pick_next = true
+		menu.close_button()
+		travel.start(_game)
+		return
 	travel.pick_next = true
 	_world_going()
 	m.mp_session().open_slot(slot)
