@@ -5,7 +5,7 @@
 		"en": "Pax RPG 0.2.10",
 		"ru": "Pax RPG 0.2.10"
 	},
-	"version": "0.3.202Y",
+	"version": "0.3.203Y",
 	"api": 1,
 	"game_version": ">=0.28.0",
 	"authors": ["Babichev Maxim"],

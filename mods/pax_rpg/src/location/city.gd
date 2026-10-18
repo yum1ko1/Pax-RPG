@@ -1071,12 +1071,15 @@ var _lod := 0                                            # 0 — обычная,
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
-## Ячейка у входа в город — Аллея Сакур (|x| < 24, z 24…96): там дома в материале house_detail.gd.
-func _entrance(cell: Vector2i) -> bool:
-	return absi(cell.x * 2 + 1) * CELL * 0.5 < 30.0 and cell.y * CELL >= 24.0 and cell.y * CELL < 96.0
+## Постройки в материале house_detail.gd (атлас Meshy + камень и дерево в мировых метрах).
+const BUILDINGS := ["house_shop", "house_timber", "house_two", "guild_hall", "tavern_hall", "khan_palace", "forge_smithy",
+	"stable_hay", "watch_tower", "shaman_tower", "stilt_hut", "gate_fang"]
 
 
 func _place(path: String, list: Array) -> void:
+	if path.ends_with("house_two_a.glb"):         # house_two_a у Meshy вышел рваным — вместо него второй дом, по месту
+		path = path.replace("house_two_a.glb", "house_two_b.glb")   # (b крупнее: 5.2×4.9 м против 4.0×3.6 — ×0.77)
+		list = list.map(func(e: Array) -> Array: return [(e[0] as Transform3D).scaled_local(Vector3.ONE * 0.77)] + e.slice(1))
 	var src := Assets.model(mod, path)
 	if src == null:
 		mod.log_warning("Pax RPG city: no model " + path)
@@ -1121,7 +1124,7 @@ func _place(path: String, list: Array) -> void:
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
-			if path.contains("house_two") and _entrance(key) and mesh.get_surface_count() > 0:   # дома у входа — детали камня и дерева
+			if BUILDINGS.any(func(b: String) -> bool: return path.contains(b)) and mesh.get_surface_count() > 0:   # постройки — детали камня и дерева
 				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
 				if hm != null:
 					mi.material_override = hm

@@ -145,7 +145,7 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 ## Большие постройки Meshy: вся модель — на одном атласе 2048, и вблизи стена из 2–3 пикселей на сантиметр
 ## мылится. Поверх — мелкое зерно дерева и камня (textures/detail, трипланарно в мировых метрах, тайл 2 м):
 ## яркость ±6 % и рельеф нормалей, цвет и рисунок атласа не меняются.
-const DETAIL := ["house_timber", "watch_tower", "stilt_hut", "forge_smithy", "shaman_tower", "stable_hay",
+const DETAIL := [   # постройки — в house_detail.gd (city.gd → BUILDINGS)
 	"yurt_noble", "market_stall_hide", "tusk_arch", "guardian_statue"]
 static var _det_a: Texture2D
 static var _det_n: Texture2D
