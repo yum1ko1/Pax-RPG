@@ -1774,6 +1774,8 @@ func _physics_body(delta: float) -> void:
 		speed *= _hf("block_speed_factor", 0.55)
 	elif _lock != null and not running:
 		speed *= _hf("lock_speed_factor", 0.75)          # в поединке — осторожный шаг
+	if _hero != null and not running and _hero.strafe_speed() >= 0.0:
+		speed = _hero.strafe_speed()                     # шаг вбок: герой идёт так, как шагают ноги в клипе
 	var vel := _player.velocity
 	var want_v := Vector2(move.x, move.z) * speed
 	var hv := _w.approach(Vector2(vel.x, vel.z), want_v, delta) if on_floor else want_v   # инерция: a = F/m, стоп — трением
@@ -1907,7 +1909,8 @@ func _physics_body(delta: float) -> void:
 			_strike(r.hit)
 			_combat_fx_swing(r.hit)
 			if is_instance_valid(_sfx):
-				_sfx.cloth(-6.0)                     # взмах — резкий хлопок ткани
+				_sfx.cloth(-15.0)                    # взмах — хлопок ткани (тихо, под свистом)
+				_sfx.whoosh()                        # свист копья в воздухе
 		if r.has("land_step") and is_instance_valid(_sfx):
 			_sfx.land_step()
 		if r.has("blade"):

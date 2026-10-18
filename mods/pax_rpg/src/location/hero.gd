@@ -30,6 +30,9 @@ var move_dir := Vector2.ZERO        # куда идём в осях героя (
 var combat := false                 # рядом враг в бою или захват цели: боевая стойка (колени согнуты)
 var blocking := false               # держит блок (ПКМ)
 var _block_t := 0.0                 # с, сколько держит блок: в начале — окно парирования
+var _still := -1.0                   # с какой секунды герой стоит без дела (Idle — раз в 20–30 с, иначе стойка)
+var _fidget_at := 0.0
+var _fidget_pos := 0.0
 var _dir_sector := "F"              # направление шага (F/B/L/R) — с запасом, чтобы клипы не дёргались на диагонали
 var action := ""                    # разовый клип: Draw / Sheathe / Jump / AttackN; "" — ходьба и стойки
 var swing_side := 0                  # location.gd: враг слева от героя (−1) — удар справа налево (Attack1), справа (+1) — слева направо (Attack2)
@@ -1685,7 +1688,51 @@ func _loop(moving: bool, speed: float, running: bool) -> void:
 			anim.via("SwordFront", maxf(bl, _f("via_time", 0.4)))
 			bl = maxf(bl, _f("via_time", 0.4))
 		anim.play(want, bl)
-	anim.speed_scale = clampf(speed / stride, 0.25, 2.0) if moving else _f("idle_speed", 1.0)   # стойка/idle — медленнее
+	if want.begins_with("GuardStrafe") and moving and strafe_speed() >= 0.0:
+		anim.speed_scale = 1.0                         # шаг вбок — клип в своём темпе, герой идёт за ним (strafe_speed)
+	elif not moving and want == "Idle":
+		anim.speed_scale = _idle_scale()
+	else:
+		anim.speed_scale = clampf(speed / stride, 0.25, 2.0) if moving else _f("idle_speed", 1.0)   # стойка/idle — медленнее
+	if moving or want != "Idle":
+		_still = -1.0
+
+
+## Без дела: стойка (первый кадр Idle), и только раз в idle_every (20–30 с) — сам клип Idle, один раз.
+func _idle_scale() -> float:
+	var now := Time.get_ticks_msec() / 1000.0
+	if _still < 0.0:
+		_still = now
+		_fidget_at = now + randf_range(_f("idle_every_min", 20.0), _f("idle_every_max", 30.0))
+		_fidget_pos = 0.0
+		anim.seek(0.0, true)
+	if now < _fidget_at:
+		return 0.0
+	var p := anim.current_animation_position
+	if p + 0.05 < _fidget_pos:                       # клип прошёл круг — снова стойка до следующего раза
+		_fidget_at = now + randf_range(_f("idle_every_min", 20.0), _f("idle_every_max", 30.0))
+		_fidget_pos = 0.0
+		anim.seek(0.0, true)
+		return 0.0
+	_fidget_pos = p
+	return _f("idle_speed", 1.0)
+
+
+## Шаг вбок с оружием: скорость героя — как у ног в клипе в этот миг (root motion клипа, м/с), а не ровная;
+## -1 — сейчас не шаг вбок или у клипа нет хода.
+func strafe_speed() -> float:
+	if anim == null or not anim.current_animation.begins_with("GuardStrafe"):
+		return -1.0
+	var rm: Dictionary = meta.get("root_motion", {})
+	var clip: Dictionary = rm.get(anim.current_animation, rm.get("GuardStrafeL", {}))
+	var off: Array = clip.get("offset", [])
+	if off.size() < 2:
+		return -1.0
+	var fps := float(clip.get("fps", 30))
+	var i := clampi(int(anim.current_animation_position * fps), 0, off.size() - 2)
+	var a: Array = off[i]
+	var b: Array = off[i + 1]
+	return Vector2(float(b[0]) - float(a[0]), float(b[1]) - float(a[1])).length() * fps * _f("strafe_speed_scale", 1.0)
 
 
 ## Направление шага по move_dir: ближайшее из вперёд / вправо / назад / влево, но меняется, только когда новое

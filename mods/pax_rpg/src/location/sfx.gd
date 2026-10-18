@@ -25,6 +25,8 @@ var city := false
 var _mod: PaxMod
 var _at: Node3D                       # где звучат шаги и ткань — герой (3D: громче, когда камера ближе)
 var _cloth       # резкий хлопок ткани (взмах, уклон)
+var _whoosh                         # свист оружия в воздухе на ударе (sounds/swing_N.wav) — у героев с sfx_whoosh
+var _step_db := 0.0                   # поправка громкости шага героя (каблуки тише)
 var _rustle      # шорох одежды на шаге
 var _skirt       # юбка — тихо, «издалека» (запись у микрофона: срез верхов, эхо)
 var _land_db := -4.0
@@ -102,10 +104,13 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 				p.queue_free()
 		_step = _rand(_mod, "sounds/heel_step_%d.wav", 10, 0.06, -9.0)    # нарезка «на каблуках по каменному полу»
 		_sand = _rand(_mod, "sounds/heel_soft_%d.wav", 10, 0.08, -9.0)    # тот же каблук глуше + хруст песка
-		_land_db = -2.0
+		_land_db = -9.0
+		_step_db = -7.0
 	if not bool(cfg.get("sfx_gear", true)) and _gear != null:
 		_gear.queue_free()
 		_gear = null
+	if bool(cfg.get("sfx_whoosh", false)):
+		_whoosh = _rand(_mod, "sounds/swing_%d.wav", 7, 0.12, -6.0)
 	if bool(cfg.get("sfx_cloth", false)):
 		_cloth = _rand(_mod, "sounds/cloth_snap_%d.wav", 6, 0.1, -6.0)
 		_rustle = _rand(_mod, "sounds/cloth_rustle_%d.wav", 8, 0.1, -20.0)
@@ -117,6 +122,13 @@ func cloth(db: float) -> void:
 	if _cloth != null:
 		_cloth.volume_db = db + randf_range(-2.0, 0.0)
 		_cloth.play()
+
+
+## Свист копья на ударе.
+func whoosh() -> void:
+	if _whoosh != null:
+		_whoosh.volume_db = randf_range(-7.0, -4.0)
+		_whoosh.play()
 
 
 ## Приземление в ударе (step_times клипа): каблук о землю, чуть громче шага.
@@ -145,10 +157,10 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 		_splash.volume_db = -5.0 if running else -8.0
 		_splash.play()
 	elif soft and _sand != null:
-		_sand.volume_db = -6.0 if running else -9.0
+		_sand.volume_db = (-6.0 if running else -9.0) + _step_db
 		_sand.play()
 	elif _step != null:
-		_step.volume_db = -6.0 if running else -9.0
+		_step.volume_db = (-6.0 if running else -9.0) + _step_db
 		_step.play()
 	if _rustle != null:
 		_rustle.volume_db = -17.0 if running else -21.0
