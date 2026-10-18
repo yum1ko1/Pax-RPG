@@ -274,6 +274,8 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	for n: String in ONCE:
 		if player.has_animation(n):
 			player.get_animation(n).loop_mode = Animation.LOOP_NONE
+	if bool(cfg.get("sheathe_from_draw", false)):
+		_sheathe_from_draw(player)
 	# анимация, поворот головы и меч — в такте физики, как движение и камера: иначе при FPS выше 60 кадры
 	# с поправками и без чередуются — поза дёргается, а бег кажется быстрее (дерево — тоже в такте физики)
 	anim = AnimCtl.new()
@@ -1356,6 +1358,46 @@ func toggle_sword(on_floor: bool, moving := false) -> void:
 		_show_sword(0.0)
 		return
 	_play_once(n)
+
+
+## Убрать копьё — тот же путь руки, что у Draw, задом наперёд: Draw начинается с руки у копья за спиной (там же
+## висит Sword_Back), значит обратный клип кончается ровно там — копьё ложится на своё место, без скачка.
+## Свой Sheathe (Cascadeur) рукой до спины не доходил. Root motion и момент «копьё — на спину» — тоже от Draw.
+func _sheathe_from_draw(player: AnimationPlayer) -> void:
+	if not player.has_animation("Draw"):
+		return
+	var src := player.get_animation("Draw")
+	var rev := src.duplicate(true) as Animation
+	var L := src.length
+	for ti: int in rev.get_track_count():
+		var keys: Array = []
+		for ki: int in rev.track_get_key_count(ti):
+			keys.append([L - rev.track_get_key_time(ti, ki), rev.track_get_key_value(ti, ki)])
+		while rev.track_get_key_count(ti) > 0:
+			rev.track_remove_key(ti, 0)
+		for k: Array in keys:
+			rev.track_insert_key(ti, float(k[0]), k[1])
+	rev.loop_mode = Animation.LOOP_NONE
+	for lib_name: StringName in player.get_animation_library_list():
+		var lib := player.get_animation_library(lib_name)
+		if lib.has_animation("Sheathe"):
+			lib.remove_animation("Sheathe")
+		if lib.has_animation("Draw"):
+			lib.add_animation("Sheathe", rev)
+			break
+	var rm: Dictionary = meta.get("root_motion", {})
+	if rm.has("Draw"):
+		var d: Dictionary = rm["Draw"]
+		var off: Array = d.get("offset", [])
+		var last: Array = off[off.size() - 1] if off.size() > 0 else [0.0, 0.0]
+		var ro: Array = []
+		for i: int in range(off.size() - 1, -1, -1):
+			var o: Array = off[i]
+			ro.append([float(o[0]) - float(last[0]), float(o[1]) - float(last[1])])
+		rm["Sheathe"] = {"fps": d.get("fps", 30), "frames": d.get("frames", off.size()), "offset": ro}
+	var sw: Dictionary = meta.get("sword_switch", {})
+	sw["Sheathe"] = {"time": L * 0.96}
+	meta["sword_switch"] = sw
 
 
 ## Реакция на удар (Hurt) — только картинка: любое действие или шаг её прерывают, управление не отнимается.

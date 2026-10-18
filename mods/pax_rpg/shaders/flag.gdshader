@@ -6,6 +6,8 @@ render_mode cull_disabled;
 uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic;
 uniform float amp = 0.12;
 uniform float speed = 2.2;
+uniform bool push = false;                                // бельё: герой раздвигает полотнища, проходя сквозь
+global uniform vec4 pax_rpg_player;
 
 void vertex() {
 	vec3 w = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -15,6 +17,15 @@ void vertex() {
 		+ sin(TIME * speed * 1.7 + UV.y * 9.0 + ph * 1.3) * amp * 0.35 * k;
 	VERTEX.z += wave;
 	VERTEX.x += sin(TIME * speed * 0.8 + ph) * amp * 0.25 * UV.y;
+	if (push) {
+		vec3 wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec3 d = wp - pax_rpg_player.xyz;
+		d.y = 0.0;
+		float near = 1.0 - smoothstep(0.2, 1.1, length(d));
+		near *= step(pax_rpg_player.y - 0.2, wp.y) * step(wp.y, pax_rpg_player.y + 2.0);   // на высоте тела
+		vec3 away = normalize(d + vec3(1e-4)) * near * 0.6 * UV.y + vec3(0.0, near * 0.25 * UV.y, 0.0);
+		VERTEX += (inverse(MODEL_MATRIX) * vec4(away, 0.0)).xyz;
+	}
 }
 
 void fragment() {

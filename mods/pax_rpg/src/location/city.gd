@@ -559,6 +559,7 @@ func _laundry(l: Array, seed_v: int) -> void:
 			m.shader = sh
 			m.set_shader_parameter("tex", gt)
 			m.set_shader_parameter("amp", 0.05)
+			m.set_shader_parameter("push", true)              # проходишь сквозь бельё — полотнища расступаются
 			mi.material_override = m
 		mi.transform = Transform3D(Basis(Vector3.UP, yaw), a + dir.normalized() * (x + w * 0.5) + Vector3(0, top - h * 0.5 - 0.02, 0))
 		root.add_child(mi)
@@ -668,13 +669,7 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 			rim.mesh = _rim_mesh
 			rim.position = Vector3(0, y * sc, 0)
 			holder.add_child(rim)
-		var tw := holder.create_tween()                   # лёгкое покачивание
-		if tw != null:
-			tw.set_loops()
-			var amp := rng.randf_range(0.05, 0.12)
-			var dur := rng.randf_range(1.4, 2.2)
-			tw.tween_property(holder, "rotation:z", amp, dur).set_trans(Tween.TRANS_SINE)
-			tw.tween_property(holder, "rotation:z", -amp, dur).set_trans(Tween.TRANS_SINE)
+		_swing_node().add(holder, rng.randf_range(0.8, 1.25))   # маятник: ветер и порывы раскачивают фонарь
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.55, 0.25)
 	light.light_energy = 0.8
@@ -1494,3 +1489,48 @@ func _amb(path: String, pos: Vector3, db: float, rng: float) -> void:
 	root.add_child(p)
 	p.play(randf() * maxf(st.get_length() - 0.5, 0.0))
 
+
+var _swinger: Swing
+
+
+func _swing_node() -> Swing:
+	if _swinger == null:
+		_swinger = Swing.new()
+		_swinger.name = "LanternSwing"
+		root.add_child(_swinger)
+	return _swinger
+
+
+## Фонари на верёвках — маятники: ветер (wind.gd → now) давит по своему направлению, в порыв сильнее; пружина
+## тянет обратно, затухание мягкое. У каждого своя длина подвеса (период) — гирлянда не машет в такт.
+## Дальше SWING_FAR м от камеры не считаются (замирают) — сотни фонарей стоят копейки.
+class Swing extends Node:
+	const SWING_FAR := 55.0
+	var items: Array = []                  # [Node3D, длина, угол Vector2, скорость Vector2]
+
+	func add(n: Node3D, length: float) -> void:
+		items.append([n, length, Vector2.ZERO, Vector2(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2))])
+
+	func _process(delta: float) -> void:
+		var cam := get_viewport().get_camera_3d()
+		if cam == null:
+			return
+		var cp := cam.global_position
+		var w: Vector4 = preload("res://mods/pax_rpg/src/location/wind.gd").now
+		var force := Vector2(w.x, w.y) * (0.35 + 2.2 * w.w)
+		var t := Time.get_ticks_msec() * 0.001
+		for it: Array in items:
+			var n: Node3D = it[0]
+			if not is_instance_valid(n) or n.global_position.distance_squared_to(cp) > SWING_FAR * SWING_FAR:
+				continue
+			var k := 9.8 / float(it[1])        # ω² маятника
+			var ang: Vector2 = it[2]
+			var vel: Vector2 = it[3]
+			var flutter := Vector2(sin(t * 1.7 + n.position.x), cos(t * 1.3 + n.position.z)) * 0.08
+			var acc := (force + flutter) * 0.12 - ang * k - vel * 0.9
+			vel += acc * delta
+			ang += vel * delta
+			ang = ang.limit_length(0.45)
+			it[2] = ang
+			it[3] = vel
+			n.rotation = Vector3(-ang.y, 0.0, ang.x)   # низ фонаря уходит по ветру (+x, +z мира; узел без поворота)
