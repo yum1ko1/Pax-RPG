@@ -217,11 +217,15 @@ def proxy(e, p, r):
                 light(L + Vector((0.4, 0, 1.0)), 25)
             return
     if k in ("guard", "person", "crier"):
-        h = 2.0 if k == "guard" else rnd.uniform(1.45, 1.75)
+        h = 2.05 if k == "guard" else rnd.uniform(1.05, 1.3)   # хобгоблин-стражник / гоблины-жители
         col = (0.3, 0.05, 0.04) if k == "guard" else CLOTH[rnd.randrange(len(CLOTH))]
         cm = pmat("cl_%s_%d" % (k, CLOTH.index(col) if col in CLOTH else 9), "noise", tuple(v * 0.6 for v in col), col, 6)
         prim("cyl", L + Vector((0, 0, h * 0.38)), (0.45, 0.35, h * 0.76), rot, cm)
-        prim("sph", L + Vector((0, 0, h * 0.86)), (0.24, 0.24, 0.28), rot, pmat("skin", "noise", (0.25, 0.33, 0.2), (0.35, 0.45, 0.28), 8))
+        hs = 0.34 if k != "guard" else 0.28                     # у гоблина голова крупная, уши в стороны
+        prim("sph", L + Vector((0, 0, h * 0.86)), (hs, hs, hs * 1.1), rot, pmat("skin", "noise", (0.18, 0.3, 0.12), (0.32, 0.5, 0.2), 8))
+        for sd in (-1, 1):
+            prim("cube", L + Vector((math.cos(r) * sd * hs * 0.75, math.sin(r) * sd * hs * 0.75, h * 0.9)), (0.28, 0.05, 0.08),
+                 (0, -0.4 * sd, r), pmat("skin", "noise", (0.18, 0.3, 0.12), (0.32, 0.5, 0.2), 8))
         if k == "guard":                          # копьё стража
             prim("cyl", L + Vector((0.32, 0, h * 0.75)), (0.04, 0.04, 2.6), rot, mat("shaft", (0.1, 0.07, 0.05)))
         if k == "crier":                          # зазывала — фонарь в руке
