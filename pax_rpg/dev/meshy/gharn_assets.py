@@ -83,6 +83,20 @@ ASSETS = {
     "house_two_b": ("Wide two-storey merchant house of the orc capital: stone ground floor with a shop counter and "
                     "cloth awning, timber upper floor with lattice windows and a gallery, a corner tower-like bay, "
                     "curved tiled roof with a bone ridge ornament, red banners with a fang emblem.", 12000),
+    # --- версия 4: дома аллеи у входа — двухэтажные, с нависающими балконами над улицей (левел-дизайн входа)
+    "house_bal_a": ("Narrow tall two-storey townhouse of the orc capital facing a street: solid rubble-stone ground "
+                    "floor with a wide shop opening and red noren cloth curtains over the door, a deep overhanging "
+                    "upper floor of dark timber on carved brackets with a long red-railed wooden balcony running the "
+                    "whole facade, lattice windows, paper lanterns under the eaves, steep curved tiled roof with "
+                    "upturned corners and a horn ridge ornament, all walls solid and closed.", 15000),
+    "house_bal_b": ("Two-storey corner tea house of the orc capital: stone plinth, ground floor with sliding wooden "
+                    "screens and a narrow veranda, upper floor of dark timber with a wrap-around balcony on two sides "
+                    "with red railings, a hanging wooden signboard on an iron bracket, round red lanterns, two-tier "
+                    "curved roof with dark tiles and gold ridge tips, all walls solid and closed.", 15000),
+    "house_bal_c": ("Three-storey narrow merchant house of the orc capital squeezed into a street: rubble-stone ground "
+                    "floor with an open stall counter under a hide awning, two upper floors of dark timber stepping "
+                    "outward over the street, a small enclosed bay balcony on the second floor, drying cloth on a pole, "
+                    "steep curved roof with a beast skull at the gable, all walls solid and closed.", 15000),
     "totem_pole": ("A tall carved wooden totem pole with three stacked snarling orc faces painted red and black, a "
                    "horned skull at the top, tusks sticking out, red ribbons and feathers tied around it.", 4000),
     "bone_banner": ("War standard: a wooden pole with a crossbar, a horned ram skull on top, a long torn dark-red banner "
