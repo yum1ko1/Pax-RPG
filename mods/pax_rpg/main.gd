@@ -348,6 +348,13 @@ func _open_test_arena() -> void:
 	if _autostart_city != "":
 		location.build({"id": _autostart_city})
 		_autostart_city = ""
+		if bool(get_setting("perf_on_start", false)):      # замер для разработчика: снимок, тяжёлые меши, части мода, автозамер
+			set_setting("perf_on_start", false)
+			await get_tree().create_timer(45.0).timeout
+			log_info("Pax RPG perf snap: " + _perf_command(PackedStringArray()))
+			log_info("Pax RPG perf top: " + _perf_command(PackedStringArray(["top"])))
+			await _perf_prof()
+			_perf_auto()
 		return
 	location.build_test()
 
