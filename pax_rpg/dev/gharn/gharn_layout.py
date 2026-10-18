@@ -846,8 +846,8 @@ def outer_belt():
                     add(random.choice(["yurt_large", "yurt_small", "yurt_small"]), px, pz, random.uniform(0, 360), c=False, y=-0.4)
                 elif k < 0.8:
                     face = 0 if pz < gz0 else 180 if pz > gz1 else (90 if px < gx0 else -90)   # фасадом к стене столицы
-                    add(random.choice(["@house_timber_a", "@house_timber_b", "@house_two_b"]), px, pz, face, c=False, y=-0.4)
-                elif k < 0.88:
+                    add("yurt_large", px, pz, face, c=False, y=-0.4)   # дома по 100k — только в столице
+                elif k < 0.82:
                     add("@watch_tower", px, pz, random.uniform(0, 360), c=False, y=-0.4)
                 elif k < 0.95:
                     add("@bone_banner", px, pz, random.uniform(0, 360), c=False, y=-0.4)
