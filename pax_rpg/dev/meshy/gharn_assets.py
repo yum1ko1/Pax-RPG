@@ -77,6 +77,12 @@ ASSETS = {
                        "under the eaves, a hide stretched on the wall.", 12000),
     "house_timber_b": ("Orc family house with a courtyard wall: low stone walls, timber upper part with a red wooden "
                        "gallery, curved tiled roof with a skull at the ridge, laundry rope with cloth, clay jars by the door.", 12000),
+    "house_two_a": ("Two-storey capital townhouse of an orc clan, narrow and tall: rubble-stone ground floor with a "
+                    "workshop opening and a red door, upper floor of dark timber with a red-railed wooden balcony, "
+                    "paper lanterns hanging under the eaves, a steep two-tier curved roof with horn ornaments.", 12000),
+    "house_two_b": ("Wide two-storey merchant house of the orc capital: stone ground floor with a shop counter and "
+                    "cloth awning, timber upper floor with lattice windows and a gallery, a corner tower-like bay, "
+                    "curved tiled roof with a bone ridge ornament, red banners with a fang emblem.", 12000),
     "totem_pole": ("A tall carved wooden totem pole with three stacked snarling orc faces painted red and black, a "
                    "horned skull at the top, tusks sticking out, red ribbons and feathers tied around it.", 4000),
     "bone_banner": ("War standard: a wooden pole with a crossbar, a horned ram skull on top, a long torn dark-red banner "
