@@ -1,3 +1,4 @@
+import sys
 """Планировка локации Гхарна → mods/pax_rpg/config/gharn.json (по заметке «Гхарн — планировка»).
 Оси: центр Площади Круга (0, 0), север = −Z, метры. Детерминированно (seed): перезапуск даёт ту же карту.
     python pax_rpg/dev/gharn/gharn_layout.py
@@ -57,7 +58,7 @@ def free(x, z, rad):
 # тропы. Тракт (x −4.5…4.5) идёт от ворот до самого Круга, Аллея (z −6.5…6.5) — насквозь, площадь — круг r 21.5.
 GROUND = [190, 186, 0, -6]                     # ширина, глубина, центр X, центр Z
 MASK_PX = 4                                    # пикселей на метр
-ROADS = [("rect", -4.5, 4.5, 14, 90), ("rect", -78, 78, -8.5, 8.5), ("disc", 0, 0, 30.0), ("rect", -6.5, 6.5, -37, -14),
+ROADS = [("rect", -5.0, 5.0, 14, 90), ("rect", -78, 78, -8.5, 8.5), ("disc", 0, 0, 30.0), ("rect", -6.5, 6.5, -37, -14),
          ("disc", 34, 0, 8.5), ("rect", 40, 50, -14, -5), ("rect", 40, 48, 5, 16)]
 TRAILS = [("rect", -72, -36, -4, 32)]          # базар — вытоптанная площадка
 
@@ -175,32 +176,27 @@ for i in range(5):
     add("barrel_kumis", 63 + (i % 2) * 0.9, 13 + i * 0.9, random.uniform(0, 360))
 add("hitching_post", 66, 32, 90, c=True)
 
-# --- Тракт Туменов: лавки, фонари, туги, гирлянды, мелочь у входов
-shops = ["@house_shop_a", "@house_shop_b", "@house_shop_c"]
-for i, z in enumerate(range(30, 76, 11)):
-    add(shops[i % 3], -12, z, 90, c=True, rad=5.5)
-    add(shops[(i + 1) % 3], 12, z, -90, c=True, rad=5.5)
-for z in range(28, 80, 10):
-    add("lantern_post", -5.6, z, 0)
-    add("lantern_post", 5.6, z, 180)
-    add("tug_banner", -6.2, z + 5)
-    add("tug_banner", 6.2, z + 5)
-for z in range(33, 80, 12):
-    add("lantern_string", 0, z, 0)
-for z in range(27, 78, 5):
+# --- Аллея Сакур (бывший Тракт Туменов): первое, что видит игрок за Вратами Клыка. Мостовая 10 м, по краям — сакуры,
+# кроны наклонены к оси и смыкаются над дорогой (падают лепестки), между стволами — каменные фонари. За деревьями —
+# сплошные фасады двухэтажных домов и лавок (фасадом к улице), через улицу между домами — гирлянды бумажных фонарей
+# на высоте второго этажа. Переулок z 57.5 — к Куреням (запад) и Улице Мастеров (восток).
+ALLEY_TREES = [38, 48, 66, 76]                          # у переулка (z 57.5) — без деревьев: проход
+for z in ALLEY_TREES:
     for side in (-1, 1):
-        k = random.random()
-        x = side * random.uniform(6.6, 7.4)
-        if k < 0.35:
-            add("barrel_kumis", x, z, random.uniform(0, 360))
-        elif k < 0.6:
-            add("crate", x, z + 1, random.uniform(-10, 10))
-            add("sack_grain", x + side * 0.2, z + 2)
-        elif k < 0.8:
-            add("basket", x, z)
-            add("sack_grain", x, z + 0.8)
-add("hitching_post", -5.5, 78, 0, c=True)
-add("trough", 5.5, 78, 0, c=True)
+        add("@flame_tree", side * 7.6, z, 90 if side < 0 else -90, s=0.8, rad=1.2)
+        items[-1]["tilt"] = 13.0                         # клонится к оси улицы
+for z in (43, 71):
+    for side in (-1, 1):
+        add("stone_lantern", side * 7.6, z, 90 if side < 0 else -90, rad=0.6)
+FRONT = [("@house_two_b", "@house_two_a"), ("@house_two_a", "@house_shop_b"), ("@house_shop_c", "@house_two_b"),
+         ("@house_two_b", "@house_two_a")]
+ALLEY_HOUSES = [34.5, 45.5, 66.5, 76.5]
+for i, z in enumerate(ALLEY_HOUSES):
+    add(FRONT[i][0], -14.6, z, 90, c=True, rad=5.4)     # фасадом к улице (+X)
+    add(FRONT[i][1], 14.6, z, -90, c=True, rad=5.4)
+    items.append({"lanterns": [-9.6, z, 9.6, z + 1.2, 5.8], "seed": int(z * 7), "p": [0, 0, z], "c": False})
+add("hitching_post", -5.6, 80, 0, c=True)               # у ворот: коновязь и поилка для всадников
+add("trough", 5.6, 80, 0, c=True)
 
 # --- Базар Добычи (запад)
 for i in range(4):
@@ -416,7 +412,7 @@ def districts():
     ROADS.append(("rect", 14, 88, 55.8, 59.2))
     TRAILS.append(("rect", 53.4, 56.6, 33, 82))
     k = 0
-    for x in (22.0, 33.0, 44.0, 63.0, 74.0, 85.0):
+    for x in (25.0, 35.0, 45.0, 63.0, 74.0, 85.0):
         for side in (-1, 1):
             craft_lot(x, 57.5 + side * 6.8, side, k)
             k += 1
@@ -426,7 +422,7 @@ def districts():
         add("stone_lantern", 55 + sx * 3.2, 54.6, 0)
         add("stone_lantern", 55 + sx * 3.2, 60.4, 0)
     add("@totem_pole", 52.2, 61.0, 0, c=True)
-    for x in (22.0, 33.0, 63.0, 74.0):               # гирлянды через улицу между фасадами — на высоте второго этажа
+    for x in (25.0, 63.0, 74.0):                     # гирлянды через улицу между фасадами — на высоте второго этажа
         items.append({"lanterns": [x + 5.5, 52.4, x + 5.5, 62.6, 5.6], "seed": int(x), "p": [x, 0, 57.5], "c": False})
     for x in (19.0, 38.0, 71.0):
         add("tug_banner", x, 55.2)
@@ -524,9 +520,9 @@ for i, (x, z, rad) in enumerate(YURTS):
 
 SIGNS = [("酒", "Кумыс и брага"), ("武", "Оружие"), ("薬", "Зелья и травы"), ("肉", "Мясо"), ("布", "Ткани"),
          ("鉄", "Кузня"), ("革", "Кожа и сёдла"), ("茶", "Чайная"), ("宝", "Добыча"), ("骨", "Обереги")]
-for i, z in enumerate(range(30, 76, 11)):                # вывески лавок Тракта — лицом к дороге
-    items.append({"sign": list(SIGNS[i * 2]), "p": [-7.9, 0.0, z + 2.8], "r": 90.0, "c": True})
-    items.append({"sign": list(SIGNS[i * 2 + 1]), "p": [7.9, 0.0, z + 2.8], "r": -90.0, "c": True})
+for i, z in enumerate(ALLEY_HOUSES):                     # вывески лавок Аллеи Сакур — у дверей, лицом к улице
+    items.append({"sign": list(SIGNS[i * 2]), "p": [-9.4, 0.0, z + 3.6], "r": 90.0, "c": True})
+    items.append({"sign": list(SIGNS[i * 2 + 1]), "p": [9.4, 0.0, z - 3.6], "r": -90.0, "c": True})
 for i, (x, z, rad) in enumerate(YURTS):                 # верёвки с бельём и шкурами у юрт
     if i % 3 != 1:
         continue
@@ -538,14 +534,9 @@ for i, (x, z, rad) in enumerate(YURTS):                 # верёвки с бе
                       "c": False})
         occupied.append(((sx + ex) / 2, (sz + ez) / 2, 2.6))
 
-for x, z, r in ((-8.5, 66, 0), (8.5, 44, 180), (9, 84, 160), (-58, 34, 90), (-40, 14, 0), (46, 30, 200),
+for x, z, r in ((-58, 34, 90),
                 (-30, -40, 90)):
     add("cart", x, z, r, c=True, rad=2.0)
-for i, z in enumerate(range(30, 76, 11)):            # навесы перед лавками Тракта
-    if i % 2 == 0:
-        add("awning", -8.6, z, 90, c=False)
-    else:
-        add("awning", 8.6, z, -90, c=False)
 for x in range(-70, 74, 18):                         # каменные фонари вдоль Аллеи — свет вечером
     if abs(x) > 24 and not 28 < x < 40:
         add("stone_lantern", x + 9, -12.5, 0)
@@ -604,7 +595,7 @@ add("@market_stall_hide", -54, 30.5, 180, c=True)
 add("@loot_pile", -52, 13, 0, c=True)
 add("@tusk_arch", -37.5, 9.5, 90, c=True)
 # Врата и стена: дозорные вышки на углах и у ворот, знамёна-туги из костей у въезда
-for x, z in ((-86, -90), (86, -90), (-86, 78), (86, 78), (-15, 79), (15, 79)):
+for x, z in ((-86, -90), (86, -90), (-86, 78), (86, 78)):
     add("@watch_tower", x, z, random.uniform(0, 360), c=True, rad=3)
 for x in (-7.5, 7.5):
     add("@bone_banner", x, 75, 180 if x < 0 else 0, c=True)
@@ -617,8 +608,6 @@ for x, z in ((-24, -11), (24, 11), (-24, 11)):
 add("@tusk_arch", 22.6, 33.5, 90, c=True)
 
 # гирлянды фонарей между домами Тракта (через улицу, на высоте вторых этажей) и между юртами кварталов
-for z in range(36, 76, 11):
-    items.append({"lanterns": [-8.6, z, 8.6, z + 1.5, 5.2], "seed": z * 3, "p": [0, 0, z], "c": False})
 for i in range(0, len(YURTS) - 1, 2):
     (ax, az, ar), (bx, bz, br) = YURTS[i], YURTS[i + 1]
     dist = math.hypot(bx - ax, bz - az)
@@ -796,7 +785,6 @@ def road_furniture(pl, w, step=16.0):
 
 for pl in PAVED:
     road_furniture(pl, 4.0)
-road_furniture([(0, 26), (0, 80)], 9.0, 22.0)      # Тракт
 for x0, x1 in ((-74, -26), (26, 74)):             # Аллея: скамьи у деревьев
     road_furniture([(x0, 0), (x1, 0)], 13.0, 18.0)
 # клумбы по оси Аллеи — каменный бордюр, цветы и травы; проход по обе стороны 5 м
@@ -818,10 +806,9 @@ for pl in PAVED:
             if _clear(px_, pz_, 1.8):
                 planter(px_, pz_)
 # вход в город: кадки у ворот и у площади Круга (по сторонам Тракта)
-for x in (-6.8, 6.8):
-    for z in (68, 34.0):
-        if _clear(x, z, 1.8):
-            planter(x, z)
+for x in (-6.8, 6.8):                                # кадки по сторонам выхода Аллеи на площадь
+    if _clear(x, 31.0, 1.8):
+        planter(x, 31.0)
 
 # подписи на карте (M): ключ перевода, x, z
 LANDMARKS = [["pax_rpg_lm_gate", 0, 80], ["pax_rpg_lm_trakt", 0, 52], ["pax_rpg_lm_circle", 15, 21],
@@ -985,7 +972,9 @@ def outer_belt():
         while z < gz1 + OUTER - 4:
             px, pz = x + random.uniform(-0.6, 0.6), z + random.uniform(-0.6, 0.6)   # слобода — рядами вдоль стены
             inside = gx0 - 5 < px < gx1 + 5 and gz0 - 5 < pz < gz1 + 5
-            if not inside and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.9:
+            in_field = any(abs(px - fx) < w / 2 + 6 and abs(pz - fz) < d / 2 + 6 for fx, fz, w, d, _m in FIELDS) or \
+                (abs(px) < 70 and pz > gz1 + 4)               # юг у ворот — поля и дорога, без юрт
+            if not inside and not in_field and not (abs(px) < 9 and pz > gz1 - 6) and random.random() < 0.9:
                 k = random.random()
                 if k < 0.55:
                     add(random.choice(["yurt_large", "yurt_small", "yurt_small"]), px, pz, random.uniform(0, 360), c=False, y=-0.4)
@@ -1000,6 +989,27 @@ def outer_belt():
         x += step
 
 
+
+# --- Поля за стеной (юг, по сторонам дороги от Врат): гряды проса, зелени и риса, межи, стога, пугала, сарай.
+# Кормят столицу; видны с дороги к воротам — первое, что игрок видит у города.
+FIELDS = [(-48, 104, 26, 14, "field_millet"), (-20, 104, 18, 14, "field_green"), (20, 104, 18, 14, "field_rice"),
+          (48, 104, 26, 14, "field_millet"), (-34, 117.5, 30, 9, "field_green"), (34, 117.5, 30, 9, "field_millet")]
+def fields():
+    for fx, fz, w, d, mat in FIELDS:
+        box([w, 0.06, d], fx, -0.37, fz, "furrow", c=False)
+        rows = int(d / 1.2)
+        for i in range(rows):
+            z = fz - d / 2 + 0.6 + i * 1.2
+            box([w - 1.0, 0.32, 0.55], fx, -0.2, round(z, 2), mat, c=False)
+        add("hay_bale", fx + w / 2 + 1.2, fz - 2, 20, c=False, y=-0.4)
+        add("hay_bale", fx + w / 2 + 1.4, fz + 0.2, 80, c=False, y=-0.4)
+        add("training_dummy", fx - w / 4, fz, random.uniform(0, 360), c=False, y=-0.4)   # пугало
+    for x in (-70, 70):
+        add("@stable_hay", x, 106, 0, s=0.7, c=False, y=-0.4)   # сарай для снопов
+
+
+fields()
+
 outer_belt()
 
 
@@ -1010,3 +1020,11 @@ data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py �
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 print(len(items), "объектов →", out)
+
+# чертёж для Obsidian (совпадает с городом): obsidian/Pax RPG Vault/03 Мир/Города/Гхарн/Гхарн — план.svg
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from plan_map import draw_plan  # noqa: E402
+from check_overlaps import foot  # noqa: E402
+draw_plan(os.path.join(ROOT, "obsidian", "Pax RPG Vault", "03 Мир", "Города", "Гхарн", "Гхарн — план.svg"), items, ROADS,
+          TRAILS, foot, GROUND, OUTER)
+print("чертёж обновлён")

@@ -9,7 +9,8 @@ const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Коллизия «c»: коробка по габаритам модели (здания, стены, юрты) — мелочь и деревья не мешают ходить.
 
 const MATS := {"stone": Color(0.49, 0.48, 0.45), "stone_cut": Color(0.55, 0.53, 0.49), "stone_dark": Color(0.36, 0.35, 0.33),
-	"earth": Color(0.6, 0.45, 0.28)}
+	"earth": Color(0.6, 0.45, 0.28), "field_millet": Color(0.78, 0.62, 0.28), "field_green": Color(0.42, 0.52, 0.22),
+	"field_rice": Color(0.55, 0.62, 0.3), "furrow": Color(0.3, 0.21, 0.14)}   # поля: гряды проса, зелени, риса и борозды
 
 var mod: PaxMod
 var root: Node3D
@@ -129,6 +130,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if not groups.has(k):
 			groups[k] = []
 		var basis := Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))) * Basis.from_scale(Vector3.ONE * float(d.get("s", 1.0)))
+		if d.has("tilt"):                                 # наклон (сакура клонится над тропой): по оси X модели, вперёд
+			basis = Basis(Vector3.UP, deg_to_rad(float(d.get("r", 0.0)))) * Basis(Vector3.RIGHT, deg_to_rad(float(d.tilt))) \
+				* Basis.from_scale(Vector3.ONE * float(d.get("s", 1.0)))
 		if d.has("sv"):                                   # своя форма (стекло окна — по размеру окна)
 			var sv: Array = d.sv
 			basis = basis * Basis.from_scale(Vector3(float(sv[0]), float(sv[1]), float(sv[2])))
