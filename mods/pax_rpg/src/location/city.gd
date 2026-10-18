@@ -115,6 +115,9 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 			_block(Vector3(0.95, 0.18, 0.95), pos + Vector3(0, 0.99, 0), "stone_cut", 45.0, 0.0, false)
 			lights.append([vfx.fire(root, pos + Vector3(0, 1.08, 0), 0.75), 2.6])
 			continue
+		if d.has("sound"):                                # фоновый 3D-звук места: громче, когда камера ближе
+			_amb(str(d.sound), pos, float(d.get("db", -6.0)), float(d.get("range", 30.0)))
+			continue
 		if d.has("laundry"):
 			_laundry(d.laundry, int(d.get("seed", 0)))
 			continue
@@ -296,9 +299,23 @@ func _fix_textures() -> void:
 var smoke: Array = []
 
 
+## Огонь моделей версии 3: [точка в осях модели, размер пламени].
+const FIRES := {"forge_smithy": [Vector3(0.0, 1.1, 1.6), 0.6], "brazier_tusk": [Vector3(0.0, 1.35, 0.0), 0.5],
+	"spit_roast": [Vector3(0.0, 0.25, 0.0), 0.45]}
+
+
 func _smoke_for(path: String, list: Array) -> void:
 	var spec := {}
-	if path.ends_with("yurt_small.glb"):
+	if path.ends_with("forge_smithy.glb"):              # дым из трубы кузни — густой, тёмный
+		spec = {"y": 8.6, "col": Color(0.3, 0.28, 0.3, 0.42), "amount": 26, "size": 0.9, "share": 1.0}
+	elif path.ends_with("yurt_noble.glb") or path.ends_with("stilt_hut.glb"):
+		spec = {"y": 6.0 if path.ends_with("yurt_noble.glb") else 6.4, "col": Color(0.5, 0.48, 0.5, 0.3), "amount": 14,
+			"size": 0.55, "share": 0.6}
+	elif path.ends_with("spit_roast.glb"):
+		spec = {"y": 0.9, "col": Color(0.4, 0.38, 0.4, 0.35), "amount": 16, "size": 0.45, "share": 1.0}
+	if not spec.is_empty():
+		pass
+	elif path.ends_with("yurt_small.glb"):
 		spec = {"y": 3.0, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 16, "size": 0.55, "share": 0.65}
 	elif path.ends_with("yurt_large.glb"):
 		spec = {"y": 4.25, "col": Color(0.5, 0.48, 0.5, 0.32), "amount": 18, "size": 0.65, "share": 0.7}
@@ -875,10 +892,22 @@ func _lights(path: String, list: Array) -> void:
 		col = Color(1.0, 0.4, 0.8)
 	elif path.ends_with("cauldron.glb"):
 		off = Vector3(0, 0.3, 0)
+	elif path.ends_with("mana_totem.glb"):            # версия 3: мановый тотем шаманов — розовый кристалл
+		off = Vector3(0, 2.3, 0)
+		col = Color(1.0, 0.4, 0.8)
+	elif path.ends_with("shaman_tower.glb"):          # кристалл в клетке на верху башни
+		off = Vector3(0, 16.5, 0)
+		col = Color(1.0, 0.35, 0.75)
+	elif FIRES.has(path.get_file().get_basename()):
+		off = Vector3.ZERO
 	else:
 		return
 	for e: Array in list:
 		var t: Transform3D = e[0]
+		if FIRES.has(path.get_file().get_basename()):                    # огонь кузни, жаровен, вертела — живой огонь из слоёв
+			var fd: Array = FIRES[path.get_file().get_basename()]
+			lights.append([vfx.fire(root, t * (fd[0] as Vector3), float(fd[1]), false), 2.6])
+			continue
 		if path.ends_with("firepit.glb") or path.ends_with("cauldron.glb"):     # живой огонь из слоёв
 			var fs := 0.55 if path.ends_with("firepit.glb") else 0.32
 			var fo := Vector3(0, 0.25, 0) if path.ends_with("firepit.glb") else Vector3(0, 0.05, 0)
@@ -1415,3 +1444,25 @@ func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, coll
 		rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z), Color(0.2, 0.27, 0.55)])
 	else:
 		rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z), Color(0.11, 0.16, 0.35)])
+
+
+## Звук места (петля): кузня, базар, таверна, бубен шамана, костёр, вода, конюшня, флажки — sounds/amb/*.ogg
+## (заглушки pax_rpg/dev/sfx/gharn_amb.py, заменяются записями с тем же именем). Старт — со случайного места петли.
+func _amb(path: String, pos: Vector3, db: float, rng: float) -> void:
+	var st: AudioStream = mod.sound(path)
+	if st == null:
+		return
+	if st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = true
+	var p := AudioStreamPlayer3D.new()
+	p.stream = st
+	p.bus = "PaxRpgSfx"
+	p.volume_db = db
+	p.unit_size = maxf(rng * 0.22, 2.0)
+	p.max_distance = rng
+	p.attenuation_filter_cutoff_hz = 6000.0
+	p.attenuation_filter_db = -18.0
+	p.position = pos
+	root.add_child(p)
+	p.play(randf() * maxf(st.get_length() - 0.5, 0.0))
+

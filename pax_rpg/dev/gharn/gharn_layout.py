@@ -85,14 +85,14 @@ add("@khan_palace", 0, -56, 0, c=True, y=3.0, rad=16)
 for x in (-6, 6):
     add("tug_banner", x, -38, y=3.0)
 for x in (-22, -14, 14, 22):
-    add("yurt_large" if abs(x) > 18 else "banner_clan", x, -46, 0, c=True, y=3.0)
+    add("@yurt_noble" if abs(x) > 18 else "banner_clan", x, -46, 180, c=True, y=3.0)
 
 # --- Площадь Круга: Круг, фонари, Древо Клятв (пока — дерево Аллеи покрупнее), глашатай
 for a in range(0, 360, 30):
     ra = math.radians(a)
     add("stone_lantern", math.sin(ra) * 20.5, math.cos(ra) * 20.5) if a % 60 else None
 box([2, 1, 2], 0, 0.5, -21.2, "stone_dark")                   # тумба глашатая — у северного входа Арены
-add("@flame_tree", 19, -19, 30, s=1.8, rad=4)                  # Древо Клятв (заглушка)
+add("@oath_tree", 21, -21, 30, s=1.0, rad=6)                    # Древо Клятв: баньян с лентами (Meshy v3)
 add("ovoo_cairn", 17, -11)
 add("trough", -16, 16, 45, c=True)
 occupied.append((0, 0, 21))
@@ -288,7 +288,12 @@ def quarter(x0, x1, z0, z1, n):
         x, z = random.uniform(x0, x1), random.uniform(z0, z1)
         if not free(x, z, rad):
             continue
-        add("yurt_large" if big else "yurt_small", x, z, random.uniform(0, 360), c=True, rad=rad)
+        kind = random.random()
+        if kind < 0.28:                                  # оседлые кланы: бревенчатые дома на цоколе (Meshy v3)
+            add(random.choice(["@house_timber_a", "@house_timber_b"]), x, z, random.choice([0, 90, 180, 270]) +
+                random.uniform(-8, 8), c=True, rad=rad + 0.8)
+        else:
+            add("yurt_large" if big else "yurt_small", x, z, random.uniform(0, 360), c=True, rad=rad)
         YURTS.append((x, z, rad))
         placed += 1
         for _ in range(random.randint(1, 3)):         # быт у юрты
@@ -365,6 +370,89 @@ for i in range(4):
     add("crate", 64 + i * 0.85, -14, random.uniform(-8, 8))
     add("barrel_water", 46 + i * 0.9, 33, 0)
 
+# ===================== версия 3: облик Орды — кость, клыки, шкуры, алые знамёна; точки интереса =====================
+# Склон шаманов: башня шаманки на вершине, мановые тотемы, бубен (звук)
+add("@shaman_tower", 68, -68, 200, c=True, y=4.0, rad=5)
+for x, z in ((59, -60), (74, -59), (61, -73)):
+    add("@mana_totem", x, z, random.uniform(0, 360), c=True, y=4.0)
+add("@bone_banner", 56, -57, 160, c=True, y=4.0)
+# гоблинский закоулок под склоном: хижины на сваях, плетни, вёдра, верёвки с тряпками
+for x, z, r in ((44, -44, 30), (52, -47, -20), (40, -54, 80), (48, -56, 140)):
+    if free(x, z, 3.0):
+        add("@stilt_hut", x, z, r, c=True, rad=3.2)
+for x, z in ((46, -40), (43, -50), (51, -52)):
+    add("@bucket_set", x, z, random.uniform(0, 360), c=False)
+add("@tusk_arch", 40, -37, 90, c=True)                     # вход в гоблинский закоулок
+add("@mana_totem", 47, -50, 0, c=True)
+# Кузнечный двор (между базаром и Счётным двором): кузня, жаровни, стойки, сохнущие шкуры
+add("@forge_smithy", -32, -24, 90, c=True, rad=6.5)
+add("@spear_rack", -24.5, -19.5, 90, c=True)
+add("@spear_rack", -24.5, -28.5, 90, c=True)
+add("@brazier_tusk", -25, -16.5, 0, c=True)
+add("@hide_frame", -40, -18, 60, c=True)
+add("@hide_frame", -42, -30, 110, c=True)
+add("barrel_water", -26.5, -24, 0)
+add("wood_pile", -38.5, -27, 90, c=True)
+# Конюшня у таверны: сено, телега, коновязь
+add("@stable_hay", 76, 21, -90, c=True, rad=7)
+add("@hay_wagon", 70, 33, 200, c=True, rad=2.2)
+add("hay_bale", 71, 12, 30, c=True)
+add("hay_bale", 72.2, 13.4, 70, c=True)
+# Ставка Хаана: каменные волки у лестницы, жаровни с клыками, трофеи, барабаны
+add("@guardian_statue", -6.8, -23.5, 180, c=True)
+add("@guardian_statue", 6.8, -23.5, 180, c=True)
+for x in (-20, 20):
+    add("@brazier_tusk", x, -37.5, 0, c=True, y=3.0)
+add("@loot_pile", -9, -38, 20, c=True, y=3.0)
+add("@loot_pile", 9.5, -38.5, -30, c=True, y=3.0)
+add("@war_drum", -13, -36.5, 10, c=True, y=3.0)
+add("@war_drum", 13, -36.5, -10, c=True, y=3.0)
+# Арена: барабаны у южного входа
+add("@war_drum", -6.6, 23.5, 20, c=True)
+add("@war_drum", 6.6, 23.5, -20, c=True)
+# Базар Добычи: клетки зверей, лавки со шкурами, груда трофеев, вход — арка клыков
+add("@beast_cage", -75, 12, 90, c=True)
+add("@beast_cage", -75, 18.5, 80, c=True)
+add("@market_stall_hide", -62, 30.5, 180, c=True)
+add("@market_stall_hide", -54, 30.5, 180, c=True)
+add("@loot_pile", -52, 13, 0, c=True)
+add("@tusk_arch", -37.5, 9.5, 90, c=True)
+# Врата и стена: дозорные вышки на углах и у ворот, знамёна-туги из костей у въезда
+for x, z in ((-86, -90), (86, -90), (-86, 78), (86, 78), (-15, 79), (15, 79)):
+    add("@watch_tower", x, z, random.uniform(0, 360), c=True, rad=3)
+for x in (-7.5, 7.5):
+    add("@bone_banner", x, 75, 180 if x < 0 else 0, c=True)
+    add("@totem_pole", x * 1.25, 71, 0, c=True)
+# тотемы по Аллее у арены и вертела в кварталах
+for x, z in ((-24, -11), (24, 11), (-24, 11)):
+    if free(x, z, 0.8):
+        add("@totem_pole", x, z, random.uniform(0, 360), c=True)
+for x, z in ((-36, 46), (30, 52), (-62, 66)):
+    if free(x, z, 1.4):
+        add("@spit_roast", x, z, random.uniform(0, 360), c=True, rad=1.4)
+# буйволиный двор: вход — арка клыков
+add("@tusk_arch", 22.6, 33.5, 90, c=True)
+
+# гирлянды фонарей между домами Тракта (через улицу, на высоте вторых этажей) и между юртами кварталов
+for z in range(36, 76, 11):
+    items.append({"lanterns": [-8.6, z, 8.6, z + 1.5, 5.2], "seed": z * 3, "p": [0, 0, z], "c": False})
+for i in range(0, len(YURTS) - 1, 2):
+    (ax, az, ar), (bx, bz, br) = YURTS[i], YURTS[i + 1]
+    dist = math.hypot(bx - ax, bz - az)
+    if 7 < dist < 16:
+        items.append({"lanterns": [round(ax, 2), round(az, 2), round(bx, 2), round(bz, 2), 3.6], "seed": i, "p": [ax, 0, az],
+                      "c": False})
+
+# 3D-звуки мест (заглушки sounds/amb/*.ogg — pax_rpg/dev/sfx/gharn_amb.py)
+SOUNDS = [("forge", -32, 2.0, -22, -2.0, 38), ("market", -54, 2.0, 14, -4.0, 46), ("tavern", 54, 2.0, 22, -3.0, 34),
+          ("shaman_drum", 68, 7.0, -66, -3.0, 55), ("water", 34, 1.0, 0, -6.0, 18), ("stable", 76, 1.5, 21, -6.0, 24),
+          ("flags", 64, 6.0, -62, -10.0, 26), ("flags", 0, 4.0, 52, -12.0, 30), ("fire", -20, 4.0, -37.5, -8.0, 14),
+          ("fire", 20, 4.0, -37.5, -8.0, 14), ("fire", -25, 1.0, -16.5, -8.0, 12), ("market", 0, 2.0, 50, -10.0, 34)]
+for name, x, y, z, db, rng_ in SOUNDS:
+    items.append({"sound": "sounds/amb/%s.ogg" % name, "p": [x, y, z], "db": db, "range": rng_, "c": False})
+
+LANDMARKS_V3 = [["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48]]
+
 grass, rocks, bushes = 0, 0, 0
 tries = 0
 while (grass < 1800 or rocks < 140 or bushes < 90) and tries < 60000:
@@ -394,7 +482,7 @@ LANDMARKS = [["pax_rpg_lm_gate", 0, 80], ["pax_rpg_lm_trakt", 0, 52], ["pax_rpg_
              ["pax_rpg_lm_khan", 0, -56], ["pax_rpg_lm_arena", AX, AZ], ["pax_rpg_lm_alley", -52, 0],
              ["pax_rpg_lm_fountain", 34, 0], ["pax_rpg_lm_guild", 54, -22], ["pax_rpg_lm_tavern", 54, 24],
              ["pax_rpg_lm_bazaar", -54, 14], ["pax_rpg_lm_barracks", -55, -45], ["pax_rpg_lm_shamans", 66, -66],
-             ["pax_rpg_lm_buffalo", 32, 33], ["pax_rpg_lm_yurts", -52, 58]]
+             ["pax_rpg_lm_buffalo", 32, 33], ["pax_rpg_lm_yurts", -52, 58]] + LANDMARKS_V3
 # маршруты мирных жителей (ломаные по улицам), сколько их
 paths = [
     [[0, 80], [0, 50], [0, 24]],                                        # Тракт

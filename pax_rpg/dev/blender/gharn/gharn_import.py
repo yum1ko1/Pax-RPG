@@ -13,7 +13,13 @@ W = r"C:\Users\mbkli\Desktop\pax_rpg_work\gharn"
 OUT = os.path.join(W, "out")
 HEIGHT = {"guild_hall": 16.0, "tavern_hall": 13.0, "fountain_dragon": 4.2, "gate_fang": 14.0, "khan_palace": 22.0,
           "flame_tree": 8.0, "house_shop_a": 9.0, "house_shop_b": 9.0, "house_shop_c": 9.0, "oath_tree": 16.0,
-          "shaman_tower": 18.0}
+          "shaman_tower": 18.0,
+          # версия 3
+          "forge_smithy": 9.0, "watch_tower": 12.0, "yurt_noble": 8.0, "stilt_hut": 7.0, "stable_hay": 5.5,
+          "house_timber_a": 7.5, "house_timber_b": 7.0, "totem_pole": 4.5, "bone_banner": 4.2, "guardian_statue": 2.6,
+          "loot_pile": 1.1, "war_drum": 1.9, "beast_cage": 2.2, "spit_roast": 1.6, "hay_wagon": 2.6, "tusk_arch": 5.5,
+          "brazier_tusk": 2.2, "spear_rack": 2.2, "market_stall_hide": 3.2, "mana_totem": 3.0, "hide_frame": 2.4,
+          "bucket_set": 0.8}
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ONLY = set(ARGS[ARGS.index("--only") + 1].split(",")) if "--only" in ARGS else None
 
