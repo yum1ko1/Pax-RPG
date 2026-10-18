@@ -2545,8 +2545,8 @@ func _aim_yaw() -> float:
 	return _yaw
 
 
-## Подтяг удара к врагу: до мига удара герой доходит (у финального — долетает) до дистанции reach, чтобы клинок
-## попал по врагу, а не по воздуху; ближе reach шаг клипа не несёт — не влезает во врага.
+## Магнит удара: герой доворачивается к врагу, но несёт его только шаг клипа — не дотягивает к врагу (было:
+## «телепорт» вплотную; вернуть — magnet_pull: true в hero_*.json). Ближе reach шаг клипа не несёт — не влезает во врага.
 func _magnet_pull(vel: Vector3, mag: Goblin, delta: float) -> Vector3:
 	var to := mag.global_position - _player.global_position
 	to.y = 0.0
@@ -2558,7 +2558,7 @@ func _magnet_pull(vel: Vector3, mag: Goblin, delta: float) -> Vector3:
 	var gap := dist - reach
 	var along := vel.x * dir.x + vel.z * dir.z
 	var tl := _hero.hit_time_left()
-	if tl >= 0.0 and _hero.pull_on() and gap > 0.0:
+	if bool(hero_cfg.get("magnet_pull", false)) and tl >= 0.0 and _hero.pull_on() and gap > 0.0:   # дотяг — по желанию
 		var need := minf(gap / maxf(tl, 0.06), _hf("magnet_pull_max", 8.0))
 		if need > along:
 			vel.x += dir.x * (need - along)
