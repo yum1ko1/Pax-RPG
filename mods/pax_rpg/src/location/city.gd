@@ -86,6 +86,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var pos := Vector3(float(p[0]), float(p[1]), float(p[2]))
 		if hole.size() >= 3 and not d.has("ramp") and Vector2(pos.x - float(hole[0]), pos.z - float(hole[1])).length() < float(hole[2]) + 1.5:
 			continue
+		if d.has("proxy"):                                # заглушка концепта (левел-дизайн в Blender) — в игре пока нет
+			continue
 		if d.has("box") and d.has("ramp"):                # невидимый пандус под ступенями: только коллизия
 			var rb: Array = d.box
 			var body := StaticBody3D.new()

@@ -244,6 +244,27 @@ for side in (-1, 1):                                     # конец аллеи
     items.append({"brazier": True, "p": [side * 4.4, 0.0, 30.5], "c": False})
 add("@tusk_arch", 0, 29.2, 0, s=1.75, c=False)          # рамка-портал на площадь Круга
 
+# --- концепт (заглушки proxy — рисует только превью Blender, в игре пока нет; потом — настоящие модели)
+def proxy(kind, x, y, z, r=0.0, **kw):
+    it = {"proxy": kind, "p": [round(x, 2), round(y, 2), round(z, 2)], "r": round(r, 1), "c": False}
+    it.update(kw)
+    items.append(it)
+
+
+# итерация 4: ворота изнутри, жилые окна и дым, колеи подхода
+for side in (-1, 1):                                    # тоннель ворот: факелы на внутренних стенах башен
+    for z in (79.6, 84.4):
+        proxy("torch", side * 2.45, 2.3, z)
+proxy("portcullis", 0, 4.1, 85.7, 0, w=4.6, h=1.6)       # решётка-герса, поднятая над проходом
+proxy("ruts", 0, 0, 99.0, 0, len=26)                     # колеи повозок по мостовой подхода
+for i, (zc, side, m) in enumerate(ALLEY_HOUSES):
+    yaw = 90 if side < 0 else -90
+    for dz in (-1.5, 1.5):                               # тёплые окна второго этажа
+        if (i + (dz > 0)) % 3:
+            proxy("window", side * 8.12, 3.6, zc + dz, yaw)
+    if i % 2 == 0:                                        # дым из трубы
+        proxy("smoke", side * 11.5, 6.4, zc + 1.0)
+
 # --- снаружи: церемониальная дорога к Вратам Клыка
 box([9.0, 0.05, 26.0], 0, 0.025, 99.0, "stone_cut", c=False)              # мощёный подход
 box([0.3, 0.16, 26.0], -4.6, 0.08, 99.0, "stone_dark", c=False)
