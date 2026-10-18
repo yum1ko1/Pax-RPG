@@ -21,6 +21,8 @@ uniform float tile_wood = 0.55;
 uniform float strength = 0.75;     // сила рисунка в яркости
 uniform float n_strength = 0.8;    // сила рельефа деталей
 uniform float detail_far = 45.0;
+uniform float sky_far_ao = 0.35;  // сколько неба остаётся на дальних домах
+uniform float sky_far_from = 40.0;
 varying vec3 wp;
 varying vec3 wn;
 
@@ -60,7 +62,11 @@ void fragment() {
 	vec3 n = normalize(vec3(an.xy + dn.xy, an.z * dn.z));   // whiteout: швы атласа + волокна и сколы деталей
 	NORMAL_MAP = n * 0.5 + 0.5;
 	ROUGHNESS = mix(0.92, 0.8, wood) - (l - 1.0) * 0.08 * k;
-	SPECULAR = mix(0.12, 0.3, k);              // вдали без бликов — дома не белеют
+	SPECULAR = mix(0.12, 0.3, k);
+	// вдали дом вне каскадов GI: его светит голое ночное небо без затенения — синеет и белеет. Гасим долю
+	// неба (AO действует на рассеянный свет и отражения неба, на фонари и луну — нет)
+	AO = mix(1.0, sky_far_ao, smoothstep(sky_far_from, sky_far_from * 2.5, dist));
+	AO_LIGHT_AFFECT = 0.0;              // вдали без бликов — дома не белеют
 }
 """
 
