@@ -15,7 +15,12 @@ uniform vec3 ground : source_color = vec3(0.32, 0.24, 0.26);
 uniform float cloud_cover = 0.48;
 uniform float cloud_speed = 0.006;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// хэш без sin (Dave Hoskins, hash12): sin больших чисел на GPU теряет точность — облака шли квадратами
+float hash(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
 float noise(vec2 p) {
 	vec2 i = floor(p), f = fract(p);
 	vec2 u = f * f * (3.0 - 2.0 * f);
@@ -48,7 +53,7 @@ void sky() {
 	}
 	// облака: плоскость над миром
 	if (h > 0.02) {
-		vec2 cp = d.xz / (d.y + 0.12) * 1.6 + vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4);
+		vec2 cp = d.xz / (d.y + 0.12) * 1.6 + mod(vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4), 1000.0);
 		float c = fbm(cp);
 		float m = smoothstep(cloud_cover, cloud_cover + 0.25, c) * smoothstep(0.02, 0.2, h);
 		vec3 lit = mix(vec3(0.16, 0.14, 0.24), vec3(1.0, 0.95, 0.98), day);

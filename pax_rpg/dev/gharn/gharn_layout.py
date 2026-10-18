@@ -451,6 +451,38 @@ SOUNDS = [("forge", -32, 2.0, -22, -2.0, 38), ("market", -54, 2.0, 14, -4.0, 46)
 for name, x, y, z, db, rng_ in SOUNDS:
     items.append({"sound": "sounds/amb/%s.ogg" % name, "p": [x, y, z], "db": db, "range": rng_, "c": False})
 
+# вытоптанная земля дворов v3 — без травы, грязь и тропы (маска G)
+YARDS = [("rect", -44, -22, -34, -14), ("rect", 36, 62, -60, -36), ("rect", 66, 84, 12, 32), ("rect", -12, 12, 64, 80)]
+TRAILS.extend(YARDS)
+# гоблинский закоулок: верёвки с тряпьём между хижинами, плетни, костёр, дрова, флажки маны
+for (ax_, az_), (bx_, bz_) in (((44, -44), (52, -47)), ((40, -54), (48, -56)), ((44, -44), (40, -54))):
+    items.append({"laundry": [ax_ + 1.5, az_ + 1.0, bx_ - 1.5, bz_ + 1.0], "seed": int(ax_ * az_), "p": [ax_, 0, az_],
+                  "c": False})
+for fx, fz, fr in ((36.5, -46, 90), (36.5, -50, 90), (36.5, -54, 90), (55, -40, 0), (59, -40, 0)):
+    add("fence_wood", fx, fz, fr, c=True)
+add("firepit", 46.5, -49.5, 0, c=False)
+add("wood_pile", 54, -52, 30, c=True)
+add("crate", 42.5, -47.5, 15)
+add("sack_grain", 43.3, -47.2)
+add("mana_flags_line", 44, -42, 75, c=False)
+add("mana_flags_line", 50, -53, -20, c=False)
+add("ovoo_cairn", 39, -41)
+# кузнечный двор: телега с углём, ящики заготовок, бочки для закалки, стойки
+add("cart", -40.5, -21.5, 20, c=True)
+for i in range(3):
+    add("crate", -28 + i * 0.9, -30.5, random.uniform(-8, 8))
+add("barrel_water", -26.5, -22.6, 0)
+add("weapon_rack", -31, -16.6, 0, c=True)
+add("wood_pile", -39, -31.5, 0, c=True)
+items.append({"lanterns": [-24.5, -15.5, -24.5, -32.5, 3.8], "seed": 77, "p": [-24.5, 0, -24], "c": False})
+# конюшня: коновязи, поилки, сено, мешки
+add("hitching_post", 69, 16, 90, c=True)
+add("hitching_post", 69, 26, 90, c=True)
+add("trough", 70.5, 21, 90, c=True)
+for hx, hz in ((80.5, 13.5), (81.2, 15), (80.6, 29)):
+    add("hay_bale", hx, hz, random.uniform(0, 360), c=True)
+add("sack_grain", 71.5, 29.5)
+
 LANDMARKS_V3 = [["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48]]
 
 grass, rocks, bushes = 0, 0, 0
@@ -458,7 +490,8 @@ tries = 0
 while (grass < 1800 or rocks < 140 or bushes < 90) and tries < 60000:
     tries += 1
     x, z = random.uniform(-91, 91), random.uniform(-94, 82)
-    if on_road(x, z, 0.6) or not free(x, z, 0.4) or (-70 < x < 70 and -96 < z < -40 and abs(x) < 28):
+    if on_road(x, z, 0.6) or not free(x, z, 0.4) or (-70 < x < 70 and -96 < z < -40 and abs(x) < 28) \
+            or any(sh[1] < x < sh[2] and sh[3] < z < sh[4] for sh in YARDS):
         continue
     edge = abs(x) > 80 or z > 74 or z < -84            # у частокола — гуще
     k = random.random()

@@ -126,7 +126,7 @@ func apply() -> void:
 		sky_mat.set_shader_parameter("day", day)
 		sky_mat.set_shader_parameter("dusk", dusk)
 	if env != null:
-		env.ambient_light_energy = lerpf(0.1, 0.42, day)        # ночью — лунный подсвет: силуэты читаются
+		env.ambient_light_energy = lerpf(0.07, 0.42, day)       # ночью — чуть лунного подсвета
 		var fog_night := Color(0.18, 0.14, 0.32)
 		env.fog_light_color = fog_night.lerp(fog_day, day).lerp(Color(1.0, 0.56, 0.46), dusk * 0.4)
 		env.tonemap_exposure = lerpf(0.95, 0.9, day)

@@ -202,6 +202,9 @@ func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) 
 	mi.mesh = q
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visibility_range_end = 80.0
+	mi.visibility_range_begin = 5.0                     # вблизи ореол — не «солнце» во весь кадр: тает у камеры
+	mi.visibility_range_begin_margin = 4.0
+	mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	mi.position = pos
 	parent.add_child(mi)
 	return mi

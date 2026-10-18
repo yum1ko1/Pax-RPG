@@ -913,7 +913,7 @@ func _lights(path: String, list: Array) -> void:
 			var fo := Vector3(0, 0.25, 0) if path.ends_with("firepit.glb") else Vector3(0, 0.05, 0)
 			lights.append([vfx.fire(root, t * fo, fs, false), 2.6])
 			continue
-		vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 1.1, 0.9)
+		vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 0.75, 0.6)
 		var l := OmniLight3D.new()
 		l.light_color = col
 		l.light_energy = 1.6
