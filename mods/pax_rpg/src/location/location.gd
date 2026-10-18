@@ -321,6 +321,7 @@ func build(city: Dictionary) -> void:
 	if str(city.get("id", "")) == "gharn":
 		_palace_stairs(layout)
 		_sink_arena(layout)
+		_take_merchants(layout)
 	if not layout.is_empty() and not layout.has("forest") and not layout.has("decor"):
 		layout["decor"] = {"seed": 4242, "count": 420}    # природа в городе: камни, трава, цветы (city.gd → _decor)
 	START = ARENA_START
@@ -362,6 +363,7 @@ func build(city: Dictionary) -> void:
 		_gate_radius = float(layout.get("exit_radius", GATE_RADIUS))
 		goblins = int(layout.get("goblins", 0))
 		_spawn_npcs(layout)
+		_spawn_merchants()
 		_mark_giver()
 		if layout.has("quest_item"):
 			_make_quest_item.call_deferred(layout)       # после героя (гоблинам нужен герой)
@@ -716,6 +718,38 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 	_map_rects.append([Vector2(pos.x, pos.z), Vector2(size.x, size.z),
 		Color(0.11, 0.16, 0.35) if big else Color(0.2, 0.27, 0.55)])
 	return body
+
+
+## Торговцы за прилавками — живые жители (с ними можно говорить, E), а не модели планировки: стоят на месте
+## (маршрут из одной точки), лицом к покупателю, ремесло — торговец.
+var _merchants: Array = []
+
+
+func _take_merchants(layout: Dictionary) -> void:
+	var keep: Array = []
+	_merchants.clear()
+	for it: Variant in layout.get("items", []):
+		var d: Dictionary = it
+		if d.has("merchant"):
+			_merchants.append(d)
+		else:
+			keep.append(d)
+	layout["items"] = keep
+
+
+func _spawn_merchants() -> void:
+	var n0 := 1000
+	for i: int in _merchants.size():
+		var d: Dictionary = _merchants[i]
+		var p: Array = d.get("p", [0, 0, 0])
+		var npc := Npc.new()
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7)
+		npc.set("role", "merchant")
+		npc.rotation.y = deg_to_rad(float(d.get("r", 0.0)))
+		npc.set("npc_index", n0 + i)
+		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n0 + i, int(npc.get("relation"))))
+		_view.add_child(npc)
+		_npcs.append(npc)
 
 
 ## Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
@@ -1944,6 +1978,10 @@ func _physics_body(delta: float) -> void:
 				_sfx.whoosh()                        # свист копья в воздухе
 		if r.has("land_step") and is_instance_valid(_sfx):
 			_sfx.land_step()
+		if is_instance_valid(_sfx):
+			_sfx.timed = r.has("timed_steps")              # шаги цикла — по кадрам клипа (hero.gd → loop_steps)
+			if r.has("foot_step"):
+				_sfx.step_now(running)
 		if r.has("blade"):
 			_blade_strike(r.blade)
 		if step != Vector3.ZERO and delta > 0.0:
@@ -3298,7 +3336,9 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	var p := CPUParticles3D.new()
 	p.one_shot = true
 	p.explosiveness = 0.9
-	p.amount = (14 if running else 8) if soft else 4
+	if not soft and not running:
+		return                                       # по камню шагом — без пыли (дёшево смотрелось)
+	p.amount = (6 if running else 3) if soft else 2
 	p.lifetime = 1.1
 	p.direction = Vector3(0.0, 1.0, 0.0)
 	p.spread = 70.0
@@ -3307,8 +3347,8 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	p.gravity = Vector3(0.0, -0.4, 0.0)
 	p.damping_min = 1.5
 	p.damping_max = 2.5
-	p.scale_amount_min = 0.12
-	p.scale_amount_max = 0.3
+	p.scale_amount_min = 0.08
+	p.scale_amount_max = 0.18
 	var sm := SphereMesh.new()
 	sm.radius = 0.5
 	sm.height = 1.0
@@ -3323,7 +3363,7 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	var ramp := Gradient.new()
 	var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
 	ramp.set_color(0, Color(c, 0.0))
-	ramp.add_point(0.15, Color(c, 0.22 if soft else 0.1))
+	ramp.add_point(0.15, Color(c, 0.09 if soft else 0.04))   # едва заметно
 	ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
 	p.color_ramp = ramp
 	var h := float(hero_cfg.get("capsule_height", 1.8)) * 0.5

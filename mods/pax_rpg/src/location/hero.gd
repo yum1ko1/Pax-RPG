@@ -1662,6 +1662,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		out.root = _root_step()
 	else:
 		_loop(moving, speed, running)
+		_loop_steps(out, moving and on_floor)
 	_on_floor = on_floor
 	_show_sword(delta)
 	_face_tick(delta)
@@ -2228,6 +2229,32 @@ func deathblow() -> bool:
 
 
 ## Приземления в клипе (cfg step_times: клип → [с]): out.land_step — location.gd проигрывает шаг (каблук).
+## Шаги циклов по кадрам клипа (loop_steps: {"Walk": [кадр, …]} при 30 к/с): звук каблука — ровно в миг касания,
+## а не по пройденным метрам. Есть у клипа — location.gd не считает шаги по расстоянию (out.timed_steps).
+var _loop_prev := -1.0
+
+
+func loop_steps_for(clip: String) -> Array:
+	var ls: Variant = (cfg.get("loop_steps", {}) as Dictionary).get(clip, null)
+	return ls if ls is Array else []
+
+
+func _loop_steps(out: Dictionary, moving: bool) -> void:
+	var frames := loop_steps_for(anim.current_animation) if anim != null else []
+	if frames.is_empty():
+		_loop_prev = -1.0
+		return
+	out["timed_steps"] = true
+	var t := _pos()
+	if moving and _loop_prev >= 0.0:
+		for f: Variant in frames:
+			var ft := float(f) / 30.0
+			var crossed := (t >= ft and _loop_prev < ft) if t >= _loop_prev else (_loop_prev < ft or t >= ft)
+			if crossed:
+				out["foot_step"] = true
+	_loop_prev = t
+
+
 func _land_steps(out: Dictionary) -> void:
 	var times: Variant = (cfg.get("step_times", {}) as Dictionary).get(action, null)
 	if times is Array and _lands_done < (times as Array).size() and _pos() >= float((times as Array)[_lands_done]):

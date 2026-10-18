@@ -229,25 +229,25 @@ func _build_preview() -> void:
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.7, 0.68, 0.8)
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.1
+	env.tonemap_exposure = 0.9
 	_cam.environment = env
 	_pv.add_child(_cam)
 	_cam.current = true
 	var key := DirectionalLight3D.new()                  # тёплый ключевой: спереди-сбоку сверху
 	key.light_color = Color(1.0, 0.92, 0.82)
-	key.light_energy = 2.2
+	key.light_energy = 1.3
 	key.rotation_degrees = Vector3(-35, 30, 0)
 	_pv.add_child(key)
 	var fill := DirectionalLight3D.new()                 # холодный заполняющий с другой стороны
 	fill.light_color = Color(0.7, 0.8, 1.0)
-	fill.light_energy = 0.9
+	fill.light_energy = 0.55
 	fill.rotation_degrees = Vector3(-15, -60, 0)
 	_pv.add_child(fill)
 	var rim := DirectionalLight3D.new()                  # розовый контровой сзади — силуэт на фоне кольца
 	rim.light_color = Color(1.0, 0.6, 0.85)
-	rim.light_energy = 2.6
+	rim.light_energy = 1.5
 	rim.rotation_degrees = Vector3(-20, 180, 0)
 	_pv.add_child(rim)
 	_pivot = Node3D.new()
@@ -277,8 +277,9 @@ func _ensure_model(path: String) -> void:
 	_pivot.add_child(_copy)
 	var ap := _find_player(_copy)
 	if ap != null and ap.has_animation("Idle"):
-		ap.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
-		ap.play("Idle")
+		ap.play("Idle")                                  # спокойная стойка — первый кадр Idle (жест «рука к голове» —
+		ap.seek(0.0, true)                               # в середине клипа, по кругу он повторялся без конца)
+		ap.pause()
 	# как у героя (hero.gd): плащ модели снят, меч в руке и «волочащийся» меч спрятаны — остаётся меч за спиной
 	var old_cape := _copy.find_child("Knight_cape", true, false)
 	if old_cape != null:

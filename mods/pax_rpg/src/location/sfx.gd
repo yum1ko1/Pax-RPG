@@ -152,8 +152,21 @@ func land_step() -> void:
 
 ## Каждый кадр физики: сколько герой прошёл по земле. Шаг — каждые stride м; бряцание — на каждый второй шаг
 ## (с мечом и на бегу — на каждый).
+var timed := false                     # шаги — по кадрам клипа (step_now), не по пройденным метрам
+
+
+## Шаг в миг касания (кадр клипа из loop_steps).
+func step_now(running: bool) -> void:
+	var p = _sand if soft and _sand != null else _step
+	if puddle and _splash != null:
+		p = _splash
+	if p != null:
+		p.volume_db = (-6.0 if running else -9.0) + (_step_db if p != _splash else 0.0)
+		p.play()
+
+
 func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
-	if not on_floor:
+	if not on_floor or timed:
 		return
 	_walked += dist
 	var stride := 1.45 if running else walk_stride

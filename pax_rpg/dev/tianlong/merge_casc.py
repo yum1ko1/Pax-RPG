@@ -5,6 +5,7 @@ Spine2↔Spine, Neck↔neck), таз — в оси модели (см → м), �
     python3 merge_casc.py <model.glb> <anim.json> Имя=<клип.glb> [...]
 """
 import json
+import os
 import struct
 import sys
 
@@ -156,6 +157,9 @@ def spear_track(s, sb, j, names, tt):
     rest = trs(gs.get("translation"), gs.get("rotation")) @ trs(gh.get("translation"), gh.get("rotation"))
     sh_inv = np.linalg.inv(trs(gh.get("translation"), gh.get("rotation")))
     pos, rot = [], []
+    if SPEAR_K is None and os.environ.get("SPEAR_CALIB_LAST"):     # копьё в руке — на последнем кадре (Draw:
+        rel = np.linalg.inv(ortho(fk.world(sn["mixamorig:RightHand"], tt[-1]))) @ ortho(fk.world(sn["CrimsonSpear"], tt[-1]))
+        SPEAR_K = np.linalg.inv(rel) @ rest                        # на первом оно ещё за спиной)
     for k, t in enumerate(tt):
         rel = np.linalg.inv(ortho(fk.world(sn["mixamorig:RightHand"], t))) @ ortho(fk.world(sn["CrimsonSpear"], t))
         if SPEAR_K is None:
