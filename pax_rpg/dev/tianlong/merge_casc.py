@@ -109,11 +109,11 @@ def trs(t=None, r=None, sc=None):
 class FK:
     """Мировые матрицы узлов исходного glb в момент t (каналы его первой анимации)."""
 
-    def __init__(self, j, bin_):
+    def __init__(self, j, bin_, ai=0):
         self.j = j
         self.par = {c: i for i, n in enumerate(j["nodes"]) for c in n.get("children", [])}
         self.tr = {}
-        a = j["animations"][0]
+        a = j["animations"][ai]
         for c in a["channels"]:
             sp = a["samplers"][c["sampler"]]
             self.tr[(c["target"]["node"], c["target"]["path"])] = (read(j, bin_, sp["input"])[:, 0], read(j, bin_, sp["output"]))
@@ -144,11 +144,16 @@ def ortho(M):
 SPEAR_K = None                  # копьё Cascadeur → узел Spear модели: поправка по первому кадру первого клипа
 
 
-def spear_track(s, sb, j, names, tt):
-    """Копьё в Cascadeur — отдельный объект (подброс, перехват): его ход относительно кисти → узел Spear модели
-    (ребёнок RightHand, в нём сетка Sword_Hand). Первый кадр первого клипа = копьё в руке как в модели."""
+def spear_track(s, sb, j, bin_, names, tt, ai, t0=0.0):
+    """Копьё в Cascadeur — отдельный объект (подброс, перехват, за спиной): его МИРОВОЕ положение в исходнике
+    переносится в мир модели по тазу (Φ = таз модели · таз исходника⁻¹ в каждый кадр — модель с клипом ai, ход
+    вынут) и записывается узлу Spear модели (ребёнок RightHand) как L = кисть модели⁻¹ · Φ · копьё · M.
+    M — поправка осей сетки копья: единичная (сетка та же). SPEAR_CALIB=1 — по хвату модели в кадре с копьём в руке
+    (SPEAR_CALIB_LAST — последний кадр), как раньше. (Было: ход копья относительно кисти исходника переносился на кисть модели
+    без учёта разницы осей кистей — вдали от руки копьё поворачивалось: за спиной в Draw — поперёк талии.)"""
     global SPEAR_K
     fk = FK(s, sb)
+    mk = FK(j, bin_, ai)
     sn = {n.get("name"): i for i, n in enumerate(s["nodes"])}
     if "CrimsonSpear" not in sn or "mixamorig:RightHand" not in sn or "Spear" not in names:
         return None
@@ -156,21 +161,46 @@ def spear_track(s, sb, j, names, tt):
     gh = j["nodes"][names["Sword_Hand"]]
     rest = trs(gs.get("translation"), gs.get("rotation")) @ trs(gh.get("translation"), gh.get("rotation"))
     sh_inv = np.linalg.inv(trs(gh.get("translation"), gh.get("rotation")))
+    hand = next(i for i, n in enumerate(j["nodes"]) if names["Spear"] in n.get("children", []))   # кисть — родитель Spear
+
+    def phi(t):
+        return ortho(mk.world(names["Hips"], t)) @ np.linalg.inv(ortho(fk.world(sn["mixamorig:Hips"], t + t0)))
+
+    def spear_w(t):                              # t — время клипа модели; исходник — с t0 (вырезка @a-b)
+        return phi(t) @ ortho(fk.world(sn["CrimsonSpear"], t + t0))
+
+    if SPEAR_K is None:
+        if os.environ.get("SPEAR_CALIB"):           # старое: копьё в кадре калибровки — как в хвате модели
+            tc = tt[-1] if os.environ.get("SPEAR_CALIB_LAST") else tt[0]
+            SPEAR_K = np.linalg.inv(spear_w(tc)) @ ortho(mk.world(hand, tc)) @ rest
+        else:                                       # сетка копья та же (ось — Z, 2.1 м): как в Cascadeur, без поправок —
+            SPEAR_K = np.eye(4)                     # калибровка по хвату модели поворачивала его на ~90° во всём клипе
+    kc = None                                       # SPEAR_BLEND=last|first: к этому концу клипа копьё сводится к хвату
+    bl = os.environ.get("SPEAR_BLEND", "")          # модели (стойка, удары) — Draw: за спиной как в Cascadeur → в хват
+    if bl:
+        tc = tt[-1] if bl == "last" else tt[0]
+        kc = np.linalg.inv(spear_w(tc)) @ ortho(mk.world(hand, tc)) @ rest
     pos, rot = [], []
-    if SPEAR_K is None and os.environ.get("SPEAR_CALIB_LAST"):     # копьё в руке — на последнем кадре (Draw:
-        rel = np.linalg.inv(ortho(fk.world(sn["mixamorig:RightHand"], tt[-1]))) @ ortho(fk.world(sn["CrimsonSpear"], tt[-1]))
-        SPEAR_K = np.linalg.inv(rel) @ rest                        # на первом оно ещё за спиной)
     for k, t in enumerate(tt):
-        rel = np.linalg.inv(ortho(fk.world(sn["mixamorig:RightHand"], t))) @ ortho(fk.world(sn["CrimsonSpear"], t))
-        if SPEAR_K is None:
-            SPEAR_K = np.linalg.inv(rel) @ rest
-        L = rel @ SPEAR_K @ sh_inv
+        K = SPEAR_K
+        if kc is not None:
+            u = k / max(1, len(tt) - 1)
+            w = float(np.clip((u - 0.25) / 0.6, 0.0, 1.0)) if bl == "last" else float(np.clip((0.75 - u) / 0.6, 0.0, 1.0))
+            w = w * w * (3 - 2 * w)
+            qa, qb = m2q(SPEAR_K[:3, :3]), m2q(kc[:3, :3])
+            if np.dot(qa, qb) < 0:
+                qb = -qb
+            q = qa * (1 - w) + qb * w
+            K = np.eye(4)
+            K[:3, :3] = q2m(q / np.linalg.norm(q))
+            K[:3, 3] = SPEAR_K[:3, 3] * (1 - w) + kc[:3, 3] * w
+        L = np.linalg.inv(ortho(mk.world(hand, t))) @ spear_w(t) @ K @ sh_inv
         pos.append(L[:3, 3])
         q = m2q(L[:3, :3])
         if rot and np.dot(q, rot[-1]) < 0:
             q = -q
         rot.append(q)
-    pos = smooth(pos, SPEAR_SIGMA, True)        # копьё: без телепортов и дрожи в руке
+    pos = smooth(pos, SPEAR_SIGMA, True)        # копьё: без телепортов и дрожи
     rot = smooth(rot, SPEAR_SIGMA, True)
     rot /= np.linalg.norm(rot, axis=1, keepdims=True)
     return pos, rot
@@ -276,15 +306,16 @@ def main():
             samp.append({"input": write(j, bin_, tt, "SCALAR"), "output": write(j, bin_, hv, "VEC3"),
                          "interpolation": "LINEAR"})
             ch.append({"sampler": len(samp) - 1, "target": {"node": names["Hips"], "path": "translation"}})
-        sp_ = None if mirror else spear_track(s, sb, j, names, tt + (f0 / FPS if f0 is not None else 0.0))   # зеркальный — копьё в хвате модели
+        j["animations"] = [a for a in j["animations"] if a.get("name") != clip]
+        j["animations"].append({"name": clip, "channels": ch, "samplers": samp})
+        sp_ = None if mirror else spear_track(s, sb, j, bin_, names, tt, len(j["animations"]) - 1,
+                                              f0 / FPS if f0 is not None else 0.0)   # зеркальный — копьё в хвате модели
         if sp_ is not None:
             ti = write(j, bin_, tt, "SCALAR")
             for path, v, typ in (("translation", sp_[0], "VEC3"), ("rotation", sp_[1], "VEC4")):
                 samp.append({"input": ti, "output": write(j, bin_, v, typ), "interpolation": "LINEAR"})
                 ch.append({"sampler": len(samp) - 1, "target": {"node": names["Spear"], "path": path}})
             print("  spear: max %.2f m from the hand" % float(np.linalg.norm(sp_[0], axis=1).max()))
-        j["animations"] = [a for a in j["animations"] if a.get("name") != clip]
-        j["animations"].append({"name": clip, "channels": ch, "samplers": samp})
         meta.setdefault("root_motion", {})[clip] = {"fps": FPS, "frames": n, "offset": off}
         meta.setdefault("clips", {})[clip] = {"frames": n}
         print(clip, "%.2f s" % t_end, len(ch), "channels", "path %.2f m" % (np.hypot(*off[-1]) if off else 0))

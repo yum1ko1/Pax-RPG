@@ -15,8 +15,9 @@ for o in list(bpy.data.objects):
 bpy.ops.import_scene.gltf(filepath=SRC)
 sc = bpy.context.scene
 arm = [o for o in sc.objects if o.type == "ARMATURE"][0]
+HIDE = os.environ.get("HIDE", "Sword_Hand,Sword_Drag").split(",")
 for o in sc.objects:
-    if o.name.startswith("Sword_Hand") or o.name.startswith("Sword_Drag"):
+    if any(o.name.startswith(h) for h in HIDE if h):
         o.hide_render = True
 eng = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items]
 sc.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in eng else "BLENDER_EEVEE"
