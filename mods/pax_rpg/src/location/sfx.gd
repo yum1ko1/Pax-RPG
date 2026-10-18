@@ -119,7 +119,8 @@ func hero(cfg: Dictionary, at: Node3D) -> void:
 		_whoosh = _rand(_mod, "sounds/swing_%d.wav", 7, 0.12, -6.0)
 	if bool(cfg.get("sfx_cloth", false)):
 		_cloth = _rand(_mod, "sounds/cloth_snap_%d.wav", 6, 0.1, -6.0)
-		_rustle = _rand(_mod, "sounds/cloth_rustle_%d.wav", 8, 0.1, -20.0)
+		if bool(cfg.get("sfx_rustle", false)):        # шорох одежды на каждом шаге — шершавый, по умолчанию выключен
+			_rustle = _rand(_mod, "sounds/cloth_rustle_%d.wav", 8, 0.1, -20.0)
 		if bool(cfg.get("sfx_skirt", false)):         # шорох юбки на шаге — по желанию героя (у Тянь Лун выключен)
 			_skirt = _rand(_mod, "sounds/skirt_%d.wav", 8, 0.08, -16.0)
 
