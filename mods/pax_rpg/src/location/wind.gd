@@ -4,6 +4,7 @@ extends Node3D
 ## (city.gd → leaves, gravity по ветру). Направление ветра медленно гуляет.
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
+const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 var mod: PaxMod
 var target: Node3D                 # вокруг кого порывы (герой)
 var leaves: Array = []             # частицы листьев (city.gd; после to_gpu — GPUParticles3D)
@@ -12,7 +13,8 @@ var dir := Vector3(1, 0, 0.3).normalized()
 var _next := 2.5
 var _gust := 0.0                   # 0..1 — сила текущего порыва
 static var now := Vector4(1.0, 0.3, 0.0, 0.0)   # x, z — направление, w — порыв: фонарям на верёвках (city.gd Swing)
-var _streaks: Array = []           # {mi, v, t, life}
+var _streaks: Array = []           # {mi, t0, life} — пряди ветра (летят и гаснут в шейдере)
+var _streak_mat: ShaderMaterial
 var _mesh: QuadMesh
 var _shader: Shader
 
@@ -64,17 +66,14 @@ func _proc(delta: float) -> void:
 			_grav(l, Vector3(0.0, -0.55, 0.0) + dir * (0.35 + 1.6 * _gust))
 		for p: Variant in smoke:
 			_grav(p, Vector3(0.0, 0.12, 0.0) + dir * (0.25 + 0.9 * _gust))
+	var now := Gfx.now
 	var keep: Array = []
-	for s: Dictionary in _streaks:
-		s.t = float(s.t) + delta
+	for s: Dictionary in _streaks:                         # полёт и угасание — в шейдере; здесь только уборка
 		var mi: MeshInstance3D = s.mi
-		if float(s.t) >= float(s.life) or not is_instance_valid(mi):
+		if now - float(s.t0) >= float(s.life) or not is_instance_valid(mi):
 			if is_instance_valid(mi):
 				mi.queue_free()
 			continue
-		mi.global_position += (s.v as Vector3) * delta
-		var k := float(s.t) / float(s.life)
-		(mi.material_override as ShaderMaterial).set_shader_parameter("life", k)
 		keep.append(s)
 	_streaks = keep
 
@@ -94,11 +93,12 @@ func _spawn_gust() -> void:
 	for i: int in randi_range(2, 4):                      # только тонкие линии воздуха — без клубов пыли
 		var mi := MeshInstance3D.new()
 		mi.mesh = _mesh
-		var m := ShaderMaterial.new()
-		m.shader = _shader
-		m.set_shader_parameter("phase", randf() * TAU)
-		m.set_shader_parameter("curl", randf_range(0.15, 0.45))
-		mi.material_override = m
+		if _streak_mat == null:                           # один материал на все пряди: своё — в instance-параметрах
+			_streak_mat = ShaderMaterial.new()
+			_streak_mat.shader = _shader
+		mi.material_override = _streak_mat
+		mi.set_instance_shader_parameter("phase", randf() * TAU)
+		mi.set_instance_shader_parameter("curl", randf_range(0.15, 0.45))
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
 		var length := randf_range(3.0, 6.5)
@@ -111,7 +111,12 @@ func _spawn_gust() -> void:
 			nrm = (to - dir * to.dot(dir)).normalized()
 		var b := Basis(dir, nrm.cross(dir).normalized(), nrm)
 		mi.global_transform = Transform3D(b * Basis.from_scale(Vector3(length, randf_range(0.25, 0.45), 1.0)), at)
-		_streaks.append({"mi": mi, "v": dir * randf_range(9.0, 14.0), "t": 0.0, "life": randf_range(0.9, 1.5)})
+		var life := randf_range(0.9, 1.5)
+		var t0 := Gfx.now
+		mi.set_instance_shader_parameter("t0", t0)
+		mi.set_instance_shader_parameter("dur", life)
+		mi.set_instance_shader_parameter("vel", dir * randf_range(9.0, 14.0))
+		_streaks.append({"mi": mi, "t0": t0, "life": life})
 
 
 static func _grav(p: Variant, g: Vector3) -> void:

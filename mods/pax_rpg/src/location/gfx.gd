@@ -134,6 +134,7 @@ func apply_viewport(v: SubViewport) -> void:
 	v.use_debanding = _b("debanding", true)
 	_lens_layer(v)
 	v.use_occlusion_culling = _b("occlusion", false)     # выкл.: на краях стен модели пропадали и появлялись
+	occlusion_on = v.use_occlusion_culling
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
@@ -448,6 +449,7 @@ func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("gfx._process")
 	var t0 := Time.get_ticks_usec()
 	_time += delta
+	now = _time
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_time", _time)
 	_shadow_t -= delta
 	if _shadow_t <= 0.0:
@@ -610,6 +612,9 @@ func _refresh_probe() -> void:
 
 
 ## Контровой свет: позади героя от камеры, чуть сверху, к камере; ночью сильнее (днём силуэт и так читается).
+var _rim_dir := Vector3.INF
+
+
 func _rim_follow() -> void:
 	if not is_instance_valid(cam) or not is_instance_valid(player):
 		return
@@ -630,13 +635,19 @@ func _rim_follow() -> void:
 	if f.length() < 0.01:
 		return
 	var dir := (-f.normalized() + Vector3(0, -0.55, 0)).normalized()    # свет летит из-за героя на камеру
-	_rim.global_transform = Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3.ZERO)
+	# пишем в свет только то, что изменилось: каждое присваивание — пересчёт света сервером рендера
+	if dir.distance_squared_to(_rim_dir) > 1e-7:
+		_rim_dir = dir
+		_rim.global_transform = Transform3D(Basis.looking_at(dir, Vector3.UP), Vector3.ZERO)
 	var night := 1.0
 	if is_instance_valid(sun):
 		night = 1.0 - clampf(sun.light_energy / 1.1, 0.0, 1.0) * 0.6
-	_rim.light_energy = energy * night
+	if not is_equal_approx(_rim.light_energy, energy * night):
+		_rim.light_energy = energy * night
 	if is_instance_valid(sun):                       # цвет — от солнца мира (розовый закат), не свой голубой
-		_rim.light_color = sun.light_color.lerp(Color(0.85, 0.75, 0.9), 0.4)
+		var rc := sun.light_color.lerp(Color(0.85, 0.75, 0.9), 0.4)
+		if not rc.is_equal_approx(_rim.light_color):
+			_rim.light_color = rc
 
 
 var _fogs_made := false
@@ -721,6 +732,17 @@ var _sun_vis := 0.0
 
 ## Слой камеры по кадру: размытие поворота (насколько повернулась камера за кадр) и блики солнца (где солнце
 ## на экране и не заслонено ли — луч по коллизиям города).
+var _lens_vals := {}
+
+
+## Параметр слоя объектива — только при смене (каждая запись — перезалив буфера материала).
+func _lens_set(key: String, v: Variant) -> void:
+	if _lens_vals.get(key) == v:
+		return
+	_lens_vals[key] = v
+	lens_mat.set_shader_parameter(key, v)
+
+
 func _camera_lens(delta: float) -> void:
 	if lens_mat == null or not is_instance_valid(cam) or not is_instance_valid(view):
 		return
@@ -737,10 +759,10 @@ func _camera_lens(delta: float) -> void:
 		if mb.length() > 0.035:
 			mb = mb.normalized() * 0.035
 	_prev_fwd = fwd
-	lens_mat.set_shader_parameter("mblur", mb)
+	_lens_set("mblur", mb)
 	var fl := _f("flare", 0.6)
 	if fl <= 0.0 or not is_instance_valid(sun):
-		lens_mat.set_shader_parameter("sun_vis", 0.0)
+		_lens_set("sun_vis", 0.0)
 		return
 	var to_sun := sun.global_transform.basis.z.normalized()        # свет летит по −Z — солнце в стороне +Z
 	var want := 0.0
@@ -748,17 +770,19 @@ func _camera_lens(delta: float) -> void:
 	if to_sun.y > -0.02 and not cam.is_position_behind(p) and sun.light_energy > 0.3:
 		var uv := cam.unproject_position(p) / vs
 		if uv.x > -0.2 and uv.x < 1.2 and uv.y > -0.2 and uv.y < 1.2:
-			lens_mat.set_shader_parameter("sun_uv", uv)
+			_lens_set("sun_uv", uv)
 			want = 0.0 if _sun_blocked else clampf(sun.light_energy / 1.1, 0.0, 1.0)   # за домом — нет
 	_sun_vis = move_toward(_sun_vis, want, delta * 4.0)
-	lens_mat.set_shader_parameter("sun_vis", _sun_vis * fl)
-	lens_mat.set_shader_parameter("sun_col", Vector3(sun.light_color.r, sun.light_color.g, sun.light_color.b))
+	_lens_set("sun_vis", _sun_vis * fl)
+	_lens_set("sun_col", Vector3(sun.light_color.r, sun.light_color.g, sun.light_color.b))
 
 
 var _sun_blocked := false
 
 
 ## Заслонено ли солнце (луч по коллизиям города) — в такте физики: вне его пространство физики может быть занято.
+static var occlusion_on := false   # отсечение заслонённым включено — городу нужны окклюдеры (city.gd)
+static var now := 0.0                # те же часы, что у шейдеров (pax_rpg_time) — читать без запроса к рендеру
 var _sun_ray_t := 0.0
 
 

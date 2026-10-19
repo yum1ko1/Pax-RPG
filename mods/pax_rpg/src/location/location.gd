@@ -1335,7 +1335,20 @@ func _notification(what: int) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+var _typing_frame := -1
+var _typing_val := false
+
+
+## Печатает ли игрок (фокус в поле ввода): ответ — один раз на кадр, а зовут его десятки раз (ввод, клавиши).
 func _typing() -> bool:
+	var fr := Engine.get_process_frames()
+	if fr != _typing_frame:
+		_typing_frame = fr
+		_typing_val = _typing_now()
+	return _typing_val
+
+
+func _typing_now() -> bool:
 	var focus := get_viewport().gui_get_focus_owner()
 	# фокус на скрытом поле (окно свернули во время загрузки — поле ввода игры или имени осталось в фокусе
 	# невидимым) — не печать: иначе клавиши героя молчат, работает одно колесо мыши
@@ -1350,7 +1363,10 @@ func _physics_process(delta: float) -> void:
 	if not active or not is_instance_valid(_player) or paused():
 		return
 	var t0 := Time.get_ticks_usec()
-	_goblins = _goblins.filter(func(g: Variant) -> bool: return is_instance_valid(g))   # павшие на арене — удалены
+	for g: Variant in _goblins:                          # павшие на арене — удалены; новый массив — только если кто-то исчез
+		if not is_instance_valid(g):
+			_goblins = _goblins.filter(func(x: Variant) -> bool: return is_instance_valid(x))
+			break
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)
 	_foe_line_cd = maxf(0.0, _foe_line_cd - delta)

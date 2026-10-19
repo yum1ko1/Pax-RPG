@@ -1,4 +1,5 @@
 extends RefCounted
+const GfxS := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const HouseDetail := preload("res://mods/pax_rpg/src/location/house_detail.gd")
@@ -1087,6 +1088,8 @@ func _occludes(path: String) -> bool:
 
 ## Окклюдер-коробка: рамка модели, ужатая shrink (крыши со свесами и проёмы не должны заслонять лишнего).
 func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
+	if not GfxS.occlusion_on:                            # отсечение заслонённым выключено (location.json) — сотни узлов-
+		return                                            # окклюдеров только занимали память и обход сцены
 	var oc := OccluderInstance3D.new()
 	var bo := BoxOccluder3D.new()
 	bo.size = box.size * shrink

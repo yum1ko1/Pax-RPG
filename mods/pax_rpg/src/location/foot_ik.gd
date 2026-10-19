@@ -15,7 +15,10 @@ var _ids: Array = []                 # [[бедро, голень, стопа], 
 var _hips := -1
 var _off := [0.0, 0.0]               # сглаженная высота земли под стопой (м, от уровня модели)
 var _hip := 0.0                      # сглаженное опускание таза (м, ≤ 0)
-var _w := 0.0                        # вес IK: 0 в воздухе, 1 на земле
+var _w := 0.0
+var _q: PhysicsRayQueryParameters3D
+var _ray_at := [Vector3.INF, Vector3.INF]   # где стопа была при последнем луче
+var _ray_want := [0.0, 0.0]                        # вес IK: 0 в воздухе, 1 на земле
 
 
 func _ready() -> void:
@@ -47,13 +50,21 @@ func _process_modification() -> void:
 	for i: int in 2:
 		var foot_w := xf * sk.get_bone_global_pose(_ids[i][2]).origin
 		if grounded:
-			var q := PhysicsRayQueryParameters3D.create(Vector3(foot_w.x, floor_y + reach, foot_w.z),
-				Vector3(foot_w.x, floor_y - reach, foot_w.z))
-			q.exclude = [body.get_rid()]
-			q.collide_with_areas = false
-			var hit := space.intersect_ray(q)
-			if not hit.is_empty() and (hit.normal as Vector3).y > 0.55:
-				want[i] = clampf((hit.position as Vector3).y - floor_y, -reach, reach)
+			var at := Vector3(foot_w.x, floor_y, foot_w.z)
+			if at.distance_squared_to(_ray_at[i]) < 0.0009:   # стопа на месте (± 3 см) — земля под ней та же
+				want[i] = _ray_want[i]
+			else:
+				if _q == null:                            # один запрос на всё время, а не новый объект на луч
+					_q = PhysicsRayQueryParameters3D.new()
+					_q.exclude = [body.get_rid()]
+					_q.collide_with_areas = false
+				_q.from = at + Vector3(0, reach, 0)
+				_q.to = at - Vector3(0, reach, 0)
+				var hit := space.intersect_ray(_q)
+				if not hit.is_empty() and (hit.normal as Vector3).y > 0.55:
+					want[i] = clampf((hit.position as Vector3).y - floor_y, -reach, reach)
+				_ray_at[i] = at
+				_ray_want[i] = want[i]
 		_off[i] = lerpf(float(_off[i]), float(want[i]), clampf(dt * 14.0, 0.0, 1.0))
 	var h := clampf(minf(minf(float(_off[0]), float(_off[1])), 0.0), -hip_max, 0.0)
 	_hip = lerpf(_hip, h, clampf(dt * 10.0, 0.0, 1.0))

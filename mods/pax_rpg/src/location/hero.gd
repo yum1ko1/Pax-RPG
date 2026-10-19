@@ -1262,6 +1262,9 @@ func _blade_out(out: Dictionary) -> void:
 
 ## Полоса между четвертью клинка и остриём за последние trail_life с — только в ударах и только пока меч летит
 ## быстро: видно дугу, которую накрывает удар.
+var _trail_drawn := true
+
+
 func _trail_tick(delta: float) -> void:
 	if _trail_mesh == null:
 		return
@@ -1280,9 +1283,13 @@ func _trail_tick(delta: float) -> void:
 			_trail.append([_clock, base, tip])
 	while not _trail.is_empty() and _clock - float((_trail[0] as Array)[0]) > life:
 		_trail.pop_front()
-	_trail_mesh.clear_surfaces()
 	if _trail.size() < 2:
+		if _trail_drawn:                                  # погас — очистить один раз, а не каждый кадр
+			_trail_mesh.clear_surfaces()
+			_trail_drawn = false
 		return
+	_trail_mesh.clear_surfaces()
+	_trail_drawn = true
 	var col: Array = cfg.get("trail_color", [0.8, 0.45, 1.0])
 	var c := Color(float(col[0]), float(col[1]), float(col[2]))
 	_trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _trail_mat)
@@ -2427,6 +2434,9 @@ var _blink_twice := false
 var _eye_t := 2.0
 var _eye_look := Vector2.ZERO
 var _eye_want := Vector2.ZERO
+var _blink_w := -1.0
+var _lid_idx: Array = []
+var _eye_rest: Array = []
 
 
 func _face_tick(delta: float) -> void:
@@ -2459,8 +2469,13 @@ func _face_tick(delta: float) -> void:
 				if _blink_twice:
 					_blink_twice = false
 					_blink_t = 0.12
-		for mi: MeshInstance3D in _lids:
-			mi.set_blend_shape_value(mi.find_blend_shape_by_name(&"Blink"), w)
+		if not is_equal_approx(w, _blink_w):              # веки — только когда двигаются (раньше: поиск формы по имени
+			_blink_w = w                                  # и запись 0 в сетку каждый кадр)
+			for li: int in _lids.size():
+				var mi: MeshInstance3D = _lids[li]
+				if li >= _lid_idx.size():
+					_lid_idx.append(mi.find_blend_shape_by_name(&"Blink"))
+				mi.set_blend_shape_value(_lid_idx[li], w)
 	if not _eyes.is_empty():
 		_eye_t -= delta
 		if _eye_t <= 0.0:
@@ -2471,11 +2486,16 @@ func _face_tick(delta: float) -> void:
 				_eye_want = Vector2(randf_range(-0.3, 0.3), randf_range(-0.1, 0.12))
 				_eye_t = randf_range(0.6, 1.6)
 		_eye_look = _eye_look.lerp(_eye_want, 1.0 - exp(-delta * 18.0))   # взгляд прыгает быстро (саккада)
-		for bi: int in _eyes:
-			var rest := _skel.get_bone_rest(bi).basis.get_rotation_quaternion()
-			var g := _skel.get_bone_global_rest(bi).basis.get_rotation_quaternion()
-			var off := Quaternion(Vector3.UP, _eye_look.x) * Quaternion(Vector3.RIGHT, -_eye_look.y)   # в осях головы: вбок, вверх
-			_skel.set_bone_pose_rotation(bi, rest * (g.inverse() * off * g))
+		# каждый кадр (клип мог перезаписать кости глаз), но покой костей — из кэша, а не два запроса на кадр
+		if _eye_rest.is_empty():                      # покой костей глаз — один раз, а не дважды на кадр
+			for bi: int in _eyes:
+				_eye_rest.append([_skel.get_bone_rest(bi).basis.get_rotation_quaternion(),
+					_skel.get_bone_global_rest(bi).basis.get_rotation_quaternion()])
+		var off := Quaternion(Vector3.UP, _eye_look.x) * Quaternion(Vector3.RIGHT, -_eye_look.y)   # в осях головы: вбок, вверх
+		for k: int in _eyes.size():
+			var rest: Quaternion = _eye_rest[k][0]
+			var g: Quaternion = _eye_rest[k][1]
+			_skel.set_bone_pose_rotation(_eyes[k], rest * (g.inverse() * off * g))
 
 
 func _show_sword(delta: float) -> void:

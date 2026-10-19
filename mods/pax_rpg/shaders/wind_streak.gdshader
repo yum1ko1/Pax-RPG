@@ -4,9 +4,20 @@
 shader_type spatial;
 render_mode unshaded, blend_add, cull_disabled, depth_draw_never, shadows_disabled;
 
-uniform float life = 0.0;
-uniform float phase = 0.0;
-uniform float curl = 0.3;
+// жизнь и полёт считает шейдер по общим часам (gfx.gd → pax_rpg_time): скрипт ничего не пишет в кадр
+global uniform float pax_rpg_time;
+instance uniform float t0 = 0.0;
+instance uniform float dur = 1.2;
+instance uniform vec3 vel = vec3(0.0);
+instance uniform float phase = 0.0;
+instance uniform float curl = 0.3;
+varying float life;
+
+void vertex() {
+	float el = max(pax_rpg_time - t0, 0.0);
+	life = clamp(el / dur, 0.0, 1.0);
+	VERTEX += (inverse(MODEL_MATRIX) * vec4(vel * el, 0.0)).xyz;   // прядь летит с ветром
+}
 uniform vec3 tint = vec3(1.0, 0.9, 0.97);
 
 float hash(float n) { return fract(sin(n) * 43758.5453); }

@@ -120,7 +120,50 @@ func _play(c: String) -> void:
 		_anim.play(c, 0.3)
 
 
+# ---------- один ведущий житель ведёт всех: 2 вызова из движка в кадр вместо 2 × N (как менеджеры толпы) ----------
+static var all: Array = []
+static var _driver: Node
+
+
+func _enter_tree() -> void:
+	all.append(self)
+	var lead := _driver == null or not is_instance_valid(_driver)
+	if lead:
+		_driver = self
+	set_process(lead)
+	set_physics_process(lead)
+
+
+func _exit_tree() -> void:
+	all.erase(self)
+	if _driver != self:
+		return
+	_driver = null
+	for n: Variant in all:
+		if is_instance_valid(n) and (n as Node).is_inside_tree():
+			_driver = n
+			(n as Node).set_process(true)
+			(n as Node).set_physics_process(true)
+			break
+
+
+func _process(delta: float) -> void:
+	if _driver != self:
+		set_process(false)
+		return
+	for n: Variant in all:
+		n._proc_tick(delta)
+
+
 func _physics_process(delta: float) -> void:
+	if _driver != self:
+		set_physics_process(false)
+		return
+	for n: Variant in all:
+		n._phys_tick(delta)
+
+
+func _phys_tick(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_tick += 1
 	_phys_acc += delta
@@ -130,7 +173,7 @@ func _physics_process(delta: float) -> void:
 	Prof.add("NPC", t0)
 
 
-func _process(delta: float) -> void:
+func _proc_tick(delta: float) -> void:
 	if _anim == null:
 		return
 	var cam := get_viewport().get_camera_3d()
