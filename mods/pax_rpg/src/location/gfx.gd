@@ -507,7 +507,9 @@ func _lamp_shadows() -> void:
 			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
-		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0 and _reaches_view(ol, frustum):
+		var seen := _reaches_view(ol, frustum)
+		ol.set_meta("pax_rpg_in_view", seen)
+		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0 and seen:
 			near.append([d, ol])
 		else:
 			ol.set_meta("pax_rpg_sh_want", false)
@@ -526,6 +528,9 @@ func _lamp_shadows() -> void:
 		if w and not so.shadow_enabled:
 			so.shadow_opacity = 0.0
 			so.shadow_enabled = true
+		if so.shadow_enabled and not w and not bool(so.get_meta("pax_rpg_in_view", true)):
+			so.shadow_enabled = false                      # свет ушёл из кадра — гасить тень плавно некому смотреть
+			continue
 		if so.shadow_enabled:
 			var far := clampf((so.global_position.distance_to(hp) - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
 			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
@@ -557,7 +562,8 @@ func _cull_particles() -> void:
 	_parts_age += 0.5
 	if _parts_age > 5.0:
 		_parts_age = 0.0
-		_parts = view.find_children("*", "CPUParticles3D", true, false) + view.find_children("*", "GPUParticles3D", true, false)
+		Vfx.registry = Vfx.registry.filter(func(n: Variant) -> bool: return is_instance_valid(n))
+		_parts = Vfx.registry.duplicate()            # список от vfx.gd, а не обход ~8000 узлов сцены раз в 5 с (рывок)
 	var cp := cam.global_position
 	for n: Variant in _parts:
 		if not is_instance_valid(n):

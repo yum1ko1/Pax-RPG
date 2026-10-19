@@ -136,3 +136,9 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, rw.size.x - 80 * s, fs, text if on else muted)
 		draw_string(_mono, rw.position + Vector2(rw.size.x - 64 * s, rw.size.y * 0.5 + 6 * s), str(_items[i][2]),
 			HORIZONTAL_ALIGNMENT_RIGHT, 52 * s, int(14 * s), Color(gold, 0.8))
+
+
+## Скрыт — не обрабатывается совсем (раньше _process звался каждый кадр и сразу выходил).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED or what == NOTIFICATION_READY:
+		set_process(is_visible_in_tree())

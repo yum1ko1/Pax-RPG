@@ -7,6 +7,7 @@ extends RefCounted
 ##  • стриминг — у больших моделей сначала лёгкие 512 px (t<N>_lo.dds), полные 2048 подгружаются, когда модель
 ##    ближе NEAR м к камере, и выгружаются дальше FAR (stream_tick — раз в полсекунды, не больше SWAPS за раз).
 
+const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 const SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ORM,
 	BaseMaterial3D.TEXTURE_ROUGHNESS, BaseMaterial3D.TEXTURE_METALLIC, BaseMaterial3D.TEXTURE_EMISSION,
 	BaseMaterial3D.TEXTURE_AMBIENT_OCCLUSION]
@@ -58,23 +59,51 @@ static func clear_tracking(mod: PaxMod) -> void:
 
 
 static func stream_tick(mod: PaxMod, cam: Vector3) -> void:
-	var swaps := 0
 	for s: Dictionary in _streams:
+		if bool(s.get("queued", false)):
+			continue
 		var d := INF
 		for p: Vector3 in s.pts:
-			d = minf(d, p.distance_to(cam))
+			d = minf(d, p.distance_squared_to(cam))
 		var alive: Array = []
 		for n: Variant in s.nodes:
 			if is_instance_valid(n):
 				alive.append(n)
-				d = minf(d, (n as Node3D).global_position.distance_to(cam))
+				d = minf(d, (n as Node3D).global_position.distance_squared_to(cam))
 		s.nodes = alive
-		var want := d < NEAR if not bool(s.hi_on) else d < FAR
+		var want := d < NEAR * NEAR if not bool(s.hi_on) else d < FAR * FAR
 		if want != bool(s.hi_on):
-			_swap(mod, s, want)
-			swaps += 1
-			if swaps >= SWAPS:
-				return
+			s.queued = true
+			_queue.append([s, want])
+
+
+## Смена текстуры — по одной за кадр и без остановки кадра: файл читается здесь, разбор DDS — в потоке (Bg),
+## загрузка в видеокарту — снова здесь. Раньше до SWAPS полных текстур (по ~5.6 МБ) читались и разбирались
+## в одном кадре — на ходу кадр дёргался.
+static var _queue: Array = []
+static var _busy := false
+
+
+static func stream_pump(mod: PaxMod) -> void:
+	if _busy or _queue.is_empty():
+		return
+	var job: Array = _queue.pop_front()
+	_swap_async(mod, job[0], job[1])
+
+
+static func _swap_async(mod: PaxMod, s: Dictionary, hi: bool) -> void:
+	_busy = true
+	var b := mod.read_bytes(str(s.hi if hi else s.lo))
+	var img: Variant = null
+	if not b.is_empty():
+		img = await Bg.run(func() -> Variant:
+			var im := Image.new()
+			return im if im.load_dds_from_buffer(b) == OK else null)
+	if img is Image and s.tex is ImageTexture:
+		(s.tex as ImageTexture).set_image(img)
+		s.hi_on = hi
+	s.queued = false
+	_busy = false
 
 
 static func _swap(mod: PaxMod, s: Dictionary, hi: bool) -> void:

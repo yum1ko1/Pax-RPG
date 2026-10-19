@@ -83,7 +83,8 @@ func _parts(parent: Node, pos: Vector3, mat: Material, amount: int, life: float)
 	p.angle_min = 0.0
 	p.angle_max = 360.0
 	p.visibility_range_end = 90.0
-	p.position = pos
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # огонь, дым, искры: прозрачное и светящееся тени не
+	p.position = pos                                     # даёт, а в списках теней огней и солнца каждый кадр — лишнее
 	parent.add_child(p)
 	return p
 
@@ -115,17 +116,88 @@ func smoke(parent: Node, pos: Vector3, size: float, col: Color, amount: int, ris
 	return p
 
 
+## Живое пламя (как в больших играх — шейдер на шумах, а не картинка): цилиндрический billboard держит вертикаль,
+## два слоя шума бегут вверх с разной скоростью и рвут край языка; цвет — от белого жара в сердцевине к оранжевому
+## и тёмно-красной кромке; у каждого огня своя фаза (по месту) — соседние не горят в такт.
+const FLAME_SH := """shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
+uniform vec4 core : source_color = vec4(1.0, 0.93, 0.7, 1.0);
+uniform vec4 mid : source_color = vec4(1.0, 0.52, 0.12, 1.0);
+uniform vec4 edge : source_color = vec4(0.7, 0.12, 0.03, 1.0);
+uniform float energy = 1.35;
+uniform float speed = 1.0;
+varying float ph;
+void vertex() {
+	ph = fract(sin(dot(MODEL_MATRIX[3].xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 40.0;
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(vec4(normalize(cross(vec3(0.0, 1.0, 0.0), INV_VIEW_MATRIX[2].xyz)), 0.0),
+		vec4(0.0, 1.0, 0.0, 0.0), vec4(normalize(cross(INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0), MODEL_MATRIX[3]);
+	MODELVIEW_MATRIX = MODELVIEW_MATRIX * mat4(vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0),
+		vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0), vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+}
+void fragment() {
+	float y = 1.0 - UV.y;
+	float t = TIME * speed + ph;
+	float n1 = texture(noise_tex, UV * vec2(1.1, 0.9) + vec2(0.13 * sin(t * 0.7), t * 0.85)).r;
+	float n2 = texture(noise_tex, UV * vec2(2.4, 1.7) + vec2(0.37, t * 1.9)).r;
+	float x = UV.x - 0.5 + (n1 - 0.5) * 0.42 * y;
+	float w = mix(0.44, 0.06, pow(y, 0.75));
+	float body = smoothstep(w, w * 0.2, abs(x)) * smoothstep(0.0, 0.1, y) * smoothstep(1.0, 0.5, y + (n2 - 0.5) * 0.45);
+	float heat = clamp(body * (0.5 + n2 * 0.9) - y * 0.3, 0.0, 1.0);
+	vec3 c = mix(edge.rgb, mid.rgb, smoothstep(0.04, 0.38, heat));
+	c = mix(c, core.rgb, smoothstep(0.62, 0.95, heat));
+	ALBEDO = c * energy;
+	ALPHA = smoothstep(0.02, 0.3, heat) * 0.9;
+}
+"""
+static var _flame_sh: Shader
+static var _noise: NoiseTexture2D
+
+
+func _flame_mat() -> ShaderMaterial:
+	if _mats.has("flame"):
+		return _mats["flame"]
+	if _flame_sh == null:
+		_flame_sh = Shader.new()
+		_flame_sh.code = FLAME_SH
+	if _noise == null:
+		var fn := FastNoiseLite.new()
+		fn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+		fn.frequency = 0.035
+		fn.fractal_octaves = 3
+		_noise = NoiseTexture2D.new()
+		_noise.width = 128
+		_noise.height = 128
+		_noise.seamless = true
+		_noise.generate_mipmaps = true
+		_noise.noise = fn
+	var m := ShaderMaterial.new()
+	m.shader = _flame_sh
+	m.set_shader_parameter("noise_tex", _noise)
+	_mats["flame"] = m
+	return m
+
+
+## Язык пламени: основание — в pos, высота size м (ширина — 0.62 высоты).
+func flame(parent: Node, pos: Vector3, size: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(size * 0.62, size)
+	q.center_offset = Vector3(0.0, size * 0.5, 0.0)
+	q.material = _flame_mat()
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = 120.0
+	mi.position = pos
+	parent.add_child(mi)
+	return mi
+
+
 ## Огонь из слоёв. size ≈ высота языков, м. Возвращает свет (им управляет daynight как фонарём).
 func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLight3D:
-	var core := MeshInstance3D.new()                     # ядро-ореол: жар у основания
-	var cq := QuadMesh.new()
-	cq.size = Vector2.ONE * size * 1.3
-	cq.material = _glow_mat(Color(1.0, 0.55, 0.2), 2.2)
-	core.mesh = cq
-	core.position = pos + Vector3(0, size * 0.25, 0)
-	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(core)
-	var fl := _parts(parent, pos, _flip_mat(FIRE, true, 2.6), 10, 0.75)   # языки пламени
+	flame(parent, pos - Vector3(0, size * 0.05, 0), size * 1.35)   # тело огня — живое пламя на шумах
+	var fl := _parts(parent, pos, _flip_mat(FIRE, true, 1.6), 7, 0.75)    # отрывающиеся языки поверх тела огня
 	fl.direction = Vector3.UP
 	fl.spread = 6.0
 	fl.initial_velocity_min = size * 0.4
@@ -148,17 +220,19 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	fr.set_color(1, Color(1, 0.6, 0.4, 0.0))
 	fl.color_ramp = fr
 	var sp := CPUParticles3D.new()                       # искры: уходят вверх, гаснут
-	var sm := SphereMesh.new()
-	sm.radius = 0.012
-	sm.height = 0.024
-	sm.radial_segments = 4
-	sm.rings = 2
+	var sm := QuadMesh.new()                             # искра — штрих по направлению полёта (как у раскалённых
+	sm.size = Vector2(0.014, 0.075)                      # частиц в жизни: глаз видит след), а не точка
 	var smat := StandardMaterial3D.new()
 	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	smat.albedo_color = Color(3.0, 1.4, 0.4)
 	smat.vertex_color_use_as_albedo = true
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	smat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	smat.billboard_keep_scale = true
 	sm.material = smat
 	sp.mesh = sm
+	sp.particle_flag_align_y = true
 	sp.amount = 10
 	sp.lifetime = 1.6
 	sp.preprocess = 1.6
@@ -177,6 +251,7 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	sr.set_color(1, Color(1, 0.3, 0.1, 0))
 	sp.color_ramp = sr
 	sp.visibility_range_end = 60.0
+	sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sp.position = pos + Vector3(0, size * 0.3, 0)
 	parent.add_child(sp)
 	if with_smoke:
@@ -325,4 +400,9 @@ static func to_gpu_list(nodes: Array) -> Dictionary:
 		par.remove_child(c)
 		c.queue_free()
 		map[c] = g
+		registry.append(g)
 	return map
+
+
+## Все постоянные системы частиц (после to_gpu) — gfx.gd прячет дальние по этому списку, без обхода дерева сцены.
+static var registry: Array = []

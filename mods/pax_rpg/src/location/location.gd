@@ -3093,6 +3093,8 @@ func _process(delta: float) -> void:
 			_set_wrist(not (is_instance_valid(_wrist) and _wrist.visible))   # TAB — наручный терминал
 	_tab_was = tab
 	_stream_t -= delta
+	if active:
+		Assets.stream_pump(mod)                        # очередь смены текстур — по одной за кадр, разбор в потоке
 	if active and _stream_t <= 0.0 and is_instance_valid(_cam):
 		_stream_t = 0.5
 		var t0 := Time.get_ticks_usec()

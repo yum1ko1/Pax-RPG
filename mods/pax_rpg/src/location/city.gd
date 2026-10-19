@@ -471,6 +471,7 @@ func _fountain_water(t: Transform3D) -> void:
 	jr.set_color(1, Color(1, 1, 1, 0.15))
 	jet.color_ramp = jr
 	jet.position = t.origin + Vector3(0, 4.0 * sc, 0)
+	jet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # прозрачная вода — тени не даёт
 	root.add_child(jet)
 	var splash := CPUParticles3D.new()                    # брызги, отскочившие от воды — короткие штрихи
 	splash.mesh = drop
@@ -491,6 +492,7 @@ func _fountain_water(t: Transform3D) -> void:
 	splash.scale_amount_min = 0.12
 	splash.scale_amount_max = 0.28
 	splash.position = t.origin + Vector3(0, 1.48 * sc, 0)
+	splash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(splash)
 	var mist := vfx.smoke(root, t.origin + Vector3(0, 1.7 * sc, 0), 1.1 * sc, Color(0.85, 0.93, 1.0, 0.16), 10, 0.25)
 	mist.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING     # водяная пыль над чашей
@@ -704,7 +706,12 @@ void fragment() {
 	if (paper) {
 		vec3 t = texture(tex, UV).rgb;
 		ALBEDO = t;
-		EMISSION = (em_col.rgb + t) * emission_energy;   // как у StandardMaterial: (цвет + текстура) · энергия
+		// бумага просвечивает, как в жизни: свеча внутри видна ярче там, где бумага смотрит на нас (свет проходит
+		// один слой), к краям шара — темнее (свет идёт вдоль бумаги); рёбра и герб темнее — они в текстуре
+		float ndv = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+		float through = 0.3 + 1.4 * pow(ndv, 2.2);
+		EMISSION = (em_col.rgb + t) * emission_energy * through;
+		BACKLIGHT = t * 0.6;                              // свет снаружи (соседние огни) тоже проходит сквозь бумагу
 		ROUGHNESS = 0.8;
 	} else {
 		ALBEDO = rim_col.rgb;
@@ -1034,7 +1041,10 @@ func _lights(path: String, list: Array) -> void:
 			var fo := Vector3(0, 0.25, 0) if path.ends_with("firepit.glb") else Vector3(0, 0.05, 0)
 			lights.append([vfx.fire(root, t * fo, fs, false), 2.6])
 			continue
-		vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 0.75, 0.6)
+		if path.ends_with("lantern_post.glb") or path.ends_with("stone_lantern.glb"):
+			vfx.flame(root, t * off - Vector3(0, 0.12, 0), 0.3)   # в фонаре — живой огонёк, а не светящийся кружок
+		else:
+			vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 0.75, 0.6)   # мана — сияние
 		var l := OmniLight3D.new()
 		l.light_color = col
 		l.light_energy = 1.6

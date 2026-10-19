@@ -442,3 +442,9 @@ class _Disc extends Control:
 			var d := c + Vector2(0, r - 2.0)
 			draw_colored_polygon(PackedVector2Array([d + Vector2(0, -6), d + Vector2(6, 0), d + Vector2(0, 6),
 				d + Vector2(-6, 0)]), Color(1.0, 0.71, 0.28))
+
+
+## Скрыт — не обрабатывается совсем (раньше _process звался каждый кадр и сразу выходил).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED or what == NOTIFICATION_READY:
+		set_process(is_visible_in_tree())

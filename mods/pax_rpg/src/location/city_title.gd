@@ -123,6 +123,7 @@ func _particles(n: int, life: float, speed: float, col: Color, sz: float) -> CPU
 
 func play(delay := 0.4) -> void:
 	_t = -delay
+	set_process(true)
 
 
 static func _ease_out(x: float) -> float:
@@ -146,6 +147,7 @@ func _once(key: String, at: float, fn: Callable) -> void:
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("city_title._process")
 	if _t < -100.0:
+		set_process(false)                               # титр отыграл — больше не обрабатывается
 		return
 	_t += delta * (1.0 if _t < 0.0 else _speed(_t))
 	if _t < 0.0:

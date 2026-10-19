@@ -254,13 +254,18 @@ func land() -> void:
 		_gear.play()
 
 
+var _at_last := Vector3.INF
+
+
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("sfx._process")
 	if is_instance_valid(_at):                       # плееры — дети простого Node: позиция = мировая
 		var pos := _at.global_position
-		for c: Node in get_children():
-			if c is AudioStreamPlayer3D:
-				(c as AudioStreamPlayer3D).position = pos
+		if not pos.is_equal_approx(_at_last):           # герой стоит — ~20 плееров не двигаем (каждое присваивание —
+			_at_last = pos                              # пересчёт трансформа и уведомление аудиосерверу)
+			for c: Node in get_children():
+				if c is AudioStreamPlayer3D:
+					(c as AudioStreamPlayer3D).position = pos
 	if not city or _far == null:
 		return
 	_next_far -= delta

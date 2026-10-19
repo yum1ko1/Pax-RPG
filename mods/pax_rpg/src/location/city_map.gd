@@ -301,3 +301,9 @@ func _legend(sh: Dictionary) -> void:
 		_ink.draw_string(title_font, Vector2(x + 54 * s, y + 16 * s), str(r[2]), HORIZONTAL_ALIGNMENT_LEFT, w - 64 * s,
 			int(18 * s), Color(0.9, 0.86, 0.95))
 		y += lh
+
+
+## Скрыт — не обрабатывается совсем (раньше _process звался каждый кадр и сразу выходил).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED or what == NOTIFICATION_READY:
+		set_process(is_visible_in_tree())
