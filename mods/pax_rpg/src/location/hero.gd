@@ -34,6 +34,7 @@ var _block_t := 0.0                 # с, сколько держит блок: 
 var _still := -1.0                   # с какой секунды герой стоит без дела (Idle — раз в 20–30 с, иначе стойка)
 var _fidget_at := 0.0
 var _fidget_pos := 0.0
+var _still_held := false              # стойка уже заморожена на первом кадре (после перехода в неё)
 var _dir_sector := "F"              # направление шага (F/B/L/R) — с запасом, чтобы клипы не дёргались на диагонали
 var action := ""                    # разовый клип: Draw / Sheathe / Jump / AttackN; "" — ходьба и стойки
 var swing_side := 0                  # location.gd: враг слева от героя (−1) — удар справа налево (Attack1), справа (+1) — слева направо (Attack2)
@@ -306,7 +307,7 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	model.add_child(anim)
 	anim.setup(player, spaces)
 	anim.animation_finished.connect(_on_finished)
-	anim.play("Idle")
+	anim.play("Idle", 0.0)                         # сразу в стойке — без перехода из первой петли списка
 	_skel = _find_skeleton(model)
 	if _skel != null:
 		_skel.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
@@ -1808,6 +1809,13 @@ func _idle_scale() -> float:
 		_still = now
 		_fidget_at = now + randf_range(_f("idle_every_min", 20.0), _f("idle_every_max", 30.0))
 		_fidget_pos = 0.0
+		_still_held = false
+	# пока идёт переход в стойку — время течёт: масштаб 0 у loop_ts замораживает и сам кроссфейд, и герой застывал
+	# между прежним клипом и стойкой (при появлении — в позе первой петли, после шага — в последнем кадре шага)
+	if now - _still < _f("idle_hold_after", 0.6):
+		return 1.0
+	if not _still_held:
+		_still_held = true
 		anim.seek(0.0, true)
 	if now < _fidget_at:
 		return 0.0

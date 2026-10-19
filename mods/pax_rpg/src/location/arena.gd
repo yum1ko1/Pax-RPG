@@ -9,6 +9,7 @@ extends Node
 
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
+const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 const LADDER := [1, 2, 3, 5, 0]               # гоблинов в бою; 0 — чемпион
 const CROWD_DIR := "models/goblin/"
 const ORC := "orc"
@@ -327,6 +328,7 @@ func _build_bowl(view: Node) -> void:
 				ol.light_volumetric_fog_energy = 0.0
 				ol.position = Vector3(0, 1.2, 0)
 				lt.add_child(ol)
+				_lamp_flame(lt)
 	for xs: float in [1.0, -1.0]:                      # фонари внизу у лестниц — видно глубину ямы
 		var lb := Assets.model(mod, "models/gharn/props/stone_lantern.glb")
 		if lb != null:
@@ -339,6 +341,7 @@ func _build_bowl(view: Node) -> void:
 			ol2.light_volumetric_fog_energy = 0.0
 			ol2.position = Vector3(0, 1.2, 0)
 			lb.add_child(ol2)
+			_lamp_flame(lb)
 	var run := ST_TOP - ST_BOT
 	for xs: float in [1.0, -1.0]:
 		var ramp := StaticBody3D.new()
@@ -417,3 +420,11 @@ class Crowd extends Node3D:
 			var n: Node3D = f[0]
 			if is_instance_valid(n):
 				n.position.y = float(f[1]) + maxf(0.0, sin(_t * 5.0 + float(f[2]))) * 0.12
+
+
+## Огонёк в каменном фонаре (сердцевина фонаря сплошная — огонь выдвинут к камере, как в городе).
+var _vfx: Vfx
+func _lamp_flame(lamp: Node3D) -> void:
+	if _vfx == null:
+		_vfx = Vfx.new(mod)
+	_vfx.flame(lamp, Vector3(0, 1.19, 0), 0.3, 0.22)

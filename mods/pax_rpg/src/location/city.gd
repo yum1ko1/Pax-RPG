@@ -1047,7 +1047,11 @@ func _lights(path: String, list: Array) -> void:
 			var fo := Vector3(0, 0.25, 0) if path.ends_with("firepit.glb") else Vector3(0, 0.05, 0)
 			lights.append([vfx.fire(root, t * fo, fs, false), 2.6])
 			continue
-		if path.ends_with("lantern_post.glb") or path.ends_with("stone_lantern.glb"):
+		if path.ends_with("stone_lantern.glb"):
+			# сердцевина каменного фонаря сплошная (r 0.18 м): огонёк — у её грани, обращённой к камере, между столбиков
+			var sc := t.basis.get_scale().x
+			vfx.flame(root, t * Vector3(0, 1.19, 0), 0.3 * sc, 0.22 * sc)
+		elif path.ends_with("lantern_post.glb"):
 			vfx.flame(root, t * off - Vector3(0, 0.12, 0), 0.3)   # в фонаре — живой огонёк, а не светящийся кружок
 		else:
 			vfx.halo(root, t * off, col, 0.9 if path.ends_with("mana_crystal.glb") else 0.75, 0.6)   # мана — сияние
@@ -1056,11 +1060,14 @@ func _lights(path: String, list: Array) -> void:
 		l.light_energy = 1.6
 		l.omni_range = 9.0
 		l.position = t * off
+		if path.ends_with("stone_lantern.glb"):
+			l.shadow_caster_mask = 0xFFFFF & ~LAMP_SELF     # свет внутри сплошного камня: сам фонарь тени не даёт
 		root.add_child(l)
 		lights.append([l, 2.8])
 
 
 const CELL := 24.0
+const LAMP_SELF := 1 << 18           # слой 19 — каменные фонари: их собственный свет их не затеняет
 const FAR_DRAW := 220.0
 
 
@@ -1247,6 +1254,8 @@ func _place(path: String, list: Array) -> void:
 				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
 				if hm != null:
 					mi.material_override = hm
+			if path.ends_with("stone_lantern.glb"):
+				mi.layers |= LAMP_SELF
 			if fol != null:
 				mi.material_override = fol
 				mi.extra_cull_margin = 1.5

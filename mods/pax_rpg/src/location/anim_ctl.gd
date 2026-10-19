@@ -121,7 +121,7 @@ func setup(p: AnimationPlayer, spaces: Dictionary) -> void:
 	# начальные состояния переключателей — явно: у нового AnimationNodeTransition состояние пустое, вывод — без позы
 	# (герой стоял в T-позе, пока «достать меч» не переключало mode туда и обратно)
 	if not _loops.is_empty():
-		tree.set("parameters/loop_tr/transition_request", _loops[0])
+		tree.set("parameters/loop_tr/transition_request", "Idle" if _loops.has("Idle") else _loops[0])
 	tree.set("parameters/act_tr/transition_request", "a")
 	tree.set("parameters/mode/transition_request", "loop")
 	tree.advance(0.0)

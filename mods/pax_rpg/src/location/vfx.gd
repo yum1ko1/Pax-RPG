@@ -127,11 +127,15 @@ uniform vec4 mid : source_color = vec4(1.0, 0.52, 0.12, 1.0);
 uniform vec4 edge : source_color = vec4(0.7, 0.12, 0.03, 1.0);
 uniform float energy = 1.35;
 uniform float speed = 1.0;
+instance uniform float push = 0.0;
 varying float ph;
 void vertex() {
 	ph = fract(sin(dot(MODEL_MATRIX[3].xyz, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 40.0;
+	vec3 at = MODEL_MATRIX[3].xyz;
+	vec3 to_cam = (INV_VIEW_MATRIX[3].xyz - at) * vec3(1.0, 0.0, 1.0);
+	at += to_cam * (push / max(length(to_cam), 0.001));   // огонь в каменном фонаре — перед его сплошной сердцевиной
 	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(vec4(normalize(cross(vec3(0.0, 1.0, 0.0), INV_VIEW_MATRIX[2].xyz)), 0.0),
-		vec4(0.0, 1.0, 0.0, 0.0), vec4(normalize(cross(INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0), MODEL_MATRIX[3]);
+		vec4(0.0, 1.0, 0.0, 0.0), vec4(normalize(cross(INV_VIEW_MATRIX[0].xyz, vec3(0.0, 1.0, 0.0))), 0.0), vec4(at, 1.0));
 	MODELVIEW_MATRIX = MODELVIEW_MATRIX * mat4(vec4(length(MODEL_MATRIX[0].xyz), 0.0, 0.0, 0.0),
 		vec4(0.0, length(MODEL_MATRIX[1].xyz), 0.0, 0.0), vec4(0.0, 0.0, length(MODEL_MATRIX[2].xyz), 0.0), vec4(0.0, 0.0, 0.0, 1.0));
 	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
@@ -179,8 +183,9 @@ func _flame_mat() -> ShaderMaterial:
 	return m
 
 
-## Язык пламени: основание — в pos, высота size м (ширина — 0.62 высоты).
-func flame(parent: Node, pos: Vector3, size: float) -> MeshInstance3D:
+## Язык пламени: основание — в pos, высота size м (ширина — 0.62 высоты). push, м — огонь выдвинут к камере
+## (в каменном фонаре сердцевина сплошная: огонь в центре был бы спрятан в камне).
+func flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(size * 0.62, size)
@@ -191,6 +196,8 @@ func flame(parent: Node, pos: Vector3, size: float) -> MeshInstance3D:
 	mi.visibility_range_end = 120.0
 	mi.position = pos
 	parent.add_child(mi)
+	if push != 0.0:
+		mi.set_instance_shader_parameter(&"push", push)
 	return mi
 
 
