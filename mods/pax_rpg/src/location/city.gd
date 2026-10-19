@@ -166,11 +166,29 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if k.ends_with("banner_clan.glb"):
 			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
 			continue
+		var l1 := k.trim_suffix(".glb") + "_lod1.glb"
+		var l2 := k.trim_suffix(".glb") + "_lod2.glb"
 		var lo := k.trim_suffix(".glb") + "_lo.glb"
-		if LOD_COPIES and not mod.read_bytes(lo).is_empty():
-			_lod = 1                                   # тяжёлая модель (100k): вблизи — она, дальше LOD_NEAR — лёгкая копия
+		if LOD_COPIES and mod.read_bytes(l1).size() > 0:
+			# три уровня: вблизи (до LOD_NEAR) — модель, средняя даль (до LOD_MID) — _lod1 (~30 % граней),
+			# дальше — _lod2 (~12 %); у копий нет коллизий и окклюдеров (dev: make_lods.py)
+			var has2 := mod.read_bytes(l2).size() > 0
+			_lod = 1
+			_vr = Vector2(0.0, LOD_NEAR)
 			_place(k, groups[k])
 			_lod = 2
+			_vr = Vector2(LOD_NEAR, LOD_MID if has2 else FAR_DRAW)
+			_place(l1, groups[k])
+			if has2:
+				_vr = Vector2(LOD_MID, FAR_DRAW)
+				_place(l2, groups[k])
+			_lod = 0
+		elif LOD_COPIES and not mod.read_bytes(lo).is_empty():
+			_lod = 1                                   # прежние копии _lo.glb: вблизи — модель, дальше LOD_NEAR — копия
+			_vr = Vector2(0.0, LOD_NEAR)
+			_place(k, groups[k])
+			_lod = 2
+			_vr = Vector2(LOD_NEAR, FAR_DRAW)
 			_place(lo, groups[k])
 			_lod = 0
 		else:
@@ -1189,11 +1207,14 @@ func _small_prop(path: String) -> float:
 	return 0.0
 
 
-## LOD-копии тяжёлых построек: <name>_lo.glb (pax_rpg/dev/blender/gharn/make_lod.py, ~12k граней) рисуется дальше
-## LOD_NEAR м, сама модель — ближе. У копии нет коллизий и окклюдеров — они у основной.
+## LOD-копии тяжёлых построек: <name>_lod1.glb (~30 % граней) — от LOD_NEAR до LOD_MID м, <name>_lod2.glb (~12 %) —
+## дальше (pax_rpg/dev/blender/gharn/make_lods.py); прежние <name>_lo.glb — одна копия дальше LOD_NEAR. Материалы и
+## текстуры копий — у основной (assets.gd → lod_base). У копий нет коллизий и окклюдеров — они у основной.
 const LOD_COPIES := true
-const LOD_NEAR := 38.0
+const LOD_NEAR := 30.0
+const LOD_MID := 70.0
 var _lod := 0                                            # 0 — обычная, 1 — полная (ближе LOD_NEAR), 2 — лёгкая копия
+var _vr := Vector2.ZERO                                  # дальность показа этого уровня: от, до (м)
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
@@ -1203,8 +1224,8 @@ const BUILDINGS := ["house_shop", "house_timber", "house_two", "house_bal", "hou
 
 
 func _place(path: String, list: Array) -> void:
-	if path.ends_with("house_two_a.glb"):         # house_two_a у Meshy вышел рваным — вместо него второй дом, по месту
-		path = path.replace("house_two_a.glb", "house_two_b.glb")   # (b крупнее: 5.2×4.9 м против 4.0×3.6 — ×0.77)
+	if path.get_file().begins_with("house_two_a"):   # house_two_a у Meshy вышел рваным — вместо него второй дом (и его LOD)
+		path = path.replace("house_two_a", "house_two_b")   # (b крупнее: 5.2×4.9 м против 4.0×3.6 — ×0.77)
 		list = list.map(func(e: Array) -> Array: return [(e[0] as Transform3D).scaled_local(Vector3.ONE * 0.77)] + e.slice(1))
 	var src := Assets.model(mod, path)
 	if src == null:
@@ -1266,13 +1287,13 @@ func _place(path: String, list: Array) -> void:
 				mi.visibility_range_end_margin = 6.0
 				mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 			elif _lod == 1:
-				mi.visibility_range_end = LOD_NEAR
+				mi.visibility_range_end = _vr.y
 				mi.visibility_range_end_margin = 4.0
 			elif _lod == 2:
-				mi.visibility_range_begin = LOD_NEAR
+				mi.visibility_range_begin = _vr.x
 				mi.visibility_range_begin_margin = 4.0
-				mi.visibility_range_end = FAR_DRAW
-				mi.visibility_range_end_margin = 20.0
+				mi.visibility_range_end = _vr.y
+				mi.visibility_range_end_margin = 20.0 if _vr.y >= FAR_DRAW else 4.0
 			else:                                         # дальше FAR_DRAW м всё равно в дымке — не рисуем
 				if absi(key.x) * CELL > 96 or key.y * CELL > 88 or (key.y + 1) * CELL < -100:
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # слобода за стеной — силуэт без тени

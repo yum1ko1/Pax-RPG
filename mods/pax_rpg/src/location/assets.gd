@@ -30,7 +30,13 @@ static func model(mod: PaxMod, path: String) -> Node3D:
 		if m == null:
 			return null
 		var t1 := Time.get_ticks_msec()
-		_textures(mod, path, m)
+		var base := lod_base(path)
+		var bm: Node3D = model(mod, base) if base != "" else null   # LOD-копия: материалы (текстуры, стриминг) — у основной
+		if bm != null:
+			bm.free()
+			_share_materials(_cache[base] as Node3D, m)
+		else:
+			_textures(mod, path, m)
 		var t2 := Time.get_ticks_msec()
 		_lods(m)
 		var t3 := Time.get_ticks_msec()
@@ -38,6 +44,36 @@ static func model(mod: PaxMod, path: String) -> Node3D:
 			print("[pax_rpg] load: model %s — glb %d, textures %d, lod %d ms" % [path.get_file(), t1 - t0, t2 - t1, t3 - t2])
 		_cache[path] = m
 	return (_cache[path] as Node3D).duplicate() as Node3D
+
+
+## LOD-копии: <name>_lod1.glb (средняя даль), <name>_lod2.glb (дальняя), <name>_lo.glb (прежние) → путь основной.
+static func lod_base(path: String) -> String:
+	for suf: String in ["_lod1.glb", "_lod2.glb", "_lo.glb"]:
+		if path.ends_with(suf):
+			return path.trim_suffix(suf) + ".glb"
+	return ""
+
+
+## Материалы основной модели — на поверхности копии по порядку обхода (у упрощённой те же поверхности).
+static func _share_materials(src: Node3D, dst: Node3D) -> void:
+	var mats: Array = []
+	for mi: Node in src.find_children("*", "MeshInstance3D", true, false):
+		var inst := mi as MeshInstance3D
+		if inst.mesh == null:
+			continue
+		for si: int in inst.mesh.get_surface_count():
+			var mat := inst.get_surface_override_material(si)
+			mats.append(mat if mat != null else inst.mesh.surface_get_material(si))
+	if mats.is_empty():
+		return
+	var k := 0
+	for mi: Node in dst.find_children("*", "MeshInstance3D", true, false):
+		var inst := mi as MeshInstance3D
+		if inst.mesh == null:
+			continue
+		for si: int in inst.mesh.get_surface_count():
+			inst.mesh.surface_set_material(si, mats[mini(k, mats.size() - 1)])
+			k += 1
 
 
 ## Где стоят копии модели (для стриминга): узлы (герой, жители) или точки (MultiMesh города).

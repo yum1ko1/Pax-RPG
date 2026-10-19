@@ -54,6 +54,13 @@ func _initialize() -> void:
 	var dst_dir := args[1]
 	var files: Array = []
 	_walk(src_dir, "", files)
+	# 4-й аргумент — файл со списком ближних моделей (по строке: путь без .glb, напр. gharn/khan_palace) — им 4K
+	var near: Array = []
+	if args.size() > 3 and FileAccess.file_exists(args[3]):
+		for line: String in FileAccess.get_file_as_string(args[3]).split("
+"):
+			if line.strip_edges() != "" and not line.begins_with("#"):
+				near.append(line.strip_edges())
 	for rel: String in files:
 		var doc := GLTFDocument.new()
 		var st := GLTFState.new()
@@ -71,6 +78,8 @@ func _initialize() -> void:
 		var skinned := not scene.find_children("*", "Skeleton3D", true, false).is_empty()
 		var big := ext > 4.0 or skinned
 		var hi_max := 2048 if skinned or (big and _tris(scene) >= 5000) else (1024 if big else 512)
+		if near.has(rel.get_basename()):
+			hi_max = 4096                          # ближние (исходный цвет 4K: главные постройки) — 4K
 		var out_dir := dst_dir.path_join(rel.get_basename() + ".tex")
 		DirAccess.make_dir_recursive_absolute(out_dir)
 		var t0 := Time.get_ticks_msec()

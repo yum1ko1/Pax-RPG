@@ -1,0 +1,12 @@
+# Модели с исходным цветом 4K: полные текстуры 4K (bake_textures.gd, 4-й аргумент). Увеличивать 2K-исходники
+# до 4K смысла нет (Real-ESRGAN замазывает мелкую фактуру, Lanczos деталей не добавляет — только память).
+gharn/khan_palace
+gharn/guild_hall
+gharn/tavern_hall
+gharn/gate_fang
+gharn/flame_tree
+gharn/house_shop_a
+gharn/house_shop_b
+gharn/house_shop_c
+gharn/props/lantern_string
+gharn/props/yurt_large
