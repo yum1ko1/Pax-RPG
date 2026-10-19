@@ -235,6 +235,7 @@ const _foot_off := 0.0               # начало тела — у ступне
 var _ground_t := 0.0
 var _ground_y := 0.1
 var _block_t := 0.0
+var _settle := 0                     # стоящий на месте: сколько раз уже искал землю под ногами
 
 
 ## Высота земли под жителем (пандусы и ступени): один луч вниз.
@@ -319,6 +320,13 @@ func _phys(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 	if _path.size() < 2:                              # стоит на посту (стража, зазывала, караванщик) — покой
+		if _settle < 10:                              # первые 2 с — на землю под ногами (мостовая, ступени арки):
+			_ground_t -= delta                        # раньше стоял на высоте точки из планировки (0.1 м) — над землёй
+			if _ground_t <= 0.0:
+				_ground_t = 0.2
+				_settle += 1
+				_probe_ground()
+				global_position.y = _ground_y
 		_play("idle")
 		return
 	# кинематика, как у толп в больших играх: позиция — напрямую по маршруту, без move_and_slide (полный расчёт

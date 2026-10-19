@@ -107,7 +107,13 @@ func add(d: Dictionary, pos: Vector3) -> void:
 		"noren":                                        # занавес над дверью лавки: три полотнища с покачиванием
 			var ci := int(d.get("c2", 0)) % PALETTE.size()
 			var col: Color = PALETTE[ci]
-			_box(Vector3(1.9, 0.06, 0.06), pos + Vector3(0, 3.05, 0) + b * Vector3(0, 0, 0.1), b, _m("wood_d", Color(0.13, 0.08, 0.05)))
+			var wd := _m("wood_d", Color(0.13, 0.08, 0.05))
+			_box(Vector3(2.1, 0.07, 0.07), pos + Vector3(0, 3.05, 0) + b * Vector3(0, 0, 0.1), b, wd)
+			for sx: float in [-1.02, 1.02]:               # перекладина — на двух столбиках от земли (стены рядом может
+				_box(Vector3(0.09, 3.12, 0.09), pos + Vector3(0, 1.56, 0) + b * Vector3(sx, 0, 0.1), b, wd)   # не быть)
+				_box(Vector3(0.09, 0.09, 0.5), pos + Vector3(0, 3.05, 0) + b * Vector3(sx, 0, -0.12), b, wd)  # и к стене
+				_box(Vector3(0.18, 0.1, 0.18), pos + Vector3(0, 0.05, 0) + b * Vector3(sx, 0, 0.1), b,
+					_m("stone_d", Color(0.2, 0.19, 0.18)))
 			for i: int in [-1, 0, 1]:                       # ткань с гербом через три полотнища (dev: noren_tex.py)
 				_cloth(Vector2(0.56, 0.95), col, Transform3D(b, pos + b * Vector3(i * 0.6, 2.55, 0.12)), 0.04,
 					"textures/noren/noren_%d_%d.png" % [ci, i + 1])

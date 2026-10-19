@@ -109,15 +109,27 @@ items.append({"m": B + "central/central_plaza.glb", "p": [AX, 0.0, AZ], "r": 0.0
 
 
 def _ring_boxes(r0, r1, h, y0=0.0, gaps=(), step=6):
-    """Кольцо коробок коллизии: радиально от r0 до r1, высотой h от y0; gaps — [(угол°, полуширина м)]."""
+    """Кольцо коробок коллизии: радиально от r0 до r1, высотой h от y0; gaps — [(угол°, полуширина м)] — проходы.
+    Сегмент у прохода обрезается ровно по его стенке (как сетка арены, arena_central.py → clip): раньше сегмент
+    по 6° либо целиком оставался (невидимый уступ в проходе), либо целиком пропадал (дыра в ярусе)."""
     rm = (r0 + r1) / 2
+    k = math.pi / 180 * rm                                   # метров дуги на градус
     for a in range(0, 360, step):
-        if any(abs((a - g + 180) % 360 - 180) * math.pi / 180 * rm < hw for g, hw in gaps):
+        lo, hi = a * k, (a + step) * k                       # дуга сегмента, м
+        for g, hw in gaps:
+            c = g * k + round(((a + step / 2) - g) / 360) * 360 * k   # ось прохода — в той же «петле» углов
+            if lo >= c - hw and hi <= c + hw:
+                lo = hi                                      # целиком в проходе
+            elif lo < c + hw < hi:
+                lo = c + hw
+            elif lo < c - hw < hi:
+                hi = c - hw
+        if hi - lo < 0.05:
             continue
-        ra = math.radians(a + step / 2)
-        items.append({"box": [r1 - r0, h, 2 * math.pi * rm * step / 360 + 0.08], "ramp": True,
+        ra = math.radians((lo + hi) / 2 / k)
+        items.append({"box": [r1 - r0, h, hi - lo + (0.08 if hi - lo > step * k * 0.99 else 0.02)], "ramp": True,
                       "p": [round(AX + math.sin(ra) * rm, 2), round(y0 + h / 2, 3), round(AZ + math.cos(ra) * rm, 2)],
-                      "r": round(a + step / 2 + 90, 1), "c": True})
+                      "r": round(math.degrees(ra) + 90, 1), "c": True})
 
 
 def _ramp(ang, r_lo, r_hi, rise, width, y_lo=0.0):
@@ -321,7 +333,7 @@ proxy("ruts", 0, 0, 99.0, 0, len=26)                     # колеи повоз
 for side in (-1, 1):
     proxy("guard", side * 2.7, 0, 87.9, 0)               # стража снаружи ворот (башни — z 78.4…85.6, |x| ≥ 2.3)
     proxy("guard", side * 2.7, 0, 76.6, 180)             # и изнутри
-    proxy("guard", side * 2.6, 0, 32.6, 180)             # у арки на площадь — перед её опорами (арка z 27…31.5, |x| ≤ 4.9)
+    proxy("guard", side * 2.6, 0, 32.6, 0)               # у арки на площадь — перед её опорами (арка z 27…31.5, |x| ≤ 4.9), лицом к Тракту
 for k, (dx, dz) in enumerate(((1.4, 0.4), (-1.2, 1.1), (0.3, -1.5), (-0.6, -1.3))):   # караванщики у костра
     proxy("person", -15.5 + dx, 0, 92.0 + dz, math.degrees(math.atan2(-dx, -dz)))
 proxy("person", 12.2, 0, 95.0, 110)                       # погонщик у буйволов

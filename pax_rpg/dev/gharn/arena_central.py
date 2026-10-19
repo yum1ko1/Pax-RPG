@@ -82,12 +82,15 @@ class Builder:
     def __init__(self, name):
         self.bm = bmesh.new()
         self.uv = self.bm.loops.layers.uv.new("UVMap")
+        self.cutl = self.bm.faces.layers.int.new("cut")
+        self.tag = 0                      # кольца с проходами: метка для clip() (точный вырез по стенкам прохода)
         self.name = name
 
     def face(self, pts, mi, uvs):
         vs = [self.bm.verts.new(p) for p in pts]
         f = self.bm.faces.new(vs)
         f.material_index = mi
+        f[self.cutl] = self.tag
         for l, uv in zip(f.loops, uvs):
             l[self.uv].uv = uv
         return f
@@ -174,9 +177,60 @@ def gap_side(B, r0, r1, z0, z1, gang, half, k):
         B.face(pts, mi(k), [(0, z0 / t), ((r1 - r0) / t, z0 / t), ((r1 - r0) / t, z1 / t), (0, z1 / t)][::(1 if s > 0 else -1)])
 
 
-def cuboid(B, c, size, rot, k_top, k_side, rx=0.0):
-    """Коробка: c — центр, size (x,y,z), rot — поворот вокруг Z (рад). UV в метрах."""
-    R = Matrix.Rotation(rot, 3, "Z") @ Matrix.Rotation(rx, 3, "X")
+def clip(B, tag, angs, half, r0, r1):
+    """Проход шириной 2·half вдоль радиусов angs: грани колец с меткой tag разрезаются ровно по стенкам прохода
+    (gap_side) и внутри него убираются. Раньше вырез шёл по целым сегментам кольца — по углу середины: у стенки
+    прохода торчали куски ярусов и парапета или зияли щели."""
+    bm = B.bm
+    for g in angs:
+        ax = Vector((math.cos(g), math.sin(g), 0)); side = Vector((-ax.y, ax.x, 0))
+        for sg in (-1, 1):
+            fs = [f for f in bm.faces if f[B.cutl] == tag]
+            es = list({e for f in fs for e in f.edges}); vs = list({v for f in fs for v in f.verts})
+            bmesh.ops.bisect_plane(bm, geom=fs + es + vs, dist=1e-5, plane_co=side * half * sg, plane_no=side)
+        dead = []
+        for f in bm.faces:
+            if f[B.cutl] != tag:
+                continue
+            c = f.calc_center_median()
+            along, lat = c.x * ax.x + c.y * ax.y, c.x * side.x + c.y * side.y
+            if abs(lat) < half - 1e-4 and r0 - 0.02 < along < r1 + 0.02:
+                dead.append(f)
+        bmesh.ops.delete(bm, geom=dead, context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+
+
+def face_out(B, pts, inside, k, uvs):
+    """Грань лицом наружу от точки inside (город рисует только лицевую сторону)."""
+    n = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+    c = sum(pts, Vector()) / len(pts)
+    if n.dot(c - inside) < 0:
+        pts, uvs = pts[::-1], uvs[::-1]
+    B.face(pts, mi(k), uvs)
+
+
+def wedge(B, a, b, side, hw, za, zb, k_top, k_side):
+    """Щека лестницы — цельный клин: основание от a до b (на земле), верх наклонный от za к zb, ширина 2·hw.
+    Раньше — столбик коробок: ступенчатый верх, щели и отдельные кубики на концах."""
+    t = TILE.get(k_side, 2.0)
+    L = (b - a).length
+    P = {}
+    for sg in (-1, 1):
+        o = side * hw * sg
+        P[sg] = [a + o, b + o, b + o + Vector((0, 0, zb)), a + o + Vector((0, 0, za))]
+    inside = (a + b) / 2 + Vector((0, 0, min(za, zb) / 2))
+    for sg in (-1, 1):                                         # бока
+        q = P[sg]
+        face_out(B, q, inside, k_side, [(0, 0), (L / t, 0), (L / t, zb / t), (0, za / t)])
+    tt = TILE.get(k_top, 2.0)
+    face_out(B, [P[-1][3], P[-1][2], P[1][2], P[1][3]], inside, k_top, [(0, 0), (L / tt, 0), (L / tt, 2 * hw / tt), (0, 2 * hw / tt)])
+    face_out(B, [P[-1][1], P[1][1], P[1][2], P[-1][2]], inside, k_side, [(0, 0), (2 * hw / t, 0), (2 * hw / t, zb / t), (0, zb / t)])
+    face_out(B, [P[-1][0], P[1][0], P[1][3], P[-1][3]], inside, k_side, [(0, 0), (2 * hw / t, 0), (2 * hw / t, za / t), (0, za / t)])
+
+
+def cuboid(B, c, size, rot, k_top, k_side, rx=0.0, pitch=0.0):
+    """Коробка: c — центр, size (x,y,z), rot — поворот вокруг Z (рад), pitch — подъём оси X (рад). UV в метрах."""
+    R = Matrix.Rotation(rot, 3, "Z") @ Matrix.Rotation(rx, 3, "X") @ Matrix.Rotation(-pitch, 3, "Y")
     hx, hy, hz = size[0] / 2, size[1] / 2, size[2] / 2
     corners = [Vector((sx * hx, sy * hy, sz * hz)) for sz in (-1, 1) for sy in (-1, 1) for sx in (-1, 1)]
     w = [c + R @ q for q in corners]
@@ -208,22 +262,26 @@ def stairs(B, ang, r0, z0, r1, z1, width, k_tread, k_riser, steps):
 
 
 def balustrade(B, path, z, k_post="marble", k_rail="marble", post_every=2.2, h=0.95):
-    """Балюстрада по ломаной path [(x, y)]: столбики, верхний и нижний поручни, фигурные балясины."""
-    for (x0, y0), (x1, y1) in zip(path[:-1], path[1:]):
-        p0, p1 = Vector((x0, y0, z)), Vector((x1, y1, z))
+    """Балюстрада по ломаной path [(x, y)]: столбики, верхний и нижний поручни, фигурные балясины.
+    z — высота основания: число или список по точкам (на наклонной щеке лестницы поручни идут вдоль наклона)."""
+    zs = list(z) if isinstance(z, (list, tuple)) else [z] * len(path)
+    for k in range(len(path) - 1):
+        (x0, y0), (x1, y1) = path[k], path[k + 1]
+        p0, p1 = Vector((x0, y0, zs[k])), Vector((x1, y1, zs[k + 1]))
         d = p1 - p0
         L = d.length
         if L < 0.05:
             continue
         rot = math.atan2(d.y, d.x)
-        cuboid(B, (p0 + p1) / 2 + Vector((0, 0, h - 0.06)), (L + 0.02, 0.24, 0.12), rot, k_rail, k_rail)    # поручень
-        cuboid(B, (p0 + p1) / 2 + Vector((0, 0, 0.09)), (L + 0.02, 0.26, 0.18), rot, k_rail, k_rail)        # цоколь
+        pit = math.atan2(d.z, d.xy.length)
+        cuboid(B, (p0 + p1) / 2 + Vector((0, 0, h - 0.06)), (L + 0.02, 0.24, 0.12), rot, k_rail, k_rail, pitch=pit)    # поручень
+        cuboid(B, (p0 + p1) / 2 + Vector((0, 0, 0.09)), (L + 0.02, 0.26, 0.18), rot, k_rail, k_rail, pitch=pit)        # цоколь
         nb = max(1, int(L / 0.32))
         for i in range(nb):                                   # балясины
             q = p0 + d * ((i + 0.5) / nb)
             cuboid(B, q + Vector((0, 0, 0.18 + (h - 0.3) / 2)), (0.1, 0.1, h - 0.3), rot + math.pi / 4, k_rail, k_rail)
-    for (x, y) in path:                                       # столбы с навершием
-        p = Vector((x, y, z))
+    for (x, y), zp in zip(path, zs):                          # столбы с навершием
+        p = Vector((x, y, zp))
         cuboid(B, p + Vector((0, 0, (h + 0.25) / 2)), (0.32, 0.32, h + 0.25), 0.0, k_post, k_post)
         cuboid(B, p + Vector((0, 0, h + 0.33)), (0.22, 0.22, 0.16), math.pi / 4, "gold", "gold")
 
@@ -287,19 +345,23 @@ annulus(A, 4.1, 8.8, 0.02, "paving")
 annulus(A, 8.8, 9.3, 0.02, "band")
 annulus(A, 9.3, PIT, 0.02, "slab")
 # парапет ямы с проходами
-annulus(A, PIT, PIT + PAR, PAR_H, "marble", gaps=pit_gaps)
-ring_wall(A, PIT, 0.0, PAR_H, "wall", False, gaps=pit_gaps)
+A.tag = 1                                             # всё до галереи — с вырезом проходов в яму (clip)
+annulus(A, PIT, PIT + PAR, PAR_H, "marble")
+ring_wall(A, PIT, 0.0, PAR_H, "wall", False)
 # трибуны: ярусы до высоты галереи (у последнего — уровень галереи)
 for i in range(TIERS):
     r0 = PIT + PAR + i * TIER_D
     r1 = r0 + TIER_D
     zt = PAR_H + (H - PAR_H) * (i + 1) / TIERS if i < TIERS - 1 else H
     zprev = PAR_H if i == 0 else PAR_H + (H - PAR_H) * i / TIERS
-    annulus(A, r0, r1, zt, "slab", gaps=pit_gaps)
-    ring_wall(A, r0, zprev, zt, "wall", False, gaps=pit_gaps)
+    annulus(A, r0, r1, zt, "slab")
+    ring_wall(A, r0, zprev, zt, "wall", False)
+A.tag = 0
 # галерея и наружная подпорная стена
 annulus(A, GAL_IN, GAL_OUT, H, "slab", gaps=[])
-ring_wall(A, GAL_OUT, 0.0, H, "wall", True, gaps=out_gaps)
+A.tag = 2
+ring_wall(A, GAL_OUT, 0.0, H, "wall", True)
+A.tag = 0
 for g in out_gaps:                                    # карниз
     pass
 # проходы в яму: лестницы с галереи вниз, боковые стенки
@@ -310,11 +372,9 @@ for gang in (N, S):
 for gang in (N, S, E, W):
     stairs(A, gang, GAL_OUT, H, OUT_ST, 0.0, GAP_OUT, "slab", "wall", STAIR_N)
     ax = Vector((math.cos(gang), math.sin(gang), 0)); side = Vector((-ax.y, ax.x, 0))
-    for s in (-1, 1):                                 # щёки лестницы — клин из коробок
-        for i in range(STAIR_N):
-            r = GAL_OUT + (i + 0.5) * STEP_D
-            zt = H - i * STEP_H + 0.15
-            cuboid(A, ax * r + side * s * (GAP_OUT / 2 + 0.3) + Vector((0, 0, zt / 2)), (STEP_D + 0.01, 0.6, zt), gang, "marble", "wall")
+    for s in (-1, 1):                                 # щёки лестницы — цельный мраморный клин
+        c = side * s * (GAP_OUT / 2 + 0.3)
+        wedge(A, ax * (GAL_OUT - 0.02) + c, ax * OUT_ST + c, side, 0.3, H + 0.15, STEP_H + 0.15, "marble", "wall")
         path = [tuple((ax * GAL_OUT + side * s * (GAP_OUT / 2 + 0.3))[:2]), tuple((ax * OUT_ST + side * s * (GAP_OUT / 2 + 0.3))[:2])]
 # балюстрада галереи — по внешнему краю, с разрывами у лестниц
 for k, gang in enumerate((E, N, W, S)):
@@ -335,7 +395,9 @@ for d in (45, 135, 225, 315):
     PAV.append(po)
 # кольцо площади вокруг арены
 annulus(A, OUT_ST, PLAZA, 0.02, "slab", gaps=[])
-annulus(A, GAL_OUT, OUT_ST, 0.02, "band", gaps=out_gaps)
+annulus(A, GAL_OUT, OUT_ST, 0.02, "band")             # под лестницами — тоже: без щелей у щёк (земля не видна)
+clip(A, 1, (N, S), GAP_PIT / 2, PIT, GAL_IN)
+clip(A, 2, (N, S, E, W), GAP_OUT / 2, GAL_OUT, GAL_OUT)
 oa = A.finish()
 bpy.ops.object.select_all(action="DESELECT")
 for po in PAV:
@@ -361,17 +423,12 @@ for i in range(steps2):
 # щёки и балюстрада по сторонам
 for s in (-1, 1):
     x = s * (PAL_W / 2 + 0.45)
-    n = 24
-    for i in range(n):
-        y0 = PAL_Y0 + (PAL_Y1 - PAL_Y0) * i / n
-        y1 = PAL_Y0 + (PAL_Y1 - PAL_Y0) * (i + 1) / n
-        zt = PAL_H * (i + 1) / n + 0.2
-        cuboid(P, Vector((x, (y0 + y1) / 2, zt / 2)), (0.9, y1 - y0 + 0.01, zt), 0.0, "marble", "wall")
+    wedge(P, Vector((x, PAL_Y0, 0)), Vector((x, PAL_Y1 + 0.06, 0)), Vector((1, 0, 0)), 0.45, 0.2 + PAL_H / 24,
+          PAL_H + 0.2, "marble", "wall")
     # поручень вдоль наклона: балюстрада ступенчато
-    pts = [(x, PAL_Y0 + (PAL_Y1 - PAL_Y0) * i / 4) for i in range(5)]
-    for i in range(4):
-        zz = PAL_H * (i + 0.5) / 4 + 0.2
-        balustrade(P, [pts[i], pts[i + 1]], zz)
+    z_lo, z_hi = 0.2 + PAL_H / 24, PAL_H + 0.2             # верх щеки (wedge выше) у начала и у террасы
+    ys = [PAL_Y0 + 0.2 + (PAL_Y1 - PAL_Y0 - 0.2) * i / 4 for i in range(5)]
+    balustrade(P, [(x, y) for y in ys], [z_lo + (z_hi - z_lo) * (y - PAL_Y0) / (PAL_Y1 + 0.06 - PAL_Y0) for y in ys])
 # облицовка фасада террасы (перед коробкой террасы: 0.06 м — без наложения)
 TW = 52.0
 for s in (-1, 1):
