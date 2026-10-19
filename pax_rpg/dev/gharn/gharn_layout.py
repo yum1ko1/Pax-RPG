@@ -17,7 +17,7 @@ occupied = []          # (x, z, радиус) — чтобы мелочь не �
 
 
 NO_COLLIDE = {"road_cobble", "road_dirt", "boardwalk", "lantern_string", "mana_flags_line", "stairs_stone"}
-TRUNK = {"flame_tree": [0.9, 3.0, 0.9],
+TRUNK = {"flame_tree": [0.9, 3.0, 0.9], "central/sakura_great": [1.5, 4.0, 1.5], "central/sakura_young": [0.6, 3.0, 0.6],
          # Врата Клыка: две башни, проход x −2.3…2.1 (по сетке модели) свободен
          "gate_fang": [[8.0, 14.0, 7.1, -6.3, 7.0, 0.0], [8.2, 14.0, 7.1, 6.2, 7.0, 0.0]]}          # у деревьев — только ствол: крона не мешает ходить
 
@@ -79,12 +79,8 @@ while z < S:
 
 # --- Ставка Хаана на террасе (+3 м) и пандус-лестница
 box([52, 3, 36], 0, 1.5, -54, "stone_cut")
-box([12, 0.5, 14], 0, 1.5, -30, "stone_cut", c=False)
-items.append({"box": [10, 0.4, 15], "mat": "stone", "p": [0, 1.4, -29], "r": 0, "rx": 11.5, "c": True})   # пандус
-for i in range(7):
-    add("stairs_stone", -3.3 + 0, -24 - i * 0.0, 0, s=1.0) if False else None
 add("@khan_palace", 0, -56, 0, c=True, y=3.0, rad=16)
-for x in (-6, 6):
+for x in (-12.5, 12.5):                              # туги — за колоннами с драконами у лестницы
     add("tug_banner", x, -38, y=3.0)
 for x in (-22, -14, 14, 22):
     add("@yurt_noble" if abs(x) > 18 else "banner_clan", x, -46, 180, c=True, y=3.0)
@@ -99,50 +95,91 @@ add("ovoo_cairn", 18, -24)
 add("trough", -22, 22.5, 45, c=True)
 occupied.append((0, 0, 30))
 
-# --- Арена на Площади Круга: песчаная яма r 13.5 за парапетом, три яруса трибун до r 17, стена позади (r 18.2).
-# Входы — юг (к Тракту и воротам, главный: жаровни, вывеска) и север (к Ставке). Текстуры — CC0 4K (city.gd TEX_MATS).
+# --- Центр Гхарна: Арена и подход к Ставке (одна модель: pax_rpg/dev/gharn/arena_central.py, Blender, CC0 4K).
+# Яма r PIT с мозаикой и кольцами мощения, парапет, три яруса трибун, кольцевая галерея на +1.8 м с балюстрадой
+# и беседками, лестницы наружу на четыре стороны, мощёное кольцо площади до r 31; парадная лестница к террасе
+# Ставки — два марша с площадкой (z −28…−36), облицовка фасада террасы. Коллизия — ниже (модель без коллизии).
 ARENA = (0.0, 0.0)
 AX, AZ = ARENA
 PIT = 13.5
 A_IN = 0.0                                               # главный вход — на юг (+Z), к Тракту
-def _gap(a, w):
-    return any(abs((a - g + 180) % 360 - 180) < w for g in (A_IN, A_IN + 180))
-for k in range(6):                                       # песок ямы: шесть квадратов, повёрнутых — почти круг
-    box([25.6, 0.06, 25.6], AX, 0.03, AZ, "arena_sand", r=k * 15, c=False)
-for a in range(0, 360, 6):                               # парапет ямы
-    if _gap(a, 9):
-        continue
-    ra = math.radians(a)
-    box([0.7, 1.3, 2 * math.pi * (PIT + 0.35) / 60 + 0.12], round(AX + math.sin(ra) * (PIT + 0.35), 2), 0.65,
-        round(AZ + math.cos(ra) * (PIT + 0.35), 2), "arena_wall", r=a + 90)
-for rr, h in ((14.85, 0.7), (15.95, 1.4), (17.05, 2.1)):  # ярусы трибун
-    for a in range(0, 360, 5):
-        if _gap(a, 10):
+C_PAR, C_PAR_H, C_H = 0.6, 1.1, 1.8                      # как в arena_central.py
+C_GIN, C_GOUT, C_OST = PIT + 0.6 + 3 * 1.0, 21.0, 21.0 + 12 * 0.3
+items.append({"m": B + "central/central_plaza.glb", "p": [AX, 0.0, AZ], "r": 0.0, "s": 1.0, "c": False})
+
+
+def _ring_boxes(r0, r1, h, y0=0.0, gaps=(), step=6):
+    """Кольцо коробок коллизии: радиально от r0 до r1, высотой h от y0; gaps — [(угол°, полуширина м)]."""
+    rm = (r0 + r1) / 2
+    for a in range(0, 360, step):
+        if any(abs((a - g + 180) % 360 - 180) * math.pi / 180 * rm < hw for g, hw in gaps):
             continue
-        ra = math.radians(a)
-        box([1.15, h, 2 * math.pi * rr / 72 + 0.1], round(AX + math.sin(ra) * rr, 2), h / 2, round(AZ + math.cos(ra) * rr, 2),
-            "arena_seat", r=a + 90)
-for a in range(0, 360, 5):                               # стена позади трибун
-    if _gap(a, 10):
-        continue
-    ra = math.radians(a)
-    box([0.8, 3.6, 2 * math.pi * 18.2 / 72 + 0.12], round(AX + math.sin(ra) * 18.2, 2), 1.8, round(AZ + math.cos(ra) * 18.2, 2),
-        "arena_wall", r=a + 90)
-for g in (A_IN, A_IN + 180):                             # входы: туги и жаровни по сторонам
-    rg = math.radians(g)
-    ex, ez = AX + math.sin(rg) * 18.9, AZ + math.cos(rg) * 18.9
-    for side in (-1, 1):
-        px, pz = ex + side * 3.0 * math.cos(rg), ez - side * 3.0 * math.sin(rg)
-        add("tug_banner", px, pz)
-        items.append({"brazier": True, "p": [round(px + math.sin(rg) * 1.3, 2), 0.0, round(pz + math.cos(rg) * 1.3, 2)],
-                      "c": True})
-rg = math.radians(A_IN)
-items.append({"sign": ["闘", "Арена"], "p": [round(AX + math.sin(rg) * 20.6 - 4.4 * math.cos(rg), 2), 0.0,
-              round(AZ + math.cos(rg) * 20.6 + 4.4 * math.sin(rg), 2)], "r": round(A_IN, 1), "c": True})
-for a in (45, 135, 225, 315):                            # жаровни в яме по диагоналям — свет вечером
+        ra = math.radians(a + step / 2)
+        items.append({"box": [r1 - r0, h, 2 * math.pi * rm * step / 360 + 0.08], "ramp": True,
+                      "p": [round(AX + math.sin(ra) * rm, 2), round(y0 + h / 2, 3), round(AZ + math.cos(ra) * rm, 2)],
+                      "r": round(a + step / 2 + 90, 1), "c": True})
+
+
+def _ramp(ang, r_lo, r_hi, rise, width, y_lo=0.0):
+    """Пандус под лестницей вдоль радиуса ang° (0 — юг, +Z): низ на r_lo (y_lo), верх на r_hi (y_lo + rise)."""
+    run = abs(r_hi - r_lo)
+    ln = math.hypot(run, rise)
+    t = math.degrees(math.atan2(rise, run))
+    rm = (r_lo + r_hi) / 2
+    ra = math.radians(ang)
+    up_out = r_hi > r_lo                                  # верх дальше от центра — +Z пандуса вверх: rx < 0
+    items.append({"box": [width, 0.3, ln + 0.4], "ramp": True,
+                  "p": [round(AX + math.sin(ra) * rm, 2), round(y_lo + rise / 2 - 0.16, 3), round(AZ + math.cos(ra) * rm, 2)],
+                  "r": round(ang, 1), "rx": round(-t if up_out else t, 2), "c": True})
+
+
+PIT_GAPS = [(0, 2.3), (180, 2.3)]                         # проходы в яму: юг и север
+OUT_GAPS = [(0, 3.1), (90, 3.1), (180, 3.1), (270, 3.1)]  # наружные лестницы
+_ring_boxes(PIT, PIT + C_PAR, C_PAR_H, gaps=PIT_GAPS)                       # парапет ямы
+for i in range(3):                                                          # ярусы трибун
+    r0 = PIT + C_PAR + i
+    zt = C_PAR_H + (C_H - C_PAR_H) * (i + 1) / 3
+    _ring_boxes(r0, r0 + 1.0, zt, gaps=PIT_GAPS)
+_ring_boxes(C_GIN, C_GOUT, C_H)                                             # галерея
+_ring_boxes(C_GOUT - 0.55, C_GOUT - 0.25, 1.0, y0=C_H, gaps=OUT_GAPS, step=4)   # балюстрада — не упасть с галереи
+for g in (0, 180):                                                          # лестницы с галереи в яму
+    _ramp(g, PIT, C_GIN, C_H, 4.3)
+for g in (0, 90, 180, 270):                                                 # наружные лестницы
+    _ramp(g, C_OST, C_GOUT, C_H, 6.0)
+# парадная лестница Ставки: один пандус на два марша (площадка посередине — на его высоте), щёки — коробки
+items.append({"box": [14.0, 0.3, math.hypot(8.0, 3.0) + 0.3], "ramp": True, "p": [0.0, 1.34, -32.0], "r": 0.0,
+              "rx": round(math.degrees(math.atan2(3.0, 8.0)), 2), "c": True})
+for sx in (-1, 1):
+    for k in range(4):
+        zt = 3.0 * (k + 1) / 4 + 0.2
+        items.append({"box": [0.9, zt, 2.0], "ramp": True, "p": [sx * 7.45, zt / 2, -29.0 - k * 2.0], "r": 0.0, "c": True})
+# убранство: жаровни в яме по диагоналям, у южного выхода — туги, жаровни и вывеска арены
+for a in (45, 135, 225, 315):
     ra = math.radians(a)
     items.append({"brazier": True, "p": [round(AX + math.sin(ra) * 12.4, 2), 0.0, round(AZ + math.cos(ra) * 12.4, 2)], "c": True})
-occupied.append((AX, AZ, 19.0))
+for side in (-1, 1):
+    add("tug_banner", side * 4.6, C_OST + 1.4)
+    items.append({"brazier": True, "p": [side * 4.6, 0.0, round(C_OST + 2.6, 2)], "c": True})
+items.append({"sign": ["闘", "Арена"], "p": [-8.2, 0.0, round(C_OST + 2.2, 2)], "r": 0.0, "c": True})
+for a in (22.5, 67.5, 112.5, 157.5, 202.5, 247.5, 292.5, 337.5):            # каменные фонари на галерее
+    ra = math.radians(a)
+    add("stone_lantern", AX + math.sin(ra) * (C_GOUT - 1.0), AZ + math.cos(ra) * (C_GOUT - 1.0), a, y=C_H)
+# сакуры (Meshy, 4K): великие — по диагоналям площади, молодые — у лестницы Ставки и на террасе
+for a in (45, 135, 225, 315):
+    ra = math.radians(a)
+    add("@central/sakura_great", round(AX + math.sin(ra) * 28.5, 2), round(AZ + math.cos(ra) * 28.5, 2), a * 1.7, c=True, rad=5)
+for x, z, y in ((-11.5, -30.5, 0.0), (11.5, -30.5, 0.0), (-19.5, -40.0, 3.0), (19.5, -40.0, 3.0)):
+    add("@central/sakura_young", x, z, (x * 13) % 360, c=True, y=y, rad=3)
+# ворота-пайфан между Ареной и лестницей Ставки, цилини по сторонам, колонны с драконами наверху лестницы,
+# треножники-курильницы на террасе
+add("@central/paifang_gate", 0.0, -26.4, 0.0, c=False)
+for x in (-5.1, -2.3, 2.3, 5.1):                          # опоры ворот (по сетке модели) — коллизия
+    items.append({"box": [0.9, 3.0, 1.3], "ramp": True, "p": [x, 1.5, -26.4], "r": 0.0, "c": True})
+for side in (-1, 1):
+    add("@central/qilin_statue", side * 8.7, -26.6, 0.0, c=True)
+    add("@central/dragon_pillar", side * 9.4, -37.2, 0.0, c=True, y=3.0)
+    add("@central/incense_ding", side * 14.5, -40.5, 0.0, c=True, y=3.0)
+occupied.append((AX, AZ, 31.0))
 
 # --- Аллея Знамён: деревья, знамёна, скамьи, фонтан
 for x in list(range(-70, -24, 9)) + list(range(26, 72, 9)):
@@ -747,14 +784,12 @@ add("@hay_wagon", 70, 33, 200, c=True, rad=2.2)
 add("hay_bale", 71, 12, 30, c=True)
 add("hay_bale", 72.2, 13.4, 70, c=True)
 # Ставка Хаана: каменные волки у лестницы, жаровни с клыками, трофеи, барабаны
-add("@guardian_statue", -8.6, -25.5, 0, c=True)          # волки-стражи по краям лестницы, лицом к городу
-add("@guardian_statue", 8.6, -25.5, 0, c=True)
 for x in (-20, 20):
     add("@brazier_tusk", x, -37.5, 0, c=True, y=3.0)
-add("@loot_pile", -9, -38, 20, c=True, y=3.0)
-add("@loot_pile", 9.5, -38.5, -30, c=True, y=3.0)
-add("@war_drum", -13, -36.5, 10, c=True, y=3.0)
-add("@war_drum", 13, -36.5, -10, c=True, y=3.0)
+add("@loot_pile", -23, -38, 20, c=True, y=3.0)
+add("@loot_pile", 23.5, -38.5, -30, c=True, y=3.0)
+add("@war_drum", -17, -36.8, 10, c=True, y=3.0)
+add("@war_drum", 17, -36.8, -10, c=True, y=3.0)
 # Арена: барабаны у южного входа
 add("@war_drum", -6.6, 32.0, 20, c=True)
 add("@war_drum", 6.6, 32.0, -20, c=True)
@@ -886,7 +921,7 @@ ALL_LINES = [(pl, 4.0) for pl in PAVED] + [(pl, 3.0) for pl in DIRT]
 
 # с проезда убрать всё, что не постройка и не дерево: бочки, ящики, плетни, сено, мелочь
 KEEP = ("palisade", "gate_fang", "khan_palace", "guild_hall", "tavern_hall", "house_", "forge_smithy", "stable_hay",
-        "shaman_tower", "watch_tower", "yurt", "stilt_hut", "oath_tree", "fountain", "arena")
+        "shaman_tower", "watch_tower", "yurt", "stilt_hut", "oath_tree", "fountain", "arena", "central/")
 def _on_lines(x, z, m):
     return any(_seg_d(x, z, pl) < w / 2 + m for pl, w in ALL_LINES)
 kept = []
@@ -988,17 +1023,17 @@ LANDMARKS = [["pax_rpg_lm_gate", 0, 80], ["pax_rpg_lm_trakt", 0, 52], ["pax_rpg_
              ["pax_rpg_lm_buffalo", 32, 33], ] + LANDMARKS_V3
 # маршруты мирных жителей (ломаные по улицам), сколько их
 paths = [
-    [[0, 80], [0, 50], [0, 24]],                                        # Тракт
-    [[-1.5, 78], [-1.5, 30], [-8, 19.5], [-17, 13.5], [-22, 2]],                       # Тракт → базар
-    [[-74, -3], [-40, -3], [-22, -3]],                                     # Аллея, запад
-    [[22, -2], [34, -6], [50, -2], [74, -2]],                           # Аллея, восток мимо фонтана
-    [[44, 8], [36, 6], [26, 12], [14, 18], [2, 22]],                    # таверна → площадь
-    [[0, 24], [17, 17], [24, 0], [17, -17], [7, -20.5], [-7, -20.5], [-17, -17], [-24, 0], [-17, 17], [0, 24]],  # вокруг Арены
+    [[0, 80], [0, 50], [0, 27.5]],                                        # Тракт
+    [[-1.5, 78], [-1.5, 30], [-11, 25.5], [-21, 17.5], [-27.5, 2]],                       # Тракт → базар
+    [[-74, -3], [-40, -3], [-27.5, -3]],                                     # Аллея, запад
+    [[27.5, -2], [34, -6], [50, -2], [74, -2]],                           # Аллея, восток мимо фонтана
+    [[44, 8], [36, 6], [27, 12], [20, 19], [3, 27.5]],                    # таверна → площадь
+    [[0, 27], [17.8, 17.8], [27, 0], [17.8, -17.8], [-17.8, -17.8], [-27, 0], [-17.8, 17.8], [0, 27]],  # вокруг Арены
     [[-52.3, -3], [-52.3, 26], [-43.3, 26], [-43.3, -3]],                         # по базару
     [[-43.3, 8.5], [-43.3, 30], [-45, 34], [-45, 58], [-65, 58], [-65, 80]],                      # переулки куреней
     [[30, 6.5], [20, 24], [20, 33.5], [22.5, 33.5]],                    # к Буйволиному двору
     [[66, 8.5], [66, 40], [55, 44], [55, 57.5], [44, 57.5]],                                  # мимо конюшни на Улицу Мастеров
-    [[-21.5, -6.5], [-21.5, -34], [-45, -34], [-45, -58], [-62, -58]],  # к Кузне, Счётному двору и Курганам
+    [[-27, -6.5], [-21.5, -34], [-45, -34], [-45, -58], [-62, -58]],  # к Кузне, Счётному двору и Курганам
     [[34, -6.5], [34, -37], [44, -38.5], [62, -42.5]],                  # к гоблинам и шаманам
     [[-45, -58], [-30, -83], [20, -83], [20, -74], [35, -74], [35, -60]],          # Сад Хаана и Псарни
     [[30, -12], [36, -12], [36, -30], [44, -38.5]],                                   # к гильдии
@@ -1215,6 +1250,12 @@ items[:] = [i for i in items if not ("m" in i and i["m"].split("/")[-1][:-4] in 
                                         and 54.5 < i["p"][2] < 60.5 and abs(i["p"][0]) > 5.2)]   # устье переулка свободно
 
 
+CENTER_KEEP = ("central/", "stone_lantern", "tug_banner", "tusk_arch", "oath_tree", "ovoo_cairn", "flame_tree",
+               "banner_clan", "bench_long", "spear_rack", "brazier_tusk", "hay_bale", "trough", "war_drum", "bucket_set",
+               "khan_palace", "yurt_noble", "loot_pile")
+items[:] = [i for i in items if not ("m" in i and math.hypot(i["p"][0], i["p"][2]) < 31.5 and i["p"][1] < 0.5
+                                       and not any(k in i["m"] for k in CENTER_KEEP))]
+items[:] = [i for i in items if not ("proxy" in i and math.hypot(i["p"][0], i["p"][2]) < C_OST + 0.5)]
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
         "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "map": "config/gharn_map.json", "arena": [AX, AZ, PIT, A_IN], "paths": paths, "npcs": npcs, "shots": shots, "outer": OUTER,

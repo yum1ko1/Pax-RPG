@@ -1871,7 +1871,14 @@ func _physics_body(delta: float) -> void:
 		var wish := right * input.x - forward * input.y
 		# в захвате — как в соулсах: лицом к врагу; назад — отскок, вбок — уклон, вперёд — кувырок
 		var dir := ""
-		if _lock != null and wish.length() > 0.01:
+		if _lock == null and _hero.has("DodgeL"):         # без захвата — шаги относительно камеры: A/D — вбок, S или
+			if wish.length() < 0.01 or input.y > 0.5:     # без ввода — назад, W — кувырок (как с захватом, только «лицом» — камера)
+				dir = "B"
+			elif absf(input.x) > absf(input.y):
+				dir = "R" if input.x > 0.0 else "L"
+			if dir != "":
+				_face_now(_yaw)
+		elif _lock != null and wish.length() > 0.01:
 			var ty := _aim_yaw()
 			var lf := Vector3(-sin(ty), 0.0, -cos(ty))
 			var lr := Vector3(cos(ty), 0.0, -sin(ty))

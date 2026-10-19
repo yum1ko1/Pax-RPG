@@ -314,7 +314,7 @@ for e in lay["items"]:
         s = float(e.get("s", 1.0))
         inst.scale = (s, s, s)
         sc.collection.objects.link(inst)
-    elif "box" in e:
+    elif "box" in e and not e.get("ramp"):       # пандусы и коробки "ramp" — только коллизия, не рисуются
         bx = e["box"]
         bpy.ops.mesh.primitive_cube_add(size=1)
         o = bpy.context.object

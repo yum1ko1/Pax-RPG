@@ -10,3 +10,11 @@ gharn/house_shop_b
 gharn/house_shop_c
 gharn/props/lantern_string
 gharn/props/yurt_large
+# центр Гхарна: арена и подход к Ставке (Blender + CC0 4K Poly Haven), модели Meshy (4K PBR)
+gharn/central/central_plaza
+gharn/central/sakura_great
+gharn/central/sakura_young
+gharn/central/qilin_statue
+gharn/central/paifang_gate
+gharn/central/incense_ding
+gharn/central/dragon_pillar

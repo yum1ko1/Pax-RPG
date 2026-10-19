@@ -564,6 +564,7 @@ func _sign(sg: Array, pos: Vector3, ry: float) -> void:
 		k.pixel_size = 0.0028
 		k.modulate = Color(1.0, 0.82, 0.45)
 		k.outline_size = 0
+		k.shaded = true                                  # иероглиф освещается вместе с доской
 		k.position = Vector3(0, 1.85, 0.045 * side)
 		k.rotation.y = 0.0 if side > 0 else PI
 		n.add_child(k)
@@ -573,6 +574,7 @@ func _sign(sg: Array, pos: Vector3, ry: float) -> void:
 		t.pixel_size = 0.0025
 		t.modulate = Color(1.0, 0.9, 0.85)
 		t.outline_size = 0
+		t.shaded = true
 		t.position = Vector3(0, 1.08, 0.045 * side)
 		t.rotation.y = 0.0 if side > 0 else PI
 		n.add_child(t)
@@ -1211,8 +1213,8 @@ func _small_prop(path: String) -> float:
 ## дальше (pax_rpg/dev/blender/gharn/make_lods.py); прежние <name>_lo.glb — одна копия дальше LOD_NEAR. Материалы и
 ## текстуры копий — у основной (assets.gd → lod_base). У копий нет коллизий и окклюдеров — они у основной.
 const LOD_COPIES := true
-const LOD_NEAR := 30.0
-const LOD_MID := 70.0
+const LOD_NEAR := 55.0
+const LOD_MID := 120.0
 var _lod := 0                                            # 0 — обычная, 1 — полная (ближе LOD_NEAR), 2 — лёгкая копия
 var _vr := Vector2.ZERO                                  # дальность показа этого уровня: от, до (м)
 

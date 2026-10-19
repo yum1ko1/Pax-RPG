@@ -33,6 +33,21 @@ static func textures_of(scene: Node) -> Array:
 	return out
 
 
+static func albedos_of(scene: Node) -> Array:
+	var out: Array = []
+	for mi: Node in scene.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for s: int in m.mesh.get_surface_count():
+			var mat := m.get_surface_override_material(s)
+			if mat == null:
+				mat = m.mesh.surface_get_material(s)
+			if mat is BaseMaterial3D and (mat as BaseMaterial3D).albedo_texture != null:
+				out.append((mat as BaseMaterial3D).albedo_texture)
+	return out
+
+
 static func normals_of(scene: Node) -> Array:
 	var out: Array = []
 	for mi: Node in scene.find_children("*", "MeshInstance3D", true, false):
@@ -57,8 +72,7 @@ func _initialize() -> void:
 	# 4-й аргумент — файл со списком ближних моделей (по строке: путь без .glb, напр. gharn/khan_palace) — им 4K
 	var near: Array = []
 	if args.size() > 3 and FileAccess.file_exists(args[3]):
-		for line: String in FileAccess.get_file_as_string(args[3]).split("
-"):
+		for line: String in FileAccess.get_file_as_string(args[3]).split("\n"):
 			if line.strip_edges() != "" and not line.begins_with("#"):
 				near.append(line.strip_edges())
 	for rel: String in files:
@@ -70,6 +84,7 @@ func _initialize() -> void:
 		var scene := doc.generate_scene(st)
 		var texs := textures_of(scene)
 		var normals := normals_of(scene) if args.size() > 2 and args[2] == "bc5" else []
+		var albedos := albedos_of(scene)
 		if texs.is_empty():
 			scene.free()
 			continue
@@ -96,7 +111,8 @@ func _initialize() -> void:
 			var nm := normals.has(texs[n])
 			if nm:
 				img.convert(Image.FORMAT_RGB8)
-			_save(img, hi_max, out_dir.path_join("t%d.dds" % n), nm)
+			# у ближних (4K) — 4K только цвет; нормали, шероховатость и металл — 2K: разницы не видно, памяти вдвое меньше
+			_save(img, hi_max if albedos.has(texs[n]) else mini(hi_max, 2048), out_dir.path_join("t%d.dds" % n), nm)
 			if big:
 				_save(img, LO, out_dir.path_join("t%d_lo.dds" % n), nm)
 		print("%s: %d текстур, %s, %d мс" % [rel, texs.size(), ("%d+512" % hi_max) if big else "512", Time.get_ticks_msec() - t0])

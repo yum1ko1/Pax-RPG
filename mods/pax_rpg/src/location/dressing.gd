@@ -35,7 +35,7 @@ func _box(size: Vector3, pos: Vector3, basis: Basis, mat: Material) -> void:
 
 
 ## Ткань на ветру: шейдер флагов (как бельё и знамёна), цвет — палитра района.
-func _cloth(size: Vector2, col: Color, xf: Transform3D, amp := 0.06) -> void:
+func _cloth(size: Vector2, col: Color, xf: Transform3D, amp := 0.06, tex_path := "") -> void:
 	var q := QuadMesh.new()
 	q.size = size
 	q.subdivide_width = 3
@@ -44,16 +44,19 @@ func _cloth(size: Vector2, col: Color, xf: Transform3D, amp := 0.06) -> void:
 	mi.mesh = q
 	var sh: Shader = city.mod.shader("shaders/flag.gdshader")
 	if sh != null:
-		var g := Gradient.new()
-		g.set_color(0, col.lightened(0.05))
-		g.set_color(1, col.darkened(0.25))
-		var gt := GradientTexture2D.new()
-		gt.gradient = g
-		gt.width = 8
-		gt.height = 8
+		var tx: Texture2D = city.mod.texture(tex_path) if tex_path != "" else null
+		if tx == null:
+			var g := Gradient.new()
+			g.set_color(0, col.lightened(0.05))
+			g.set_color(1, col.darkened(0.25))
+			var gt := GradientTexture2D.new()
+			gt.gradient = g
+			gt.width = 8
+			gt.height = 8
+			tx = gt
 		var m := ShaderMaterial.new()
 		m.shader = sh
-		m.set_shader_parameter("tex", gt)
+		m.set_shader_parameter("tex", tx)
 		m.set_shader_parameter("amp", amp)
 		mi.material_override = m
 	else:
@@ -102,15 +105,23 @@ func add(d: Dictionary, pos: Vector3) -> void:
 			for i: int in n + 1:                            # зубья внизу
 				_box(Vector3(0.05, 0.22, 0.05), pos + b * Vector3(-w * 0.5 + i * w / n, -0.11, 0), b, iron)
 		"noren":                                        # занавес над дверью лавки: три полотнища с покачиванием
-			var col: Color = PALETTE[int(d.get("c2", 0)) % PALETTE.size()]
+			var ci := int(d.get("c2", 0)) % PALETTE.size()
+			var col: Color = PALETTE[ci]
 			_box(Vector3(1.9, 0.06, 0.06), pos + Vector3(0, 3.05, 0) + b * Vector3(0, 0, 0.1), b, _m("wood_d", Color(0.13, 0.08, 0.05)))
-			for i: int in [-1, 0, 1]:
-				_cloth(Vector2(0.56, 0.95), col, Transform3D(b, pos + b * Vector3(i * 0.6, 2.55, 0.12)), 0.04)
+			for i: int in [-1, 0, 1]:                       # ткань с гербом через три полотнища (dev: noren_tex.py)
+				_cloth(Vector2(0.56, 0.95), col, Transform3D(b, pos + b * Vector3(i * 0.6, 2.55, 0.12)), 0.04,
+					"textures/noren/noren_%d_%d.png" % [ci, i + 1])
 		"hang_sign":                                    # вывеска на кронштейне — над тротуаром, иероглиф с двух сторон
 			var wood := _m("wood_d", Color(0.13, 0.08, 0.05))
 			var out := b * Vector3(0, 0, 0.55)
 			_box(Vector3(0.06, 0.06, 1.1), pos + Vector3(0, 3.5, 0) + out, b, wood)
 			_box(Vector3(0.05, 0.42, 0.05), pos + Vector3(0, 3.28, 0) + b * Vector3(0, 0, 0.1), b, wood)
+			# свой столб от земли до кронштейна: стены рядом может не быть — вывеска не висит в воздухе
+			_box(Vector3(0.14, 3.62, 0.14), pos + Vector3(0, 1.81, 0) + b * Vector3(0, 0, 0.02), b, wood)
+			_box(Vector3(0.26, 0.12, 0.26), pos + Vector3(0, 0.06, 0) + b * Vector3(0, 0, 0.02), b, _m("stone_d", Color(0.2, 0.19, 0.18)))
+			for cx: float in [-0.24, 0.24]:                  # доска — на двух цепях под кронштейном
+				_box(Vector3(0.02, 0.16, 0.02), pos + Vector3(0, 3.42, 0) + b * Vector3(0, 0, 0.85) + (b * Basis(Vector3.UP, PI * 0.5)) * Vector3(cx, 0, 0),
+					b, _m("iron", Color(0.05, 0.05, 0.055), 0.45, 0.8))
 			var board := pos + Vector3(0, 2.92, 0) + b * Vector3(0, 0, 0.85)
 			var sb := b * Basis(Vector3.UP, PI * 0.5)       # доска — поперёк фасада, видна вдоль улицы
 			_box(Vector3(0.62, 0.9, 0.06), board, sb, _m("lac", Color(0.12, 0.04, 0.04), 0.4))
@@ -129,6 +140,7 @@ func add(d: Dictionary, pos: Vector3) -> void:
 					lb.pixel_size = 0.004
 					lb.modulate = Color(0.95, 0.78, 0.4)
 					lb.outline_size = 0
+					lb.shaded = true                          # освещается, как доска: не светится в тени
 					lb.transform = Transform3D(sb * Basis(Vector3.UP, 0.0 if side > 0 else PI), board + sb * Vector3(0, 0, 0.05 * side))
 					city.root.add_child(lb)
 		"banner_x":                                     # полотнище с верёвки гирлянды
