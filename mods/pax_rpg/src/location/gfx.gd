@@ -17,6 +17,8 @@ extends Node
 ##  • слой камеры (shaders/lens.gdshader на контейнере вида, без потока рендера): цифровая резкость, сияние солнца,
 ##    размытие при повороте камеры (как в Sekiro / The Witcher 3); «съёмочные» приёмы (бочка, аберрация, зерно, грязь
 ##    на линзе, «призраки», ручная камера — camera_sway) есть, но в RPG выключены (config gfx.lens_*).
+##  • шейдеры «Юрума Ультра» (shaders — 0..1, меню «Графика»): лучи солнца сквозь кроны и арки, киношный цвет (сочность,
+##    S-кривая, тёплые света и холодные тени по часу), мягкое широкое сияние, лёгкое затемнение краёв — в слое камеры.
 ## Оптимизация: окклюзия (Hi-Z движка: окклюдеры стен и домов — city.gd) — заслонённое не рисуется; каскады теней
 ## распределены к герою (ближний — несколько метров, чёткий); LOD-порог сеток — mesh_lod_px.
 ## Герой и враги в SDFGI — динамические (иначе оставляют «тень-призрак» в отражённом свете).
@@ -87,7 +89,7 @@ func _f(key: String, fallback: float) -> float:
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
 const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen", "cam_blur",
-	"flare", "auto_exposure", "grass_density"]
+	"flare", "auto_exposure", "grass_density", "shaders"]
 var _ovr := {}
 var _env: Environment
 var _we: WorldEnvironment
@@ -115,7 +117,7 @@ func set_option(key: String, value: Variant) -> void:
 		"lens_sharpen":
 			if lens_mat != null:
 				lens_mat.set_shader_parameter("sharpen", float(value))
-		"gi", "ssil", "ssao", "ssr", "glow", "auto_exposure":
+		"gi", "ssil", "ssao", "ssr", "glow", "auto_exposure", "shaders":
 			if _env != null and is_instance_valid(_we):
 				apply_env(_env, _we)
 
@@ -283,8 +285,11 @@ func apply_env(env: Environment, we: WorldEnvironment) -> void:
 	env.glow_hdr_threshold = 1.15                   # светится только огонь, мана и блики, не освещённые стены
 	env.glow_hdr_scale = _f("glow_scale", 0.9)
 	var levels := [0.0, 1.0, 0.7, 0.35, 0.12, 0.0, 0.0]   # ореол близко к источнику, без широкой засветки
+	var wide := [0.0, 1.0, 0.8, 0.6, 0.42, 0.22, 0.08]    # «Юрума Ультра»: мягкое широкое сияние, как в шейдерпаках
+	var sp := shaders()
 	for i: int in 7:
-		env.set_glow_level(i, float(levels[i]))
+		env.set_glow_level(i, lerpf(float(levels[i]), float(wide[i]), sp))
+	env.glow_bloom = maxf(env.glow_bloom, 0.035 * sp)       # чуть света от ярких стен и неба
 	var ca := CameraAttributesPractical.new()
 	ca.auto_exposure_enabled = _b("auto_exposure", true)
 	ca.auto_exposure_scale = _f("exposure_scale", 0.3)
@@ -728,6 +733,7 @@ static func _dirt_texture() -> ImageTexture:
 
 var _prev_fwd := Vector3.ZERO
 var _sun_vis := 0.0
+var _rays_vis := 0.0
 
 
 ## Слой камеры по кадру: размытие поворота (насколько повернулась камера за кадр) и блики солнца (где солнце
@@ -741,6 +747,29 @@ func _lens_set(key: String, v: Variant) -> void:
 		return
 	_lens_vals[key] = v
 	lens_mat.set_shader_parameter(key, v)
+
+
+## Сила шейдеров «Юрума Ультра» 0..1 (0 — выкл.).
+func shaders() -> float:
+	return clampf(_f("shaders", 1.0), 0.0, 1.0)
+
+
+## Тон по часу (раздельный тон слоя камеры): днём — лёгкий тёплый свет и прохладные тени, на заре и закате — золото
+## против сиреневой синевы, ночью — лунная синь. elev — высота солнца (y направления к нему).
+var _tone_k := -1.0
+
+
+func _grade_tones(elev: float, sp: float) -> void:
+	var gold := clampf(1.0 - absf(elev - 0.08) / 0.3, 0.0, 1.0)
+	var night := 1.0 - smoothstep(-0.12, 0.04, elev)
+	var hi := Vector3(1.04, 1.0, 0.95).lerp(Vector3(1.12, 0.98, 0.84), gold).lerp(Vector3(0.94, 0.98, 1.1), night)
+	var lo := Vector3(0.97, 0.99, 1.04).lerp(Vector3(0.96, 0.95, 1.06), gold).lerp(Vector3(0.88, 0.95, 1.14), night)
+	var key := snappedf(elev, 0.01) + sp * 100.0
+	if key == _tone_k:
+		return
+	_tone_k = key
+	_lens_set("tone_hi", hi)
+	_lens_set("tone_lo", lo)
 
 
 func _camera_lens(delta: float) -> void:
@@ -760,20 +789,32 @@ func _camera_lens(delta: float) -> void:
 			mb = mb.normalized() * 0.035
 	_prev_fwd = fwd
 	_lens_set("mblur", mb)
+	var sp := shaders()
+	_lens_set("grade", sp)
+	_lens_set("vignette", maxf(_f("lens_vignette", 0.0), 0.16 * sp))
 	var fl := _f("flare", 0.6)
-	if fl <= 0.0 or not is_instance_valid(sun):
+	if not is_instance_valid(sun):
 		_lens_set("sun_vis", 0.0)
+		_lens_set("rays", 0.0)
 		return
 	var to_sun := sun.global_transform.basis.z.normalized()        # свет летит по −Z — солнце в стороне +Z
+	_grade_tones(to_sun.y, sp)
 	var want := 0.0
+	var want_r := 0.0
 	var p := cam.global_position + to_sun * 1000.0
 	if to_sun.y > -0.02 and not cam.is_position_behind(p) and sun.light_energy > 0.3:
 		var uv := cam.unproject_position(p) / vs
-		if uv.x > -0.2 and uv.x < 1.2 and uv.y > -0.2 and uv.y < 1.2:
+		if uv.x > -0.45 and uv.x < 1.45 and uv.y > -0.45 and uv.y < 1.45:
 			_lens_set("sun_uv", uv)
-			want = 0.0 if _sun_blocked else clampf(sun.light_energy / 1.1, 0.0, 1.0)   # за домом — нет
+			var inside := uv.x > -0.2 and uv.x < 1.2 and uv.y > -0.2 and uv.y < 1.2
+			want = 0.0 if _sun_blocked or not inside else clampf(sun.light_energy / 1.1, 0.0, 1.0)   # за домом — нет
+			# лучи — и когда солнце за домом или кроной (так они и видны); у края кадра и за ним слабее
+			var edge := maxf(absf(uv.x - 0.5), absf(uv.y - 0.5))
+			want_r = clampf(sun.light_energy / 1.1, 0.0, 1.0) * (1.0 - smoothstep(0.55, 0.95, edge)) 				* (0.55 + 0.45 * clampf(1.0 - to_sun.y / 0.6, 0.0, 1.0))     # низкое солнце — лучи длиннее и ярче
 	_sun_vis = move_toward(_sun_vis, want, delta * 4.0)
-	_lens_set("sun_vis", _sun_vis * fl)
+	_rays_vis = move_toward(_rays_vis, want_r, delta * 2.0)
+	_lens_set("sun_vis", _sun_vis * maxf(fl, 0.0))
+	_lens_set("rays", _rays_vis * sp * _f("rays", 0.55))
 	_lens_set("sun_col", Vector3(sun.light_color.r, sun.light_color.g, sun.light_color.b))
 
 

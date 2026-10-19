@@ -6,6 +6,11 @@
 //   flare — блики объектива от солнца (sun_uv — солнце на экране, sun_vis 0..1 — видно ли, gfx.gd проверяет лучом):
 //     ореол вокруг солнца, горизонтальная полоса, «призраки» вдоль линии солнце → центр кадра;
 //   mblur — размытие при повороте камеры (смещение кадра за выдержку, доли экрана; gfx.gd), центр с героем резкий.
+// Шейдеры «Юрума Ультра» (как шейдерпаки Minecraft — BSL, Complementary; сила — меню «Графика» → shaders, gfx.gd):
+//   rays — лучи солнца в экранном пространстве: от яркого неба у солнца сквозь кроны, арки и щели между домами
+//     (32 шага к солнцу с затуханием, шаг сдвинут шумом — без полос); видны и когда само солнце за домом;
+//   grade — киношный цвет: сочность без кислотности (вибрация — ненасыщенное насыщается сильнее), мягкая S-кривая,
+//     раздельный тон — света тёплые, тени холодные (tone_hi / tone_lo от часа: золото на заре, синева ночью).
 // Всё здесь, а не в эффектах потока рендера: с отдельным потоком рендера те вешали игру.
 // Тут же «Остановка времени» иая (iai.gd ставит k / wave / flash / center на этот же материал):
 //   k 0..1 — рыбий глаз сильнее, расслоение цвета, мир уходит в сиреневый монохром; wave — кольцо волны от героя;
@@ -24,6 +29,12 @@ uniform vec3 sun_col = vec3(1.0, 0.82, 0.62);
 uniform float flare = 1.0;
 uniform float ghosts = 0.0;          // «призраки», полоса и кольцо объектива (0 — только сияние солнца, как в RPG)
 uniform vec2 mblur = vec2(0.0);
+uniform float rays = 0.0;
+uniform float rays_thr = 0.76;        // с какой яркости пиксель — «небо/свет», от которого идут лучи
+uniform float rays_decay = 0.968;
+uniform float grade = 0.0;
+uniform vec3 tone_hi = vec3(1.05, 1.0, 0.93);
+uniform vec3 tone_lo = vec3(0.95, 0.98, 1.07);
 
 uniform float k = 0.0;
 uniform float wave = -1.0;
@@ -33,6 +44,7 @@ uniform vec3 tint = vec3(0.78, 0.66, 1.0);
 uniform float strength = 0.38;        // рыбий глаз иая: центр крупнее в 1 / (1 − strength) раз
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }   // шум без узора
 
 void fragment() {
 	vec2 px = TEXTURE_PIXEL_SIZE;
@@ -69,6 +81,38 @@ void fragment() {
 		vec3 nb = textureLod(TEXTURE, base + vec2(px.x, 0.0), 0.0).rgb + textureLod(TEXTURE, base - vec2(px.x, 0.0), 0.0).rgb
 			+ textureLod(TEXTURE, base + vec2(0.0, px.y), 0.0).rgb + textureLod(TEXTURE, base - vec2(0.0, px.y), 0.0).rgb;
 		col += (col - nb * 0.25) * sharpen;
+	}
+	// лучи солнца: сумма ярких точек на пути к солнцу (чем дальше по пути — тем слабее)
+	if (rays > 0.001) {
+		vec2 stepv = (sun_uv - base) / 32.0;
+		vec2 p = base + stepv * ign(FRAGCOORD.xy);
+		float acc = 0.0;
+		float w = 1.0;
+		for (int i = 0; i < 32; i++) {
+			p += stepv;
+			vec2 q = clamp(p, vec2(0.0), vec2(1.0));
+			vec3 sc = textureLod(TEXTURE, q, 0.0).rgb;
+			float l = dot(sc, vec3(0.2126, 0.7152, 0.0722));
+			float edge = step(abs(p.x - 0.5), 0.5) * step(abs(p.y - 0.5), 0.5);   // за кадром — не знаем, что там
+			float near_sun = exp(-length((p - sun_uv) * asp) * 2.6);              // светит небо у солнца, а не огонь и гербы
+			acc += smoothstep(rays_thr, 1.0, l) * w * mix(0.6, 1.0, edge) * near_sun;
+			w *= rays_decay;
+		}
+		acc /= 32.0;
+		float fall = exp(-length((base - sun_uv) * asp) * 1.1);
+		col += sun_col * acc * fall * rays * 2.6;
+	}
+	// киношный цвет
+	if (grade > 0.001) {
+		vec3 c = max(col, vec3(0.0));
+		float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+		float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+		c = mix(vec3(l), c, 1.0 + grade * 0.32 * (1.0 - clamp(sat, 0.0, 1.0)));     // вибрация
+		vec3 cc = clamp(c, 0.0, 1.0);
+		c = mix(c, c + (cc * cc * (3.0 - 2.0 * cc) - cc), grade * 0.28);              // S-кривая: глубже тени, плотнее света
+		float hw = smoothstep(0.18, 0.85, l);
+		c *= mix(vec3(1.0), mix(tone_lo, tone_hi, hw), grade);                         // раздельный тон
+		col = c;
 	}
 	// остановленный мир иая: сиреневый монохром с сохранённым контрастом
 	if (k > 0.001) {

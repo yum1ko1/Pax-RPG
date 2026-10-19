@@ -232,6 +232,7 @@ func _open(t: String) -> void:
 			_slider("Volumetric fog", float(mod.get_setting("vol_fog", 0.5)), 0.0, 1.0, 0.01, true, func(v: float) -> void:
 				mod.set_setting("vol_fog", v))
 			_section("CAMERA")
+			_gslider("Shaders «Yuruma Ultra» (sun rays, cinematic colour, soft bloom)", "shaders", 1.0, 0.0, 1.0, 0.01, true)
 			_gslider("Glow", "glow", 0.55, 0.0, 1.0, 0.01, true)
 			_gslider("Sharpen", "lens_sharpen", 0.3, 0.0, 1.0, 0.01, true)
 			_gslider("Motion blur", "cam_blur", 0.35, 0.0, 1.0, 0.01, true)

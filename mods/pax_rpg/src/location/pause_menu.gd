@@ -235,16 +235,16 @@ func _show_gfx(on: bool) -> void:
 const PRESETS := {
 	"low": {"gi": false, "ssil": false, "ssao": false, "ssr": false, "aa": "fsr2", "fsr_scale": 0.77, "lamp_shadows_n": 8.0,
 		"glow": 0.3, "lens_sharpen": 0.3, "cam_blur": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0,
-		"vol_fog": 0.0},
+		"vol_fog": 0.0, "shaders": 0.0},
 	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 16.0,
 		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.25, "flare": true, "auto_exposure": true, "grass_density": 4.0,
-		"vol_fog": 0.3},
+		"vol_fog": 0.3, "shaders": 0.6},
 	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 32.0,
 		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 6.0,
-		"vol_fog": 0.5},
+		"vol_fog": 0.5, "shaders": 0.85},
 	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 40.0,
 		"glow": 0.45, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 9.0,
-		"vol_fog": 0.6},
+		"vol_fog": 0.6, "shaders": 1.0},
 }
 
 
@@ -293,6 +293,7 @@ func _fill_gfx() -> void:
 	_gslider("pax_rpg_gfx_lamps", "lamp_shadows_n", float(_gfx_cfg.get("lamp_shadows_n", 40.0)), 0.0, 40.0, 4.0)
 	_slider(_mod.tr_key("pax_rpg_set_volfog"), "vol_fog", 0.5, 0.0, 1.0, func(v: float) -> void:
 		fog_changed.emit(v), _gfx_rows)
+	_gslider("pax_rpg_gfx_shaders", "shaders", float(_gfx_cfg.get("shaders", 1.0)), 0.0, 1.0, 0.01)
 	_gslider("pax_rpg_gfx_glow", "glow", float(_gfx_cfg.get("glow", 0.55)), 0.0, 1.0, 0.01)
 	_gslider("pax_rpg_gfx_sharpen", "lens_sharpen", float(_gfx_cfg.get("lens_sharpen", 0.3)), 0.0, 1.0, 0.01)
 	_toggle("pax_rpg_gfx_flare", "flare", float(_gfx_cfg.get("flare", 1.0)) > 0.0)

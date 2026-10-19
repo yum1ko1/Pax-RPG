@@ -133,6 +133,7 @@
 	"pax_rpg_gfx_aa_off": "Выкл.",
 	"pax_rpg_gfx_scale": "Масштаб рендера (FSR 2)",
 	"pax_rpg_gfx_lamps": "Тени огней",
+	"pax_rpg_gfx_shaders": "Шейдеры «Юрума Ультра»",
 	"pax_rpg_gfx_glow": "Свечение",
 	"pax_rpg_gfx_sharpen": "Резкость",
 	"pax_rpg_gfx_blur": "Размытие поворота",
