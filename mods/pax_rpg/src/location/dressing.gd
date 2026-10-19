@@ -26,16 +26,12 @@ func _m(key: String, col: Color, rough := 0.85, metal := 0.0) -> StandardMateria
 	return m
 
 
-func _box(size: Vector3, pos: Vector3, basis: Basis, mat: Material, parent: Node = null) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	bm.material = mat
-	mi.mesh = bm
-	mi.transform = Transform3D(basis, pos)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if size.length() < 0.6 else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	(parent if parent != null else city.root).add_child(mi)
-	return mi
+## Коробка убранства — в пакет города (city.gd → batch_box): сотни мелочей одним вызовом отрисовки на ячейку.
+func _box(size: Vector3, pos: Vector3, basis: Basis, mat: Material) -> void:
+	var tiny := size.length() < 0.6                   # щепки, солома, черепки: без тени, дальше 50 м не рисуются (< 1 px)
+	city.batch_box(size, basis, pos, mat,
+		GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if tiny else GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		50.0 if tiny else 0.0)
 
 
 ## Ткань на ветру: шейдер флагов (как бельё и знамёна), цвет — палитра района.

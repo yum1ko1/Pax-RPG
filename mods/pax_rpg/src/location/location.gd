@@ -3156,6 +3156,18 @@ static func _bez(p0: Vector2, c: Vector2, p1: Vector2, k: float) -> Vector2:
 	return p0.lerp(c, e).lerp(c.lerp(p1, e), e)
 
 
+var _tr_cache := {}
+
+
+## Перевод строки HUD — один раз за игру (раньше ~15 поисков по словарю языка каждый кадр).
+func _t(key: String) -> String:
+	var v: Variant = _tr_cache.get(key)
+	if v == null:
+		v = mod.tr_key(key)
+		_tr_cache[key] = v
+	return v
+
+
 func _hud_tick(delta: float) -> void:
 	if not is_inside_tree() or not is_instance_valid(_player) or not is_instance_valid(_cam) \
 			or not _player.is_inside_tree():
@@ -3179,8 +3191,8 @@ func _hud_tick(delta: float) -> void:
 			gain *= _style.reward_mult()
 			_prog.add_gold(coins)
 			_gold_flash = 1.0
-			_toast = {"text": mod.tr_key("pax_rpg_hud_got") % [mod.tr_key("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
-				mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0}
+			_toast = {"text": _t("pax_rpg_hud_got") % [_t("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
+				_t("pax_rpg_gold_got") % coins, "t": 0.0}
 		elif gob.is_alive():
 			_dead_seen[id] = false
 	_tick_orbs(delta)
@@ -3194,12 +3206,12 @@ func _hud_tick(delta: float) -> void:
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
 		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash,
 		"style": {"letter": _style.letter(), "rank": _style.rank(), "frac": _style.frac(), "flash": _style.flash,
-			"title": mod.tr_key("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+			"title": _t("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,
-		"hint": mod.tr_key("pax_rpg_controls"), "hint_a": clampf(_hint_t, 0.0, 1.0),
-		"gate_hint": mod.tr_key("pax_rpg_gate_hint") if _near_gate else ""}
+		"hint": _t("pax_rpg_controls"), "hint_a": clampf(_hint_t, 0.0, 1.0),
+		"gate_hint": _t("pax_rpg_gate_hint") if _near_gate else ""}
 	var targets: Array = []
 	var enemies: Array = []
 	for g: Variant in _goblins:
@@ -3219,9 +3231,9 @@ func _hud_tick(delta: float) -> void:
 	st["enemies"] = enemies
 	var e := _hud_enemy()
 	if e != null:
-		st["enemy"] = {"name": mod.tr_key(e.display_key), "hp": e.hp / e.max_hp,
+		st["enemy"] = {"name": _t(e.display_key), "hp": e.hp / e.max_hp,
 			"posture": e.posture / e.max_posture, "broken": e.can_deathblow(), "boss": e.boss,
-			"title": mod.tr_key(e.title_key) if e.title_key != "" else ""}
+			"title": _t(e.title_key) if e.title_key != "" else ""}
 		st["ult"] = e.posture / e.max_posture if not e.can_deathblow() else 1.0
 		st["ult_ready"] = e.can_deathblow()
 	if _lock != null and is_instance_valid(_lock):
@@ -3250,13 +3262,13 @@ func _hud_tick(delta: float) -> void:
 			st["toast"] = {"text": _toast.text, "a": 1.0 - smoothstep(2.8, 3.5, float(_toast.t))}
 	var act := _hero.action if _hero != null else ""
 	st["skills"] = [
-		{"k": "斬", "key": mod.tr_key("pax_rpg_key_lmb"), "label": mod.tr_key("pax_rpg_hud_attack"),
+		{"k": "斬", "key": _t("pax_rpg_key_lmb"), "label": _t("pax_rpg_hud_attack"),
 			"on": act in Hero.ATTACKS, "color": Color(1.0, 0.55, 0.78)},
-		{"k": "盾", "key": mod.tr_key("pax_rpg_key_rmb"), "label": mod.tr_key("pax_rpg_hud_block"),
+		{"k": "盾", "key": _t("pax_rpg_key_rmb"), "label": _t("pax_rpg_hud_block"),
 			"on": _hero != null and _hero.blocking, "color": Color(0.47, 0.84, 1.0)},
-		{"k": "風", "key": "Alt", "label": mod.tr_key("pax_rpg_hud_dodge"), "on": act.begins_with("Dodge"),
+		{"k": "風", "key": "Alt", "label": _t("pax_rpg_hud_dodge"), "on": act.begins_with("Dodge"),
 			"color": Color(0.47, 0.84, 1.0)},
-		{"k": "鎖", "key": "Q", "label": mod.tr_key("pax_rpg_hud_lock"), "on": _lock != null,
+		{"k": "鎖", "key": "Q", "label": _t("pax_rpg_hud_lock"), "on": _lock != null,
 			"color": Color(1.0, 0.55, 0.78)},
 		] + _weapon_skills(act)
 	_hud.st = st

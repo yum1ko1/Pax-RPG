@@ -471,6 +471,18 @@ func _process(delta: float) -> void:
 
 
 ## Тени — у ближайших к камере горящих огней; дальние без теней (каждая тень огня — 6 проходов сцены).
+## Свет огня (шар его радиуса) хоть краем попадает в пирамиду камеры. Если нет — ни свет, ни его тень не ложатся
+## ни на один видимый пиксель, и тень (до 6 проходов отрисовки сцены) не нужна. Запас 4 м — покачивание камеры
+## не дёргает набор (это и было причиной «прыгающих» теней у старой проверки «в кадре» по точке).
+static func _reaches_view(ol: OmniLight3D, frustum: Array[Plane]) -> bool:
+	var c := ol.global_position
+	var r := ol.omni_range + 4.0
+	for pl: Plane in frustum:
+		if pl.distance_to(c) > r:
+			return false
+	return true
+
+
 func _lamp_shadows() -> void:
 	var n := int(_f("lamp_shadows_n", 40))
 	if lights.is_empty() or not is_instance_valid(cam):
@@ -478,6 +490,7 @@ func _lamp_shadows() -> void:
 	if not _fogs_made:
 		_fire_fog()
 	var hp := player.global_position if is_instance_valid(player) else cam.global_position
+	var frustum := cam.get_frustum()
 	var near: Array = []
 	for l: Array in lights:
 		var ol := l[0] as OmniLight3D
@@ -494,7 +507,7 @@ func _lamp_shadows() -> void:
 			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
-		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0:
+		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0 and _reaches_view(ol, frustum):
 			near.append([d, ol])
 		else:
 			ol.set_meta("pax_rpg_sh_want", false)

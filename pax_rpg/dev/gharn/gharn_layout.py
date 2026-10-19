@@ -260,6 +260,12 @@ for side in (-1, 1):                                     # конец аллеи
     add("@brazier_tusk", side * 4.6, 33.4, 0, c=True, rad=1.0)       # перед опорами арки, не в них
     items.append({"brazier": True, "p": [side * 4.6, 0.0, 33.4], "c": False})
 add("@tusk_arch", 0, 29.2, 0, s=1.75, c=False)          # рамка-портал на площадь Круга
+for side in (-1, 1):                                     # арка не стоит одна: от опор — каменные стены до рядов домов
+    box([9.2, 4.2, 1.1], side * 9.6, 2.1, 28.4, "stone_dark", c=True)          # x 5.0…14.2, z 27.85…28.95
+    box([9.6, 0.35, 1.5], side * 9.6, 4.35, 28.4, "stone_cut", c=False)        # карниз-навершие
+    box([1.6, 5.0, 1.6], side * 14.4, 2.5, 28.4, "stone_cut", c=True)          # угловой столб у домов
+    occupied.append((side * 9.6, 28.4, 4.8))
+WALL_ARCH = [(-14.6, -4.9, 27.6, 29.2), (4.9, 14.6, 27.6, 29.2)]   # мелочь в теле стен — убрать (ниже, перед записью)
 
 # --- концепт (заглушки proxy — рисует только превью Blender, в игре пока нет; потом — настоящие модели)
 def proxy(kind, x, y, z, r=0.0, **kw):
@@ -1203,6 +1209,8 @@ def declutter():
     print("мелочь у входа: сдвинуто", moved, "убрано", len(items) - len(keep))
     items[:] = keep
 declutter()
+items[:] = [i for i in items if not ("m" in i and "house_" not in i["m"] and "tusk_arch" not in i["m"]
+    and any(a <= i["p"][0] <= b and c <= i["p"][2] <= d for a, b, c, d in WALL_ARCH))]   # ничего в стенах у арки
 items[:] = [i for i in items if not ("m" in i and i["m"].split("/")[-1][:-4] in SMALL | {"grass_tuft"}
                                         and 54.5 < i["p"][2] < 60.5 and abs(i["p"][0]) > 5.2)]   # устье переулка свободно
 

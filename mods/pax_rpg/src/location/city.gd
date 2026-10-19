@@ -185,7 +185,60 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		print("[pax_rpg] load: landscape %d ms" % (Time.get_ticks_msec() - tl))
 		if not await _slice():
 			return
+	_flush_batches()
 	_fix_textures()
+
+
+# ---------- пакеты: одинаковые простые сетки — одним MultiMesh на ячейку CELL м и материал ----------
+# Каждый MeshInstance3D — свой вызов отрисовки в каждом проходе (глубина, свет, каждая тень каждого огня). Коробки
+# блоков, мелочь убранства и фонари гирлянд — сотни штук: пакет рисует их за один вызов, а ячейки по CELL м
+# оставляют отсечение камерой как было. Вид тот же: BoxMesh даёт одинаковую UV при любом размере, материалы —
+# мировой triplanar или цвет, масштаб коробки — в матрице экземпляра.
+var _batches := {}
+var _unit_box := {}                  # материал → BoxMesh 1×1×1 с ним
+
+
+func batch_box(size: Vector3, basis: Basis, pos: Vector3, mat: Material,
+		shadow := GeometryInstance3D.SHADOW_CASTING_SETTING_ON, vis_end := 0.0) -> void:
+	if not _unit_box.has(mat):
+		var bm := BoxMesh.new()
+		bm.material = mat
+		_unit_box[mat] = bm
+	batch_mesh(_unit_box[mat], Transform3D(basis * Basis.from_scale(size), pos), shadow, vis_end)
+
+
+func batch_mesh(mesh: Mesh, xf: Transform3D, shadow := GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
+		vis_end := 0.0, custom = null) -> void:
+	var key := "%d|%d|%d|%d|%d|%d" % [mesh.get_instance_id(), shadow, int(vis_end), floori(xf.origin.x / CELL),
+		floori(xf.origin.z / CELL), 1 if custom != null else 0]
+	if not _batches.has(key):
+		_batches[key] = {"mesh": mesh, "shadow": shadow, "vis": vis_end, "xf": [], "cd": [], "custom": custom != null}
+	var b: Dictionary = _batches[key]
+	(b.xf as Array).append(xf)
+	(b.cd as Array).append(custom if custom != null else Color())
+
+
+func _flush_batches() -> void:
+	for key: String in _batches:
+		var b: Dictionary = _batches[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = bool(b.custom)
+		mm.mesh = b.mesh
+		var xs: Array = b.xf
+		mm.instance_count = xs.size()
+		for i: int in xs.size():
+			mm.set_instance_transform(i, xs[i])
+			if b.custom:
+				mm.set_instance_custom_data(i, (b.cd as Array)[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = int(b.shadow)
+		if float(b.vis) > 0.0:
+			mmi.visibility_range_end = float(b.vis)
+			mmi.visibility_range_end_margin = 4.0
+		root.add_child(mmi)
+	_batches.clear()
 
 
 ## Земля: плоскость с шейдером (глина, кладка дорог и тропы по маске — shaders/ground.gdshader) и коробка-коллизия.
@@ -623,14 +676,14 @@ func _lantern_tex() -> ImageTexture:
 const LANTERN_SH := """shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 global uniform vec4 pax_rpg_wind;
-instance uniform vec3 pivot;
-instance uniform float swing_len = 1.0;
 uniform bool paper = false;
 uniform sampler2D tex : source_color, filter_linear_mipmap;
 uniform float emission_energy = 0.4;
 uniform vec4 em_col : source_color = vec4(1.0, 0.42, 0.12, 1.0);    // те же цвета, что были у StandardMaterial
 uniform vec4 rim_col : source_color = vec4(0.12, 0.06, 0.04, 1.0);
 void vertex() {
+	vec3 pivot = INSTANCE_CUSTOM.xyz;                 // фонари — экземпляры MultiMesh: подвес и длина — в custom
+	float swing_len = INSTANCE_CUSTOM.w;
 	float k = 9.8 / max(swing_len, 0.1);
 	float w = sqrt(k);
 	vec2 force = pax_rpg_wind.xy * (0.35 + 2.2 * pax_rpg_wind.w);
@@ -723,27 +776,15 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	for i: int in n:
 		var f := (i + 0.5) / n
 		var sag := sin(f * PI) * 0.35
-		var holder := Node3D.new()
-		holder.position = a.lerp(b, f) + Vector3(0, hgt - sag, 0)
-		root.add_child(holder)
-		var pivot := root.transform * holder.position      # точка подвеса — центр качания в шейдере
+		var pivot := root.transform * (a.lerp(b, f) + Vector3(0, hgt - sag, 0))   # точка подвеса — центр качания
 		var swing_len := rng.randf_range(0.8, 1.25)         # длина подвеса — свой период у каждого фонаря
-		var lan := MeshInstance3D.new()
-		lan.mesh = _lantern_mesh
 		var sc := rng.randf_range(0.75, 1.25)
-		lan.scale = Vector3.ONE * sc
-		lan.position = Vector3(0, -0.55 * sc, 0)
-		holder.add_child(lan)
-		var parts: Array = [lan]
+		var cd := Color(pivot.x, pivot.y, pivot.z, swing_len)   # шейдеру — через INSTANCE_CUSTOM
+		batch_mesh(_lantern_mesh, Transform3D(Basis.from_scale(Vector3.ONE * sc), pivot + Vector3(0, -0.55 * sc, 0)),
+			GeometryInstance3D.SHADOW_CASTING_SETTING_ON, 0.0, cd)
 		for y: float in [-0.12, -0.98]:
-			var rim := MeshInstance3D.new()
-			rim.mesh = _rim_mesh
-			rim.position = Vector3(0, y * sc, 0)
-			holder.add_child(rim)
-			parts.append(rim)
-		for mi: Variant in parts:
-			(mi as GeometryInstance3D).set_instance_shader_parameter("pivot", pivot)
-			(mi as GeometryInstance3D).set_instance_shader_parameter("swing_len", swing_len)
+			batch_mesh(_rim_mesh, Transform3D(Basis(), pivot + Vector3(0, y * sc, 0)),
+				GeometryInstance3D.SHADOW_CASTING_SETTING_ON, 0.0, cd)
 	if l.size() > 5 and int(l[5]) == 0:
 		count += 1
 		return                                           # гирлянда без своего света (свет — у соседней): меньше огней в кадре
@@ -1566,13 +1607,7 @@ func _block_mat(mat: String) -> StandardMaterial3D:
 
 func _block(size: Vector3, pos: Vector3, mat: String, ry: float, rx: float, collide: bool) -> void:
 	var basis := Basis(Vector3.UP, deg_to_rad(ry)) * Basis(Vector3.RIGHT, deg_to_rad(rx))
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	bm.material = _block_mat(mat)
-	mi.mesh = bm
-	mi.transform = Transform3D(basis, pos)
-	root.add_child(mi)
+	batch_box(size, basis, pos, _block_mat(mat))         # сама коробка — в пакет MultiMesh (_flush_batches)
 	if collide:
 		var body := StaticBody3D.new()
 		var sh := CollisionShape3D.new()

@@ -139,6 +139,9 @@ func apply() -> void:
 				(ol as Vfx.Flicker).base = e                  # огонь мерцает вокруг этой энергии
 			else:
 				ol.light_energy = e
+			var lit := e > 0.001                           # погасший огонь — выключен совсем: не считается в кластерах
+			if ol.visible != lit:                          # света и в затенении, а на картинке его и так нет
+				ol.visible = lit
 	for pm: Variant in paper:
 		var pe := lerpf(0.12, 0.5, night)                    # бумага ночью — тёплая, без пересвета в ореол
 		if pm is ShaderMaterial:
