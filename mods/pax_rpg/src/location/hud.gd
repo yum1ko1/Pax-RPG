@@ -133,6 +133,11 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_map.draw.connect(_draw_map)
 	_mask.add_child(_map)
+	_coin = Control.new()                                 # монета дышит каждый кадр — свой маленький слой
+	_coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_coin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_coin.draw.connect(_draw_coin)
+	add_child(_coin)
 
 
 static func _sys(names: Array, weight: int) -> Font:
@@ -150,7 +155,14 @@ func refresh() -> void:
 	_mask.position = Vector2((_w - 40.0 - MAP_R * 2.0 - 2.0) * _s, 28.0 * _s)
 	_mask.size = Vector2(side, side)
 	_map.size = _mask.size
-	queue_redraw()
+	# весь HUD (≈200 команд рисования и текста) — только когда изменилось состояние или размер экрана; раньше —
+	# каждый кадр. Дышащая монета — свой слой (_coin), он дёшев и рисуется каждый кадр.
+	var sig := st.hash() ^ hash(Vector3(size.x, size.y, _s))
+	if sig != _sig:
+		_sig = sig
+		queue_redraw()
+	if is_instance_valid(_coin):
+		_coin.queue_redraw()
 	if _embers != null:
 		var cc := _core_c()
 		var anchor := Vector2(_w * 0.5, 1080.0)
@@ -172,6 +184,17 @@ func refresh() -> void:
 		_map_t = now
 		_mask.queue_redraw()
 		_map.queue_redraw()
+
+
+var _sig := 0                        # отпечаток состояния, с которым HUD нарисован последний раз
+var _coin: Control
+
+
+func _draw_coin() -> void:
+	if st.is_empty():
+		return
+	_coin.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	coin(_coin, Vector2(70, 70), 30.0, Time.get_ticks_msec() * 0.001, float(_g("gold_flash", 0.0)))
 
 
 var _map_mesh: ArrayMesh
@@ -1059,9 +1082,6 @@ func _draw_style() -> void:
 
 ## Золото слева вверху: монета (золото, шлем самурая, розовое переливающееся свечение) и число монет.
 func _draw_gold() -> void:
-	var t := Time.get_ticks_msec() * 0.001
-	var c := Vector2(70, 70)
-	coin(self, c, 30.0, t, float(_g("gold_flash", 0.0)))
 	var fl := float(_g("gold_flash", 0.0))
 	_text(Vector2(112, 82), str(int(_g("gold", 0))), serif, 38, c_gold_hi.lerp(Color.WHITE, fl * 0.6), HORIZONTAL_ALIGNMENT_LEFT, -1, 5)
 	_text(Vector2(114, 104), _tr("pax_rpg_gold_name").to_upper(), sans, 12, Color(c_muted, 0.85), HORIZONTAL_ALIGNMENT_LEFT, -1, 3)

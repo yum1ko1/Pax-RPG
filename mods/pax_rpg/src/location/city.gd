@@ -618,6 +618,57 @@ func _lantern_tex() -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## Фонарь-маятник в шейдере: наклон по ветру + порыв + лёгкая дрожь — то, что раньше считал Swing (скрипт) по
+## каждому фонарю каждый кадр (сила ветра · 0.12 / ω², ω² = g / длина подвеса; дрожь 0.08 · 0.12 / ω²).
+const LANTERN_SH := """shader_type spatial;
+render_mode diffuse_burley, specular_schlick_ggx;
+global uniform vec4 pax_rpg_wind;
+instance uniform vec3 pivot;
+instance uniform float swing_len = 1.0;
+uniform bool paper = false;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform float emission_energy = 0.4;
+uniform vec4 em_col : source_color = vec4(1.0, 0.42, 0.12, 1.0);    // те же цвета, что были у StandardMaterial
+uniform vec4 rim_col : source_color = vec4(0.12, 0.06, 0.04, 1.0);
+void vertex() {
+	float k = 9.8 / max(swing_len, 0.1);
+	float w = sqrt(k);
+	vec2 force = pax_rpg_wind.xy * (0.35 + 2.2 * pax_rpg_wind.w);
+	vec2 flutter = vec2(sin(TIME * 1.7 + pivot.x), cos(TIME * 1.3 + pivot.z)) * 0.08;
+	float ph = fract(sin(dot(pivot, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.2832;
+	vec2 ang = (force + flutter) * 0.12 / k + 0.004 * vec2(sin(TIME * w + ph), cos(TIME * w * 0.9 + ph));
+	ang = clamp(ang, vec2(-0.45), vec2(0.45));
+	vec3 wv = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - pivot;
+	float cx = cos(-ang.y);
+	float sx = sin(-ang.y);
+	float cz = cos(ang.x);
+	float sz = sin(ang.x);
+	wv = vec3(wv.x, cx * wv.y - sx * wv.z, sx * wv.y + cx * wv.z);
+	wv = vec3(cz * wv.x - sz * wv.y, sz * wv.x + cz * wv.y, wv.z);
+	VERTEX = (inverse(MODEL_MATRIX) * vec4(wv + pivot, 1.0)).xyz;
+}
+void fragment() {
+	if (paper) {
+		vec3 t = texture(tex, UV).rgb;
+		ALBEDO = t;
+		EMISSION = (em_col.rgb + t) * emission_energy;   // как у StandardMaterial: (цвет + текстура) · энергия
+		ROUGHNESS = 0.8;
+	} else {
+		ALBEDO = rim_col.rgb;
+		ROUGHNESS = 1.0;
+	}
+}
+"""
+static var _lan_sh: Shader
+
+
+static func _lantern_shader(_paper: bool) -> Shader:
+	if _lan_sh == null:
+		_lan_sh = Shader.new()
+		_lan_sh.code = LANTERN_SH
+	return _lan_sh
+
+
 func _lantern_line(l: Array, seed_v: int) -> void:
 	var a := Vector3(float(l[0]), 0, float(l[1]))
 	var b := Vector3(float(l[2]), 0, float(l[3]))
@@ -625,21 +676,20 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	if _lantern_mesh == null:
-		var paper := StandardMaterial3D.new()
+		# фонарь качается в вершинном шейдере (ветер — глобальный pax_rpg_wind, у каждого своя длина подвеса и фаза):
+		# узел стоит — сервер рендера не пересчитывает его, а тени соседних огней не перерисовываются каждый кадр
 		var ptex := _lantern_tex()
-		paper.albedo_texture = ptex
-		paper.emission_enabled = true
-		paper.emission = Color(1.0, 0.42, 0.12)
-		paper.emission_texture = ptex
-		paper.emission_energy_multiplier = 0.4
-		paper_mats.append(paper)                          # мягко разгорается к ночи (daynight.gd)
-		paper.roughness = 0.8
+		var paper := ShaderMaterial.new()
+		paper.shader = _lantern_shader(true)
+		paper.set_shader_parameter("tex", ptex)
+		paper.set_shader_parameter("paper", true)
+		paper_mats.append(paper)                          # мягко разгорается к ночи (daynight.gd → emission_energy)
 		_lantern_mesh = SphereMesh.new()
 		_lantern_mesh.radius = 0.38
 		_lantern_mesh.height = 0.86
 		_lantern_mesh.material = paper
-		var dark := StandardMaterial3D.new()
-		dark.albedo_color = Color(0.12, 0.06, 0.04)
+		var dark := ShaderMaterial.new()
+		dark.shader = _lantern_shader(false)
 		_rim_mesh = CylinderMesh.new()
 		_rim_mesh.top_radius = 0.2
 		_rim_mesh.bottom_radius = 0.2
@@ -676,18 +726,24 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		var holder := Node3D.new()
 		holder.position = a.lerp(b, f) + Vector3(0, hgt - sag, 0)
 		root.add_child(holder)
+		var pivot := root.transform * holder.position      # точка подвеса — центр качания в шейдере
+		var swing_len := rng.randf_range(0.8, 1.25)         # длина подвеса — свой период у каждого фонаря
 		var lan := MeshInstance3D.new()
 		lan.mesh = _lantern_mesh
 		var sc := rng.randf_range(0.75, 1.25)
 		lan.scale = Vector3.ONE * sc
 		lan.position = Vector3(0, -0.55 * sc, 0)
 		holder.add_child(lan)
+		var parts: Array = [lan]
 		for y: float in [-0.12, -0.98]:
 			var rim := MeshInstance3D.new()
 			rim.mesh = _rim_mesh
 			rim.position = Vector3(0, y * sc, 0)
 			holder.add_child(rim)
-		_swing_node().add(holder, rng.randf_range(0.8, 1.25))   # маятник: ветер и порывы раскачивают фонарь
+			parts.append(rim)
+		for mi: Variant in parts:
+			(mi as GeometryInstance3D).set_instance_shader_parameter("pivot", pivot)
+			(mi as GeometryInstance3D).set_instance_shader_parameter("swing_len", swing_len)
 	if l.size() > 5 and int(l[5]) == 0:
 		count += 1
 		return                                           # гирлянда без своего света (свет — у соседней): меньше огней в кадре

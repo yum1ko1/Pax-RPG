@@ -740,10 +740,17 @@ var _sun_blocked := false
 
 
 ## Заслонено ли солнце (луч по коллизиям города) — в такте физики: вне его пространство физики может быть занято.
+var _sun_ray_t := 0.0
+
+
 func _physics_process(_delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("gfx._physics_process")
 	if not is_instance_valid(cam) or not is_instance_valid(sun) or not is_instance_valid(view) or view.world_3d == null:
 		return
+	_sun_ray_t -= _delta                               # 10 раз в секунду: блик солнца гаснет плавно, чаще не нужно
+	if _sun_ray_t > 0.0:
+		return
+	_sun_ray_t = 0.1
 	var to_sun := sun.global_transform.basis.z.normalized()
 	var q := PhysicsRayQueryParameters3D.create(cam.global_position, cam.global_position + to_sun * 300.0)
 	if player is CollisionObject3D:

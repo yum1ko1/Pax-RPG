@@ -235,6 +235,9 @@ func hitstopped() -> bool:
 	return _hit_t > 0.0
 
 
+var _blend_keys := {}                 # имя → StringName пути параметра дерева (кэш)
+
+
 func _physics_process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("anim_ctl._physics_process")
 	if tree == null:
@@ -251,18 +254,26 @@ func _physics_process(delta: float) -> void:
 			_via_t = -1.0
 		else:
 			w = sin(PI * x)                          # 0 → 1 (середина перехода) → 0
-	tree.set("parameters/upper/blend_amount", w)
+	tree.set(&"parameters/upper/blend_amount", w)
 	var sc := speed_scale * k
 	if _is_loop:
-		tree.set("parameters/loop_ts/scale", sc)
+		tree.set(&"parameters/loop_ts/scale", sc)
 	else:
-		tree.set("parameters/ts_" + _slot + "/scale", sc)
+		var tk: StringName = _blend_keys.get("ts_" + _slot, &"")
+		if tk == &"":
+			tk = StringName("parameters/ts_" + _slot + "/scale")
+			_blend_keys["ts_" + _slot] = tk
+		tree.set(tk, sc)
 	for n: String in _blend_now:
 		var now: Vector2 = _blend_now[n]
 		var want: Vector2 = _blend_want[n]
 		now = now.lerp(want, minf(1.0, delta * blend_smooth))
 		_blend_now[n] = now
-		tree.set("parameters/L_" + n + "/blend_position", now)
+		var key: StringName = _blend_keys.get(n, &"")
+		if key == &"":
+			key = StringName("parameters/L_" + n + "/blend_position")   # путь параметра — один раз, а не строкой каждый такт
+			_blend_keys[n] = key
+		tree.set(key, now)
 	if current_animation == "":
 		return
 	current_animation_position += delta * sc

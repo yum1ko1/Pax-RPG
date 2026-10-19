@@ -140,9 +140,11 @@ func apply() -> void:
 			else:
 				ol.light_energy = e
 	for pm: Variant in paper:
-		var m2 := pm as BaseMaterial3D
-		if m2 != null:
-			m2.emission_energy_multiplier = lerpf(0.12, 0.5, night)   # бумага ночью — тёплая, без пересвета в ореол
+		var pe := lerpf(0.12, 0.5, night)                    # бумага ночью — тёплая, без пересвета в ореол
+		if pm is ShaderMaterial:
+			(pm as ShaderMaterial).set_shader_parameter("emission_energy", pe)   # фонари-маятники (city.gd)
+		elif pm is BaseMaterial3D:
+			(pm as BaseMaterial3D).emission_energy_multiplier = pe
 	for g: Variant in glass:
 		var m := g as BaseMaterial3D
 		if m != null:

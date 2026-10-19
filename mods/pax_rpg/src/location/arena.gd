@@ -410,6 +410,9 @@ class Crowd extends Node3D:
 
 	func _process(delta: float) -> void:
 		_t += delta
+		var cam := get_viewport().get_camera_3d()          # толпу дальше 70 м не качаем — подскок 12 см не виден
+		if cam != null and cam.global_position.distance_squared_to(global_position) > 4900.0:
+			return
 		for f: Array in fans:
 			var n: Node3D = f[0]
 			if is_instance_valid(n):

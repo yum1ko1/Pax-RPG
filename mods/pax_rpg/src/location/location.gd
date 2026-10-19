@@ -353,8 +353,10 @@ func build(city: Dictionary) -> void:
 		gcfg["grass_density"] = float(mod.get_setting("gfx_grass_density", gcfg.get("grass_density", 6.0)))
 		_grass.start(mod, _view, layout, c.rects, gcfg, _check_ready.bind(gen))
 		_mark("grass started")
-		_city_leaves = c.leaves
-		_city_smoke = c.smoke
+		# постоянные частицы города (огни, дым, листва, брызги фонтана) — на видеокарту (vfx.gd → to_gpu)
+		var gmap := Vfx.to_gpu(c.root)
+		_city_leaves = c.leaves.map(func(p: Variant) -> Variant: return gmap.get(p, p))
+		_city_smoke = c.smoke.map(func(p: Variant) -> Variant: return gmap.get(p, p))
 		_city_lights = c.lights
 		_city_glass = c.glass
 		_city_paper = c.paper_mats
@@ -1005,6 +1007,7 @@ func _make_portal() -> void:
 	p.mesh = dot
 	p.position = _gate_pos + Vector3(0.0, 0.2, 0.0)
 	_view.add_child(p)
+	Vfx.to_gpu_list([p])                               # искры ворот — на видеокарте (vfx.gd)
 	var label := Label3D.new()
 	label.text = mod.tr_key("pax_rpg_gate")
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED

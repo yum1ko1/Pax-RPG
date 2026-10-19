@@ -14,6 +14,7 @@ const KINDS := ["clear", "cloudy", "fog", "rain", "storm"]
 
 static var forced := ""                 # консоль rpg_weather: погода для следующих локаций ("" — по дню мира)
 
+const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 var mod: PaxMod
 var kind := "clear"
 var wet := 0.0
@@ -23,8 +24,8 @@ var low_fog := 0.0
 var _cam: Camera3D
 var _rain: GPUParticles3D
 var _rain_snd: AudioStreamPlayer
-var _dust: CPUParticles3D
-var _flies: CPUParticles3D
+var _dust: Node3D                  # пыль и светлячки — частицы на видеокарте (vfx.gd → to_gpu)
+var _flies: Node3D
 var _shadow: Decal
 var _prints: Array = []
 var _print_tex: Texture2D
@@ -99,6 +100,19 @@ func setup(m: PaxMod, k: String, env: Environment, sky_mat: ShaderMaterial, cam:
 	if day < 0.4 and rain <= 0.0:
 		_make_flies()
 	_make_moths(lamps, day)
+	_to_gpu()
+
+
+## Пыль, светлячки, мотыльки у фонарей — на видеокарту: CPUParticles3D считались процессором каждый кадр.
+func _to_gpu() -> void:
+	var list: Array = [_dust, _flies].filter(func(n: Variant) -> bool: return n is CPUParticles3D and is_instance_valid(n))
+	for ol: Variant in _moth_lamps:
+		if is_instance_valid(ol):
+			list.append_array((ol as Node).find_children("*", "CPUParticles3D", false, false))
+	var map := Vfx.to_gpu_list(list)
+	_dust = map.get(_dust, _dust)
+	_flies = map.get(_flies, _flies)
+	_moth_lamps.clear()
 
 
 # ---------- тени облаков ----------
@@ -319,6 +333,10 @@ func _make_moths(lamps: Array, day: float) -> void:
 		p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		p.visibility_range_end = 35.0
 		ol.add_child(p)
+		_moth_lamps.append(ol)
+
+
+var _moth_lamps: Array = []
 
 
 # ---------- следы ----------

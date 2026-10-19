@@ -6,7 +6,7 @@ const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 var mod: PaxMod
 var target: Node3D                 # вокруг кого порывы (герой)
-var leaves: Array = []             # CPUParticles3D листьев (city.gd)
+var leaves: Array = []             # частицы листьев (city.gd; после to_gpu — GPUParticles3D)
 var smoke: Array = []              # дым и пар (city.gd) — ветер клонит их в свою сторону
 var dir := Vector3(1, 0, 0.3).normalized()
 var _next := 2.5
@@ -28,6 +28,7 @@ func setup(m: PaxMod, who: Node3D) -> void:
 
 
 var _gust_up := 0.0                 # сколько ещё секунд порыв нарастает
+var _applied := Vector3(INF, INF, INF)  # ветер, под который уже выставлена гравитация частиц
 
 
 func _process(delta: float) -> void:
@@ -54,12 +55,15 @@ func _proc(delta: float) -> void:
 	# трава, листва, степь — шейдеры читают ветер из глобального параметра (gfx.gd: pax_rpg_wind)
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_wind", Vector4(dir.x, dir.z, 0.55 + 0.25 * sin(Time.get_ticks_msec() * 0.0004), _gust))
 	now = Vector4(dir.x, dir.z, 0.0, _gust)
-	for l: Variant in leaves:
-		if is_instance_valid(l):
-			(l as CPUParticles3D).gravity = Vector3(0.0, -0.55, 0.0) + dir * (0.35 + 1.6 * _gust)
-	for p: Variant in smoke:
-		if is_instance_valid(p):
-			(p as CPUParticles3D).gravity = Vector3(0.0, 0.12, 0.0) + dir * (0.25 + 0.9 * _gust)
+	# гравитация частиц — только когда ветер заметно сменился (каждое присваивание — вызов в сервер рендера на
+	# каждую систему; порыв меняется плавно, шаг 0.02 глазу не виден)
+	var key := Vector3(dir.x, dir.z, _gust)
+	if key.distance_to(_applied) > 0.02:
+		_applied = key
+		for l: Variant in leaves:
+			_grav(l, Vector3(0.0, -0.55, 0.0) + dir * (0.35 + 1.6 * _gust))
+		for p: Variant in smoke:
+			_grav(p, Vector3(0.0, 0.12, 0.0) + dir * (0.25 + 0.9 * _gust))
 	var keep: Array = []
 	for s: Dictionary in _streaks:
 		s.t = float(s.t) + delta
@@ -108,3 +112,14 @@ func _spawn_gust() -> void:
 		var b := Basis(dir, nrm.cross(dir).normalized(), nrm)
 		mi.global_transform = Transform3D(b * Basis.from_scale(Vector3(length, randf_range(0.25, 0.45), 1.0)), at)
 		_streaks.append({"mi": mi, "v": dir * randf_range(9.0, 14.0), "t": 0.0, "life": randf_range(0.9, 1.5)})
+
+
+static func _grav(p: Variant, g: Vector3) -> void:
+	if not is_instance_valid(p):
+		return
+	if p is GPUParticles3D:
+		var m := (p as GPUParticles3D).process_material as ParticleProcessMaterial
+		if m != null:
+			m.gravity = g
+	elif p is CPUParticles3D:
+		(p as CPUParticles3D).gravity = g

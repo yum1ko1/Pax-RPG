@@ -121,7 +121,6 @@ func _play(c: String) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	preload("res://mods/pax_rpg/src/trace.gd").tick("npc._physics_process")
 	var t0 := Time.get_ticks_usec()
 	_tick += 1
 	_phys_acc += delta
@@ -132,14 +131,17 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	preload("res://mods/pax_rpg/src/trace.gd").tick("npc._process")
 	if _anim == null:
 		return
 	var cam := get_viewport().get_camera_3d()
 	if cam != null:
 		var p := global_position + Vector3(0.0, 0.6, 0.0)
 		_seen = true                                    # шар 1 м вокруг жителя хоть краем в кадре — виден
-		for pl: Plane in cam.get_frustum():
+		var fr := Engine.get_process_frames()
+		if fr != _fr_frame:                             # пирамида камеры — одна на кадр для всех жителей (раньше
+			_fr_frame = fr                              # каждый житель собирал свой массив плоскостей)
+			_frustum = cam.get_frustum()
+		for pl: Plane in _frustum:
 			if pl.distance_to(p) > 1.0:
 				_seen = false
 				break
@@ -153,6 +155,42 @@ func _process(delta: float) -> void:
 		return
 	_anim.advance(minf(_anim_acc, 0.5))
 	_anim_acc = 0.0
+
+
+const _foot_off := 0.0               # начало тела — у ступней (капсула поднята на 0.55)
+var _ground_t := 0.0
+var _ground_y := 0.1
+var _block_t := 0.0
+
+
+## Высота земли под жителем (пандусы и ступени): один луч вниз.
+func _probe_ground() -> void:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return
+	var p := global_position
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 1.2, 0), p - Vector3(0, 3.0, 0))
+	q.exclude = [get_rid()]
+	var hit := space.intersect_ray(q)
+	if not hit.is_empty():
+		_ground_y = (hit.position as Vector3).y + _foot_off
+	else:
+		_ground_y = p.y
+
+
+## Впереди на шаг кто-то стоит (герой, другой житель, телега) — луч на уровне груди.
+func _blocked(d: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return false
+	var p := global_position + Vector3(0, 0.6, 0)
+	var q := PhysicsRayQueryParameters3D.create(p, p + d * 0.7)
+	q.exclude = [get_rid()]
+	return not space.intersect_ray(q).is_empty()
+
+
+static var _frustum: Array[Plane] = []
+static var _fr_frame := -1
 
 
 var _giver: Label3D
@@ -212,12 +250,17 @@ func _phys(delta: float) -> void:
 	if _path.size() < 2:                              # стоит на посту (стража, зазывала, караванщик) — покой
 		_play("idle")
 		return
-	var fall := velocity.y - 20.0 * delta if not is_on_floor() else -0.5      # по пандусам и ступеням — с землёй
+	# кинематика, как у толп в больших играх: позиция — напрямую по маршруту, без move_and_slide (полный расчёт
+	# столкновений на каждого жителя каждый такт). Земля — луч вниз раз в 0.2 с, «упёрся» — луч вперёд раз в 0.25 с.
+	_ground_t -= delta
+	if _ground_t <= 0.0:
+		_ground_t = 0.2
+		_probe_ground()
+	if absf(global_position.y - _ground_y) > 0.002:
+		global_position.y = move_toward(global_position.y, _ground_y, delta * 6.0)
+	velocity = Vector3.ZERO
 	if _wait > 0.0:
 		_wait -= delta
-		velocity = Vector3(0.0, fall, 0.0)
-		if not is_on_floor():                            # стоит на земле — двигать нечего (дорогой расчёт столкновений)
-			move_and_slide()
 		_play("idle")
 		return
 	var target := _path[_i]
@@ -235,19 +278,19 @@ func _phys(delta: float) -> void:
 			_wait = randf_range(1.5, 4.0)
 		return
 	var d := to.normalized()
-	velocity = Vector3(d.x * _speed, fall, d.z * _speed)
-	move_and_slide()
-	var hv := get_real_velocity()
-	hv.y = 0.0
-	if hv.length() < _speed * 0.2:                      # упёрся (в героя, в соседа) — постоять, потом назад
-		_stuck += 1
-		_wait = 0.8
-		if _stuck >= 3:
-			_stuck = 0
-			_dir = -_dir
-			_i = clampi(_i + _dir, 0, _path.size() - 1)
-	else:
+	_block_t -= delta
+	if _block_t <= 0.0:
+		_block_t = 0.25
+		if _blocked(d):                              # упёрся (в героя, в соседа) — постоять, потом назад
+			_stuck += 1
+			_wait = 0.8
+			if _stuck >= 3:
+				_stuck = 0
+				_dir = -_dir
+				_i = clampi(_i + _dir, 0, _path.size() - 1)
+			return
 		_stuck = 0
+	global_position += Vector3(d.x, 0.0, d.z) * _speed * delta
 	_play("walk")
 	if _model != null:
 		_model.rotation.y = lerp_angle(_model.rotation.y, atan2(d.x, d.z), minf(1.0, delta * 6.0))

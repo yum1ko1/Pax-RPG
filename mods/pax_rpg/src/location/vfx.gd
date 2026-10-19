@@ -192,10 +192,10 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 
 ## Ореол у фонаря / кристалла: мягкое свечение вокруг источника, чуть дышит.
 func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) -> MeshInstance3D:
-	var mi := Halo.new()
+	var mi := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2.ONE * size
-	q.material = _glow_mat(color, energy)
+	q.material = _halo_mat(color, energy)
 	mi.mesh = q
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visibility_range_end = 80.0
@@ -208,22 +208,121 @@ func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) 
 
 
 ## Свет огня: мерцает шумом (не ровный), энергию задаёт daynight через base.
+## Один «ведущий» огонь считает мерцание всех (а не сотня колбэков _process в кадр — как менеджеры эффектов
+## в больших движках); дальше FAR м от камеры мерцание не считается — его там не разглядеть.
 class Flicker extends OmniLight3D:
+	const FAR := 60.0
+	static var all: Array = []
+	static var _driver: Flicker
 	var base := -1.0
 	var _t := randf() * 100.0
 
+	func _enter_tree() -> void:
+		all.append(self)
+		var lead := _driver == null or not is_instance_valid(_driver)
+		if lead:
+			_driver = self
+		set_process(lead)
+
+	func _exit_tree() -> void:
+		all.erase(self)
+		if _driver != self:
+			return
+		_driver = null
+		for f: Variant in all:
+			if is_instance_valid(f) and (f as Flicker).is_inside_tree():
+				_driver = f
+				(f as Flicker).set_process(true)
+				break
+
 	func _process(delta: float) -> void:
-		if base < 0.0:
-			base = light_energy
-		_t += delta
-		var n := sin(_t * 13.0) * 0.5 + sin(_t * 7.3 + 1.7) * 0.3 + sin(_t * 23.0 + 0.4) * 0.2
-		light_energy = base * (0.85 + 0.15 * n)
+		if _driver != self:
+			set_process(false)
+			return
+		var cam := get_viewport().get_camera_3d()
+		var cp := cam.global_position if cam != null else Vector3.ZERO
+		for v: Variant in all:
+			var f := v as Flicker
+			if f == null:
+				continue
+			if f.base < 0.0:
+				f.base = f.light_energy
+			f._t += delta
+			if cam != null and f.global_position.distance_squared_to(cp) > FAR * FAR:
+				continue
+			var t := f._t
+			var n := sin(t * 13.0) * 0.5 + sin(t * 7.3 + 1.7) * 0.3 + sin(t * 23.0 + 0.4) * 0.2
+			f.light_energy = f.base * (0.85 + 0.15 * n)
 
 
-## Ореол, который медленно дышит.
-class Halo extends MeshInstance3D:
-	var _t := randf() * 10.0
+## Ореол — billboard как у StandardMaterial (без масштаба узла: прежнее «дыхание» через scale billboard и так
+## не показывал), но без узла-скрипта: раньше каждый ореол звал _process каждый кадр впустую.
+const HALO_SH := """shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform vec4 col : source_color = vec4(1.0);
+uniform float prox = 0.3;
+uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+void vertex() {
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+	MODELVIEW_NORMAL_MATRIX = mat3(MODELVIEW_MATRIX);
+}
+void fragment() {
+	vec4 t = texture(tex, UV);
+	float d = textureLod(depth_tex, SCREEN_UV, 0.0).r;
+	vec4 wp = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, d, 1.0);
+	wp.xyz /= wp.w;
+	ALBEDO = col.rgb * t.rgb;
+	ALPHA = t.a * clamp(1.0 - smoothstep(wp.z + prox, wp.z, VERTEX.z), 0.0, 1.0);
+}
+"""
+static var _halo_sh: Shader
 
-	func _process(delta: float) -> void:
-		_t += delta
-		scale = Vector3.ONE * (1.0 + 0.06 * sin(_t * 2.1))
+
+func _halo_mat(color: Color, energy: float) -> ShaderMaterial:
+	var key := "halo" + str(color) + str(energy)
+	if _mats.has(key):
+		return _mats[key]
+	if _halo_sh == null:
+		_halo_sh = Shader.new()
+		_halo_sh.code = HALO_SH
+	var m := ShaderMaterial.new()
+	m.shader = _halo_sh
+	m.set_shader_parameter("tex", mod.texture(GLOW))
+	m.set_shader_parameter("col", Color(color.r * energy, color.g * energy, color.b * energy))
+	_mats[key] = m
+	return m
+
+
+## Постоянные частицы (огни, дым, листья, брызги) — на видеокарту: CPUParticles3D считает каждую частицу
+## процессором каждый кадр, GPUParticles3D — шейдером (так делают все большие движки). Вид тот же:
+## convert_from_particles переносит все параметры. Разовые всплески (искры удара, пыль) остаются как есть.
+## Возвращает {старый узел: новый} — чтобы обновить списки (ветер).
+static func to_gpu(root: Node) -> Dictionary:
+	return to_gpu_list(root.find_children("*", "CPUParticles3D", true, false))
+
+
+static func to_gpu_list(nodes: Array) -> Dictionary:
+	var map := {}
+	for n: Variant in nodes:
+		var c := n as CPUParticles3D
+		if c == null or c.one_shot or c.get_parent() == null:
+			continue
+		var g := GPUParticles3D.new()
+		g.convert_from_particles(c)
+		g.transform = c.transform
+		g.preprocess = c.preprocess
+		g.visibility_range_begin = c.visibility_range_begin
+		g.visibility_range_end = c.visibility_range_end
+		g.cast_shadow = c.cast_shadow
+		g.layers = c.layers
+		g.visible = c.visible
+		g.visibility_aabb = AABB(Vector3(-8.0, -3.0, -8.0), Vector3(16.0, 18.0, 16.0))   # дым уходит высоко
+		g.emitting = c.emitting
+		var par := c.get_parent()
+		par.add_child(g)
+		par.move_child(g, c.get_index())
+		par.remove_child(c)
+		c.queue_free()
+		map[c] = g
+	return map
