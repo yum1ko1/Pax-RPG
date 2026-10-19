@@ -4,6 +4,7 @@ extends RefCounted
 ## Удары ведёт root motion (смещение таза вынуто при сборке — pax_rpg/dev/blender/knight/*.py → *_anim.json):
 ## инерция меча тянет персонажа. Удар без продолжения кончается сразу после взмаха и плавно уходит в стойку.
 ## location.gd каждый кадр зовёт tick() и двигает CharacterBody3D по тому, что тот вернул.
+const FootIK := preload("res://mods/pax_rpg/src/location/foot_ik.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 const AnimCtl := preload("res://mods/pax_rpg/src/location/anim_ctl.gd")
@@ -309,6 +310,14 @@ func start(owner_body: PhysicsBody3D = null) -> void:
 	_skel = _find_skeleton(model)
 	if _skel != null:
 		_skel.modifier_callback_mode_process = Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
+		if bool(cfg.get("foot_ik", true)) and owner_body is CharacterBody3D:   # стопы на ступенях и склонах
+			var ik := FootIK.new()
+			ik.name = "FootIK"
+			ik.body = owner_body
+			ik.feet_root = model
+			ik.reach = _f("foot_ik_reach", 0.45)
+			ik.hip_max = _f("foot_ik_hip", 0.35)
+			_skel.add_child(ik)
 	_owner_body = owner_body
 	# меч за спиной — чуть дальше от спины, поверх плаща (иначе клинок тонет в ткани)
 	if _sword_back != null and _sword_back.is_inside_tree() and _sword_back.get_parent() is Node3D \
