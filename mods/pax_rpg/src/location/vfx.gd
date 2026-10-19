@@ -383,6 +383,9 @@ static func to_gpu_list(nodes: Array) -> Dictionary:
 		var c := n as CPUParticles3D
 		if c == null or c.one_shot or c.get_parent() == null:
 			continue
+		if c.particle_flag_align_y:
+			continue                                     # штрихи вдоль полёта (струи фонтана, искры) — в игре на видеокарте
+			                                             # пропадали (связка align_y + billboard по оси); их мало — остаются как были
 		var g := GPUParticles3D.new()
 		g.convert_from_particles(c)
 		g.transform = c.transform

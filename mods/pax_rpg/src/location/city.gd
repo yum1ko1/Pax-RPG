@@ -620,16 +620,21 @@ func _laundry(l: Array, seed_v: int) -> void:
 		var mi := MeshInstance3D.new()
 		mi.mesh = q
 		if sh != null:
-			var g := Gradient.new()
-			g.set_color(0, c)
-			g.set_color(1, c.darkened(0.15))
-			var gt := GradientTexture2D.new()
-			gt.gradient = g
-			gt.width = 8
-			gt.height = 8
+			var ctex: Texture2D = null
+			if not hide:                                   # ткань — узоры Гхарна (pax_rpg/dev/gharn/laundry_tex.py)
+				ctex = mod.texture("textures/laundry/cloth_%d.png" % rng.randi_range(0, 8))
+			if ctex == null:                               # шкуры (и запасной путь) — ровный тон
+				var g := Gradient.new()
+				g.set_color(0, c)
+				g.set_color(1, c.darkened(0.15))
+				var gt := GradientTexture2D.new()
+				gt.gradient = g
+				gt.width = 8
+				gt.height = 8
+				ctex = gt
 			var m := ShaderMaterial.new()
 			m.shader = sh
-			m.set_shader_parameter("tex", gt)
+			m.set_shader_parameter("tex", ctex)
 			m.set_shader_parameter("amp", 0.05)
 			m.set_shader_parameter("push", true)              # проходишь сквозь бельё — полотнища расступаются
 			mi.material_override = m
