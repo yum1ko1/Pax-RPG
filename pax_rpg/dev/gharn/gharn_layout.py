@@ -223,8 +223,9 @@ for side in (-1, 1):                                    # ряд домов в �
                 if side < 0 and j == 0 and z0 > 60:          # в первом проходе слева — тележка
                     add("cart", side * (FRONT_X + 1.2), gz, 90, s=0.8, c=True, rad=0.8)
                     continue
-                add("fence_wood", side * (FRONT_X + 1.6), gz, 0 if True else 0, c=True)
-                add(random.choice(["barrel_water", "wood_pile", "crate"]), side * (FRONT_X + 0.5), gz, random.uniform(0, 360),
+                # щель между домами закрыта каменной оградой в рост: за ней не видно пустого поля
+                box([0.5, 2.6, gap + 0.6], side * (FRONT_X + 0.6), 1.3, round(gz, 2), "stone_dark", c=True)
+                add(random.choice(["barrel_water", "wood_pile", "crate"]), side * (FRONT_X - 0.2), gz, random.uniform(0, 360),
                     s=0.9, c=True, rad=0.5)
 for side in (-1, 1):                                    # тротуары по обе стороны; у переулка (z 57.5) — разрыв
     box([2.2, 0.06, 23.0], side * 6.2, 0.03, 43.0, "stone_cut", c=False)   # узкий, низкий, без коллизии
@@ -251,15 +252,13 @@ for i in range(len(ALLEY_HOUSES) - 1):                   # знамёна кла
     if s1_ == s2_ and abs(z1_ - z2_) < 12 and i % 2 == 0:
         add("banner_clan", s1_ * 6.9, (z1_ + z2_) / 2, 90 if s1_ < 0 else -90, s=1.2, c=True, rad=0.4)
 for side in (-1, 1):                                     # карман у переулка (z 57.5): скамьи и кадка сакуры
-    add("bench_long", side * 9.0, 55.6, 90 if side < 0 else -90, c=True)
-    box([2.4, 0.9, 2.4], side * 9.6, 0.45, 59.6, "stone_cut", c=True)        # кадка сакуры (как planter ниже)
-    add("@flame_tree", side * 9.6, 59.6, random.uniform(0, 360), s=0.42, c=False, y=0.9)
-    occupied.append((side * 9.6, 59.6, 1.8))
+    pass                                                 # переулок свободен: скамья и кадка стояли поперёк прохода
+TRAILS.append(("rect", -34, 34, 55.0, 60.0))             # переулок z 57.5 — широкая утоптанная дорога, а не тропка
 add("hitching_post", -5.6, 79.5, 0, c=True)             # у ворот: коновязь и поилка для всадников
 add("trough", 5.6, 79.5, 0, c=True)
 for side in (-1, 1):                                     # конец аллеи: жаровни у арки
-    add("@brazier_tusk", side * 4.4, 30.5, 0, c=True, rad=1.0)
-    items.append({"brazier": True, "p": [side * 4.4, 0.0, 30.5], "c": False})
+    add("@brazier_tusk", side * 4.6, 33.4, 0, c=True, rad=1.0)       # перед опорами арки, не в них
+    items.append({"brazier": True, "p": [side * 4.6, 0.0, 33.4], "c": False})
 add("@tusk_arch", 0, 29.2, 0, s=1.75, c=False)          # рамка-портал на площадь Круга
 
 # --- концепт (заглушки proxy — рисует только превью Blender, в игре пока нет; потом — настоящие модели)
@@ -277,9 +276,9 @@ proxy("portcullis", 0, 4.1, 85.7, 0, w=4.6, h=1.6)       # решётка-гер
 proxy("ruts", 0, 0, 99.0, 0, len=26)                     # колеи повозок по мостовой подхода
 # итерация 5: люди группами, с действием (концепт — потом жители с анимациями)
 for side in (-1, 1):
-    proxy("guard", side * 3.2, 0, 87.0, 0)               # стража снаружи ворот
-    proxy("guard", side * 3.0, 0, 77.6, 180)             # и изнутри
-    proxy("guard", side * 3.6, 0, 30.8, 180)             # у арки на площадь
+    proxy("guard", side * 2.7, 0, 87.9, 0)               # стража снаружи ворот (башни — z 78.4…85.6, |x| ≥ 2.3)
+    proxy("guard", side * 2.7, 0, 76.6, 180)             # и изнутри
+    proxy("guard", side * 2.6, 0, 32.6, 180)             # у арки на площадь — перед её опорами (арка z 27…31.5, |x| ≤ 4.9)
 for k, (dx, dz) in enumerate(((1.4, 0.4), (-1.2, 1.1), (0.3, -1.5), (-0.6, -1.3))):   # караванщики у костра
     proxy("person", -15.5 + dx, 0, 92.0 + dz, math.degrees(math.atan2(-dx, -dz)))
 proxy("person", 12.2, 0, 95.0, 110)                       # погонщик у буйволов
@@ -1204,6 +1203,8 @@ def declutter():
     print("мелочь у входа: сдвинуто", moved, "убрано", len(items) - len(keep))
     items[:] = keep
 declutter()
+items[:] = [i for i in items if not ("m" in i and i["m"].split("/")[-1][:-4] in SMALL | {"grass_tuft"}
+                                        and 54.5 < i["p"][2] < 60.5 and abs(i["p"][0]) > 5.2)]   # устье переулка свободно
 
 
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))

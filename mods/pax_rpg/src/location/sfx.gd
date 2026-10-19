@@ -159,7 +159,7 @@ func whoosh(clip := "", final := false) -> void:
 func land_step() -> void:
 	var p = _sand if soft and _sand != null else _step
 	if p != null:
-		p.volume_db = _land_db
+		p.volume_db = _land_db - (7.0 if p == _sand else 0.0)
 		p.play()
 	if _rustle != null:
 		_rustle.volume_db = -16.0
@@ -177,7 +177,7 @@ func step_now(running: bool) -> void:
 	if puddle and _splash != null:
 		p = _splash
 	if p != null:
-		p.volume_db = (-6.0 if running else -9.0) + (_step_db if p != _splash else 0.0)
+		p.volume_db = (-6.0 if running else -9.0) + (_step_db if p != _splash else 0.0) - (7.0 if p == _sand else 0.0)   # земля тише
 		p.play()
 
 
@@ -194,7 +194,7 @@ func walk(dist: float, running: bool, armed: bool, on_floor: bool) -> void:
 		_splash.volume_db = -5.0 if running else -8.0
 		_splash.play()
 	elif soft and _sand != null:
-		_sand.volume_db = (-6.0 if running else -9.0) + _step_db
+		_sand.volume_db = (-13.0 if running else -16.0) + _step_db   # земля тише камня: мягкий шаг не громче каблука
 		_sand.play()
 	elif _step != null:
 		_step.volume_db = (-6.0 if running else -9.0) + _step_db
