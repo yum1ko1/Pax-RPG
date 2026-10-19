@@ -256,198 +256,184 @@
 <rect x="846" y="822" width="35" height="36" fill="#4a3b2e" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="231" y="932" width="19" height="40" fill="#8a6d3b" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="791" y="932" width="19" height="40" fill="#8a6d3b" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="2" y="-5" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="4" y="34" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="5" y="70" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="3" y="142" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="7" y="181" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="-0" y="210" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="10" y="252" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="10" y="326" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="4" y="357" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="9" y="398" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="8" y="432" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="1" y="466" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="2" y="569" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="4" y="606" width="37" height="37" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="9" y="683" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="7" y="716" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="6" y="754" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="6" y="791" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="1" y="825" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="3" y="899" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="-3" y="926" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="6" y="972" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="37" y="-5" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="43" y="37" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="32" y="61" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="39" y="101" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="144" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="36" y="169" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="211" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="251" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="35" y="280" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="40" y="320" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="38" y="389" width="38" height="38" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="42" y="464" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="42" y="539" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="42" y="575" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="38" y="642" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="682" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="718" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="754" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="790" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="827" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="41" y="862" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="39" y="931" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="32" y="962" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="78" y="-4" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="77" y="33" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="76" y="72" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="72" y="99" width="42" height="42" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="77" y="139" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="74" y="176" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="72" y="211" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="282" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="70" y="312" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="427" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="465" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="79" y="536" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="573" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="76" y="609" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="77" y="644" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="718" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="76" y="786" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="77" y="822" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="78" y="900" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="75" y="931" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="78" y="971" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="106" y="-11" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="116" y="37" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="117" y="69" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="113" y="931" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="110" y="969" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="147" y="31" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="142" y="64" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="148" y="897" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="144" y="928" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="144" y="961" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="182" y="-4" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="182" y="33" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="176" y="63" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="186" y="898" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="184" y="935" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="182" y="967" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="222" y="-5" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="218" y="31" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="216" y="63" width="41" height="41" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="224" y="936" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="213" y="961" width="42" height="42" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="248" y="-12" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="254" y="32" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="261" y="68" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="293" y="-3" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="289" y="67" width="34" height="34" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="332" y="1" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="324" y="29" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="360" y="-8" width="38" height="38" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="359" y="27" width="42" height="42" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="366" y="68" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="392" y="-12" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="399" y="29" width="35" height="35" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="429" y="27" width="47" height="47" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="469" y="32" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="471" y="72" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="510" y="-0" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="500" y="26" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="509" y="70" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="541" y="-4" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="544" y="31" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="545" y="66" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="583" y="68" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="614" y="-3" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="615" y="69" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="657" y="3" width="21" height="21" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="657" y="38" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="655" y="72" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="691" y="-2" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="690" y="33" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="726" y="34" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="752" y="24" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="759" y="67" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="797" y="-6" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="799" y="70" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="788" y="887" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="797" y="933" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="797" y="970" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="825" y="-9" width="42" height="42" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="836" y="37" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="827" y="887" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="833" y="934" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="833" y="968" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="868" y="-0" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="873" y="36" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="872" y="899" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="866" y="930" width="35" height="35" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="868" y="969" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="903" y="32" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="905" y="68" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="910" y="145" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="910" y="363" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="910" y="395" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="910" y="469" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="905" y="570" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="905" y="678" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="906" y="789" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="903" y="819" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="899" y="852" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="903" y="895" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="897" y="923" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="902" y="965" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="944" y="35" width="21" height="21" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="940" y="66" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="935" y="132" width="47" height="47" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="945" y="182" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="939" y="211" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="940" y="248" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="943" y="284" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="943" y="323" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="941" y="465" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="937" y="498" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="934" y="532" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="938" y="572" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="940" y="610" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="943" y="647" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="940" y="677" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="934" y="711" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="947" y="756" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="940" y="788" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="941" y="857" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="941" y="893" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="941" y="936" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="978" y="2" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="979" y="144" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="974" y="281" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="967" y="349" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="5" y="31" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="4" y="68" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="8" y="107" width="21" height="21" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="-2" y="132" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="4" y="177" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="4" y="211" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="-5" y="242" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="3" y="282" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="5" y="321" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="3" y="355" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="-2" y="388" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="5" y="466" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="3" y="538" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="7" y="577" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="-0" y="606" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="10" y="648" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="10" y="722" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="4" y="753" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="9" y="794" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="8" y="828" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="1" y="862" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="2" y="965" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="40" y="-6" width="37" height="37" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="45" y="71" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="43" y="104" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="142" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="179" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="37" y="213" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="39" y="287" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="33" y="314" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="360" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="37" y="391" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="43" y="433" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="32" y="457" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="39" y="497" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="41" y="540" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="36" y="565" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="41" y="607" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="41" y="647" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="35" y="676" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="40" y="716" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="38" y="785" width="38" height="38" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="860" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="935" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="42" y="971" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="74" y="30" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="70" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="106" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="142" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="178" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="215" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="250" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="75" y="319" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="68" y="350" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="78" y="392" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="429" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="76" y="468" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="72" y="495" width="42" height="42" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="77" y="535" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="74" y="572" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="72" y="607" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="75" y="678" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="70" y="708" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="75" y="823" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="75" y="861" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="79" y="932" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="75" y="969" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="112" y="-3" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="113" y="32" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="116" y="901" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="117" y="933" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="113" y="969" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="149" y="-3" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="149" y="71" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="149" y="966" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="186" y="-4" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="185" y="31" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="187" y="73" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="176" y="927" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="186" y="968" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="221" y="-4" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="218" y="66" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="224" y="902" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="221" y="936" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="220" y="971" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="259" y="-4" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="257" y="66" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="291" y="33" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="298" y="72" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="331" y="-1" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="330" y="34" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="334" y="72" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="364" y="34" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="402" y="-4" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="437" y="-1" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="430" y="63" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="472" y="32" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="505" y="-4" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="507" y="36" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="545" y="-3" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="548" y="69" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="575" y="-11" width="41" height="41" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="576" y="27" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="580" y="68" width="34" height="34" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="615" y="-8" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="612" y="31" width="37" height="37" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="649" y="-9" width="41" height="41" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="653" y="33" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="650" y="62" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="684" y="-7" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="718" y="-11" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="723" y="33" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="726" y="68" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="762" y="30" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="763" y="74" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="796" y="-3" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="796" y="33" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="793" y="69" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="800" y="902" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="789" y="924" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="800" y="971" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="833" y="897" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="832" y="966" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="872" y="2" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="862" y="24" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="870" y="896" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="874" y="974" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="899" y="26" width="41" height="41" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="901" y="66" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="906" y="105" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="905" y="392" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="901" y="604" width="38" height="38" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="905" y="644" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="904" y="679" width="35" height="35" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="910" y="793" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="905" y="895" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="909" y="974" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="946" y="-1" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="946" y="73" width="23" height="23" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="942" y="177" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="943" y="215" width="28" height="28" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="941" y="249" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="935" y="348" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="939" y="391" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="933" y="419" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="938" y="461" width="40" height="40" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="944" y="539" width="21" height="21" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="940" y="570" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="935" y="636" width="47" height="47" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="945" y="686" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="939" y="715" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="940" y="752" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="943" y="788" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="943" y="827" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="941" y="969" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="973" y="-6" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="970" y="28" width="43" height="43" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="974" y="68" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="976" y="106" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="979" y="143" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="976" y="173" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="970" y="207" width="46" height="46" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="983" y="252" width="22" height="22" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="976" y="284" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="977" y="353" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <rect x="977" y="389" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="970" y="420" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="979" y="467" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="981" y="505" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="977" y="539" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="979" y="572" width="27" height="27" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="979" y="646" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="976" y="683" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="977" y="716" width="30" height="30" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="977" y="786" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="974" y="822" width="38" height="38" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="979" y="862" width="29" height="29" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="981" y="899" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="975" y="932" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
-<rect x="974" y="968" width="36" height="36" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="977" y="432" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="978" y="506" width="24" height="24" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="979" y="648" width="25" height="25" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="974" y="785" width="39" height="39" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="967" y="853" width="45" height="45" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="977" y="893" width="33" height="33" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="970" y="924" width="44" height="44" fill="#d8c7a0" stroke="#2b2118" stroke-width="1.5" rx="3"/>
+<rect x="979" y="971" width="26" height="26" fill="#e2d6b6" stroke="#2b2118" stroke-width="1.5" rx="3"/>
 <text x="520" y="864" font-size="22" text-anchor="middle">🚪</text>
 <text x="520" y="312" font-size="22" text-anchor="middle">🏯</text>
-<text x="496" y="380" font-size="12" text-anchor="middle">🚩</text>
-<text x="544" y="380" font-size="12" text-anchor="middle">🚩</text>
+<text x="470" y="380" font-size="12" text-anchor="middle">🚩</text>
+<text x="570" y="380" font-size="12" text-anchor="middle">🚩</text>
 <text x="432" y="352" font-size="22" text-anchor="middle">⛺</text>
 <text x="608" y="352" font-size="22" text-anchor="middle">⛺</text>
 <text x="578" y="633" font-size="12" text-anchor="middle">🏮</text>
@@ -457,10 +443,16 @@
 <text x="620" y="424" font-size="12" text-anchor="middle">🌳</text>
 <text x="592" y="436" font-size="12" text-anchor="middle">🪨</text>
 <text x="432" y="622" font-size="12" text-anchor="middle">💧</text>
-<text x="508" y="608" font-size="12" text-anchor="middle">🚩</text>
-<text x="532" y="608" font-size="12" text-anchor="middle">🚩</text>
-<text x="532" y="457" font-size="12" text-anchor="middle">🚩</text>
-<text x="508" y="457" font-size="12" text-anchor="middle">🚩</text>
+<text x="502" y="636" font-size="12" text-anchor="middle">🚩</text>
+<text x="538" y="636" font-size="12" text-anchor="middle">🚩</text>
+<text x="551" y="606" font-size="12" text-anchor="middle">🏮</text>
+<text x="594" y="563" font-size="12" text-anchor="middle">🏮</text>
+<text x="594" y="502" font-size="12" text-anchor="middle">🏮</text>
+<text x="551" y="458" font-size="12" text-anchor="middle">🏮</text>
+<text x="489" y="458" font-size="12" text-anchor="middle">🏮</text>
+<text x="446" y="502" font-size="12" text-anchor="middle">🏮</text>
+<text x="446" y="563" font-size="12" text-anchor="middle">🏮</text>
+<text x="489" y="606" font-size="12" text-anchor="middle">🏮</text>
 <text x="240" y="490" font-size="12" text-anchor="middle">🌸</text>
 <text x="240" y="574" font-size="12" text-anchor="middle">🌸</text>
 <text x="258" y="485" font-size="12" text-anchor="middle">🪑</text>
@@ -736,10 +728,8 @@
 <text x="824" y="620" font-size="22" text-anchor="middle">🐎</text>
 <text x="804" y="580" font-size="12" text-anchor="middle">🌾</text>
 <text x="809" y="586" font-size="12" text-anchor="middle">🌾</text>
-<text x="486" y="430" font-size="12" text-anchor="middle">🗿</text>
-<text x="554" y="430" font-size="12" text-anchor="middle">🗿</text>
-<text x="468" y="386" font-size="12" text-anchor="middle">🥁</text>
-<text x="572" y="386" font-size="12" text-anchor="middle">🥁</text>
+<text x="452" y="385" font-size="12" text-anchor="middle">🥁</text>
+<text x="588" y="385" font-size="12" text-anchor="middle">🥁</text>
 <text x="494" y="654" font-size="12" text-anchor="middle">🥁</text>
 <text x="546" y="660" font-size="12" text-anchor="middle">🥁</text>
 <text x="220" y="580" font-size="12" text-anchor="middle">🐺</text>
@@ -763,7 +753,6 @@
 <text x="451" y="413" font-size="12" text-anchor="middle">🌸</text>
 <text x="323" y="283" font-size="12" text-anchor="middle">🌸</text>
 <text x="368" y="280" font-size="12" text-anchor="middle">🪑</text>
-<text x="379" y="212" font-size="12" text-anchor="middle">🪑</text>
 <text x="393" y="261" font-size="12" text-anchor="middle">🌸</text>
 <text x="417" y="217" font-size="12" text-anchor="middle">🌸</text>
 <text x="677" y="466" font-size="12" text-anchor="middle">🪑</text>
@@ -776,6 +765,7 @@
 <text x="406" y="182" font-size="12" text-anchor="middle">🌸</text>
 <text x="646" y="480" font-size="12" text-anchor="middle">🌸</text>
 <text x="754" y="384" font-size="12" text-anchor="middle">🌸</text>
+<text x="645" y="367" font-size="12" text-anchor="middle">🌸</text>
 <text x="642" y="311" font-size="12" text-anchor="middle">🌸</text>
 <text x="751" y="685" font-size="12" text-anchor="middle">🌸</text>
 <text x="722" y="738" font-size="12" text-anchor="middle">🌸</text>
@@ -800,221 +790,214 @@
 <text x="626" y="1002" font-size="12" text-anchor="middle">🎯</text>
 <text x="240" y="960" font-size="22" text-anchor="middle">🐎</text>
 <text x="800" y="960" font-size="22" text-anchor="middle">🐎</text>
-<text x="19" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="94" font-size="22" text-anchor="middle">⛺</text>
-<text x="20" y="166" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="200" font-size="22" text-anchor="middle">⛺</text>
-<text x="19" y="238" font-size="22" text-anchor="middle">⛺</text>
-<text x="21" y="272" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="346" font-size="22" text-anchor="middle">⛺</text>
-<text x="20" y="381" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="418" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="454" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="490" font-size="22" text-anchor="middle">⛺</text>
-<text x="20" y="518" font-size="12" text-anchor="middle">🚩</text>
-<text x="22" y="555" font-size="12" text-anchor="middle">🚩</text>
-<text x="18" y="593" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="632" font-size="22" text-anchor="middle">⛺</text>
-<text x="21" y="703" font-size="22" text-anchor="middle">⛺</text>
-<text x="22" y="738" font-size="22" text-anchor="middle">⛺</text>
-<text x="21" y="777" font-size="22" text-anchor="middle">⛺</text>
-<text x="20" y="812" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="849" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="922" font-size="22" text-anchor="middle">⛺</text>
-<text x="20" y="957" font-size="22" text-anchor="middle">⛺</text>
-<text x="18" y="992" font-size="22" text-anchor="middle">⛺</text>
-<text x="54" y="19" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="54" y="91" font-size="22" text-anchor="middle">⛺</text>
-<text x="56" y="126" font-size="22" text-anchor="middle">⛺</text>
-<text x="54" y="165" font-size="22" text-anchor="middle">⛺</text>
-<text x="57" y="198" font-size="22" text-anchor="middle">⛺</text>
-<text x="57" y="235" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="273" font-size="22" text-anchor="middle">⛺</text>
-<text x="56" y="309" font-size="22" text-anchor="middle">⛺</text>
-<text x="56" y="344" font-size="22" text-anchor="middle">⛺</text>
-<text x="57" y="416" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="446" font-size="12" text-anchor="middle">🚩</text>
-<text x="57" y="487" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="559" font-size="22" text-anchor="middle">⛺</text>
-<text x="56" y="596" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="666" font-size="22" text-anchor="middle">⛺</text>
-<text x="57" y="706" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="740" font-size="22" text-anchor="middle">⛺</text>
-<text x="54" y="775" font-size="22" text-anchor="middle">⛺</text>
-<text x="58" y="814" font-size="22" text-anchor="middle">⛺</text>
-<text x="54" y="848" font-size="22" text-anchor="middle">⛺</text>
-<text x="58" y="886" font-size="22" text-anchor="middle">⛺</text>
-<text x="56" y="955" font-size="22" text-anchor="middle">⛺</text>
-<text x="55" y="993" font-size="22" text-anchor="middle">⛺</text>
-<text x="94" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="92" y="55" font-size="22" text-anchor="middle">⛺</text>
-<text x="91" y="93" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="127" font-size="22" text-anchor="middle">⛺</text>
-<text x="92" y="162" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="202" font-size="22" text-anchor="middle">⛺</text>
-<text x="91" y="237" font-size="22" text-anchor="middle">⛺</text>
-<text x="91" y="306" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="343" font-size="22" text-anchor="middle">⛺</text>
-<text x="90" y="378" font-size="12" text-anchor="middle">🚩</text>
-<text x="91" y="411" font-size="12" text-anchor="middle">🚩</text>
-<text x="91" y="451" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="17" font-size="12" text-anchor="middle">🚩</text>
+<text x="20" y="53" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="92" font-size="22" text-anchor="middle">⛺</text>
+<text x="19" y="126" font-size="22" text-anchor="middle">⛺</text>
+<text x="21" y="163" font-size="22" text-anchor="middle">⛺</text>
+<text x="19" y="200" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="235" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="272" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="306" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="342" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="378" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="417" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="448" font-size="12" text-anchor="middle">🚩</text>
+<text x="22" y="490" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="562" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="596" font-size="22" text-anchor="middle">⛺</text>
+<text x="19" y="634" font-size="22" text-anchor="middle">⛺</text>
+<text x="21" y="668" font-size="22" text-anchor="middle">⛺</text>
+<text x="22" y="742" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="777" font-size="22" text-anchor="middle">⛺</text>
+<text x="22" y="814" font-size="22" text-anchor="middle">⛺</text>
+<text x="22" y="850" font-size="22" text-anchor="middle">⛺</text>
+<text x="18" y="886" font-size="22" text-anchor="middle">⛺</text>
+<text x="20" y="914" font-size="12" text-anchor="middle">🚩</text>
+<text x="22" y="951" font-size="12" text-anchor="middle">🚩</text>
+<text x="18" y="989" font-size="22" text-anchor="middle">⛺</text>
+<text x="58" y="20" font-size="22" text-anchor="middle">⛺</text>
+<text x="57" y="91" font-size="22" text-anchor="middle">⛺</text>
+<text x="58" y="126" font-size="22" text-anchor="middle">⛺</text>
+<text x="57" y="165" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="200" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="237" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="310" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="345" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="380" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="415" font-size="22" text-anchor="middle">⛺</text>
+<text x="55" y="453" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="487" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="522" font-size="22" text-anchor="middle">⛺</text>
+<text x="54" y="561" font-size="22" text-anchor="middle">⛺</text>
+<text x="57" y="594" font-size="22" text-anchor="middle">⛺</text>
+<text x="57" y="631" font-size="22" text-anchor="middle">⛺</text>
+<text x="55" y="669" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="705" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="740" font-size="22" text-anchor="middle">⛺</text>
+<text x="57" y="812" font-size="22" text-anchor="middle">⛺</text>
+<text x="55" y="842" font-size="12" text-anchor="middle">🚩</text>
+<text x="57" y="883" font-size="22" text-anchor="middle">⛺</text>
+<text x="55" y="955" font-size="22" text-anchor="middle">⛺</text>
+<text x="56" y="992" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="54" font-size="22" text-anchor="middle">⛺</text>
+<text x="93" y="94" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="128" font-size="22" text-anchor="middle">⛺</text>
+<text x="90" y="163" font-size="22" text-anchor="middle">⛺</text>
+<text x="94" y="202" font-size="22" text-anchor="middle">⛺</text>
+<text x="90" y="236" font-size="22" text-anchor="middle">⛺</text>
+<text x="94" y="274" font-size="22" text-anchor="middle">⛺</text>
+<text x="92" y="343" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="381" font-size="22" text-anchor="middle">⛺</text>
+<text x="94" y="416" font-size="22" text-anchor="middle">⛺</text>
+<text x="92" y="451" font-size="22" text-anchor="middle">⛺</text>
 <text x="91" y="489" font-size="22" text-anchor="middle">⛺</text>
-<text x="92" y="518" font-size="12" text-anchor="middle">🚩</text>
+<text x="93" y="523" font-size="22" text-anchor="middle">⛺</text>
 <text x="92" y="558" font-size="22" text-anchor="middle">⛺</text>
-<text x="90" y="596" font-size="22" text-anchor="middle">⛺</text>
-<text x="90" y="630" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="668" font-size="22" text-anchor="middle">⛺</text>
-<text x="91" y="700" font-size="12" text-anchor="middle">🚩</text>
-<text x="91" y="742" font-size="22" text-anchor="middle">⛺</text>
-<text x="94" y="771" font-size="12" text-anchor="middle">🚩</text>
-<text x="92" y="810" font-size="22" text-anchor="middle">⛺</text>
-<text x="94" y="846" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="922" font-size="22" text-anchor="middle">⛺</text>
-<text x="90" y="953" font-size="22" text-anchor="middle">⛺</text>
-<text x="93" y="993" font-size="22" text-anchor="middle">⛺</text>
-<text x="129" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="127" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="129" y="89" font-size="22" text-anchor="middle">⛺</text>
-<text x="129" y="917" font-size="12" text-anchor="middle">🚩</text>
-<text x="127" y="953" font-size="22" text-anchor="middle">⛺</text>
-<text x="127" y="994" font-size="22" text-anchor="middle">⛺</text>
-<text x="164" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="162" y="92" font-size="22" text-anchor="middle">⛺</text>
-<text x="165" y="922" font-size="22" text-anchor="middle">⛺</text>
-<text x="164" y="956" font-size="22" text-anchor="middle">⛺</text>
-<text x="166" y="991" font-size="22" text-anchor="middle">⛺</text>
-<text x="199" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="198" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="199" y="94" font-size="22" text-anchor="middle">⛺</text>
-<text x="198" y="918" font-size="22" text-anchor="middle">⛺</text>
+<text x="93" y="598" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="633" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="702" font-size="22" text-anchor="middle">⛺</text>
+<text x="93" y="739" font-size="22" text-anchor="middle">⛺</text>
+<text x="90" y="774" font-size="12" text-anchor="middle">🚩</text>
+<text x="91" y="807" font-size="12" text-anchor="middle">🚩</text>
+<text x="91" y="847" font-size="22" text-anchor="middle">⛺</text>
+<text x="91" y="885" font-size="22" text-anchor="middle">⛺</text>
+<text x="92" y="914" font-size="12" text-anchor="middle">🚩</text>
+<text x="92" y="954" font-size="22" text-anchor="middle">⛺</text>
+<text x="90" y="992" font-size="22" text-anchor="middle">⛺</text>
+<text x="126" y="18" font-size="22" text-anchor="middle">⛺</text>
+<text x="129" y="56" font-size="22" text-anchor="middle">⛺</text>
+<text x="127" y="88" font-size="12" text-anchor="middle">🚩</text>
+<text x="127" y="920" font-size="22" text-anchor="middle">⛺</text>
+<text x="129" y="953" font-size="22" text-anchor="middle">⛺</text>
+<text x="130" y="993" font-size="22" text-anchor="middle">⛺</text>
+<text x="163" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="163" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="166" y="914" font-size="12" text-anchor="middle">🚩</text>
+<text x="165" y="990" font-size="22" text-anchor="middle">⛺</text>
+<text x="201" y="18" font-size="22" text-anchor="middle">⛺</text>
+<text x="202" y="56" font-size="22" text-anchor="middle">⛺</text>
+<text x="198" y="91" font-size="22" text-anchor="middle">⛺</text>
+<text x="201" y="914" font-size="12" text-anchor="middle">🚩</text>
 <text x="199" y="958" font-size="22" text-anchor="middle">⛺</text>
-<text x="198" y="992" font-size="22" text-anchor="middle">⛺</text>
-<text x="238" y="19" font-size="22" text-anchor="middle">⛺</text>
-<text x="235" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="236" y="91" font-size="22" text-anchor="middle">⛺</text>
-<text x="234" y="915" font-size="12" text-anchor="middle">🚩</text>
-<text x="237" y="956" font-size="22" text-anchor="middle">⛺</text>
-<text x="234" y="990" font-size="22" text-anchor="middle">⛺</text>
-<text x="271" y="19" font-size="22" text-anchor="middle">⛺</text>
-<text x="270" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="274" y="89" font-size="22" text-anchor="middle">⛺</text>
-<text x="308" y="19" font-size="22" text-anchor="middle">⛺</text>
-<text x="309" y="52" font-size="12" text-anchor="middle">🚩</text>
-<text x="306" y="92" font-size="22" text-anchor="middle">⛺</text>
-<text x="344" y="21" font-size="22" text-anchor="middle">⛺</text>
-<text x="344" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="380" y="19" font-size="22" text-anchor="middle">⛺</text>
-<text x="380" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="382" y="92" font-size="22" text-anchor="middle">⛺</text>
-<text x="414" y="18" font-size="22" text-anchor="middle">⛺</text>
-<text x="416" y="54" font-size="22" text-anchor="middle">⛺</text>
-<text x="452" y="16" font-size="12" text-anchor="middle">🚩</text>
-<text x="453" y="58" font-size="22" text-anchor="middle">⛺</text>
-<text x="452" y="90" font-size="12" text-anchor="middle">🚩</text>
-<text x="487" y="18" font-size="12" text-anchor="middle">🚩</text>
-<text x="487" y="58" font-size="22" text-anchor="middle">⛺</text>
-<text x="486" y="94" font-size="22" text-anchor="middle">⛺</text>
-<text x="523" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="522" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="525" y="94" font-size="22" text-anchor="middle">⛺</text>
-<text x="558" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="561" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="561" y="90" font-size="22" text-anchor="middle">⛺</text>
-<text x="597" y="90" font-size="22" text-anchor="middle">⛺</text>
-<text x="631" y="21" font-size="22" text-anchor="middle">⛺</text>
-<text x="633" y="50" font-size="12" text-anchor="middle">🚩</text>
-<text x="630" y="91" font-size="22" text-anchor="middle">⛺</text>
-<text x="668" y="22" font-size="22" text-anchor="middle">⛺</text>
-<text x="670" y="58" font-size="22" text-anchor="middle">⛺</text>
-<text x="668" y="93" font-size="22" text-anchor="middle">⛺</text>
-<text x="704" y="18" font-size="22" text-anchor="middle">⛺</text>
-<text x="703" y="54" font-size="22" text-anchor="middle">⛺</text>
-<text x="705" y="88" font-size="12" text-anchor="middle">🚩</text>
-<text x="740" y="56" font-size="22" text-anchor="middle">⛺</text>
-<text x="774" y="54" font-size="22" text-anchor="middle">⛺</text>
-<text x="775" y="92" font-size="22" text-anchor="middle">⛺</text>
-<text x="813" y="18" font-size="22" text-anchor="middle">⛺</text>
-<text x="812" y="91" font-size="22" text-anchor="middle">⛺</text>
-<text x="811" y="918" font-size="22" text-anchor="middle">⛺</text>
-<text x="813" y="958" font-size="22" text-anchor="middle">⛺</text>
-<text x="810" y="991" font-size="22" text-anchor="middle">⛺</text>
-<text x="846" y="20" font-size="22" text-anchor="middle">⛺</text>
-<text x="849" y="58" font-size="22" text-anchor="middle">⛺</text>
-<text x="850" y="918" font-size="22" text-anchor="middle">⛺</text>
-<text x="850" y="958" font-size="22" text-anchor="middle">⛺</text>
-<text x="849" y="992" font-size="22" text-anchor="middle">⛺</text>
-<text x="883" y="22" font-size="22" text-anchor="middle">⛺</text>
-<text x="886" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="885" y="87" font-size="12" text-anchor="middle">🚩</text>
-<text x="885" y="920" font-size="22" text-anchor="middle">⛺</text>
-<text x="883" y="955" font-size="22" text-anchor="middle">⛺</text>
-<text x="882" y="990" font-size="22" text-anchor="middle">⛺</text>
-<text x="918" y="18" font-size="12" text-anchor="middle">🚩</text>
-<text x="919" y="57" font-size="22" text-anchor="middle">⛺</text>
-<text x="920" y="91" font-size="22" text-anchor="middle">⛺</text>
-<text x="921" y="165" font-size="22" text-anchor="middle">⛺</text>
-<text x="921" y="302" font-size="12" text-anchor="middle">🚩</text>
-<text x="921" y="382" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="415" font-size="22" text-anchor="middle">⛺</text>
-<text x="921" y="489" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="522" font-size="12" text-anchor="middle">🚩</text>
-<text x="922" y="594" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="702" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="814" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="846" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="882" font-size="22" text-anchor="middle">⛺</text>
-<text x="919" y="919" font-size="22" text-anchor="middle">⛺</text>
-<text x="920" y="954" font-size="22" text-anchor="middle">⛺</text>
-<text x="922" y="993" font-size="22" text-anchor="middle">⛺</text>
-<text x="955" y="53" font-size="22" text-anchor="middle">⛺</text>
-<text x="956" y="90" font-size="22" text-anchor="middle">⛺</text>
-<text x="958" y="163" font-size="22" text-anchor="middle">⛺</text>
-<text x="956" y="200" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="237" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="272" font-size="22" text-anchor="middle">⛺</text>
-<text x="958" y="306" font-size="22" text-anchor="middle">⛺</text>
-<text x="955" y="343" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="378" font-size="12" text-anchor="middle">🚩</text>
-<text x="956" y="448" font-size="12" text-anchor="middle">🚩</text>
-<text x="954" y="486" font-size="22" text-anchor="middle">⛺</text>
-<text x="954" y="523" font-size="22" text-anchor="middle">⛺</text>
-<text x="955" y="561" font-size="22" text-anchor="middle">⛺</text>
-<text x="955" y="596" font-size="22" text-anchor="middle">⛺</text>
-<text x="956" y="634" font-size="22" text-anchor="middle">⛺</text>
-<text x="958" y="669" font-size="22" text-anchor="middle">⛺</text>
-<text x="956" y="701" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="742" font-size="22" text-anchor="middle">⛺</text>
-<text x="958" y="774" font-size="22" text-anchor="middle">⛺</text>
-<text x="954" y="810" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="846" font-size="12" text-anchor="middle">🚩</text>
-<text x="957" y="881" font-size="22" text-anchor="middle">⛺</text>
-<text x="957" y="918" font-size="22" text-anchor="middle">⛺</text>
-<text x="954" y="957" font-size="22" text-anchor="middle">⛺</text>
-<text x="958" y="990" font-size="12" text-anchor="middle">🚩</text>
-<text x="990" y="22" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="51" font-size="12" text-anchor="middle">🚩</text>
-<text x="991" y="164" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="234" font-size="12" text-anchor="middle">🚩</text>
-<text x="994" y="308" font-size="22" text-anchor="middle">⛺</text>
-<text x="991" y="342" font-size="12" text-anchor="middle">🚩</text>
-<text x="990" y="379" font-size="22" text-anchor="middle">⛺</text>
-<text x="994" y="413" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="450" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="488" font-size="22" text-anchor="middle">⛺</text>
-<text x="993" y="525" font-size="22" text-anchor="middle">⛺</text>
-<text x="991" y="561" font-size="22" text-anchor="middle">⛺</text>
-<text x="993" y="594" font-size="22" text-anchor="middle">⛺</text>
-<text x="994" y="669" font-size="22" text-anchor="middle">⛺</text>
-<text x="991" y="706" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="739" font-size="22" text-anchor="middle">⛺</text>
-<text x="993" y="811" font-size="22" text-anchor="middle">⛺</text>
-<text x="993" y="849" font-size="22" text-anchor="middle">⛺</text>
-<text x="994" y="885" font-size="22" text-anchor="middle">⛺</text>
-<text x="993" y="919" font-size="22" text-anchor="middle">⛺</text>
-<text x="991" y="956" font-size="22" text-anchor="middle">⛺</text>
-<text x="992" y="993" font-size="22" text-anchor="middle">⛺</text>
+<text x="202" y="992" font-size="22" text-anchor="middle">⛺</text>
+<text x="238" y="20" font-size="22" text-anchor="middle">⛺</text>
+<text x="237" y="55" font-size="12" text-anchor="middle">🚩</text>
+<text x="235" y="90" font-size="22" text-anchor="middle">⛺</text>
+<text x="235" y="920" font-size="22" text-anchor="middle">⛺</text>
+<text x="234" y="957" font-size="22" text-anchor="middle">⛺</text>
+<text x="234" y="993" font-size="22" text-anchor="middle">⛺</text>
+<text x="274" y="18" font-size="22" text-anchor="middle">⛺</text>
+<text x="270" y="52" font-size="12" text-anchor="middle">🚩</text>
+<text x="274" y="90" font-size="22" text-anchor="middle">⛺</text>
+<text x="309" y="16" font-size="12" text-anchor="middle">🚩</text>
+<text x="306" y="56" font-size="22" text-anchor="middle">⛺</text>
+<text x="310" y="92" font-size="22" text-anchor="middle">⛺</text>
+<text x="344" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="346" y="58" font-size="22" text-anchor="middle">⛺</text>
+<text x="346" y="91" font-size="22" text-anchor="middle">⛺</text>
+<text x="380" y="18" font-size="12" text-anchor="middle">🚩</text>
+<text x="378" y="56" font-size="22" text-anchor="middle">⛺</text>
+<text x="380" y="91" font-size="12" text-anchor="middle">🚩</text>
+<text x="418" y="20" font-size="22" text-anchor="middle">⛺</text>
+<text x="417" y="54" font-size="12" text-anchor="middle">🚩</text>
+<text x="451" y="20" font-size="22" text-anchor="middle">⛺</text>
+<text x="452" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="487" y="55" font-size="22" text-anchor="middle">⛺</text>
+<text x="523" y="22" font-size="22" text-anchor="middle">⛺</text>
+<text x="522" y="58" font-size="22" text-anchor="middle">⛺</text>
+<text x="560" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="558" y="53" font-size="12" text-anchor="middle">🚩</text>
+<text x="561" y="91" font-size="22" text-anchor="middle">⛺</text>
+<text x="595" y="17" font-size="22" text-anchor="middle">⛺</text>
+<text x="597" y="56" font-size="22" text-anchor="middle">⛺</text>
+<text x="597" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="634" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="631" y="57" font-size="22" text-anchor="middle">⛺</text>
+<text x="632" y="87" font-size="12" text-anchor="middle">🚩</text>
+<text x="670" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="667" y="55" font-size="22" text-anchor="middle">⛺</text>
+<text x="669" y="90" font-size="22" text-anchor="middle">⛺</text>
+<text x="703" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="702" y="50" font-size="12" text-anchor="middle">🚩</text>
+<text x="702" y="87" font-size="12" text-anchor="middle">🚩</text>
+<text x="740" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="739" y="57" font-size="22" text-anchor="middle">⛺</text>
+<text x="742" y="92" font-size="22" text-anchor="middle">⛺</text>
+<text x="778" y="54" font-size="22" text-anchor="middle">⛺</text>
+<text x="775" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="813" y="21" font-size="22" text-anchor="middle">⛺</text>
+<text x="810" y="55" font-size="22" text-anchor="middle">⛺</text>
+<text x="810" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="813" y="922" font-size="22" text-anchor="middle">⛺</text>
+<text x="812" y="955" font-size="22" text-anchor="middle">⛺</text>
+<text x="813" y="992" font-size="22" text-anchor="middle">⛺</text>
+<text x="846" y="918" font-size="22" text-anchor="middle">⛺</text>
+<text x="846" y="951" font-size="12" text-anchor="middle">🚩</text>
+<text x="848" y="990" font-size="22" text-anchor="middle">⛺</text>
+<text x="884" y="21" font-size="22" text-anchor="middle">⛺</text>
+<text x="885" y="55" font-size="22" text-anchor="middle">⛺</text>
+<text x="884" y="89" font-size="12" text-anchor="middle">🚩</text>
+<text x="885" y="918" font-size="22" text-anchor="middle">⛺</text>
+<text x="886" y="993" font-size="22" text-anchor="middle">⛺</text>
+<text x="920" y="14" font-size="12" text-anchor="middle">🚩</text>
+<text x="920" y="54" font-size="22" text-anchor="middle">⛺</text>
+<text x="918" y="90" font-size="22" text-anchor="middle">⛺</text>
+<text x="921" y="127" font-size="22" text-anchor="middle">⛺</text>
+<text x="922" y="268" font-size="12" text-anchor="middle">🚩</text>
+<text x="922" y="416" font-size="22" text-anchor="middle">⛺</text>
+<text x="920" y="631" font-size="22" text-anchor="middle">⛺</text>
+<text x="921" y="668" font-size="22" text-anchor="middle">⛺</text>
+<text x="921" y="705" font-size="22" text-anchor="middle">⛺</text>
+<text x="921" y="813" font-size="22" text-anchor="middle">⛺</text>
+<text x="919" y="917" font-size="22" text-anchor="middle">⛺</text>
+<text x="920" y="992" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="957" y="93" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="126" font-size="12" text-anchor="middle">🚩</text>
+<text x="955" y="198" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="237" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="273" font-size="22" text-anchor="middle">⛺</text>
+<text x="955" y="340" font-size="12" text-anchor="middle">🚩</text>
+<text x="958" y="378" font-size="22" text-anchor="middle">⛺</text>
+<text x="955" y="415" font-size="22" text-anchor="middle">⛺</text>
+<text x="956" y="450" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="489" font-size="22" text-anchor="middle">⛺</text>
+<text x="955" y="557" font-size="22" text-anchor="middle">⛺</text>
+<text x="956" y="594" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="667" font-size="22" text-anchor="middle">⛺</text>
+<text x="956" y="704" font-size="22" text-anchor="middle">⛺</text>
+<text x="957" y="741" font-size="22" text-anchor="middle">⛺</text>
+<text x="957" y="776" font-size="22" text-anchor="middle">⛺</text>
+<text x="958" y="810" font-size="22" text-anchor="middle">⛺</text>
+<text x="955" y="847" font-size="22" text-anchor="middle">⛺</text>
+<text x="957" y="882" font-size="12" text-anchor="middle">🚩</text>
+<text x="956" y="952" font-size="12" text-anchor="middle">🚩</text>
+<text x="954" y="990" font-size="22" text-anchor="middle">⛺</text>
+<text x="990" y="19" font-size="22" text-anchor="middle">⛺</text>
+<text x="991" y="57" font-size="22" text-anchor="middle">⛺</text>
+<text x="991" y="92" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="130" font-size="22" text-anchor="middle">⛺</text>
+<text x="994" y="165" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="197" font-size="22" text-anchor="middle">⛺</text>
+<text x="993" y="238" font-size="22" text-anchor="middle">⛺</text>
+<text x="994" y="270" font-size="22" text-anchor="middle">⛺</text>
+<text x="990" y="306" font-size="22" text-anchor="middle">⛺</text>
+<text x="993" y="342" font-size="12" text-anchor="middle">🚩</text>
+<text x="993" y="377" font-size="22" text-anchor="middle">⛺</text>
+<text x="993" y="414" font-size="22" text-anchor="middle">⛺</text>
+<text x="990" y="453" font-size="22" text-anchor="middle">⛺</text>
+<text x="994" y="486" font-size="12" text-anchor="middle">🚩</text>
+<text x="990" y="526" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="555" font-size="12" text-anchor="middle">🚩</text>
+<text x="991" y="668" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="738" font-size="12" text-anchor="middle">🚩</text>
+<text x="994" y="812" font-size="22" text-anchor="middle">⛺</text>
+<text x="991" y="846" font-size="12" text-anchor="middle">🚩</text>
+<text x="990" y="883" font-size="22" text-anchor="middle">⛺</text>
+<text x="994" y="917" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="954" font-size="22" text-anchor="middle">⛺</text>
+<text x="992" y="992" font-size="22" text-anchor="middle">⛺</text>
 <text x="520" y="600" font-size="15" font-weight="700" text-anchor="middle" fill="#2b2118" stroke="#fff8ea" stroke-width="4" paint-order="stroke">Аллея Сакур</text>
 <text x="520" y="424" font-size="15" font-weight="700" text-anchor="middle" fill="#2b2118" stroke="#fff8ea" stroke-width="4" paint-order="stroke">Площадь Круга · Арена</text>
 <text x="520" y="256" font-size="15" font-weight="700" text-anchor="middle" fill="#2b2118" stroke="#fff8ea" stroke-width="4" paint-order="stroke">Ставка Хаана</text>

@@ -4,13 +4,16 @@ extends CharacterBody3D
 ## Модель и клипы — как у гоблина-врага (models/goblin/), без боя.
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const Names := preload("res://mods/pax_rpg/src/location/names.gd")
 
 const DIR := "models/goblin/"
-## Облики жителей: гоблин Meshy (клипы — models/goblin/walk.glb, idle.glb) и гости столицы из моделей Tripo
-## (models/goblin/variants/, клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет:
-## pax_rpg/dev/gharn/npc_variant.py). Вес — как часто встречается (Гхарн — город гоблинов).
-const LOOKS := [["goblin_rigged.glb", 55], ["variants/goblin_b.glb", 15], ["variants/orc_citizen.glb", 10],
-	["variants/elf_warrior.glb", 10], ["variants/witch.glb", 10]]
+## Облики: горожане — гоблин Meshy (клипы — models/goblin/walk.glb, idle.glb) и гоблин с рюкзаком, их много;
+## стража — вся эльфы-воины; распорядительница Арены (орчиха) и ведунья Древа Клятв (гоблинша-маг) — по одной на город.
+## У моделей Tripo (models/goblin/variants/) клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет
+## (pax_rpg/dev/gharn/npc_variant.py). Размер — как у модели, без случайного масштаба.
+const COMMON := [["goblin_rigged.glb", 60], ["variants/goblin_b.glb", 40]]
+const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb"}
+const RACE_OF := {"variants/elf_warrior.glb": "elf", "variants/orc_citizen.glb": "orc"}
 const SPEED := 1.3
 
 var mod: PaxMod
@@ -22,14 +25,15 @@ var _dir := 1
 var _wait := 0.0
 var _speed := SPEED
 var _stuck := 0                    # сколько раз подряд упёрся — на третий разворачивается назад по маршруту
-# кто это (разговор через нейросеть — talk.gd): имя, ремесло, характер, отношение к герою 0..100
-const NAMES := ["Гракх", "Зугба", "Мырт", "Шнырь", "Каргаш", "Ульба", "Бзык", "Трокх", "Ырза", "Хряп", "Сквирт", "Дорна",
-	"Гнилоглаз", "Курба", "Пырх", "Ярга", "Щербач", "Мокла", "Згрит", "Нахра"]
-const ROLES := ["merchant", "guard", "herder", "shaman", "smith", "beggar", "cook", "porter"]
+# кто это (разговор через нейросеть — talk.gd): имя, род занятий (role) и ремесло, характер, забота, отношение 0..100;
+# имя, ремесло и забота — из генератора (names.gd), свои в каждом прохождении
 const TEMPERS := ["жадный и хитрый", "угрюмый и подозрительный", "болтливый и любопытный", "трусливый, но услужливый",
 	"гордый и вспыльчивый", "добродушный простак", "мрачный, говорит загадками", "насмешливый и дерзкий"]
 var npc_name := ""
 var role := ""
+var trade := ""                     # ремесло словами («торговец коврами»)
+var worry := ""                     # что заботит сегодня
+var race := "goblin"
 var temper := ""
 var relation := 50
 var npc_index := -1                 # номер жителя в городе (задания и отношения — по нему, quest.gd)
@@ -47,16 +51,19 @@ var _seen := true
 var _far := false
 
 
-func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> void:
+## as_role — род занятий места (стража у ворот, торговец за прилавком, единственные — arena_master, seer); пусто — любой.
+func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int, as_role := "") -> void:
 	mod = m
 	_path = path
 	_i = clampi(start_i, 0, path.size() - 1)
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_v
+	rng.seed = hash([seed_v, Names.run_seed(m)])
 	_speed = SPEED * rng.randf_range(0.8, 1.25)
 	_dir = 1 if rng.randf() < 0.5 else -1
-	npc_name = NAMES[rng.randi() % NAMES.size()]
-	role = ROLES[rng.randi() % ROLES.size()]
+	role = as_role if as_role != "" else str(Names.ROLES[rng.randi() % Names.ROLES.size()])
+	npc_name = mod.tr_key("pax_rpg_npc_unique_" + role) if role in Names.UNIQUE else Names.goblin_name(mod, rng)
+	trade = Names.trade(mod, role, rng)
+	worry = Names.worry(mod, role, rng)
 	temper = TEMPERS[rng.randi() % TEMPERS.size()]
 	relation = rng.randi_range(35, 65)
 	_prompt = Label3D.new()                           # «E — поговорить», когда герой рядом (location.gd → show_prompt)
@@ -80,14 +87,14 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	shape.shape = cap
 	shape.position = Vector3(0, 0.55, 0)
 	add_child(shape)
-	var look := _pick_look(rng)
+	var look := str(LOOK_OF[role]) if LOOK_OF.has(role) else _pick_look(rng)
+	race = str(RACE_OF.get(look, "goblin"))
 	_model = Assets.model(mod, DIR + look)
 	if _model == null and look != "goblin_rigged.glb":
 		look = "goblin_rigged.glb"
 		_model = Assets.model(mod, DIR + look)
 	if _model == null:
 		return
-	_model.scale = Vector3.ONE * (rng.randf_range(0.85, 1.1) if look == "goblin_rigged.glb" else rng.randf_range(0.94, 1.05))
 	add_child(_model)
 	for g: Node in _model.find_children("*", "GeometryInstance3D", true, false):   # дальше 80 м жителя не видно в дымке
 		(g as GeometryInstance3D).visibility_range_end = 80.0
@@ -119,10 +126,10 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 
 static func _pick_look(rng: RandomNumberGenerator) -> String:
 	var total := 0
-	for l: Array in LOOKS:
+	for l: Array in COMMON:
 		total += int(l[1])
 	var r := rng.randi_range(0, total - 1)
-	for l: Array in LOOKS:
+	for l: Array in COMMON:
 		r -= int(l[1])
 		if r < 0:
 			return str(l[0])
@@ -284,13 +291,10 @@ func show_prompt(on: bool) -> void:
 		_prompt.visible = on
 
 
-## Житель на месте (убранство улиц, location.gd): лицом по yaw (рад), своё ремесло, рост (хобгоблин-стражник крупнее).
-func stand(yaw: float, as_role: String, size := 1.0) -> void:
-	if as_role != "":
-		role = as_role
+## Житель на месте (убранство улиц, location.gd): лицом по yaw (рад).
+func stand(yaw: float) -> void:
 	if _model != null:
 		_model.rotation.y = yaw
-		_model.scale = Vector3.ONE * size
 	_play("idle")
 
 

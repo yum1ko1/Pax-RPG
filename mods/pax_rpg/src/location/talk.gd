@@ -133,7 +133,7 @@ func open(npc: Node) -> void:
 	for b: Button in _keys:
 		b.set_pressed_no_signal(false)
 	_title.text = str(npc.get("npc_name"))
-	_sub.text = "%s · %s" % [mod.tr_key("pax_rpg_npc_role_" + str(npc.get("role"))), _relation_text()]
+	_sub.text = "%s · %s" % [_trade_of(npc), _relation_text()]
 	_log.clear()
 	_log.append_text("[i][color=#9a9080]%s[/color][/i]\n" % mod.tr_key("pax_rpg_talk_hint"))
 	visible = true
@@ -236,6 +236,12 @@ const CONCERNS := {
 }
 
 
+## Ремесло жителя словами (генератор names.gd); у прежних — род занятий.
+func _trade_of(npc: Node) -> String:
+	var t := str(npc.get("trade"))
+	return t if t != "" and t != "<null>" else mod.tr_key("pax_rpg_npc_role_" + str(npc.get("role")))
+
+
 ## Сцена для нейросети одним описанием (текстом): вложенные поля она принимала за форму и возвращала их копией вместо
 ## реплики — житель «молчал». Поля данных — только то, на что отвечать.
 func _context(text: String, key: String, guessed: String, eff: String) -> Dictionary:
@@ -249,8 +255,8 @@ func _context(text: String, key: String, guessed: String, eff: String) -> Dictio
 	var scene := "Мир Юрума: мана течёт в кристаллах и облаках, империи делят степи и горы. Город — %s: %s Сейчас %s. " % [
 		str(context.get("city", "")), mod.tr_key("pax_rpg_talk_city_about"), str(context.get("time", ""))]
 	scene += "Ты — %s, %s, %s. Характер: %s. Сегодня тебя заботит: %s. К собеседнику ты относишься: %s (%d из 100). " % [
-		str(_npc.get("npc_name")), mod.tr_key("pax_rpg_npc_race_goblin"), mod.tr_key("pax_rpg_npc_role_" + role).to_lower(),
-		str(_npc.get("temper")), str(CONCERNS.get(role, "")), _relation_text(), int(_npc.get("relation"))]
+		str(_npc.get("npc_name")), mod.tr_key("pax_rpg_npc_race_" + str(_npc.get("race"))), _trade_of(_npc).to_lower(),
+		str(_npc.get("temper")), str(_npc.get("worry")) if str(_npc.get("worry")) != "" else str(CONCERNS.get(role, "")), _relation_text(), int(_npc.get("relation"))]
 	scene += "Собеседник — %s, %s: %s. " % [str(context.get("hero", "")), str(context.get("hero_title", "")),
 		mod.tr_key("pax_rpg_talk_hero_looks")]
 	if not lines.is_empty():
@@ -338,7 +344,7 @@ func _answer(a: Dictionary, key: String, tok: int) -> void:
 		_speak(reply)
 	else:                                               # без заготовок: нейросеть не ответила — так и пишем
 		_log.append_text("[i][color=#8a8070]%s[/color][/i]\n\n" % _esc(mod.tr_key("pax_rpg_talk_silent") % str(_npc.get("npc_name"))))
-	_sub.text = "%s · %s" % [mod.tr_key("pax_rpg_npc_role_" + str(_npc.get("role"))), _relation_text()]
+	_sub.text = "%s · %s" % [_trade_of(_npc), _relation_text()]
 	if _npc.has_method("react"):
 		_npc.call("react", str(a.get("mood", "neutral")))
 	_update_give()

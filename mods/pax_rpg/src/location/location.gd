@@ -26,6 +26,7 @@ const Iai := preload("res://mods/pax_rpg/src/location/iai.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
 const Npc := preload("res://mods/pax_rpg/src/location/npc.gd")
+const Names := preload("res://mods/pax_rpg/src/location/names.gd")
 const HelpPanel := preload("res://mods/pax_rpg/src/location/help_panel.gd")
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
 const Sfx := preload("res://mods/pax_rpg/src/location/sfx.gd")
@@ -751,8 +752,7 @@ func _spawn_merchants() -> void:
 		var d: Dictionary = _merchants[i]
 		var p: Array = d.get("p", [0, 0, 0])
 		var npc := Npc.new()
-		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7)
-		npc.set("role", "merchant")
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, "merchant")
 		npc.rotation.y = deg_to_rad(float(d.get("r", 0.0)))
 		npc.set("npc_index", n0 + i)
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n0 + i, int(npc.get("relation"))))
@@ -760,10 +760,11 @@ func _spawn_merchants() -> void:
 		_npcs.append(npc)
 
 
-## Жители на местах из убранства улиц (proxy guard/crier/person в планировке): стража у ворот и арки — хобгоблины
-## крупнее, зазывалы у прилавков, караванщики у костра. Номера — после маршрутных (задания и отношения по номеру).
+## Жители на местах из убранства улиц (proxy в планировке): стража у ворот и арки (эльфы-воины), зазывалы у прилавков,
+## караванщики у костра, единственные в городе — распорядительница Арены и ведунья Древа Клятв. Номера — после
+## маршрутных (задания и отношения по номеру).
 func _spawn_dressing_npcs(layout: Dictionary) -> void:
-	var roles := {"guard": "guard", "crier": "merchant", "person": ""}
+	var roles := {"guard": "guard", "crier": "merchant", "person": "", "arena_master": "arena_master", "seer": "seer"}
 	var n := int(layout.get("npcs", 0))
 	for it: Variant in layout.get("items", []):
 		var d: Dictionary = it
@@ -772,17 +773,18 @@ func _spawn_dressing_npcs(layout: Dictionary) -> void:
 			continue
 		var p: Array = d.get("p", [0, 0, 0])
 		var npc := Npc.new()
-		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, n * 7919 + 13)
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, n * 7919 + 13, str(roles[k]))
 		npc.set("npc_index", n)
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n, int(npc.get("relation"))))
 		_view.add_child(npc)
-		npc.stand(deg_to_rad(float(d.get("r", 0.0))), str(roles[k]), 1.3 if k == "guard" else randf_range(0.85, 1.05))
+		npc.stand(deg_to_rad(float(d.get("r", 0.0))))
 		_npcs.append(npc)
 		n += 1
 
 
 ## Мирные жители по маршрутам планировки: «npcs» штук, по кругу маршрутов, в разных точках.
 func _spawn_npcs(layout: Dictionary) -> void:
+	Names.reset()
 	_spawn_dressing_npcs(layout)
 	var paths: Array = layout.get("paths", [])
 	if paths.is_empty():
@@ -814,6 +816,8 @@ func _sink_arena(layout: Dictionary) -> void:
 			continue
 		keep.append(d)
 	layout["items"] = keep
+	if ar.size() >= 5 and float(ar[4]) < 0.5:          # новая арена (пол на уровне земли, arena.gd) — земля целая
+		return
 	layout["hole"] = [float(ar[0]), float(ar[1]), float(ar[2]) + 2.1]
 
 

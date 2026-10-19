@@ -10,6 +10,7 @@ const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
 const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
 const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 const MainMenu := preload("res://mods/pax_rpg/src/ui/main_menu.gd")
+const Names := preload("res://mods/pax_rpg/src/location/names.gd")
 
 var planet: Planet
 var location: Location
@@ -102,6 +103,7 @@ func _rpg_new_game() -> void:
 	menu._country_choice_screen()
 	var go := func() -> void:
 		if str(menu.faction_chosen) != "":
+			Names.new_run(self)                         # новое прохождение — другие жители, имена и ремёсла
 			menu._start_game()
 	var map: Variant = menu.choice_map
 	if map is Control:

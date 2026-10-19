@@ -25,6 +25,13 @@ const STX := 12.3                             # лестницы: хорды у 
 const ST_TOP := 5.0
 const ST_BOT := -4.0
 const RIM := 17.5
+## Новая арена Гхарна (models/gharn/central/central_plaza.glb ставит город, pax_rpg/dev/gharn/arena_central.py): пол ямы —
+## на уровне земли, вокруг парапет, три яруса трибун и галерея на +1.8 м; проходы в яму — с юга и севера (x = 0).
+## Пятое число арены в планировке — глубина пола: 0 — эта арена (старой чаши и выреза в земле нет), иначе — старая яма.
+const FLAT_SEATS := [[14.6, 1.34], [15.6, 1.57], [16.6, 1.8]]   # ярусы трибун: радиус, высота
+const FLAT_OUT := 27.0                       # куда выходит герой после боя — площадь за южной лестницей
+var _depth := DEPTH
+var _flat := false
 var fighting := false
 var _root: Node3D                             # трибуны со зрителями, решётки
 var _crowd: Node3D
@@ -45,7 +52,10 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	name = "PaxRpgArena"
 	center = Vector3(float(arena[0]), 0.0, float(arena[1]))
 	pit = float(arena[2])
-	_build_bowl.call_deferred(view)
+	_depth = float(arena[4]) if arena.size() >= 5 else DEPTH
+	_flat = _depth < 0.5
+	if not _flat:
+		_build_bowl.call_deferred(view)
 	_player = player
 	_spawn_foe = spawn_foe
 	_heal = heal
@@ -79,7 +89,7 @@ func tick() -> void:
 	if not is_instance_valid(_player) or _busy:
 		return
 	var dist := Vector2(_player.global_position.x - center.x, _player.global_position.z - center.z).length()
-	var inside := dist < pit and _player.global_position.y < -1.0      # в яме (на решётке сверху — нет)
+	var inside := dist < pit and _player.global_position.y < -_depth + (1.0 if _flat else 3.0)   # в яме (на решётке сверху — нет)
 	var near := dist < RIM + 6.0 and not inside
 	if near and not _near_hint and not fighting:
 		toast.emit(mod.tr_key("pax_rpg_arena_way_down"))   # где спуск
@@ -109,9 +119,9 @@ func start() -> void:
 		_open(false)
 		_fill_crowd(true)
 		_heal.call()
-		var south := center + Vector3(0, -DEPTH + 0.3, pit - 3.0)
+		var south := center + Vector3(0, -_depth + 0.3, pit - 3.0)
 		_player.global_position = south
-		var far := center + Vector3(0, -DEPTH + 0.3, -pit * 0.45)
+		var far := center + Vector3(0, -_depth + 0.3, -pit * 0.45)
 		var n: int = LADDER[i]
 		if n == 0:
 			_foes.append(_spawn_foe.call(ORC, far))
@@ -152,7 +162,7 @@ func leave(lost := false) -> void:
 		_fill_crowd(false)
 		_open(true)
 		_heal.call()
-		_player.global_position = center + Vector3(0, 0.3, RIM + 3.0)   # наверх, за забор
+		_player.global_position = center + (Vector3(0, 0.3, FLAT_OUT) if _flat else Vector3(0, 0.3, RIM + 3.0))   # наверх, за забор
 	_transition(mod.tr_key("pax_rpg_arena_lost" if lost else "pax_rpg_arena_leave"), out, "")
 
 
@@ -202,7 +212,7 @@ func _fill_crowd(on: bool) -> void:
 		anim_src.free()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1047
-	var tiers := [[15.3, 0.05], [16.4, 0.05]]                      # на ободе у забора, смотрят вниз сквозь решётку
+	var tiers: Array = FLAT_SEATS if _flat else [[15.3, 0.05], [16.4, 0.05]]   # трибуны (старая яма — обод у забора)
 	for ti: int in tiers.size():
 		var rr := float(tiers[ti][0])
 		var h := float(tiers[ti][1])
@@ -210,11 +220,12 @@ func _fill_crowd(on: bool) -> void:
 		var a := rng.randf_range(0.0, step)
 		while a < TAU:
 			var deg := fposmod(rad_to_deg(a), 360.0)
-			if absf(deg - 68.0) > 14.0 and absf(deg - 292.0) > 14.0 and rng.randf() < 0.6:   # не в проходах к лестницам
+			var gap := (minf(deg, 360.0 - deg) > 14.0 and absf(deg - 180.0) > 14.0) if _flat \
+				else (absf(deg - 68.0) > 14.0 and absf(deg - 292.0) > 14.0)
+			if gap and rng.randf() < 0.6:                  # не в проходах к лестницам
 				var g := src.duplicate() as Node3D
 				g.position = center + Vector3(sin(a) * rr, h, cos(a) * rr)
 				g.rotation.y = a + PI                      # лицом к яме
-				g.scale = Vector3.ONE * rng.randf_range(0.85, 1.1)
 				_crowd.add_child(g)
 				var ap2 := _find_anim(g)
 				if ap2 != null and idle != null:
@@ -246,17 +257,26 @@ func _open(on: bool) -> void:
 	mat.albedo_color = Color(0.16, 0.14, 0.15)
 	mat.metallic = 0.8
 	mat.roughness = 0.45
-	for xs: float in [1.0, -1.0]:                      # решётки внизу обеих лестниц
-		var at := center + Vector3(xs * STX, -DEPTH, ST_BOT - 0.6)
+	var spots: Array = []                              # решётки внизу обеих лестниц: [место, ширина]
+	if _flat:
+		for zs: float in [1.0, -1.0]:                  # проходы парапета — юг и север
+			spots.append([center + Vector3(0.0, 0.0, zs * (pit + 0.3)), 4.6])
+	else:
+		for xs: float in [1.0, -1.0]:
+			spots.append([center + Vector3(xs * STX, -DEPTH, ST_BOT - 0.6), 2.6])
+	for sp: Array in spots:
+		var at: Vector3 = sp[0]
+		var gw := float(sp[1])
 		var body := StaticBody3D.new()
 		var sh := CollisionShape3D.new()
 		var bs := BoxShape3D.new()
-		bs.size = Vector3(2.6, 3.6, 0.5)
+		bs.size = Vector3(gw, 3.6, 0.5)
 		sh.shape = bs
 		body.add_child(sh)
 		body.position = at + Vector3(0, 1.8, 0)
 		_gates.add_child(body)
-		for k: int in 6:                                   # прутья и две перекладины
+		var nb := int(round(gw / 0.48)) + 1
+		for k: int in nb:                                  # прутья и две перекладины
 			var bar := MeshInstance3D.new()
 			var cm := CylinderMesh.new()
 			cm.top_radius = 0.045
@@ -264,12 +284,12 @@ func _open(on: bool) -> void:
 			cm.height = 3.4
 			cm.material = mat
 			bar.mesh = cm
-			bar.position = at + Vector3(-1.2 + k * 0.48, 1.7, 0)
+			bar.position = at + Vector3(-gw * 0.5 + 0.1 + k * (gw - 0.2) / float(nb - 1), 1.7, 0)
 			_gates.add_child(bar)
 		for y: float in [0.8, 2.6]:
 			var cross := MeshInstance3D.new()
 			var bm := BoxMesh.new()
-			bm.size = Vector3(2.6, 0.12, 0.12)
+			bm.size = Vector3(gw, 0.12, 0.12)
 			bm.material = mat
 			cross.mesh = bm
 			cross.position = at + Vector3(0, y, 0)

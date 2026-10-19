@@ -90,7 +90,7 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if hole.size() >= 3 and not d.has("ramp") and Vector2(pos.x - float(hole[0]), pos.z - float(hole[1])).length() < float(hole[2]) + 1.5:
 			continue
 		if d.has("proxy"):                                # убранство улиц (dressing.gd); люди — location.gd
-			if not str(d.proxy) in ["guard", "crier", "person"]:
+			if not str(d.proxy) in ["guard", "crier", "person", "arena_master", "seer"]:
 				if _dress == null:
 					_dress = Dressing.new(self)
 				_dress.add(d, pos)
