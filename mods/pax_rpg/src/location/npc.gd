@@ -6,6 +6,11 @@ const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 const DIR := "models/goblin/"
+## Облики жителей: гоблин Meshy (клипы — models/goblin/walk.glb, idle.glb) и гости столицы из моделей Tripo
+## (models/goblin/variants/, клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет:
+## pax_rpg/dev/gharn/npc_variant.py). Вес — как часто встречается (Гхарн — город гоблинов).
+const LOOKS := [["goblin_rigged.glb", 55], ["variants/goblin_b.glb", 15], ["variants/orc_citizen.glb", 10],
+	["variants/elf_warrior.glb", 10], ["variants/witch.glb", 10]]
 const SPEED := 1.3
 
 var mod: PaxMod
@@ -75,21 +80,28 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 	shape.shape = cap
 	shape.position = Vector3(0, 0.55, 0)
 	add_child(shape)
-	_model = Assets.model(mod, DIR + "goblin_rigged.glb")
+	var look := _pick_look(rng)
+	_model = Assets.model(mod, DIR + look)
+	if _model == null and look != "goblin_rigged.glb":
+		look = "goblin_rigged.glb"
+		_model = Assets.model(mod, DIR + look)
 	if _model == null:
 		return
-	_model.scale = Vector3.ONE * rng.randf_range(0.85, 1.1)
+	_model.scale = Vector3.ONE * (rng.randf_range(0.85, 1.1) if look == "goblin_rigged.glb" else rng.randf_range(0.94, 1.05))
 	add_child(_model)
 	for g: Node in _model.find_children("*", "GeometryInstance3D", true, false):   # дальше 80 м жителя не видно в дымке
 		(g as GeometryInstance3D).visibility_range_end = 80.0
 		(g as GeometryInstance3D).visibility_range_end_margin = 5.0
-	Assets.track(DIR + "goblin_rigged.glb", _model)
+	Assets.track(DIR + look, _model)
 	_anim = _find(_model)
 	if _anim != null:
 		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # ведёт _process (LOD)
 	if _anim != null:
 		var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
 		for clip: String in ["walk", "idle"]:
+			if _anim.has_animation(clip):                  # у гостей Tripo клипы — в самой модели
+				_anim.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+				continue
 			var src := Assets.model(mod, DIR + clip + ".glb")
 			if src == null:
 				continue
@@ -103,6 +115,18 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int) -> vo
 			_anim.add_animation_library("", lib)
 		_play("walk")
 		_anim.seek(rng.randf_range(0.0, 1.0), true)
+
+
+static func _pick_look(rng: RandomNumberGenerator) -> String:
+	var total := 0
+	for l: Array in LOOKS:
+		total += int(l[1])
+	var r := rng.randi_range(0, total - 1)
+	for l: Array in LOOKS:
+		r -= int(l[1])
+		if r < 0:
+			return str(l[0])
+	return "goblin_rigged.glb"
 
 
 static func _find(n: Node) -> AnimationPlayer:
