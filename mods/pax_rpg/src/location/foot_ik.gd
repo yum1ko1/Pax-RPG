@@ -35,7 +35,7 @@ func _process_modification() -> void:
 	var sk := get_skeleton()
 	if sk == null or _ids.size() != 2 or _hips < 0 or not is_instance_valid(body) or not is_instance_valid(feet_root):
 		return
-	var dt := get_process_delta_time() if not Engine.is_in_physics_frame() else get_physics_process_delta_time()
+	var dt := get_physics_process_delta_time()       # модификаторы скелета героя — в такте физики (hero.gd)
 	var grounded := body.is_on_floor()
 	_w = move_toward(_w, 1.0 if grounded else 0.0, dt * 6.0)
 	var xf := sk.global_transform
