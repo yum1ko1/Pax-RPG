@@ -189,7 +189,7 @@ add("hitching_post", 66, 32, 90, c=True)
 #      и товаром на тротуарах, гирлянды фонарей ритмом (через 6 м, свет — у каждой второй), не облаком.
 #   3) В конце аллеи — арка из клыков с жаровнями: рамка, через которую видна площадь Круга (точка притяжения взгляда).
 ALLEY_ROWS = [(76.5, 61.0), (54.0, 31.5)]              # отрезки фасадов (между ними — переулок z 57.5)
-ALLEY_MODELS = ["@house_bal_a", "@house_timber_a", "@house_bal_b", "@house_shop_b", "@house_bal_c", "@house_shop_b"]   # узкие, 7.5–8.5 м; балконы — через один
+ALLEY_MODELS = ["@house_bal_a", "@house_bal_b", "@house_bal_c", "@house_bal_b", "@house_bal_a", "@house_bal_c"]   # центр — только каменные (бут + тёмное дерево), деревянные — в бедных кварталах
 FOOT = {"house_two_b": (5.22, 4.92), "house_shop_a": (5.11, 4.13), "house_shop_b": (4.24, 4.06),
         "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71),
         "house_bal_a": (4.2, 3.14), "house_bal_b": (3.9, 4.48), "house_bal_c": (4.22, 4.61)}
@@ -483,7 +483,7 @@ def quarter(x0, x1, z0, z1, n):
 
 
 # ===================== жилые слободы =====================
-FOOT = {"yurt_large": (4.2, 4.2), "yurt_small": (2.7, 2.7), "house_timber_a": (3.8, 4.6), "house_timber_b": (4.1, 3.8),
+FOOT = {"house_bal_a": (4.2, 3.14), "house_bal_b": (3.9, 4.48), "house_bal_c": (4.22, 4.61), "yurt_large": (4.2, 4.2), "yurt_small": (2.7, 2.7), "house_timber_a": (3.8, 4.6), "house_timber_b": (4.1, 3.8),
         "house_shop_a": (5.2, 4.2), "house_shop_b": (4.3, 4.1), "house_shop_c": (5.8, 4.3),
         "house_two_a": (4.0, 3.6), "house_two_b": (5.2, 4.9)}
 RECTS = []                                       # (x0, x1, z0, z1) занятых построек слобод — без самопересечений
@@ -539,10 +539,7 @@ def craft_lot(x, z, side, k):
     """Участок мастера на Улице Мастеров: дом фасадом к улице (двухэтажный, где есть модель), за домом — свой двор:
     у гончара кувшины и корзины, у кожевника рамы со шкурой, у плотника дрова и телега, у пивовара бочки кумыса."""
     r = 0 if side < 0 else 180
-    if TWO and k % 3 != 2:
-        m = "@house_two_a" if k % 2 else "@house_two_b"
-    else:
-        m = ["@house_timber_a", "@house_shop_b", "@house_timber_a", "@house_shop_a"][k % 4]
+    m = ["@house_bal_a", "@house_bal_b", "@house_bal_c"][k % 3]   # Улица Мастеров — центр: каменные дома одного стиля
     if not place(m, x, z, r):
         return
     by = z + side * 9.0                              # задний двор
