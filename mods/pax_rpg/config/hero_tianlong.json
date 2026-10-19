@@ -1,6 +1,6 @@
 {
 	"_note_walk": "Шаг без оружия: Walk из Cascadeur (31 кадр, 1 с на два шага, ход вперёд 1.53 м за цикл, вынут в root motion) — скорость шага = длина цикла, ноги не скользят.",
-	"walk_speed": 1.53, "stride_walk": 1.53, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "sfx_stride_walk": 0.77, "run_speed": 6.5, "stride_run": 8.99, "loop_steps": {"Walk": [13, 28], "RunStart": [1], "Run": [4, 13, 20, 28], "RunStop": [8]}, "sheathe_from_draw": false, "sword_back_from_model": true, "combat_stance": false,
+	"walk_speed": 1.53, "stride_walk": 1.53, "stride_walk_armed": 0.38, "stride_strafe": 0.53, "stride_back": 0.71, "armed_speed_factor": 0.4, "_note_steps": "Шаги с оружием из Cascadeur (Step_front/back/with_weapon_left/right, 1 с): ход за цикл 0.38 / 0.71 / 0.49–0.57 м; с оружием шаг 0.61 м/с — клип ×1.6, ноги не скользят", "sfx_stride_walk": 0.77, "run_speed": 6.5, "stride_run": 8.99, "loop_steps": {"Walk": [13, 28], "RunStart": [1], "Run": [4, 13, 20, 28], "RunStop": [8]}, "sheathe_from_draw": false, "sword_back_from_model": true, "combat_stance": false,
 	"sfx_steps": "heel", "sfx_gear": false, "sfx_cloth": true, "sfx_whoosh": true,
 	"combo_end_free": 0.05,
 	"clip_speed": {"Dodge": 1.0, "DodgeArmed": 1.0, "Hurt": 1.5, "DodgeBack": 1.0, "DodgeL": 1.0, "DodgeR": 1.0, "JumpLand": 1.2, "BlockHit": 1.0, "Draw": 1.0, "Sheathe": 1.0},
