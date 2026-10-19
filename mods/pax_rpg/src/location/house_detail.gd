@@ -21,7 +21,6 @@ uniform float tile_wood = 0.55;
 uniform float strength = 0.75;     // сила рисунка в яркости
 uniform float n_strength = 0.8;    // сила рельефа деталей
 uniform float detail_far = 45.0;
-uniform float tone = 1.0;         // < 1 — светлый атлас темнеет к общему тону улицы
 uniform float sky_far_ao = 0.35;  // сколько неба остаётся на дальних домах
 uniform float sky_far_from = 40.0;
 varying vec3 wp;
@@ -39,7 +38,6 @@ vec3 unpack(vec2 rg) {
 
 void fragment() {
 	vec3 base = texture(atlas, UV).rgb;
-	base *= tone;                      // общий тёмный тон улицы (material: по средней яркости атласа)
 	float mx = max(base.r, max(base.g, base.b));
 	float mn = min(base.r, min(base.g, base.b));
 	float sat = (mx - mn) / max(mx, 0.001);
@@ -72,7 +70,6 @@ void fragment() {
 }
 """
 
-const TONE := 0.3                  # средняя яркость атласа (sRGB), к которой тянем светлые дома
 static var _shader: Shader
 static var _tex := {}
 static var _mats := {}
@@ -129,9 +126,5 @@ static func material(mod: PaxMod, src: BaseMaterial3D) -> Material:
 		_tex["avg_w"] = _avg(wa)
 	m.set_shader_parameter("stone_avg", _tex["avg_s"])
 	m.set_shader_parameter("wood_avg", _tex["avg_w"])
-	# один тёмный тон на всю улицу: бледные атласы (выгоревшее дерево, светлый камень) темнеют к средней яркости
-	# тёмных домов; рисунок атласа не трогаем — масштаб один на весь дом
-	var avg := _avg(src.albedo_texture)
-	m.set_shader_parameter("tone", clampf(pow(TONE / avg, 2.2), 0.3, 1.0))
 	_mats[src] = m
 	return m

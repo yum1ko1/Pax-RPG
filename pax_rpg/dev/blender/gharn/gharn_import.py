@@ -21,7 +21,8 @@ HEIGHT = {"guild_hall": 16.0, "tavern_hall": 13.0, "fountain_dragon": 4.2, "gate
           "brazier_tusk": 2.2, "spear_rack": 2.2, "market_stall_hide": 3.2, "mana_totem": 3.0, "hide_frame": 2.4,
           "bucket_set": 0.8,
           # версия 4: дома аллеи с балконами (этаж ~3 м, конёк ~8–10 м)
-          "house_bal_a": 8.5, "house_bal_b": 9.0, "house_bal_c": 10.0}
+          "house_bal_a": 8.5, "house_bal_b": 9.0, "house_bal_c": 10.0,
+          "house_stone_a": 8.5, "house_stone_b": 11.0, "house_stone_c": 8.0, "house_stone_d": 8.5}
 ARGS = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 ONLY = set(ARGS[ARGS.index("--only") + 1].split(",")) if "--only" in ARGS else None
 

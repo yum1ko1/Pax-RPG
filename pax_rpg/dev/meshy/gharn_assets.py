@@ -97,6 +97,24 @@ ASSETS = {
                     "floor with an open stall counter under a hide awning, two upper floors of dark timber stepping "
                     "outward over the street, a small enclosed bay balcony on the second floor, drying cloth on a pole, "
                     "steep curved roof with a beast skull at the gable, all walls solid and closed.", 60000),
+    # --- центр: каменные дома одной палитры с house_bal (тёмный бут, тёмное дерево, алый лак), разные силуэты
+    "house_stone_a": ("Two-storey stone townhouse of the orc capital facing a street: both floors of dark grey weathered "
+                      "rubble stone with dark timber beams, a red lacquered door under a small tiled porch roof, "
+                      "narrow lattice windows with red frames, a short red-railed balcony on the upper floor, steep "
+                      "curved dark-tiled roof with upturned corners and a horn ridge ornament, uniform dark palette, "
+                      "all walls solid and closed.", 60000),
+    "house_stone_b": ("Narrow three-storey stone tower house of the orc capital: dark grey rubble-stone walls getting "
+                      "narrower upward, dark timber floor bands, small barred windows, a hanging wooden signboard on "
+                      "an iron bracket, two stacked curved dark-tiled roofs with bone tips, red paper lanterns by the "
+                      "door, uniform dark palette, all walls solid and closed.", 60000),
+    "house_stone_c": ("Wide two-storey stone merchant house of the orc capital: dark grey cut-stone ground floor with "
+                      "three arched openings closed by dark wooden shutters, upper floor of dark timber and plaster "
+                      "with a long red-railed balcony, wide curved dark-tiled hip roof with upturned corners, red "
+                      "banners with a black fang emblem, uniform dark palette, all walls solid and closed.", 60000),
+    "house_stone_d": ("Two-storey stone corner house of the orc capital with a small walled courtyard gate: dark grey "
+                      "rubble-stone walls, a roofed red wooden gate with iron studs, upper floor of dark timber with "
+                      "lattice windows, a bay window on carved brackets, curved dark-tiled roof with a beast skull at "
+                      "the gable, uniform dark palette, all walls solid and closed.", 60000),
     "totem_pole": ("A tall carved wooden totem pole with three stacked snarling orc faces painted red and black, a "
                    "horned skull at the top, tusks sticking out, red ribbons and feathers tied around it.", 4000),
     "bone_banner": ("War standard: a wooden pole with a crossbar, a horned ram skull on top, a long torn dark-red banner "
