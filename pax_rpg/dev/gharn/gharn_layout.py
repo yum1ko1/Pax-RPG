@@ -189,7 +189,7 @@ add("hitching_post", 66, 32, 90, c=True)
 #      и товаром на тротуарах, гирлянды фонарей ритмом (через 6 м, свет — у каждой второй), не облаком.
 #   3) В конце аллеи — арка из клыков с жаровнями: рамка, через которую видна площадь Круга (точка притяжения взгляда).
 ALLEY_ROWS = [(76.5, 61.0), (54.0, 31.5)]              # отрезки фасадов (между ними — переулок z 57.5)
-ALLEY_MODELS = ["@house_bal_a", "@house_timber_a", "@house_bal_b", "@house_timber_b", "@house_bal_c", "@house_shop_b"]   # узкие, 7.5–8.5 м; балконы — через один
+ALLEY_MODELS = ["@house_bal_a", "@house_timber_a", "@house_bal_b", "@house_shop_b", "@house_bal_c", "@house_shop_b"]   # узкие, 7.5–8.5 м; балконы — через один
 FOOT = {"house_two_b": (5.22, 4.92), "house_shop_a": (5.11, 4.13), "house_shop_b": (4.24, 4.06),
         "house_shop_c": (5.74, 4.29), "house_timber_a": (3.74, 4.51), "house_timber_b": (4.03, 3.71),
         "house_bal_a": (4.2, 3.14), "house_bal_b": (3.9, 4.48), "house_bal_c": (4.22, 4.61)}
@@ -464,7 +464,7 @@ def quarter(x0, x1, z0, z1, n):
             continue
         kind = random.random()
         if kind < 0.28:                                  # оседлые кланы: бревенчатые дома на цоколе (Meshy v3)
-            add(random.choice(["@house_timber_a", "@house_timber_b"]), x, z, random.choice([0, 90, 180, 270]) +
+            add(random.choice(["@house_timber_a"]), x, z, random.choice([0, 90, 180, 270]) +
                 random.uniform(-8, 8), c=True, rad=rad + 0.8)
         else:
             add("yurt_large" if big else "yurt_small", x, z, random.uniform(0, 360), c=True, rad=rad)
@@ -542,7 +542,7 @@ def craft_lot(x, z, side, k):
     if TWO and k % 3 != 2:
         m = "@house_two_a" if k % 2 else "@house_two_b"
     else:
-        m = ["@house_timber_a", "@house_shop_b", "@house_timber_b", "@house_shop_a"][k % 4]
+        m = ["@house_timber_a", "@house_shop_b", "@house_timber_a", "@house_shop_a"][k % 4]
     if not place(m, x, z, r):
         return
     by = z + side * 9.0                              # задний двор
@@ -1102,7 +1102,7 @@ def fill_voids():
                     x + math.cos(a) * 5.8, z + math.sin(a) * 5.8, random.uniform(0, 360), rad=0.6)
             add("firepit", x + 6.5, z, 0, c=False)
         elif kind == 1:                                 # сруб с садом
-            add(random.choice(["@house_timber_a", "@house_timber_b"]), x, z, random.choice([0, 90, 180, 270]), c=True, rad=5.4)
+            add(random.choice(["@house_timber_a"]), x, z, random.choice([0, 90, 180, 270]), c=True, rad=5.4)
             for k in range(2):
                 a = random.uniform(0, 2 * math.pi)
                 add("@flame_tree", x + math.cos(a) * 7.0, z + math.sin(a) * 7.0, random.uniform(0, 360),
