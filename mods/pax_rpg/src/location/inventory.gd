@@ -95,7 +95,7 @@ func _fit() -> void:
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
 
 
-## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, posture, level, xp_abs, xp_need;
+## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, conc, level, xp_abs, xp_need;
 ## attributes — характеристики персонажа из config/hero.json).
 func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dictionary) -> void:
 	_player = player
@@ -499,7 +499,7 @@ func _fill_stats(st: Dictionary) -> void:
 		c.queue_free()
 	var rows := [
 		["pax_rpg_hero_hp", "%d / %d" % [int(st.get("hp_abs", 0)), int(st.get("hp_max", 0))], Hud.PINK],
-		["pax_rpg_hud_posture_label", "%d%%" % int(float(st.get("posture", 0.0)) * 100.0), Hud.AMBER],
+		["pax_rpg_hud_posture_label", "%d%%" % int(float(st.get("conc", 1.0)) * 100.0), Hud.AMBER],
 		["pax_rpg_hud_level", str(int(st.get("level", 1))), Hud.BLUE],
 		["pax_rpg_inv_xp", "%d / %d" % [int(st.get("xp_abs", 0)), int(st.get("xp_need", 0))], Hud.BLUE],
 		["pax_rpg_inv_damage", _scaling_text(st), Hud.TEXT],

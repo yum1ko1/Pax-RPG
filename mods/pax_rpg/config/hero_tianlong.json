@@ -1,10 +1,73 @@
 {
 	"_note_walk": "Шаг без оружия: Walk из Cascadeur (31 кадр, 1 с на два шага, ход вперёд 1.53 м за цикл, вынут в root motion) — скорость шага = длина цикла, ноги не скользят.",
-	"walk_speed": 1.53, "stride_walk": 1.53, "stride_walk_armed": 1.45, "stride_strafe": 1.05, "stride_back": 1.19, "sfx_stride_walk": 0.77, "run_speed": 6.5, "stride_run": 8.99, "loop_steps": {"Walk": [13, 28], "RunStart": [1], "Run": [4, 13, 20, 28], "RunStop": [8]}, "sheathe_from_draw": false, "sword_back_from_model": true, "combat_stance": false,
-	"sfx_steps": "heel", "sfx_gear": false, "sfx_cloth": true, "sfx_whoosh": true,
+	"walk_speed": 1.53,
+	"stride_walk": 1.53,
+	"stride_walk_armed": 1.45,
+	"stride_strafe": 1.05,
+	"stride_back": 1.19,
+	"sfx_stride_walk": 0.77,
+	"run_speed": 6.5,
+	"stride_run": 8.99,
+	"loop_steps": {
+		"Walk": [
+			13,
+			28
+		],
+		"RunStart": [
+			1
+		],
+		"Run": [
+			4,
+			13,
+			20,
+			28
+		],
+		"RunStop": [
+			8
+		]
+	},
+	"sheathe_from_draw": false,
+	"sword_back_from_model": true,
+	"combat_stance": false,
+	"sfx_steps": "heel",
+	"sfx_gear": false,
+	"sfx_cloth": true,
+	"sfx_whoosh": true,
 	"combo_end_free": 0.05,
-	"clip_speed": {"Dodge": 1.0, "DodgeArmed": 1.0, "Hurt": 1.5, "DodgeBack": 1.0, "DodgeL": 1.0, "DodgeR": 1.0, "JumpLand": 1.2, "BlockHit": 1.0, "Draw": 1.0, "Sheathe": 1.0},
-	"step_times": {"Attack2": [0.93], "Attack3": [0.43, 0.97], "ComboEnd": [1.03], "HeavyAttack": [0.37, 2.3]},
+	"clip_speed": {
+		"Dodge": 1.0,
+		"DodgeArmed": 1.0,
+		"Hurt": 1.5,
+		"DodgeBack": 1.0,
+		"DodgeL": 1.0,
+		"DodgeR": 1.0,
+		"JumpLand": 1.2,
+		"BlockHit": 1.5,
+		"Draw": 1.0,
+		"Sheathe": 1.0,
+		"Parry": 1.7,
+		"Stagger": 1.0,
+		"Knocked": 1.0,
+		"GetUp": 1.25,
+		"Bloodthirsty": 1.0,
+		"Deathblow": 1.0
+	},
+	"step_times": {
+		"Attack2": [
+			0.93
+		],
+		"Attack3": [
+			0.43,
+			0.97
+		],
+		"ComboEnd": [
+			1.03
+		],
+		"HeavyAttack": [
+			0.37,
+			2.3
+		]
+	},
 	"_note": "Тян Лун — второй герой (для проверки): поверх config/hero.json, когда выбран в окне героя. Модель и клипы — dev bl_tl2.py (лоу-поли, риг Mixamo с глазами и веками) (кости под имена рыцаря), копьё Алого Заката держится за середину древка; хват двумя руками и IK левой руки рыцаря выключены.",
 	"model": "models/heroes/tian_long/model.glb",
 	"anim_meta": "models/heroes/tian_long/anim.json",
@@ -29,7 +92,8 @@
 		"Attack1": 0.5,
 		"Attack2": 0.5,
 		"Attack3": 0.6,
-		"Draw": 0.6
+		"Draw": 0.6,
+		"Bloodthirsty": 0.78
 	},
 	"character": {
 		"id": "tian_long",
@@ -93,7 +157,12 @@
 	"_note_run": "Бег — один клип Cascadeur (Running.glb, 51 кадр), разрезан merge_casc.py @a-b: RunStart 5–12 (разгон), Run — отдельный цикл Running_loop.glb (31 кадр, два цикла шагов, 8.99 м за 1 с; шаги — касания носков 4 13 20 28), RunStop 29–40 (торможение). Шаги автора: 6 · 17 27 · 37. На входе и выходе скорость героя — ход таза клипа (hero.edge_speed).",
 	"_note_thrust": "thrust_clips — прямые выпады: на них вместо swing_N звучит sfx_thrust.",
 	"sfx_thrust": "sounds/spear_thrust.ogg",
-	"thrust_clips": ["Attack1", "Attack2", "Attack3"],
+	"thrust_clips": [
+		"Attack1",
+		"Attack2",
+		"Attack3",
+		"Bloodthirsty"
+	],
 	"sfx_finish": "sounds/spear_magic_finish.ogg",
 	"final_push": 6.5,
 	"final_push_up": 2.2,
@@ -137,5 +206,10 @@
 	"trail_alpha": 0.75,
 	"trail_combo_gain": 0.35,
 	"trail_speed": 1.5,
-	"trail_life": 0.28
+	"trail_life": 0.28,
+	"_note_conc": "Концентрация (ДИЗДОК — бой): clip_speed новых клипов — Parry/BlockHit (короткие реакции, обрываются шагом и действием после react_cancel с), Stagger — слом (2.97 с: падает на колено и встаёт), Bloodthirsty — Кровожадная атака (укол Attack1 с другим ходом времени, dev/tianlong/warp_clip.py; копьё в теле — blood_hit), Hurt/Knocked/GetUp/Death/Iai* — с рыцаря и Meshy (dev/tianlong/retarget_glb.py).",
+	"blood_hit": {
+		"Bloodthirsty": 0.82
+	},
+	"react_cancel": 0.22
 }

@@ -18,7 +18,8 @@ const LOOPS := ["Idle", "IdleArmed", "Walk", "Run", "RunArmed", "WalkArmed", "Gu
 	"GuardBack", "StrafeL", "StrafeR", "WalkBack", "Block", "BlockWalkF", "BlockWalkB", "BlockWalkL", "BlockWalkR", "CombatIdle"]
 const ONCE := ["UltCrush", "SwordTrick", "Draw", "Sheathe", "DrawWalk", "SheatheWalk", "Jump", "JumpArmed", "JumpLand", "JumpLandArmed", "BlockHit",
 	"Attack1", "Attack2", "Attack3", "Dodge",
-	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp"]
+	"DodgeArmed", "Hurt", "Parry", "Deathblow", "Knocked", "GetUp", "Stagger", "Bloodthirsty"]
+const SOFT := ["Hurt", "Parry", "BlockHit"]        # реакции: не отнимают управление, шаг или любое действие их обрывают
 const ON_THE_GO := ["DrawWalk", "SheatheWalk"]   # меч достают и убирают на ходу — ноги шагают, управление не забрано
 
 var cfg: Dictionary = {}
@@ -70,6 +71,7 @@ var _items: Dictionary = {}          # config/items.json → items: что во�
 var _worn: Dictionary = {}           # слот → надетый предмет (см. equip)
 var _last_in_slot: Dictionary = {}   # слот → что в нём было — «C» надевает обратно
 var cloth_paused := false           # для замера (rpg_perf auto)
+var tired := false                  # концентрация ниже трети (location.gd): удары медленнее
 var _colliders: Array = []           # [AnimatableBody3D, кость от, кость до] — капсулы тела для тканей
 var _trail_mesh: ImmediateMesh      # след взмаха — видно, куда достаёт меч
 var _trail_mat: StandardMaterial3D
@@ -373,7 +375,7 @@ func has(n: String) -> bool:
 
 
 func locks_move() -> bool:
-	return action != "" and action != "Jump" and action != "Hurt" and action != "ComboEnd" and action not in ON_THE_GO
+	return action != "" and action != "Jump" and action not in SOFT and action != "ComboEnd" and action not in ON_THE_GO
 
 
 ## Достаёт или убирает меч на ходу — бежать нельзя, только шаг.
@@ -1441,7 +1443,7 @@ func _sheathe_from_draw(player: AnimationPlayer) -> void:
 
 ## Реакция на удар (Hurt) — только картинка: любое действие или шаг её прерывают, управление не отнимается.
 func _cancel_hurt() -> void:
-	if action == "Hurt":
+	if action == "Hurt" or (action in ["Parry", "BlockHit"] and _pos() > _f("react_cancel", 0.22)):
 		action = ""
 
 
@@ -1522,7 +1524,7 @@ func dodge(on_floor: bool, dir := "") -> bool:
 
 ## Во время кувырка удары проходят мимо (i-frames).
 func invulnerable() -> bool:
-	return action.begins_with("Dodge") or action in ["Knocked", "GetUp"]
+	return action.begins_with("Dodge") or action in ["Knocked", "GetUp", "Bloodthirsty"]
 
 
 ## Уворот в стороны (не кувырок вперёд) — location.gd держит героя лицом к врагу.
@@ -1589,7 +1591,7 @@ func _play_once(n: String, skip := 0.0, clip := "") -> void:
 	_hits_done = 0
 	_lands_done = 0
 	_impact_done = false
-	anim.speed_scale = _per("attack_speed", n, 1.0) if n in ATTACKS else _per("clip_speed", n, 1.0)
+	anim.speed_scale = _per("attack_speed", n, 1.0) * (_f("tired_speed", 0.85) if tired else 1.0) if n in ATTACKS 		else _per("clip_speed", n, 1.0)
 	anim.play(_clip, _per("blend_in", n, 0.15))
 	if skip > 0.0:
 		anim.seek(skip, true)
@@ -1657,7 +1659,7 @@ func tick(delta: float, moving: bool, speed: float, running: bool, on_floor: boo
 		_block_t += delta
 	# выход из комбо доигрывается и на ходу (герой уже идёт — управление не забрано, locks_move); оборвать его
 	# могут только удар, уворот, блок и прыжок
-	if action == "Hurt" and moving:
+	if moving and (action == "Hurt" or (action in ["Parry", "BlockHit"] and _pos() > _f("react_cancel", 0.22))):
 		_end_action()                        # пошёл — реакция на удар обрывается, ходьба сливается плавно
 	if action != "" and action != "Iai" and action != "Ultimate" and not anim.is_playing():
 		_end_action()                        # сигнал конца не пришёл — не застрять (Иай ведёт стадии сам)
@@ -2276,6 +2278,51 @@ func block_hit(heavy: bool) -> void:
 	blocking = keep
 
 
+## Парировал: клип Parry (короткий отбив оружием), блок остаётся; нет клипа — меч вздрагивает в блоке.
+func parry_anim() -> void:
+	if anim == null:
+		return
+	if not has("Parry") or (action != "" and action not in SOFT):
+		deflect()
+		return
+	var keep := blocking
+	_play_once("Parry")
+	blocking = keep
+
+
+## Концентрация на нуле: шатается и падает на колено (Stagger), встаёт сам; управление отнято (location.gd — 2.6 с).
+func stagger() -> void:
+	if anim == null:
+		return
+	if action == "ComboEnd" or action in SOFT or action in ATTACKS or action in SPECIALS or action.begins_with("Dodge") 			or action.begins_with("Draw") or action.begins_with("Sheathe") or action == "Jump":
+		_end_action()
+	if action != "":
+		return                                       # кат-сцена (ульта, иай) — её не рвём
+	blocking = false
+	if has("Stagger"):
+		_play_once("Stagger")
+	else:
+		hurt()
+
+
+## Кровожадная атака (концентрация врага на нуле): свой клип (у Тянь Луна — укол Bloodthirsty), иначе добивание
+## Deathblow. Возвращает секунду клипа, когда оружие в теле (−1 — не началась).
+func bloodthirsty() -> float:
+	_cancel_hurt()
+	_cancel_recovery()
+	if action == "ComboEnd":
+		_end_action()
+	if anim == null or action != "":
+		return -1.0
+	var clip := "Bloodthirsty" if has("Bloodthirsty") else ("Deathblow" if has("Deathblow") else "")
+	if clip == "":
+		return -1.0
+	armed = true
+	blocking = false
+	_play_once(clip)
+	return _per("blood_hit", clip, 0.82 if clip == "Bloodthirsty" else _f("deathblow_hit", 1.1))
+
+
 ## Добивание (враг без равновесия): свой клип, двигаться нельзя. true — началось.
 func deathblow() -> bool:
 	_cancel_hurt()
@@ -2515,7 +2562,7 @@ func _show_sword(delta: float) -> void:
 		in_hand = _pos() >= float((sw.get("Draw", {}) as Dictionary).get("time", 0.45))
 	elif action.begins_with("Sheathe"):
 		in_hand = _pos() < float((sw.get("Sheathe", {}) as Dictionary).get("time", 0.9))
-	elif action in ATTACKS or action in SPECIALS or action in ["Ultimate", "Finisher", "SwordTrick"]:
+	elif action in ATTACKS or action in SPECIALS or action in ["Ultimate", "Finisher", "SwordTrick", "Bloodthirsty"]:
 		in_hand = true
 	_sword_hand.visible = in_hand and action != "Iai" and _planted == null
 	_curl_fingers(_sword_hand.visible)

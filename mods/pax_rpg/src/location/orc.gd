@@ -7,7 +7,10 @@ signal slammed(at: Vector3)          # прыжок с ударом призем
 ##  • «Вихрь» (как Джаггернаут): крутится с топором и медленно идёт за героем — не блокируется, только уйти кувырком;
 ##  • «Таран»: рёв, разгон и удар плечом — не блокируется, сбивает с ног; промахнулся — спотыкается, окно для удара.
 ## Опасные приёмы (вихрь, таран) предупреждает красный знак 危 над головой — как в Sekiro.
-## Бой и интерфейс — как у гоблина (goblin.gd): здоровье, концентрация, добивание; меняются клипы, ИИ и удары.
+## Бой и интерфейс — как у гоблина (goblin.gd): здоровье, концентрация (выдержка, от 100 к 0), Кровожадная атака;
+## меняются клипы, ИИ и удары. Концентрация босса: пропущенный удар героя стоит мало (hit_conc), свои приёмы — много,
+## парирование его удара — 0, но в сериях (Combo1, Combo3) в 0 уводит только последний удар, прежние — −CHAIN_PARRY.
+## Кровожадная атака снимает треть здоровья: три слома — три фазы (phase), с каждой он быстрее и злее.
 ## Темп каждого удара — TEMPO: [доля клипа от, до, скорость] — где замах тянется, где удар ускорен; HOLD — замирание.
 
 const ORC_MODEL := "models/orc/orc_champion.glb"
@@ -40,6 +43,11 @@ const SKID_DECEL := 11.0      # м/с²: торможение после про�
 const CHARGE_DMG := 34.0
 const PARRY_WINDOW := 0.28      # с от начала блока: удар героя отбит
 const DIZZY_TIME := 1.6         # после вихря и промаха тараном — открыт
+const CHAIN_PARRY := 25.0       # парирован не последний удар серии — столько концентрации, а не всю
+const COST_ATTACK := 8.0        # концентрация на свой удар (тяжёлый — COST_HEAVY, вихрь и таран — COST_SPECIAL)
+const COST_HEAVY := 12.0
+const COST_SPECIAL := 15.0
+const ORC_REGEN := 9.0          # в секунду на отдыхе (дальше 5 м — ×1.5, раненый — медленнее)
 
 var _atk := ""
 var _hits_done := 0
@@ -72,7 +80,10 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	name = "OrcChampion"
 	position = at
 	max_hp = 1100.0                                  # босс арены: не падает от пары серий
-	max_posture = 420.0
+	conc_max = 100.0
+	conc = conc_max
+	hit_conc = 0.45                                  # тяжёлый: удар героя выдержку почти не сбивает
+	_guard_chance = 0.15                             # сам блок ставит, видя замах (ИИ); случайный — редко
 	hp = max_hp
 	display_key = "pax_rpg_orc"
 	boss = true
@@ -143,7 +154,7 @@ func _clip(name_: String) -> String:
 		return ""
 	var map := {"idle": "Idle", "walk": "WalkF", "run": "WalkF", "combat_idle": "Idle", "strafe_l": "WalkL",
 		"strafe_r": "WalkR", "back": "WalkB", "hit": "ReactL", "deflected": "ReactR", "knockdown": "ReactR",
-		"getup": "Idle", "attack": "Backhand"}
+		"getup": "GetUp", "attack": "Backhand", "stagger": "Stagger", "parry": "Parry", "block": "BlockIdle"}
 	var c := str(map.get(name_, name_))
 	return c if _anim.has_animation(c) else "Idle"
 
@@ -155,7 +166,7 @@ func _set_state(s: String) -> void:
 	_danger.visible = s in ["spin", "charge_wind", "charge"]
 	match s:
 		"broken":
-			_play("ReactR", true)
+			_play("Stagger", true, 0.1)                   # шатается и падает на колено (окно Кровожадной атаки)
 		"dead":
 			_play("Death", true)
 			var ds: AudioStream = mod.sound("sounds/orc_death.mp3")    # предсмертный рёв
@@ -170,6 +181,9 @@ func _set_state(s: String) -> void:
 				dp.play()
 		"guard":
 			_play("BlockIdle", true, 0.12)
+		"parry":
+			_play("Parry", true, 0.08)
+			_snd(_snd_clang)
 		"taunt":
 			_play("Taunt", true)
 			_snd(_snd_grunt if _roar_taunt else _snd_laugh)
@@ -187,8 +201,7 @@ func _set_state(s: String) -> void:
 			_play("ChargeHit", true)
 
 
-## Кат-сцена: у орка нет клипов падения и подъёма — падение = начало клипа смерти (остановлен лёжа),
-## подъём = он же задом наперёд; удар — ReactL, отброс — ReactR.
+## Кат-сцена: удар — ReactL, отброс — ReactR, падение — Fall (навзничь, Meshy), подъём — GetUp.
 func cine_anim(kind: String) -> void:
 	if dead or _anim == null:
 		return
@@ -201,11 +214,15 @@ func cine_anim(kind: String) -> void:
 			_anim.play("ReactR", 0.05)
 		"fall":
 			_set_state_keep("knockdown")
-			_anim.play("Death", 0.08)
+			_anim.play("Fall" if _anim.has_animation("Fall") else "Death", 0.08)
+			_anim.speed_scale = 1.3
 		"getup":
 			_set_state_keep("getup")
-			_anim.play_backwards("Death", 0.1)
-			_anim.seek(minf(_anim.current_animation_length, 1.6), true)
+			if _anim.has_animation("GetUp"):
+				_anim.play("GetUp", 0.15)
+				_anim.speed_scale = 1.6
+			else:
+				_anim.play("Idle", 0.3)
 
 
 func cine_release(v: Vector3) -> void:
@@ -213,11 +230,18 @@ func cine_release(v: Vector3) -> void:
 	_hitstop = 0.0
 	if _anim != null:
 		_anim.active = true
-	posture = minf(posture, max_posture * 0.7)
+	conc = maxf(conc, conc_max * 0.25)
+	if _anim != null:
+		_anim.speed_scale = 1.0
 	if dead:
 		return
 	velocity = Vector3(v.x, 0.0, v.z) * 0.4                 # тяжёлый — отъезжает, не летит
-	_set_state("recover")
+	var lying := _anim != null and _anim.current_animation in ["Fall", "Death"]
+	if lying:
+		_set_state("getup")                              # лежит после сцены — встаёт (GetUp), потом снова в бой
+	else:
+		_set_state("circle")
+		_wait = randf_range(0.5, 1.0)
 
 
 ## Звуки орка: замах (свист), попадание (глухой удар), блок (сталь), получил урон (удар по телу).
@@ -273,11 +297,16 @@ func _voice_busy() -> bool:
 	return false
 
 
-## Удар героя: в первые доли блока — отбит (концентрация героя), в блоке — почти без урона; вихрь не сбить.
-func take_damage(amount: float, from: Vector3, knock := false) -> void:
-	if dead or _state == "broken":
-		return
-	mod.log_info("[pax_rpg] orc hit %.0f (hp %.0f/%.0f, posture %.0f/%.0f, %s)" % [amount, hp, max_hp, posture, max_posture, _state])
+## Удар героя: в первые доли блока — отбит ("parry": концентрация героя в 0), в блоке — почти без урона ("guard"),
+## в приёме — гиперброня (урон без срыва); иначе — как у гоблина (тяжёлый — не отлетает).
+func take_damage(amount: float, from: Vector3, knock := false) -> String:
+	if dead:
+		return "dead"
+	mod.log_info("[pax_rpg] orc hit %.0f (hp %.0f/%.0f, conc %.0f/%.0f, %s)" % [amount, hp, max_hp, conc, conc_max, _state])
+	if _state == "broken":                                   # на колене: раны идут, слом не снимают
+		hp = maxf(1.0, hp - amount)
+		_snd(_snd_hurt)
+		return "hit"
 	if _state == "guard":
 		var away := (from - global_position)
 		away.y = 0.0
@@ -285,28 +314,49 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 		_snd(_snd_clang)
 		if _state_t <= PARRY_WINDOW:
 			_burst(at, away, Color(1.0, 0.8, 0.35), 40, 5.0, 0.0, 0.3, 0.04, true)
-			if _on_hit.is_valid():
-				_on_hit.call(0.0, self, "parried")             # отбил: героя качнуло, его концентрация
-			_atk_after_guard()
-		else:
-			_burst(at, away, Color(1.0, 0.6, 0.25), 14, 3.0, 0.0, 0.25, 0.03, true)
-			posture = minf(max_posture, posture + amount * 0.25)
-			hp = maxf(1.0, hp - amount * 0.1)
-			_guard_hits += 1
-			if _guard_hits >= 3:
-				_atk_after_guard()                          # надоело стоять в блоке — контратака
-		return
+			_set_state("parry")                               # отбил: концентрация героя — в 0 (location.gd)
+			return "parry"
+		_burst(at, away, Color(1.0, 0.6, 0.25), 14, 3.0, 0.0, 0.25, 0.03, true)
+		spend(amount * 0.25)
+		hp = maxf(1.0, hp - amount * 0.1)
+		_guard_hits += 1
+		if _state != "broken" and _guard_hits >= 3:
+			_atk_after_guard()                          # надоело стоять в блоке — контратака
+		return "broken" if _state == "broken" else "guard"
 	_snd(_snd_hurt_hi if hp > max_hp * 0.5 else _snd_hurt)
 	if _state in ["spin", "charge", "charge_wind"] or _atk != "":
 		hp = maxf(0.0, hp - amount)                         # в приёме — урон без срыва (гиперброня)
-		posture = minf(max_posture, posture + amount * 0.4)
 		_since_hit = 0.0
 		if hp <= 0.0:
 			_lethal = true
 			_atk = ""
-			_set_state("broken")
+			_die()
+			return "dead"
+		spend(amount * hit_conc)
+		if _state == "broken":
+			_atk = ""
+			return "broken"
+		return "hit"
+	return super.take_damage(amount * 0.8, from, false)     # тяжёлый — не отлетает
+
+
+## Герой парировал его удар: в серии (не последний удар) — −CHAIN_PARRY и удар продолжается; последний — 0, слом.
+func deflected(from: Vector3) -> void:
+	if dead:
 		return
-	super.take_damage(amount * 0.8, from, false)            # тяжёлый — не отлетает
+	var hits: Array = (ATTACKS.get(_atk, {}) as Dictionary).get("hits", [])
+	if _atk != "" and _hits_done < hits.size():
+		spend(CHAIN_PARRY)
+		if _state == "broken":
+			_atk = ""
+		return
+	_atk = ""
+	spend(conc + 1.0)
+
+
+## Удар орка принят героем в блок: атакующий тратит больше (тяжёлый — ещё больше).
+func on_blocked(dmg: float, heavy: bool) -> void:
+	spend(dmg * (0.6 if heavy else 0.45))
 
 
 func _atk_after_guard() -> void:
@@ -315,6 +365,10 @@ func _atk_after_guard() -> void:
 
 
 func _start_attack(clip: String) -> void:
+	var heavy_atk := str((ATTACKS.get(clip, {}) as Dictionary).get("kind", "")) == "heavy"
+	spend(COST_HEAVY if heavy_atk else COST_ATTACK)          # замах — усталость; на нуле — слом вместо удара
+	if _state == "broken" or dead:
+		return
 	_atk = clip
 	_hits_done = 0
 	_whoosh_done = 0
@@ -345,11 +399,14 @@ func _phys(delta: float) -> void:
 	_state_t += delta
 	_since_hit += delta
 	_since_special += delta
-	if _state not in ["attack", "broken", "dead", "spin", "charge"] and _since_hit > 2.0 and posture > 0.0:
-		posture = maxf(0.0, posture - delta * (10.0 if hp > max_hp * 0.5 else 4.0))
 	var to := _target.global_position - global_position
 	to.y = 0.0
 	var dist := to.length()
+	_conc_idle += delta
+	if _state not in ["attack", "guard", "parry", "broken", "rise", "dead", "spin", "charge", "charge_wind"] \
+			and _conc_idle > CONC_IDLE and conc < conc_max:
+		var kr := (1.5 if dist > 5.0 else 1.0) * (0.35 + 0.65 * hp / maxf(max_hp, 1.0))
+		conc = minf(conc_max, conc + ORC_REGEN * kr * delta)
 	var dir := to / maxf(dist, 0.001)
 	var side := Vector3(-dir.z, 0.0, dir.x)
 	var flat := Vector3.ZERO
@@ -388,6 +445,8 @@ func _phys(delta: float) -> void:
 				flat = side * _circle_dir * 0.9 + dir * radial * 1.2
 				_play("WalkF" if radial > 0.0 else ("WalkB" if radial < 0.0 else ("WalkR" if _circle_dir > 0.0 else "WalkL")))
 				_wait -= delta
+				if hero_broken and dist < 8.0:
+					_wait = minf(_wait, 0.05)                    # герой сломлен — наказать сразу
 				if _wait <= 0.0:
 					_choose(dist)
 		"guard":
@@ -440,16 +499,40 @@ func _phys(delta: float) -> void:
 			if _state_t >= 0.7:
 				_set_state("circle")
 				_wait = randf_range(0.3, 0.8)
+		"parry":                                         # отбил удар героя — ответ без замаха (герой на нуле)
+			_face(dir, delta * 2.0)
+			_damp(delta)
+			if _state_t >= 0.35:
+				_atk_after_guard()
 		"broken":
 			_damp(delta)
-			if _anim != null and _state_t > 0.6:
-				_anim.pause()
-			if _state_t >= BROKEN_TIME + 0.8:
+			if _anim != null and _anim.is_playing() and _anim.current_animation == "Stagger" \
+					and _anim.current_animation_position >= _anim.current_animation_length * KNEEL_AT:
+				_anim.pause()                            # на колене — окно Кровожадной атаки
+			if _state_t >= BROKEN_TIME + 0.4:
 				if _lethal:
 					_die()
 				else:
-					posture = max_posture * 0.45
+					conc = conc_max * RISE_CONC
+					_set_state("rise")
+		"getup":
+			_damp(delta)
+			if _anim != null:
+				_anim.speed_scale = 1.4
+			if _state_t >= _clip_len("GetUp") / 1.4 * 0.95 or (_anim != null and not _anim.is_playing()):
+				_set_state("circle")
+				_wait = randf_range(0.4, 0.9)
+		"rise":
+			_damp(delta)
+			_face(dir, delta * 0.4)
+			if _state_t >= _clip_len("Stagger") * (1.0 - KNEEL_AT) / 1.7 * 0.85:
+				if _roar_phase:
+					_roar_phase = false
+					_roar_taunt = true
+					_set_state("taunt")                  # новая фаза — рёв
+				else:
 					_set_state("circle")
+					_wait = randf_range(0.4, 0.9)
 		"dead":
 			velocity.x = 0.0
 			velocity.z = 0.0
@@ -463,11 +546,19 @@ func _phys(delta: float) -> void:
 	move_and_slide()
 
 
-## Что делать: вблизи — удары и пинок, на средней — прыжок или вихрь, издалека — таран.
+## Что делать: вблизи — удары и пинок, на средней — прыжок или вихрь, издалека — таран. С каждой фазой (сломом
+## с Кровожадной атакой) особые приёмы чаще, паузы короче.
 func _choose(dist: float) -> void:
-	var low_hp := hp < max_hp * 0.5                       # вторая фаза: чаще особые приёмы
-	if _since_special > (7.0 if low_hp else 10.0) and randf() < 0.6:
+	var ph := clampi(phase, 0, 2)
+	if hero_broken and dist <= 4.5:                       # герой сломлен — сразу тяжёлый удар
+		_start_attack("Backhand")
+		_wait = 0.6
+		return
+	if _since_special > [10.0, 7.5, 5.5][ph] and randf() < 0.6:
 		_since_special = 0.0
+		spend(COST_SPECIAL)
+		if _state == "broken":
+			return
 		if dist > 5.0 or randf() < 0.5:
 			_set_state("charge_wind")
 		else:
@@ -477,7 +568,8 @@ func _choose(dist: float) -> void:
 		_start_attack("JumpAttack")
 	else:
 		_start_attack(MOVES_NEAR[randi() % MOVES_NEAR.size()])
-	_wait = randf_range(1.0, 2.2) if not low_hp else randf_range(0.5, 1.4)
+	var w: Array = [[1.0, 2.2], [0.7, 1.6], [0.4, 1.1]][ph]
+	_wait = randf_range(float(w[0]), float(w[1]))
 
 
 ## Удар: темп по TEMPO, замирание HOLD (обманная задержка), удары в доли HITS, прыжок — LEAP м.
@@ -503,7 +595,7 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 	elif _hits_done < hits.size() and frac < float(hits[_hits_done]):
 		_face(dir, delta * 0.8)                            # доворачивает за героем до удара
 	if _anim != null:
-		_anim.speed_scale = sp
+		_anim.speed_scale = sp * (1.0 + 0.08 * clampi(phase, 0, 2)) * (0.85 if low_conc() else 1.0)
 	if a.has("leap") and _hits_done == 0:
 		var t0 := 0.3
 		var t1 := float(hits[0])
@@ -561,21 +653,37 @@ func _hand_fast(delta: float) -> bool:
 	return fast
 
 
-## Добивание босса — как в Sekiro: снимает «жизнь», а не убивает. Пока здоровья больше 30 % —
-## тяжёлая рана (40 % от полного), равновесие сброшено, встаёт и бьётся дальше; меньше — гибель.
-func deathblow() -> void:
+## Кровожадная атака по боссу: треть здоровья (последняя треть — гибель); новая фаза — выдержка полная, встаёт
+## с колена и ревёт.
+var _roar_phase := false
+
+
+func bloodthirsty() -> void:
 	if dead:
 		return
-	if hp > max_hp * 0.3:
-		hp = maxf(1.0, hp - max_hp * 0.4)
-		posture = 0.0
-		_lethal = false
-		_burst(global_position + Vector3(0.0, 1.2, 0.0), Vector3.UP, Color(0.55, 0.02, 0.03), 60, 4.0, 9.0, 0.6, 0.07)
-		_snd(_snd_hurt)
-		_set_state("hurt")
-		mod.log_info("[pax_rpg] orc deathblow: wounded, hp %.0f/%.0f" % [hp, max_hp])
+	cine = false
+	if _anim != null:
+		_anim.active = true
+	var cut := max_hp / 3.0
+	if hp <= cut + 1.0:
+		hp = 0.0
+		_lethal = true
+		_atk = ""
+		_die()
 		return
-	_die()
+	hp = maxf(1.0, hp - cut)
+	phase += 1
+	conc = conc_max
+	_lethal = false
+	_atk = ""
+	_burst(global_position + Vector3(0.0, 1.2, 0.0), Vector3.UP, Color(0.55, 0.02, 0.03), 60, 4.0, 9.0, 0.6, 0.07)
+	_snd(_snd_hurt)
+	_roar_phase = true
+	if _anim != null and _anim.has_animation("Stagger"):   # с колена — вторая половина клипа слома
+		_anim.play("Stagger", 0.15)
+		_anim.seek(_anim.get_animation("Stagger").length * KNEEL_AT, true)
+	_set_state("rise")
+	mod.log_info("[pax_rpg] orc bloodthirsty: phase %d, hp %.0f/%.0f" % [phase, hp, max_hp])
 
 
 ## Достаёт ли удар героя сейчас: кисть (у пинка — стопа) ближе CONTACT к телу героя (отрезок от колен до головы).
@@ -670,4 +778,5 @@ func _face(dir: Vector3, delta: float) -> void:
 func _respawn() -> void:
 	super._respawn()
 	_atk = ""
+	_roar_phase = false
 	_since_special = 4.0

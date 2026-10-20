@@ -47,11 +47,18 @@ const THEMES := {
 		"gold": Color(0.8, 0.58, 0.3), "bronze": Color(0.2, 0.15, 0.11), "gold_hi": Color(1.0, 0.82, 0.52),
 		"gold_lo": Color(0.38, 0.25, 0.12), "lac": Color(0.16, 0.13, 0.11), "embers": true, "emblem": "knight",
 	},
+	"tian_long": {
+		"pink": Color(0.84, 0.14, 0.18), "blue": Color(0.94, 0.8, 0.55), "ink": Color(0.07, 0.025, 0.03, 0.86),
+		"ink2": Color(0.17, 0.05, 0.06, 0.95), "text": Color(0.98, 0.93, 0.86), "muted": Color(0.82, 0.73, 0.64),
+		"dim": Color(0.56, 0.45, 0.4), "amber": Color(1.0, 0.8, 0.3), "red": Color(0.92, 0.12, 0.14),
+		"gold": Color(0.84, 0.66, 0.4), "bronze": Color(0.22, 0.13, 0.09), "gold_hi": Color(1.0, 0.89, 0.64),
+		"gold_lo": Color(0.42, 0.27, 0.14), "lac": Color(0.24, 0.05, 0.07), "embers": false, "emblem": "",
+	},
 }
 
 
 func apply_theme(id: String) -> void:
-	var t: Dictionary = THEMES.get(id, {})
+	var t: Dictionary = THEMES.get(id, THEMES["tian_long"])     # своей палитры нет — багрянец и старое золото
 	if t.is_empty():
 		return
 	c_pink = t.pink
@@ -138,6 +145,7 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	_coin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_coin.draw.connect(_draw_coin)
 	add_child(_coin)
+	_live_setup()                                         # полосы концентрации, панель врага, босс — каждый кадр
 
 
 static func _sys(names: Array, weight: int) -> Font:
@@ -163,6 +171,7 @@ func refresh() -> void:
 		queue_redraw()
 	if is_instance_valid(_coin):
 		_coin.queue_redraw()
+	_live_tick()
 	if _embers != null:
 		var cc := _core_c()
 		var anchor := Vector2(_w * 0.5, 1080.0)
@@ -507,8 +516,8 @@ func _text(pos: Vector2, s: String, font: Font, fs: int, color: Color, align := 
 		if tw > width:
 			fs = maxi(8, int(fs * width / tw))
 	if outline > 0:
-		draw_string_outline(font, pos, s, align, width, fs, outline, Color(SHADOW, SHADOW.a * color.a))
-	draw_string(font, pos, s, align, width, fs, color)
+		_ci.draw_string_outline(font, pos, s, align, width, fs, outline, Color(SHADOW, SHADOW.a * color.a))
+	_ci.draw_string(font, pos, s, align, width, fs, color)
 
 
 ## Текст по центру точки (по ширине и примерно по высоте).
@@ -551,10 +560,7 @@ func _core_c() -> Vector2:
 func _draw_core() -> void:
 	var c := _core_c()
 	# концентрация: внешнее тонкое кольцо
-	var p := clampf(float(_g("posture", 0.0)), 0.0, 1.0)
-	draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN, 96, Color(c_text, 0.14), 6.0, true)
-	if p > 0.005:
-		draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN * p, 96, c_amber.lerp(c_red, p * p), 6.0, true)
+	draw_arc(c, 119.0, ARC0, ARC0 + ARC_LEN, 96, Color(c_gold, 0.35), 2.0, true)   # концентрация — полосой над кольцом
 	# здоровье: толстое кольцо; светлый «след» недавней потери, поверх — текущее
 	draw_arc(c, 98.0, ARC0, ARC0 + ARC_LEN, 96, c_ink2, 17.0, true)
 	var ghost := clampf(float(_g("hp_ghost", 1.0)), 0.0, 1.0)
@@ -647,11 +653,11 @@ func _draw_player() -> void:
 	_text(Vector2(178, 122), "%s  %d / %d" % [_tr("pax_rpg_hero_hp"), int(_g("hp_abs", 100)),
 		int(_g("hp_max", 100))], sans, 13, c_text)
 	# концентрация — от середины к краям, как в Sekiro; ближе к пределу — краснее
-	var p := float(_g("posture", 0.0))
+	var p := float(_g("conc", 1.0))
 	draw_rect(Rect2(178, 132, 440, 8), c_ink)
 	draw_rect(Rect2(178, 132, 440, 8), Color(c_text, 0.25), false, 1.0)
 	if p > 0.005:
-		draw_rect(Rect2(398 - 220 * p, 132, 440 * p, 8), c_amber.lerp(c_red, p))
+		draw_rect(Rect2(398 - 220 * p, 132, 440 * p, 8), c_amber)
 	draw_rect(Rect2(397, 128, 2, 16), c_text)
 	# опыт: сюда перетекает мана повергнутых врагов
 	var xp := float(_g("xp", 0.0))
@@ -811,7 +817,7 @@ func _draw_quest() -> void:
 
 func _draw_enemy() -> void:
 	var e: Dictionary = _g("enemy", {})
-	if e.is_empty():
+	if e.is_empty() or _live != null:                    # враг и босс — в живом слое (_draw_live)
 		_boss_ghost = 1.0
 		return
 	if bool(e.get("boss", false)):
@@ -1066,18 +1072,24 @@ func _draw_style() -> void:
 		return
 	var rk := int(sd.get("rank", 0))
 	var fl := float(sd.get("flash", 0.0))
-	var x := _w - 60.0
-	var y := 560.0
-	var hot := Color(1.0, 0.55, 0.2).lerp(Color(1.0, 0.25, 0.3), clampf(rk / 6.0, 0.0, 1.0))
-	var fs := 92 + rk * 6 + int(fl * 24.0)
-	for k: int in 3:                                         # огненный ореол
-		draw_circle(Vector2(x - 70, y - 30), 60.0 + k * 14.0 + fl * 20.0, Color(hot, 0.06 + 0.04 * float(rk) / 6.0))
-	_text(Vector2(x - 260, y), l, serif, fs, c_gold_hi.lerp(hot, 0.45), HORIZONTAL_ALIGNMENT_RIGHT, 260, 8)
-	_text(Vector2(x - 320, y + 30), str(sd.get("title", "")).to_upper(), sans, 15, Color(hot, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 320, 3)
-	var bw := 200.0
-	draw_rect(Rect2(x - bw, y + 42, bw, 5), Color(c_ink, 0.9))
-	draw_rect(Rect2(x - bw, y + 42, bw * clampf(float(sd.get("frac", 0.0)), 0.0, 1.0), 5), hot)
-	draw_rect(Rect2(x - bw, y + 42, bw, 5), Color(c_gold, 0.6), false, 1.0)
+	# плашка: красный лак в золоте с конём и фениксом (textures/hud/style_frame.png) — слева, под уведомлениями
+	var tex := _ht("style_frame")
+	var pw := 290.0 + fl * 16.0
+	var ph := pw * (tex.get_height() / float(tex.get_width())) if tex != null else 150.0
+	var pc := Vector2(40.0 + 145.0, 590.0)
+	var pr := Rect2(pc - Vector2(pw, ph) * 0.5, Vector2(pw, ph))
+	var hot := Color(1.0, 0.75, 0.3).lerp(Color(1.0, 0.92, 0.6), clampf(rk / 6.0, 0.0, 1.0))
+	if fl > 0.0:
+		draw_circle(pc, pw * 0.42, Color(1.0, 0.4, 0.2, 0.12 * fl))
+	if tex != null:
+		draw_texture_rect(tex, pr, false)
+	var lc := pr.position + pr.size * Vector2(0.5, 0.56)          # середина красного лака
+	_center(lc + Vector2(0, -8), l, serif, 58 + rk * 4 + int(fl * 14.0), c_gold_hi.lerp(hot, 0.3), 6, 160.0)
+	_center(lc + Vector2(0, 30), str(sd.get("title", "")).to_upper(), sans, 13, Color(1.0, 0.9, 0.75), 3, 150.0)
+	var bw := pr.size.x * 0.36
+	var by := pr.position.y + pr.size.y * 0.8
+	draw_rect(Rect2(lc.x - bw * 0.5, by, bw, 4), Color(0.2, 0.0, 0.02, 0.9))
+	draw_rect(Rect2(lc.x - bw * 0.5, by, bw * clampf(float(sd.get("frac", 0.0)), 0.0, 1.0), 4), hot)
 
 
 ## Золото слева вверху: монета (золото, шлем самурая, розовое переливающееся свечение) и число монет.
@@ -1143,3 +1155,297 @@ func _draw_hint() -> void:
 	var g := str(_g("gate_hint", ""))
 	if g != "":
 		_center(Vector2(_w * 0.5, 1080 - CORE_UP - 175), g, sans, 18, c_pink, 5)   # над кольцом героя
+
+
+# ---------- живой слой (каждый кадр): концентрация героя, панель врага справа, босс по центру ----------
+# Порядок: полосы (shaders/hud_bar.gdshader — глянец, текущая энергия, свечение края) → поверх кованые рамки
+# (textures/hud/*.png, канал рамки прозрачный — полоса под рамкой, края её накрывают) → сверху тумблеры, шевроны,
+# аватар, имена. Полосы без цифр: концентрация делится по центру — на 100 заполнена в обе стороны, к нулю края
+# сходятся к центру; ползунок движется плавно, при резком падении — светлый след и вздрог; тумблеры на краях с
+# шевронами: наружу и золотом — растёт, внутрь и красным — убывает (ДИЗДОК — бой).
+const CONC_SLOT := [0.0711, 0.3247, 0.8567, 0.3395]       # прозрачный канал conc_frame.png (доли)
+const BOSS_SLOT := [0.1118, 0.4599, 0.7736, 0.3029]       # канал boss_frame.png
+const FOE_HP := [0.2545, 0.2490, 0.1500, 0.5750]          # каналы enemy_frame.png: здоровье и концентрация
+const FOE_CONC := [0.5870, 0.2505, 0.1530, 0.5735]
+const FOE_MEDAL := [0.4958, 0.1354, 0.3]                  # центр медальона (доли) и радиус аватара (доля ширины)
+const HP_COLS := [Color(1.0, 0.45, 0.45), Color(0.86, 0.07, 0.12), Color(0.32, 0.0, 0.03), Color(1.0, 0.78, 0.72),
+	Color(1.0, 0.62, 0.58)]                                 # здоровье: верх, середина, низ, свечение, след
+const CONC_COLS := [Color(1.0, 0.95, 0.6), Color(1.0, 0.72, 0.17), Color(0.56, 0.25, 0.02), Color(1.0, 0.98, 0.82),
+	Color(1.0, 0.86, 0.55)]
+var _live: Control                     # контейнер: полосы, рамки, верхний слой
+var _over: Control                     # верхний слой (рисование): тумблеры, аватар, имена
+var _tex := {}
+var _live_ms := 0
+var _bars := {}                        # ключ → {v, ghost, a, shake, trend, last, hold}
+var _bar_nodes := {}                   # ключ → ColorRect с шейдером полосы
+var _frame_nodes := {}                 # ключ → TextureRect рамки
+var _lay := {}                         # ключ → что рисовать сверху: {rect (макет), vertical, centered, low, broken}
+var _bar_sh: Shader
+var _foe_id := -1
+var _foe_e: Dictionary = {}
+
+
+func _ht(name_: String) -> Texture2D:
+	if not _tex.has(name_):
+		_tex[name_] = mod.texture("textures/hud/%s.png" % name_) if mod != null else null
+	return _tex[name_]
+
+
+func _live_setup() -> void:
+	_live = Control.new()
+	_live.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_live.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_live)
+	_over = Control.new()
+	_over.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_over.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_over.draw.connect(_draw_over)
+	_live.add_child(_over)
+	_bar_sh = mod.shader("shaders/hud_bar.gdshader") if mod != null else null
+
+
+## Полоса-узел с шейдером (ниже всех детей слоя) и рамка-узел (над полосами, под верхним слоем).
+func _bar_node(key: String, cols: Array, centered: bool, vertical: bool) -> ColorRect:
+	if not _bar_nodes.has(key):
+		var n := ColorRect.new()
+		n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		n.color = Color(0.08, 0.01, 0.02)
+		if _bar_sh != null:
+			var m := ShaderMaterial.new()
+			m.shader = _bar_sh
+			m.set_shader_parameter("col_hi", cols[0])
+			m.set_shader_parameter("col_mid", cols[1])
+			m.set_shader_parameter("col_lo", cols[2])
+			m.set_shader_parameter("glow", cols[3])
+			m.set_shader_parameter("ghost_col", cols[4])
+			m.set_shader_parameter("centered", centered)
+			m.set_shader_parameter("vertical", vertical)
+			n.material = m
+		_live.add_child(n)
+		_live.move_child(n, 0)
+		_bar_nodes[key] = n
+	return _bar_nodes[key]
+
+
+func _frame_node(key: String, tex_name: String) -> TextureRect:
+	if not _frame_nodes.has(key):
+		var f := TextureRect.new()
+		f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		f.texture = _ht(tex_name)
+		f.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		f.stretch_mode = TextureRect.STRETCH_SCALE
+		_live.add_child(f)
+		_live.move_child(f, _over.get_index())
+		_frame_nodes[key] = f
+	return _frame_nodes[key]
+
+
+## Плавная полоса: v догоняет цель, след держится миг и догоняет, резкое падение — вздрог, тренд — знак изменения.
+func _bar_step(key: String, target: float, dt: float, show: bool) -> Dictionary:
+	if not _bars.has(key):
+		_bars[key] = {"v": target, "ghost": target, "a": 0.0, "shake": 0.0, "trend": 0.0, "last": target, "hold": 0.0}
+	var b: Dictionary = _bars[key]
+	var last := float(b.last)
+	if target < last - 0.06:
+		b.shake = 0.35
+		b.hold = 0.45
+	if absf(target - last) > 0.0005:
+		b.trend = clampf(float(b.trend) + signf(target - last) * 0.6, -1.0, 1.0)
+	b.trend = move_toward(float(b.trend), 0.0, dt * 1.2)
+	b.last = target
+	b.v = move_toward(float(b.v), target, dt * (2.4 if target < float(b.v) else 1.4))
+	if target >= float(b.ghost):
+		b.ghost = maxf(target, float(b.v))
+	else:
+		b.hold = maxf(0.0, float(b.hold) - dt)
+		if float(b.hold) <= 0.0:
+			b.ghost = move_toward(float(b.ghost), float(b.v), dt * 0.7)
+	b.shake = maxf(0.0, float(b.shake) - dt)
+	b.a = move_toward(float(b.a), 1.0 if show else 0.0, dt / 0.45)
+	return b
+
+
+func _shake_off(b: Dictionary) -> Vector2:
+	var k := float(b.get("shake", 0.0)) / 0.35
+	if k <= 0.0:
+		return Vector2.ZERO
+	return Vector2(randf_range(-1.0, 1.0), randf_range(-0.6, 0.6)) * 4.0 * k
+
+
+## Поставить полосу и рамку: r — рамка (макет), slot — канал (доли рамки); полоса чуть шире канала — края под рамкой.
+func _place(key: String, frame_key: String, tex_name: String, r: Rect2, slot: Array, cols: Array, centered: bool,
+		vertical: bool, b: Dictionary, low: bool, broken: bool) -> void:
+	var a := smoothstep(0.0, 1.0, float(b.a))
+	var sr := Rect2(r.position + r.size * Vector2(float(slot[0]), float(slot[1])), r.size * Vector2(float(slot[2]), float(slot[3])))
+	var n := _bar_node(key, cols, centered, vertical)
+	n.position = (sr.position - Vector2(2, 2)) * _s
+	n.size = (sr.size + Vector2(4, 4)) * _s
+	n.visible = a > 0.01
+	var m := n.material as ShaderMaterial
+	if m != null:
+		m.set_shader_parameter("fill", float(b.v))
+		m.set_shader_parameter("ghost", float(b.ghost))
+		m.set_shader_parameter("low", 1.0 if low else 0.0)
+		m.set_shader_parameter("broken", 1.0 if broken else 0.0)
+		m.set_shader_parameter("alpha", a)
+		m.set_shader_parameter("aspect", maxf(sr.size.x, sr.size.y) / maxf(minf(sr.size.x, sr.size.y), 1.0))
+	if frame_key != "":
+		var f := _frame_node(frame_key, tex_name)
+		f.position = r.position * _s
+		f.size = r.size * _s
+		f.visible = a > 0.01
+		f.modulate.a = a
+	_lay[key] = {"rect": sr, "vertical": vertical, "centered": centered, "low": low, "broken": broken, "a": a, "b": b}
+
+
+func _hide(keys: Array) -> void:
+	for k: String in keys:
+		if _bar_nodes.has(k):
+			(_bar_nodes[k] as Control).visible = false
+		if _frame_nodes.has(k):
+			(_frame_nodes[k] as Control).visible = false
+		_lay.erase(k)
+
+
+## Кадр живого слоя (из refresh): шаг полос, раскладка узлов, перерисовка верхнего слоя.
+func _live_tick() -> void:
+	if _live == null or st.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	var dt := clampf((now - _live_ms) / 1000.0, 0.0, 0.1) if _live_ms > 0 else 0.016
+	_live_ms = now
+	# герой — над кольцом внизу по центру
+	var hb := _bar_step("hero", clampf(float(_g("conc", 1.0)), 0.0, 1.0), dt, bool(_g("conc_on", false)))
+	var tex := _ht("conc_frame")
+	var w := 440.0
+	var h := w * (tex.get_height() / float(tex.get_width())) if tex != null else 60.0
+	var c := Vector2(_w * 0.5, 1080.0 - 232.0) + _shake_off(hb)
+	_place("hero", "hero", "conc_frame", Rect2(c - Vector2(w, h) * 0.5, Vector2(w, h)), CONC_SLOT, CONC_COLS, true, false, hb,
+		bool(_g("conc_low", false)), bool(_g("conc_broken", false)))
+	# враг
+	var e: Dictionary = _g("enemy", {})
+	var eid := int(e.get("id", -1))
+	if eid != _foe_id:
+		_foe_id = eid
+		for k: String in ["foe_hp", "foe_conc", "boss_hp", "boss_conc"]:
+			_bars.erase(k)
+	_foe_e = e
+	if e.is_empty():
+		_hide(["foe_hp", "foe_conc", "foe", "boss_hp", "boss_conc", "boss", "boss_cf"])
+	elif bool(e.get("boss", false)):
+		_hide(["foe_hp", "foe_conc", "foe"])
+		var bh := _bar_step("boss_hp", clampf(float(e.get("hp", 1.0)), 0.0, 1.0), dt, true)
+		var bc := _bar_step("boss_conc", clampf(float(e.get("conc", 1.0)), 0.0, 1.0), dt, true)
+		var bt := _ht("boss_frame")
+		var bw := 720.0
+		var bhh := bw * (bt.get_height() / float(bt.get_width())) if bt != null else 60.0
+		var br := Rect2(Vector2((_w - bw) * 0.5, 92.0) + _shake_off(bh), Vector2(bw, bhh))
+		_place("boss_hp", "boss", "boss_frame", br, BOSS_SLOT, HP_COLS, false, false, bh, false, false)
+		var cw := 380.0
+		var chh := cw * (tex.get_height() / float(tex.get_width())) if tex != null else 40.0
+		var crr := Rect2(Vector2((_w - cw) * 0.5, br.end.y + 2.0) + _shake_off(bc), Vector2(cw, chh))
+		_place("boss_conc", "boss_cf", "conc_frame", crr, CONC_SLOT, CONC_COLS, true, false, bc, float(bc.v) < 1.0 / 3.0,
+			bool(e.get("broken", false)))
+	else:
+		_hide(["boss_hp", "boss_conc", "boss", "boss_cf"])
+		var fh := _bar_step("foe_hp", clampf(float(e.get("hp", 1.0)), 0.0, 1.0), dt, true)
+		var fc := _bar_step("foe_conc", clampf(float(e.get("conc", 1.0)), 0.0, 1.0), dt, true)
+		var et := _ht("enemy_frame")
+		var hgt := 420.0
+		var wid := hgt * (et.get_width() / float(et.get_height())) if et != null else 100.0
+		var er := Rect2(Vector2(_w - 46.0 - wid, 500.0) + _shake_off(fc), Vector2(wid, hgt))
+		_place("foe_hp", "foe", "enemy_frame", er, FOE_HP, HP_COLS, false, true, fh, false, false)
+		_place("foe_conc", "", "", er, FOE_CONC, CONC_COLS, true, true, fc, float(fc.v) < 1.0 / 3.0, bool(e.get("broken", false)))
+		_lay["foe_frame"] = {"rect": er}
+	_over.queue_redraw()
+
+
+## Верхний слой: тумблеры и шевроны у краёв концентрации, метка центра, слом; аватар врага в медальоне, имена,
+## фазы босса и его трети здоровья.
+func _draw_over() -> void:
+	if st.is_empty():
+		return
+	_ci = _over
+	_over.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	var t := Time.get_ticks_msec() / 1000.0
+	for key: String in ["hero", "boss_conc", "foe_conc"]:
+		if _lay.has(key):
+			_knobs(_lay[key], t)
+	if _lay.has("boss_hp"):
+		var L: Dictionary = _lay["boss_hp"]
+		var sr: Rect2 = L.rect
+		for k: int in [1, 2]:                                    # трети здоровья — три слома, три фазы
+			var xk := sr.position.x + sr.size.x * k / 3.0
+			_over.draw_line(Vector2(xk, sr.position.y + 2.0), Vector2(xk, sr.end.y - 2.0), Color(0.0, 0.0, 0.0, 0.55), 2.0)
+		var e := _foe_e
+		_center(Vector2(_w * 0.5, sr.position.y - 88.0), str(e.get("name", "")), serif, 26, Color(1.0, 0.9, 0.72), 5)
+		var ph := int(e.get("phase", 0))
+		for k: int in 3:
+			var pc := Vector2(_w * 0.5 + (k - 1) * 22.0, sr.end.y + 26.0)
+			var dm := _diamond(pc, 6.0)
+			_over.draw_colored_polygon(dm, Color(0.85, 0.1, 0.12) if k >= ph else Color(0.25, 0.2, 0.2))
+			_over.draw_polyline(dm + PackedVector2Array([dm[0]]), c_gold_hi, 1.0, true)
+		if bool(e.get("broken", false)) and _lay.has("boss_conc"):
+			var cr: Rect2 = (_lay["boss_conc"] as Dictionary).rect
+			_center(Vector2(_w * 0.5, cr.end.y + 34.0), _tr("pax_rpg_hud_broken"), sans, 15, Color(1.0, 0.45, 0.4), 3)
+	if _lay.has("foe_frame"):
+		var er: Rect2 = (_lay["foe_frame"] as Dictionary).rect
+		var e2 := _foe_e
+		var mc := er.position + er.size * Vector2(FOE_MEDAL[0], FOE_MEDAL[1])
+		var mr := er.size.x * float(FOE_MEDAL[2])
+		if portrait != null:                                   # аватар — поверх бронзового диска медальона
+			var pts := PackedVector2Array()
+			var uvs := PackedVector2Array()
+			for i: int in 40:
+				var an := TAU * i / 40.0
+				var d := Vector2(cos(an), sin(an))
+				pts.append(mc + d * mr)
+				uvs.append(Vector2(0.5, 0.5) + d * 0.5)
+			_over.draw_polygon(pts, PackedColorArray([Color.WHITE]), uvs, portrait)
+			_over.draw_arc(mc, mr, 0.0, TAU, 48, c_gold_hi, 1.5, true)
+		var broken := bool(e2.get("broken", false))
+		if broken:
+			_over.draw_arc(mc, mr + 3.0, 0.0, TAU, 48, Color(1.0, 0.15, 0.1, 0.5 + 0.5 * sin(t * 9.0)), 3.0, true)
+		var tx := er.position.x - 12.0
+		_text(Vector2(tx - 320.0, mc.y - 4.0), str(e2.get("name", "")), serif, 24, c_text, HORIZONTAL_ALIGNMENT_RIGHT, 320, 5)
+		if broken:
+			_text(Vector2(tx - 320.0, mc.y + 20.0), _tr("pax_rpg_hud_broken"), sans, 14, Color(1.0, 0.45, 0.4), HORIZONTAL_ALIGNMENT_RIGHT, 320, 3)
+	_ci = self
+
+
+## Тумблеры концентрации: ромбы на краях заливки, шевроны тренда, метка центра, красный ромб слома.
+func _knobs(L: Dictionary, t: float) -> void:
+	var a := float(L.get("a", 1.0))
+	if a <= 0.01:
+		return
+	var b: Dictionary = L.b
+	var sr: Rect2 = L.rect
+	var vert := bool(L.vertical)
+	var v := float(b.v)
+	var c := sr.get_center()
+	var along := sr.size.y if vert else sr.size.x
+	var thick := sr.size.x if vert else sr.size.y
+	var ax := Vector2(0, -1) if vert else Vector2(1, 0)
+	var cross := Vector2(1, 0) if vert else Vector2(0, 1)
+	var cl := Color(c_gold_hi, 0.65 * a)
+	_over.draw_line(c - cross * (thick * 0.5 + 2.0), c + cross * (thick * 0.5 + 2.0), cl, 1.0)
+	if v > 0.004:
+		for sd: float in [-1.0, 1.0]:
+			var kc := c + ax * sd * along * 0.5 * v
+			var dm := _diamond(kc, thick * 0.42)
+			_over.draw_colored_polygon(dm, Color(c_gold_hi, a))
+			_over.draw_polyline(dm + PackedVector2Array([dm[0]]), Color(0.3, 0.16, 0.06, a), 1.2, true)
+			_over.draw_circle(kc, thick * 0.6, Color(1.0, 0.85, 0.5, 0.12 * a))
+			var tr := float(b.trend)
+			if absf(tr) > 0.05:
+				var outw := tr > 0.0
+				var dir := sd * (1.0 if outw else -1.0)
+				var col := Color(1.0, 0.9, 0.5, absf(tr) * a) if outw else Color(1.0, 0.3, 0.25, absf(tr) * a)
+				for k: int in 2:
+					var p := kc + ax * dir * (thick * 0.62 + k * 7.0)
+					var hh := thick * 0.32
+					_over.draw_polyline(PackedVector2Array([p - ax * dir * 4.0 - cross * hh, p, p - ax * dir * 4.0 + cross * hh]),
+						col, 2.0, true)
+	if bool(L.broken) or v <= 0.004:
+		var bp := 0.6 + 0.4 * sin(t * 9.0)
+		_over.draw_colored_polygon(_diamond(c, thick * 0.55), Color(0.95, 0.1, 0.1, a * bp))

@@ -18,6 +18,7 @@ const NetSync := preload("res://mods/pax_rpg/src/location/net_sync.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const SpearUlt := preload("res://mods/pax_rpg/src/location/spear_ult.gd")
+const Blood := preload("res://mods/pax_rpg/src/location/blood.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
@@ -51,7 +52,10 @@ const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
 const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
 const HERO_HP := 100.0
-const HERO_POSTURE := 100.0
+const HERO_CONC := 100.0
+const BROKEN_TIME := 2.6             # с слома героя (концентрация 0): управление отнято, враг может казнить
+const CONC_REGEN := 16.0             # в секунду, пока герой не бьёт и не блокирует (ДИЗДОК — бой)
+const CONC_IDLE := 0.8               # с без трат — и концентрация пошла вверх
 
 var mod: PaxMod
 var cfg: Dictionary = {}
@@ -87,7 +91,9 @@ var game: PaxGame                  # задаёт travel.gd: пока мы на 
 var test_mode := false             # тестовая арена из главного меню (герой + гоблин), выход — обратно в меню
 var _goblins: Array = []
 var _hp := HERO_HP
-var _posture := 0.0                # концентрация героя (Sekiro): блоки копят, переполнилась — стойка сломана
+var _conc := HERO_CONC             # концентрация героя (выдержка): от 100 к 0 — удар, блок, пропущенный удар; 0 — слом
+var _conc_idle := 0.0              # с без трат концентрации
+var _broken_t := 0.0               # с слома героя (концентрация 0) — осталось
 var _since_hit := 99.0
 var _stagger := 0.0                # с, сломанная стойка — управление на миг отнято
 var _lock: Node3D                  # захваченный враг (Q): камера держит его, герой стоит к нему лицом
@@ -253,8 +259,44 @@ func _hp_max() -> float:
 	return HERO_HP * (_prog.hp_mult() if _prog != null else 1.0)
 
 
-func _pos_max() -> float:
-	return HERO_POSTURE * (_prog.posture_mult() if _prog != null else 1.0)
+func _conc_max() -> float:
+	return HERO_CONC * (_prog.posture_mult() if _prog != null else 1.0)
+
+
+## Герой беспомощен (слом концентрации или миг оглушения): ни ударов, ни приёмов, ни эликсира.
+func _helpless() -> bool:
+	return _stagger > 0.0 or _broken_t > 0.0
+
+
+## Трата концентрации героя; дошла до 0 — слом (by — кто сломал: он и казнит).
+func _spend(a: float, by: Node3D = null) -> void:
+	if a <= 0.0 or _broken_t > 0.0:
+		return
+	_conc = maxf(0.0, _conc - a)
+	_conc_idle = 0.0
+	if _conc <= 0.0:
+		_hero_break(by)
+
+
+## Прибавка концентрации (доля от полной): ульта, попавшая всеми ударами, — +50 %.
+func _conc_gain(frac: float) -> void:
+	if _broken_t > 0.0:
+		return
+	_conc = minf(_conc_max(), _conc + _conc_max() * frac)
+
+
+## Слом героя: шатается и падает на колено (клип Stagger), BROKEN_TIME с без управления — враги спешат казнить
+## (goblin.gd → hero_broken); удар врага в это время — Кровожадная атака по герою: треть здоровья.
+func _hero_break(_by: Node3D) -> void:
+	_conc = 0.0
+	_broken_t = BROKEN_TIME
+	_rmb = false
+	if _hero != null:
+		_hero.set_block(false)
+		_hero.stagger()
+	_toast = {"text": mod.tr_key("pax_rpg_conc_broken"), "t": 0.0}
+	_sfx_once("sounds/body_fall.ogg", -6.0)
+	_flash_t = maxf(_flash_t, _hf("fx_flash_time", 0.22))
 
 
 ## Готова ли локация (экран загрузки не открывает её раньше — travel.gd).
@@ -412,7 +454,8 @@ func build(city: Dictionary) -> void:
 		add_child(_arena)
 		_arena.setup(mod, _view, self, _arena_cfg, _player, _arena_spawn, func() -> void:
 			_hp = _hp_max()
-			_posture = 0.0)
+			_conc = _conc_max()
+			_broken_t = 0.0)
 		_arena.toast.connect(func(t: String) -> void: _toast = {"text": t, "t": 0.0})
 	_cam = Camera3D.new()
 	_cam.fov = 65.0
@@ -445,7 +488,9 @@ func build(city: Dictionary) -> void:
 				_hud.visible = on)
 	_iai.finished.connect(func(interrupted: bool) -> void:
 		if interrupted:
-			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5)
+			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5
+		elif _iai_hits > 0:
+			_conc_gain(0.5))                             # разрезы попали — выдох: концентрация +50 %
 	_inv = Inventory.new()
 	_inv.setup(mod)
 	_inv.weapon_equipped.connect(func(slot: String, _id: String) -> void:
@@ -543,7 +588,9 @@ func build(city: Dictionary) -> void:
 	_lock_mark.visible = false
 	_view.add_child(_lock_mark)
 	_lock = null
-	_posture = 0.0
+	_conc = _conc_max()
+	_broken_t = 0.0
+	Goblin.hero_broken = false
 	_stagger = 0.0
 	_update_hud()
 	visible = true
@@ -604,6 +651,9 @@ func clear() -> void:
 		_net.leave()
 	if _sult != null:
 		_sult.stop()
+	if _blood != null:
+		_blood.stop()
+	Goblin.hero_broken = false
 	building = false
 	_build_finished = false
 	_grass = null
@@ -1307,7 +1357,7 @@ func _set_inventory(on: bool) -> void:
 		return
 	mod.log_info("Pax RPG: inventory %s" % ("open" if on else "closed"))
 	if on:
-		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(), "level": _prog.level,
+		var st := {"hp_abs": _hp, "hp_max": _hp_max(), "conc": _conc / _conc_max(), "level": _prog.level,
 			"xp_abs": _prog.xp, "xp_need": _prog.need(), "attributes": _attributes()}
 		st["main_stat"] = str(_character().get("main_stat", ""))
 		st["passive"] = str(_character().get("passive", ""))
@@ -1386,8 +1436,9 @@ func _physics_process(delta: float) -> void:
 ## «Земной разлом» (T): тратит концентрацию героя (риск — переполнится, стойка сломана), перезарядка quake_cooldown;
 ## пока герой на колене, раз в секунду волна: всё ближе радиуса волны получает урон, теряет равновесие, отлетает.
 func _iai_try() -> void:
-	if _hero == null or not is_instance_valid(_iai) or _iai_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+	if _hero == null or not is_instance_valid(_iai) or _iai_cd > 0.0 or _helpless() or not _player.is_on_floor():
 		return
+	_iai_hits = 0
 	if _iai.start():
 		_iai_cd = _hf("iai_cooldown", 90.0)
 
@@ -1440,9 +1491,11 @@ func _iai_cut(v: Node) -> void:
 		var line := cb.x.rotated(-cb.z, randf_range(-1.0, 1.0))
 		g.mark_slice((-cb.z).cross(line))
 	g.take_damage(dmg if g.boss else maxf(dmg, g.hp + 1.0), _player.global_position, not g.boss)
-	g.posture = minf(g.max_posture, g.posture + (g.max_posture * 0.4 if g.boss else g.max_posture))
-	if not g.boss:
+	if g.boss:
+		g.spend(g.conc_max * 0.4)                        # босс: выдержка сбита сильно
+	elif g.is_alive():
 		g.deathblow()                                    # щелчок цубы — падает сразу, без «на коленях»
+	_iai_hits += 1
 	_numbers.append({"pos": g.global_position + Vector3(0, 1.4, 0), "v": int(dmg), "crit": true, "t": 0.0})
 
 
@@ -1468,7 +1521,7 @@ var _ult_done := 0
 
 
 func _ult_try() -> void:
-	if _hero == null or _ult_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+	if _hero == null or _ult_cd > 0.0 or _helpless() or not _player.is_on_floor():
 		return
 	var ms := _weapon_skill("main")                    # ульта — приём оружия в основном слоте
 	var spear := ms == "spear_ult"
@@ -1484,7 +1537,6 @@ func _ult_try() -> void:
 	if not _hero.ult_begin(true):
 		return
 	_ult_cd = _hf("ult_cooldown", 45.0)
-	_posture = minf(_pos_max(), _posture + _hf("ult_posture", 25.0))
 	_since_hit = 0.0
 
 
@@ -1535,17 +1587,14 @@ func _ult_wave(i: int) -> void:
 
 
 func _quake_try() -> void:
-	if _hero == null or _quake_cd > 0.0 or _stagger > 0.0 or not _player.is_on_floor():
+	if _hero == null or _quake_cd > 0.0 or _helpless() or not _player.is_on_floor():
 		return
 	if not _hero.quake(true):
 		return
-	_quake_cd = _hf("quake_cooldown", 30.0)
+	_quake_cd = _hf("quake_cooldown", 30.0)          # мини-ульта второго слота — свой таймер, концентрацию не тратит
 	_quake_waves_done = 0
-	_posture = minf(_pos_max(), _posture + _hf("quake_posture", 35.0))
+	_quake_hit_waves = 0
 	_since_hit = 0.0
-	if _posture >= _pos_max():                     # перебрал — стойка сломана прямо в приёме
-		_posture = _pos_max() * 0.35
-		_stagger = _hf("guard_break_time", 1.2)
 
 
 func _quake_step() -> void:
@@ -1558,8 +1607,13 @@ func _quake_step() -> void:
 		_quake_waves_done += 1
 
 
+var _quake_hit_waves := 0
+var _iai_hits := 0
+
+
 func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 	var c := (_player.global_position if at == Vector3.INF else at) - Vector3(0, 0.9, 0)
+	var hit_any := false
 	for g: Variant in _goblins:
 		if not is_instance_valid(g) or not (g as Goblin).is_alive():
 			continue
@@ -1568,11 +1622,17 @@ func _quake_wave(radius: float, dmg: float, i: int, at := Vector3.INF) -> void:
 		if d <= radius:
 			gob.take_damage(dmg * _dmg_mult(), c, i == 2)          # последняя волна — отбрасывает
 			_style.hit("Ultimate" if _hero != null and _hero.action == "Ultimate" else "Quake")
-			gob.posture = minf(gob.max_posture, gob.posture + dmg * 0.8)
+			gob.spend(dmg * 0.8)
+			hit_any = true
 			if d >= maxf(0.0, radius - 3.0):                               # шипы на кольце волны — подбрасывают
 				var away := Vector3(gob.global_position.x - c.x, 0.0, gob.global_position.z - c.z).normalized()
 				gob.launch(away * 2.5 + Vector3(0.0, 7.5 if not gob.boss else 3.5, 0.0))
 			_numbers.append({"pos": gob.global_position + Vector3(0, 1.3, 0), "v": int(dmg), "crit": i == 2, "t": 0.0})
+	if hit_any and _hero != null and _hero.action == "Quake":
+		_quake_hit_waves += 1
+		var nw: Array = hero_cfg.get("quake_waves", [[3.0, 22.0], [5.5, 18.0], [8.0, 15.0]])
+		if _quake_hit_waves == nw.size():
+			_conc_gain(0.5)                              # разлом задел врагов всеми волнами — +50 % концентрации
 	if _sfx != null:
 		_sfx.impact()
 	# «Разлом» Разрубателя: земля раскалывается (декаль трещин с глубиной), по кольцу волны — земляные шипы
@@ -1828,15 +1888,22 @@ func _physics_body(delta: float) -> void:
 	_f_down = f
 	_stagger = maxf(0.0, _stagger - delta)
 	_since_hit += delta
-	_regen_posture(delta)
+	if _broken_t > 0.0:
+		_broken_t = maxf(0.0, _broken_t - delta)
+		if _broken_t <= 0.0:
+			_conc = _conc_max() * _hf("conc_rise", 0.4)     # слом прошёл без казни — выдержка частично вернулась
+	Goblin.hero_broken = _broken_t > 0.0
+	_regen_conc(delta)
+	if _hero != null:
+		_hero.tired = _conc < _conc_max() / 3.0
 	if _hero != null:
 		_hero.combat = _hud_enemy() != null
 		_hero.lock_on = _lock != null
 	if _lock != null and (not is_instance_valid(_lock) or not (_lock as Goblin).is_alive()
 			or _lock.global_position.distance_to(_player.global_position) > 22.0):
 		_set_lock(null)
-	if _lmb_queued and _hero != null and _stagger <= 0.0:
-		if not _try_deathblow():
+	if _lmb_queued and _hero != null and not _helpless():
+		if not _try_bloodthirsty():
 			var cy := _combo_yaw()
 			_hero.swing_side = 0                     # враг сбоку: слева — взмах справа налево, справа — зеркально
 			if cy != INF:
@@ -1858,8 +1925,8 @@ func _physics_body(delta: float) -> void:
 				_hero.attack(on_floor)
 	_lmb_queued = false
 	if _hero != null:
-		_hero.set_block(_rmb and _stagger <= 0.0)
-	var locked := _hero != null and (_hero.locks_move() or _stagger > 0.0)
+		_hero.set_block(_rmb and not _helpless())
+	var locked := _hero != null and (_hero.locks_move() or _helpless())
 	var input := Vector2.ZERO
 	if not _typing() and not locked:
 		input = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
@@ -2002,18 +2069,12 @@ func _physics_body(delta: float) -> void:
 			# наклон взмаха: иногда слева, иногда справа (по стороне врага или наугад); финальный сверху — ровно
 			var ts := float(_hero.swing_side) if _hero.swing_side != 0 else (1.0 if randf() < 0.5 else -1.0)
 			_tilt_want = 0.0 if _hero.action in ["Attack3", "Launcher", "PauseFinisher"] else ts * deg_to_rad(_hf("swing_tilt", 20.0)) * randf_range(0.75, 1.0)
-			# концентрация: каждый удар её копит — бить без конца нельзя (отдохнуть или парировать)
-			_posture = minf(_pos_max(), _posture + _hf("attack_posture", 9.0) * (1.4 if _hero.action == "Attack3" else 1.0))
-			_since_hit = 0.0
-			if _posture >= _pos_max():
-				_posture = _pos_max() * 0.35
-				_stagger = _hf("guard_break_time", 1.2)      # выдохся: открылся, как при пробитом блоке
-				_hero.hurt()
-				_toast = {"text": mod.tr_key("pax_rpg_out_of_breath"), "t": 0.0}
+			# концентрация: каждый удар её тратит (усталость) — бить без конца нельзя, на нуле — слом
+			_spend(_hf("conc_attack", 6.0) * (1.35 if _hero.action in ["Attack3", "PauseFinisher", "Launcher"] else 1.0))
 		if _prev_action.begins_with("Dodge") and _hero.action == "" and _lock != null:
 			_reface = _hf("reface_time", 0.35)
 		_reface = maxf(0.0, _reface - delta)
-		if _prev_action in Hero.ATTACKS and _hero.action == "" and int(_hero.get("_last_i")) == 1 and _stagger <= 0.0 \
+		if _prev_action in Hero.ATTACKS and _hero.action == "" and int(_hero.get("_last_i")) == 1 and not _helpless() \
 				and _chain < int(_hf("chain_finisher", 5.0)) and not _foe_near(_hf("trick_clear", 4.0)):
 			_hero.flourish()                                 # после второго удара, если враг не рядом — трюк с мечом
 		if _hero.action != _prev_action and (_hero.action.begins_with("Dodge") or _hero.action == "SwordTrick"):
@@ -2027,10 +2088,10 @@ func _physics_body(delta: float) -> void:
 			_chain_t += delta                            # серия рвётся, только если герой не бьёт дольше chain_window
 		if _hero.action not in Hero.ATTACKS and _hero.action not in Hero.SPECIALS:
 			_tilt_want = 0.0
-		if _chain >= int(_hf("chain_finisher", 5.0)) and _hero.action == "" and _stagger <= 0.0:
+		if _chain >= int(_hf("chain_finisher", 5.0)) and _hero.action == "" and not _helpless():
 			_chain = 0                                   # пять ударов подряд — отскок и разрез с волной
 			if _hero.combo_finisher(on_floor):
-				_posture = minf(_pos_max(), _posture + _hf("finisher_posture", 14.0))
+				_spend(_hf("conc_finisher", 8.0))
 				_style.hit("Finisher")
 		if _hero.slash_wave:
 			_hero.slash_wave = false
@@ -2041,6 +2102,8 @@ func _physics_body(delta: float) -> void:
 		_quake_step()
 		if _sult != null and _sult.active():
 			_sult.tick(delta)
+		if _blood != null and _blood.active():
+			_blood.tick(delta)
 		if _hero.action == "Ultimate" and _hero.ult_hit > _ult_done:   # ультимейт: удар о землю — волна (раз на удар)
 			_ult_done = _hero.ult_hit
 			_ult_wave(_ult_done)
@@ -2185,6 +2248,12 @@ func probe() -> String:
 func _arena_spawn(kind: String, pos: Vector3) -> Node:
 	var g: Goblin = Orc.new() if kind == "orc" else Goblin.new()
 	g.setup(mod, _player, _on_hero_hit, pos, _hero_attacking, _hero_blocking)
+	if kind == "veteran":                                # ветеран: крепче, блок чаще, парирует удары героя
+		g.veteran = true
+		g.max_hp = 95.0
+		g.hp = g.max_hp
+		g.display_key = "pax_rpg_goblin_veteran"
+		g.set("_guard_chance", 0.45)
 	if g.has_signal("slammed"):
 		g.connect("slammed", _orc_slam)
 	_view.add_child(g)
@@ -2288,6 +2357,10 @@ func _follow_camera(delta := 0.0) -> void:
 		var cc: Array = _sult.camera()
 		pos = cc[0]
 		look = cc[1]
+	elif _blood != null and _blood.active():         # Кровожадная атака — своя камера
+		var cb: Array = _blood.camera()
+		pos = cb[0]
+		look = cb[1]
 	else:
 		pos = _cam_collide(pos, delta)
 	_cam.position = pos
@@ -2476,8 +2549,9 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
-		gob.posture_scale = 1.0 / maxf(_dmg_mult(), 0.01)
-		gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
+		var res := gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
+		if _strike_result(gob, res, float(hit.damage)):
+			continue
 		if _hero != null and _hero.action == "Launcher":
 			_sfx_once("sounds/kick_hit.wav", 0.0)          # пинок попал
 		if _hero != null and _hero.action == "Launcher" and gob.is_alive():   # подброс: пинок по площади — враг взлетает
@@ -2582,8 +2656,9 @@ func _blade_strike(b: Dictionary) -> void:
 			continue
 		done[g] = true
 		var dmg := float(b.damage) * _dmg_mult()
-		gob.posture_scale = 1.0 / maxf(_dmg_mult(), 0.01)
-		gob.take_damage(dmg, _player.global_position, false)
+		var res := gob.take_damage(dmg, _player.global_position, false)
+		if _strike_result(gob, res, float(b.damage)):
+			continue
 		var mv := str(b.get("move", "Attack1"))
 		_style.hit(mv)
 
@@ -2591,6 +2666,29 @@ func _blade_strike(b: Dictionary) -> void:
 		_impact_feel(gob, false, _mass_hit(gob, tip, false))
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
+
+
+## Ответ врага на удар героя: «guard» — принял на клинок (атакующему дороже: герой тратит больше, ДИЗДОК — бой),
+## «parry» — враг отбил: концентрация героя — 0 (слом). true — удар не прошёл (без цифр и крови).
+func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
+	match res:
+		"guard":
+			_spend(base_dmg * _hf("conc_hit_blocked", 0.5) * (1.5 if _conc < _conc_max() / 3.0 else 1.0), gob)
+			_sfx_once("sounds/katana_hit_%d.ogg" % randi_range(0, 3), -5.0)
+			_sparks(gob.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.65, 0.3), 16, 3.5)
+			if _hero != null:
+				_hero.hitstop(0.05)
+			return true
+		"parry":
+			_parry_sound()
+			_sparks(gob.global_position + Vector3(0.0, 1.1, 0.0), Color(1.0, 0.85, 0.4), 44, 5.5)
+			_shake = 0.25
+			_shake_amp = 0.06
+			_hero_break(gob)
+			return true
+		"broken":
+			_toast = {"text": mod.tr_key("pax_rpg_conc_enemy_broken"), "t": 0.0}
+	return false
 
 
 # ---------- бой как в Sekiro ----------
@@ -2721,16 +2819,64 @@ func _toggle_lock() -> void:
 	_set_lock(best)
 
 
+## В захвате мышь не крутит камеру — рывок мыши в сторону переводит захват на врага, что на экране в той стороне
+## (ближайший по горизонтали к прицелу). Жест — сумма движения за короткое время (пауза — заново).
+var _flick := Vector2.ZERO
+var _flick_ms := 0
+var _flick_cd_ms := 0
+
+
+func _lock_flick(rel: Vector2) -> void:
+	var now := Time.get_ticks_msec()
+	if now - _flick_ms > 220:
+		_flick = Vector2.ZERO
+	_flick_ms = now
+	_flick += rel * _sens
+	if now < _flick_cd_ms or absf(_flick.x) < _hf("lock_flick_px", 90.0) or not is_instance_valid(_cam) \
+			or not is_instance_valid(_lock):
+		return
+	var cur := _cam.unproject_position(_lock.global_position + Vector3(0.0, 0.9, 0.0))
+	var sgn := signf(_flick.x)
+	var best: Goblin = null
+	var best_s := INF
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or g == _lock or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var p := gob.global_position + Vector3(0.0, 0.9, 0.0)
+		if gob.global_position.distance_to(_player.global_position) > 22.0 or _cam.is_position_behind(p):
+			continue
+		var sp := _cam.unproject_position(p)
+		var dx := (sp.x - cur.x) * sgn
+		if dx < 24.0:
+			continue
+		var score := dx + absf(sp.y - cur.y) * 1.5
+		if score < best_s:
+			best_s = score
+			best = gob
+	_flick = Vector2.ZERO
+	if best != null:
+		_set_lock(best)
+		_flick_cd_ms = now + 350
+		_sfx_once("sounds/air_whoosh.wav", -16.0)
+
+
 func _set_lock(t: Node3D) -> void:
 	_lock = t
 	if is_instance_valid(_lock_mark):
 		_lock_mark.visible = false
 
 
-## ЛКМ рядом с врагом без равновесия (красная метка) — добивание вместо удара.
-func _try_deathblow() -> bool:
-	if _hero == null:
+## ЛКМ рядом со сломленным врагом (концентрация 0, на коленях) — Кровожадная атака вместо удара: кат-сцена blood.gd.
+## Захваченный — первым, иначе ближайший в blood_range м.
+var _blood: Blood
+
+
+func _try_bloodthirsty() -> bool:
+	if _hero == null or (_blood != null and _blood.active()):
 		return false
+	var best: Goblin = null
+	var bd := _hf("blood_range", 3.2)
 	for g: Variant in _goblins:
 		if not is_instance_valid(g):
 			continue
@@ -2739,37 +2885,64 @@ func _try_deathblow() -> bool:
 			continue
 		var to := gob.global_position - _player.global_position
 		to.y = 0.0
-		if to.length() > _hf("deathblow_range", 2.8):
-			continue
-		_face_now(atan2(-to.x, -to.z))
-		if _hero.deathblow():
-			get_tree().create_timer(_hf("deathblow_hit", 1.1)).timeout.connect(gob.deathblow)
-			get_tree().create_timer(maxf(0.0, _hf("deathblow_hit", 1.1) - 0.03)).timeout.connect(_deathblow_sound)
-			return true
-	return false
+		var d := to.length()
+		if gob == _lock and d < _hf("blood_range", 3.2):
+			best = gob
+			break
+		if d < bd:
+			bd = d
+			best = gob
+	if best == null:
+		return false
+	var dir := best.global_position - _player.global_position
+	_face_now(atan2(-dir.x, -dir.z))
+	var hit_at := _hero.bloodthirsty()
+	if hit_at < 0.0:
+		return false
+	if _blood == null:
+		_blood = Blood.new()
+		add_child(_blood)
+	_blood.start(self, _hero, best, hit_at)
+	return true
 
 
-## Удар гоблина по герою: кувырок — мимо; парирование в первые доли секунды блока — отбит, у врага сбита
-## концентрация; блок — урона нет, но копится своя концентрация (переполнилась — стойка сломана); иначе — урон.
-## kind: "heavy" — блок копит вдвое больше; "perilous" — не блокируется и не парируется (только уйти);
-## "charge" — таран: блок не держит, сбивает с ног; "parried" — враг отбил удар героя, стойка героя проседает.
+## Удар врага по герою: кувырок — мимо; парирование в первые доли секунды блока — отбит, концентрация врага — 0
+## (в сериях босса — часть); блок — урона нет, концентрация тратится у обоих (у атакующего больше); иначе — урон
+## и трата концентрации. Герой сломлен (концентрация 0) — удар врага становится Кровожадной атакой: треть здоровья.
+## kind: "heavy" — блок тратит больше; "perilous" — не блокируется и не парируется (только уйти);
+## "charge" — таран: блок не держит, сбивает с ног; "parried" — враг отбил удар героя: слом.
 func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and _hero.invulnerable():
+		return
+	if _blood != null and _blood.active():
 		return
 	if damage > 0.0 and attacker is Goblin and (attacker as Goblin).boss:
 		_foe_line(attacker as Goblin, "hit_hero")
 	if is_instance_valid(_iai) and _iai.active and not _iai.interrupt():
 		return                                       # время стоит — по герою не попасть
 	if kind == "parried":
-		_posture = minf(_pos_max(), _posture + 18.0)
-		_since_hit = 0.0
-		_stagger = maxf(_stagger, 0.5)
-		if _hero != null:
-			_hero.hurt()
-		if _posture >= _pos_max():
-			_posture = _pos_max() * 0.35
-			_stagger = _hf("guard_break_time", 1.2)
+		_hero_break(attacker)
 		_update_hud()
+		return
+	if _broken_t > 0.0 and damage > 0.0:            # сломлен: Кровожадная атака врага — треть здоровья, сбит с ног
+		_hp = maxf(0.0, _hp - maxf(damage, _hp_max() / 3.0))
+		_broken_t = 0.0
+		_conc = _conc_max() * _hf("conc_after_execute", 0.5)
+		_style.hurt()
+		_armor_hit_sound(40.0)
+		_sfx_once("sounds/deathblow.wav", -2.0)
+		_shake = 0.45
+		_shake_amp = 0.11
+		_flash_t = _hf("fx_flash_time", 0.22) * 2.0
+		_sparks(_player.global_position + Vector3(0.0, 1.1, 0.0), Color(0.6, 0.02, 0.05), 50, 5.0)
+		_toast = {"text": mod.tr_key("pax_rpg_hero_executed"), "t": 0.0}
+		if _hp > 0.0 and _hero != null:
+			_hero.knock_down()
+			if attacker != null:
+				var push0 := _player.global_position - attacker.global_position
+				push0.y = 0.0
+				_shove = push0.normalized() * _hf("execute_shove", 5.0)
+		_hero_down_check(attacker)
 		return
 	var unblockable := kind == "perilous" or kind == "charge"
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
@@ -2779,32 +2952,28 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		to.y = 0.0
 		facing = to.length() < 0.01 or fwd.dot(to.normalized()) > 0.2
 	var spark_at := _player.global_position + fwd * 0.7 + Vector3(0.0, 1.2, 0.0)
+	var heavy := kind == "heavy"
 	if _hero != null and facing and not unblockable and _hero.parry_window():
-		_hero.deflect()
+		_hero.parry_anim()                           # отбил: клип Parry, блок остаётся
 		_style.hit("Parry")
 		_parry_sound(attacker != null and str(attacker.get("_atk")) == "Kick")   # пинок — глухой шлепок, не звон стали
-		_hero.block_hit(false)
-		_posture = maxf(0.0, _posture - _hf("parry_relief", 22.0))   # удачное парирование — выдох: своя концентрация спадает
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
+		_shake = maxf(_shake, 0.12)
+		_shake_amp = 0.04
 		if attacker is Goblin:
-			var ag := attacker as Goblin                  # а у врага — копится
-			ag.posture = minf(ag.max_posture, ag.posture + _hf("parry_enemy_posture", 24.0))
-		if attacker is Goblin:
-			(attacker as Goblin).deflected(_player.global_position)
+			(attacker as Goblin).deflected(_player.global_position)   # концентрация врага — 0 (в серии босса — часть)
+			if (attacker as Goblin).can_deathblow():
+				_toast = {"text": mod.tr_key("pax_rpg_conc_enemy_broken"), "t": 0.0}
 		return
 	if _hero != null and facing and not unblockable and _hero.blocking:
 		var guard := 1.0 - _block_reduce()               # пассивка героя (Чёрный рыцарь — «Железная стена»)
-		_posture = minf(_pos_max(), _posture + damage * (4.4 if kind == "heavy" else 2.2) * guard)
+		var tired := 1.5 if _conc < _conc_max() / 3.0 else 1.0   # устал — блок держит хуже
 		_since_hit = 0.0
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
-		_hero.block_hit(kind == "heavy")                # отдача: сдвиг назад — root motion клипа
+		_hero.block_hit(heavy)                          # отдача: сдвиг назад — root motion клипа
 		if attacker is Goblin:
-			(attacker as Goblin).blocked()
-		if _posture >= _pos_max():
-			_posture = _pos_max() * 0.35
-			_stagger = _hf("guard_break_time", 1.2)
-			_hero.set_block(false)
-			_hero.hurt()
+			(attacker as Goblin).on_blocked(damage, heavy)   # атакующий тратит больше блокирующего
+		_spend(damage * (0.75 if heavy else 0.45) * tired * guard, attacker)
 		return
 	_hp = maxf(0.0, _hp - damage)
 	_style.hurt()
@@ -2812,7 +2981,6 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_sfx_once("sounds/kick_hit.wav", 0.0)              # пинок врага — удар в живот, а не по стали
 	else:
 		_armor_hit_sound(damage)
-	_posture = minf(_pos_max(), _posture + damage * 0.8)
 	_since_hit = 0.0
 	if _hero != null:
 		if kind == "charge" and _hp > 0.0:
@@ -2824,15 +2992,24 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 				_player.velocity.y = _hf("charge_lift", 3.5)
 		else:
 			_hero.hurt()
+	if _hp > 0.0:
+		_spend(clampf(damage * _hf("conc_hit_taken", 0.7), 6.0, 30.0), attacker)
+	_hero_down_check(attacker)
+
+
+## Здоровье кончилось: на арене — уносят с песка (без потери прогресса), в городе — на старт.
+func _hero_down_check(attacker: Node3D) -> void:
 	if _hp <= 0.0 and attacker != null and is_instance_valid(attacker) and attacker.has_method("cheer"):
 		attacker.call("cheer")                       # орк ликует над павшим героем
 	if _hp <= 0.0 and is_instance_valid(_arena) and _arena.fighting:
-		_hp = 1.0                                    # пал на арене — уносят с песка, без потери прогресса
+		_hp = 1.0
+		_broken_t = 0.0
 		_arena.leave(true)
 	if _hp <= 0.0 and is_instance_valid(_player):
 		_hp = _hp_max()
 		_hp_ghost = 1.0
-		_posture = 0.0
+		_conc = _conc_max()
+		_broken_t = 0.0
 		_flask = int(_hf("flask_charges", 3.0))
 		_player.position = START
 		_player.velocity = Vector3.ZERO
@@ -2918,11 +3095,17 @@ func _armor_hit_sound(damage: float) -> void:
 	_armor_hit.play()
 
 
-func _regen_posture(delta: float) -> void:
-	if _since_hit < 1.0 or _posture <= 0.0:
+## Концентрация героя возвращается, пока он не бьёт и не блокирует: на расстоянии от врагов — быстрее,
+## раненый — медленнее (ДИЗДОК — бой).
+func _regen_conc(delta: float) -> void:
+	_conc_idle += delta
+	if _broken_t > 0.0 or _conc >= _conc_max() or _conc_idle < CONC_IDLE:
 		return
-	var rate := _hf("posture_regen_block", 10.0) if (_hero != null and _hero.blocking) else _hf("posture_regen", 22.0)
-	_posture = maxf(0.0, _posture - rate * delta)
+	if _hero != null and (_hero.blocking or _hero.action in Hero.ATTACKS or _hero.action in Hero.SPECIALS):
+		return
+	var near := _foe_near(_hf("conc_near", 4.5))
+	var k := (1.0 if near else _hf("conc_far_mult", 1.6)) * (0.35 + 0.65 * _hp / maxf(_hp_max(), 1.0))
+	_conc = minf(_conc_max(), _conc + _hf("conc_regen", CONC_REGEN) * k * delta)
 
 
 ## Искры: блок и парирование.
@@ -3094,7 +3277,7 @@ func _update_hud() -> void:
 
 ## Эликсир (R): лечит, зарядов мало — пополняются, когда герой пал и вернулся на старт.
 func _drink() -> void:
-	if _flask <= 0 or _hp >= _hp_max() or _stagger > 0.0 or not is_instance_valid(_player):
+	if _flask <= 0 or _hp >= _hp_max() or _helpless() or not is_instance_valid(_player):
 		return
 	_flask -= 1
 	_hp = minf(_hp_max(), _hp + _hf("flask_heal", 45.0))
@@ -3231,7 +3414,9 @@ func _hud_tick(delta: float) -> void:
 	elif _since_hit > 0.6:
 		_hp_ghost = move_toward(_hp_ghost, hp, delta * 0.6)
 	_hint_t = maxf(0.0, _hint_t - delta)
-	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "posture": _posture / _pos_max(),
+	var fighting := _hud_enemy() != null or _lock != null or (is_instance_valid(_arena) and _arena.fighting) or _broken_t > 0.0
+	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "conc": _conc / _conc_max(),
+		"conc_on": fighting, "conc_broken": _broken_t > 0.0, "conc_low": _conc < _conc_max() / 3.0,
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
 		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash,
 		"style": {"letter": _style.letter(), "rank": _style.rank(), "frac": _style.frac(), "flash": _style.flash,
@@ -3261,9 +3446,10 @@ func _hud_tick(delta: float) -> void:
 	var e := _hud_enemy()
 	if e != null:
 		st["enemy"] = {"name": _t(e.display_key), "hp": e.hp / e.max_hp,
-			"posture": e.posture / e.max_posture, "broken": e.can_deathblow(), "boss": e.boss,
+			"conc": e.conc / e.conc_max, "broken": e.can_deathblow(), "boss": e.boss, "phase": e.phase,
+			"veteran": e.veteran, "id": e.get_instance_id(),
 			"title": _t(e.title_key) if e.title_key != "" else ""}
-		st["ult"] = e.posture / e.max_posture if not e.can_deathblow() else 1.0
+		st["ult"] = 1.0 - e.conc / e.conc_max if not e.can_deathblow() else 1.0
 		st["ult_ready"] = e.can_deathblow()
 	if _lock != null and is_instance_valid(_lock):
 		var lp := _lock.global_position + Vector3(0.0, 0.85, 0.0)
@@ -3363,6 +3549,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock == null:
 			_yaw -= (event as InputEventMouseMotion).relative.x * _f("turn_speed", 0.004) * _sens
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock != null:
+			_lock_flick((event as InputEventMouseMotion).relative)
 		return
 	if event is InputEventKey and not _typing():
 		var key: InputEventKey = event
@@ -3375,6 +3563,10 @@ func _input(event: InputEvent) -> void:
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
 				and _arena.can_start():
 			_arena.start()
+		if key.pressed and not key.echo and key.physical_keycode in [KEY_LEFT, KEY_RIGHT] and is_instance_valid(_arena) \
+				and _arena.can_start():
+			_arena.pick(-1 if key.physical_keycode == KEY_LEFT else 1)   # этап арены (с первого — до открытых)
+			get_viewport().set_input_as_handled()
 		if key.pressed and not key.echo and key.physical_keycode == KEY_V:
 			_extra_try()                             # приём оружия в дополнительном слоте (катана — «Иай»)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_G:

@@ -1,9 +1,10 @@
 extends CharacterBody3D
-## Гоблин — враг-дуэлянт, бой как в Sekiro. Заметив героя, подходит на дистанцию поединка и кружит вокруг него лицом
-## к нему, выжидая окно; потом короткий выпад: вспышка-предупреждение и рубящий удар. После удара — миг уязвимости и
-## отход. Концентрация (posture): копится от парирований и ударов героя, переполнилась (или кончилось здоровье) —
-## гоблин теряет равновесие, его можно добить (deathblow). Гибель — тело рассыпается маной.
-## Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
+## Гоблин — враг-дуэлянт. Заметив героя, подходит на дистанцию поединка и кружит вокруг него лицом к нему, выжидая
+## окно; потом короткий выпад: вспышка-предупреждение и рубящий удар. После удара — миг уязвимости и отход.
+## Концентрация — выдержка бойца (ДИЗДОК — бой): от 100 к 0, тратится своим ударом, блоком и пропущенным ударом,
+## парирование его удара — сразу 0; восстанавливается, пока не бьёт и не блокирует (на расстоянии быстрее, раненый —
+## медленнее). На 0 — слом: падает на колени, окно Кровожадной атаки героя (рядовой гибнет). Гибель — тело
+## рассыпается маной. Атакует одновременно только один гоблин (жетон атаки). Модель и клипы — models/goblin/ (Meshy).
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 const BodyFx := preload("res://mods/pax_rpg/src/location/body_fx.gd")
@@ -11,13 +12,19 @@ const BodyFx := preload("res://mods/pax_rpg/src/location/body_fx.gd")
 const DIR := "models/goblin/"
 const CLIPS := {"idle": "idle.glb", "walk": "walk.glb", "run": "run.glb", "attack": "attack.glb", "hit": "hit.glb",
 	"combat_idle": "combat_idle.glb", "strafe_l": "strafe_l.glb", "strafe_r": "strafe_r.glb", "back": "back.glb",
-	"deflected": "deflected.glb", "knockdown": "knockdown.glb", "getup": "getup.glb"}
+	"deflected": "deflected.glb", "knockdown": "knockdown.glb", "getup": "getup.glb", "stagger": "stagger.glb",
+	"parry": "parry.glb", "block": "block.glb"}
 const LOOPED := ["idle", "walk", "run", "combat_idle", "strafe_l", "strafe_r", "back"]
 const FALLBACK := {"combat_idle": "idle", "strafe_l": "walk", "strafe_r": "walk", "back": "walk", "deflected": "hit",
-	"knockdown": "hit", "getup": "combat_idle"}
+	"knockdown": "hit", "getup": "combat_idle", "stagger": "hit", "parry": "deflected", "block": "hit"}
 
 const MAX_HP := 60.0
-const MAX_POSTURE := 100.0
+const MAX_CONC := 100.0
+const CONC_ATTACK := 10.0     # свой удар (замах) — усталость
+const CONC_REGEN := 12.0      # в секунду, пока не бьёт и не блокирует (дальше 5 м — ×1.5; раненый — медленнее)
+const CONC_IDLE := 1.2        # с без трат — и концентрация пошла вверх
+const RISE_CONC := 0.4        # доля концентрации после слома, если Кровожадной атаки не было
+const KNEEL_AT := 0.45        # доля клипа слома: на коленях — тут клип замирает до конца окна
 const DETECT := 14.0          # м, замечает героя
 const LOSE := 24.0            # м, теряет
 const CIRCLE_DIST := 4.0      # м, дистанция поединка — на ней кружит
@@ -33,7 +40,7 @@ const ATTACK_SPEED := 1.5
 const DAMAGE := 12.0
 const HURT_TIME := 0.45
 const DEFLECTED_TIME := 0.9
-const BROKEN_TIME := 3.2      # с без равновесия — окно добивания
+const BROKEN_TIME := 2.6      # с на коленях после слома — окно Кровожадной атаки
 const RECOVER_TIME := 0.6
 const RESPAWN := 9.0           # с до нового гоблина (тело лежит BODY_STAY, потом уходит в землю)
 const BODY_STAY := 4.0
@@ -50,13 +57,18 @@ static var _attacker: Node = null   # у кого жетон атаки
 
 var mod: PaxMod
 var max_hp := MAX_HP
-var max_posture := MAX_POSTURE
+var conc_max := MAX_CONC
+var hit_conc := 1.4                  # пропущенный удар героя → столько концентрации за единицу урона
+var veteran := false                 # ветеран арены (4-й этап): блок чаще, парирует удары героя
+var phase := 0                       # сломов с Кровожадной атакой пережито (босс: три — три фазы)
+static var hero_broken := false      # location.gd: концентрация героя на нуле — враги спешат наказать
 var mass := 45.0                    # кг: сколько уносит удар (location.gd → _mass_hit, weight.gd)
 var boss := false                   # мини-босс: своя полоса внизу экрана (HUD), а не карточка врага
 var title_key := ""                 # титул под именем босса
 var display_key := "pax_rpg_goblin"   # имя в HUD (ключ перевода)
 var hp := max_hp
-var posture := 0.0
+var conc := MAX_CONC
+var _conc_idle := 0.0
 var dead := false
 var respawns := true
 # характер — у каждого свой (setup): как часто ставит блок, связывает удары в серию, как терпелив
@@ -234,11 +246,29 @@ func is_alive() -> bool:
 	return not dead
 
 
+## Концентрация на нуле — окно Кровожадной атаки (на коленях).
 func can_deathblow() -> bool:
-	return _state == "broken"
+	return _state == "broken" and not dead
 
 
-## Полосы здоровья и концентрации — в HUD справа (location.gd читает hp / posture), над головой ничего.
+## Концентрация ниже трети: удары медленнее, блок реже.
+func low_conc() -> bool:
+	return conc < conc_max / 3.0
+
+
+## Трата концентрации (удар, блок, пропущенный удар). Дошла до 0 — слом.
+func spend(a: float) -> void:
+	if dead or a <= 0.0:
+		return
+	conc = maxf(0.0, conc - a)
+	_conc_idle = 0.0
+	if conc <= 0.0 and _state != "broken":
+		_lethal = false
+		_release_token()
+		_set_state("broken")
+
+
+## Полосы здоровья и концентрации — в HUD справа (location.gd читает hp / conc), над головой ничего.
 func _update_bars() -> void:
 	pass
 
@@ -250,38 +280,43 @@ func in_combat() -> bool:
 
 # ---------- что с ним делают ----------
 
-## Удар героя: кровь, отлёт, атака сорвана; растёт концентрация. Без равновесия — не принимает обычных ударов.
-var posture_scale := 1.0              # урон героя → равновесие: без множителя силы и уровня (location.gd ставит 1/множитель)
-
-
-func take_damage(amount: float, from: Vector3, knock := false) -> void:
+## Удар героя. Ответ — что вышло: "hit" — ранен, "guard" — принял на клинок (урона нет, своя концентрация
+## потрачена немного — герою дороже, location.gd), "parry" — ветеран отбил (концентрация героя в 0), "broken" —
+## своя концентрация кончилась (слом), "dead".
+func take_damage(amount: float, from: Vector3, knock := false) -> String:
 	if dead:
-		return
-	if _state == "broken":                         # сломлен (добивание): удары всё равно ранят, а не проходят впустую
+		return "dead"
+	if _state == "broken":                         # на коленях: удары всё равно ранят
 		hp = maxf(0.0, hp - amount)
 		_update_bars()
 		if hp <= 0.0:
 			_lethal = true
-			_die()                                   # добит ударами — падает сразу
-		return
-	var pa := amount * posture_scale
+			_die()
+			return "dead"
+		return "hit"
 	var face := global_position.direction_to(from)
-	var fwd := -global_transform.basis.z
-	if not knock and _state in ["idle", "circle", "stalk", "evade", "recover", "guard"] \
-			and fwd.dot(Vector3(face.x, 0.0, face.z).normalized()) > 0.3 and randf() < _guard_chance:
-		posture = minf(max_posture, posture + pa * 0.4)     # принял на клинок: урона нет, равновесие шатается
+	var fwd := _model.global_transform.basis.z if _model != null else -global_transform.basis.z   # модель смотрит по +Z
+	var facing := fwd.dot(Vector3(face.x, 0.0, face.z).normalized()) > 0.3
+	var ready := not knock and facing and _state in ["idle", "circle", "stalk", "evade", "recover", "guard", "approach"]
+	if ready and veteran and randf() < (0.35 if _state == "guard" else 0.22):
+		_since_hit = 0.0                                    # ветеран: отбил — герой открыт
+		_burst(global_position + Vector3(0.0, 1.0, 0.0) + face * 0.4, face, Color(1.0, 0.85, 0.4), 30, 4.5, 6.0, 0.3,
+			0.035, true)
+		_riposte = true
+		_set_state("parry")
+		return "parry"
+	var gc := _guard_chance * (0.5 if low_conc() else 1.0)
+	if ready and randf() < gc:
 		_since_hit = 0.0
 		_burst(global_position + Vector3(0.0, 1.0, 0.0) + face * 0.4, face, Color(1.0, 0.75, 0.35), 14, 3.0, 6.0,
 			0.25, 0.03, true)
-		if posture >= max_posture:
-			_set_state("broken")
-		else:
+		spend(amount * 0.4)                                 # принял на клинок: урона нет, выдержка чуть тратится
+		if _state != "broken":
 			_riposte = randf() < 0.5                         # после блока — иногда сразу ответный удар
 			_set_state("guard")
 		_update_bars()
-		return
+		return "broken" if _state == "broken" else "guard"
 	hp = maxf(0.0, hp - amount)
-	posture = minf(max_posture, posture + pa * 0.45)
 	_since_hit = 0.0
 	if _hurt_cd <= 0.0:
 		_hurt_cd = 0.3
@@ -292,12 +327,18 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 	_last_away = away
 	_burst(global_position + Vector3(0.0, 0.75, 0.0) - away * 0.2, away, Color(0.55, 0.02, 0.03), 36, 3.5, 9.0, 0.5,
 		0.06)
-	if hp <= 0.0 or posture >= max_posture:
-		_lethal = hp <= 0.0
-		_set_state("broken")
-		if knock:
-			velocity = away * KNOCK_FLY * 0.5 + Vector3(0.0, KNOCK_UP * 0.5, 0.0)
-	elif knock:
+	if hp <= 0.0:
+		_lethal = true
+		velocity = away * KNOCK_FLY * (1.0 if knock else 0.5) + Vector3(0.0, KNOCK_UP * (1.0 if knock else 0.5), 0.0)
+		_die()
+		_update_bars()
+		return "dead"
+	spend(amount * hit_conc)
+	if _state == "broken":
+		velocity = away * KNOCKBACK
+		_update_bars()
+		return "broken"
+	if knock:
 		velocity = away * KNOCK_FLY + Vector3(0.0, KNOCK_UP, 0.0)   # финальный удар — отлетает и падает навзничь
 		_face(-away, 1.0)
 		_set_state("knockdown")
@@ -310,31 +351,38 @@ func take_damage(amount: float, from: Vector3, knock := false) -> void:
 		_set_state("hurt")
 		_stun_t = t
 	_update_bars()
+	return "hit"
 
 
-## Героя парировали удар: сильно сбивает концентрацию, гоблина отбрасывает в сторону.
+## Герой парировал его удар: концентрация сразу 0 — слом, отбрасывает в сторону.
 func deflected(from: Vector3) -> void:
 	if dead:
 		return
-	posture = minf(max_posture, posture + 34.0)
-	_since_hit = 0.0
 	var away := global_position - from
 	away.y = 0.0
 	velocity = (away.normalized() if away.length() > 0.01 else Vector3.FORWARD) * 3.0
-	_set_state("broken" if posture >= max_posture else "deflected")
+	spend(conc + 1.0)
 	_update_bars()
 
 
-## Удар заблокирован: немного концентрации.
-func blocked() -> void:
-	posture = minf(max_posture, posture + 8.0)
+## Удар принят героем в блок: атакующий тратит больше блокирующего (долбить в блок невыгодно).
+func on_blocked(dmg: float, heavy: bool) -> void:
+	spend(dmg * (0.9 if heavy else 0.7))
 	_update_bars()
 
 
-## Добивание: гибель.
+## Кровожадная атака героя (концентрация на нуле): рядовой — гибнет.
+func bloodthirsty() -> void:
+	if dead:
+		return
+	cine = false
+	_lethal = true
+	_die()
+
+
+## Совместимость (иай, старые вызовы): добить — как Кровожадная атака.
 func deathblow() -> void:
-	if not dead:
-		_die()
+	bloodthirsty()
 
 
 func _die() -> void:
@@ -424,7 +472,8 @@ static func _blood_image() -> Image:
 
 func _respawn() -> void:
 	hp = max_hp
-	posture = 0.0
+	conc = conc_max
+	phase = 0
 	dead = false
 	_lethal = false
 	if _model != null:
@@ -530,7 +579,7 @@ func _set_state(s: String) -> void:
 		"attack":
 			_play("attack", true)
 			if _anim != null:
-				_anim.speed_scale = ATTACK_SPEED
+				_anim.speed_scale = ATTACK_SPEED * (0.85 if low_conc() else 1.0)   # устал — бьёт медленнее
 		"hurt":
 			_play("hit", true)
 		"deflected":
@@ -542,7 +591,15 @@ func _set_state(s: String) -> void:
 			if _anim != null and _clip("getup") == "getup":
 				_anim.seek(GETUP_SKIP, true)
 		"broken":
-			_play("hit", true)
+			_play("stagger", true, 0.1)                 # шатается и падает на колени (stagger.glb)
+		"rise":
+			if _anim != null:
+				_anim.play()                            # с колен — дальше по клипу слома
+				_anim.speed_scale = 1.7
+		"guard":
+			_play("block", true, 0.08)
+		"parry":
+			_play("parry", true, 0.06)
 		"dead":
 			_play("knockdown", true)                  # падает и остаётся лежать (клип не зациклен)
 
@@ -606,7 +663,7 @@ func cine_release(v: Vector3) -> void:
 	_hitstop = 0.0
 	if _anim != null:
 		_anim.active = true
-	posture = minf(posture, max_posture * 0.7)            # не «сломлен» — иначе стоит и ждёт добивания
+	conc = maxf(conc, conc_max * 0.25)                  # не на нуле после сцены — иначе стоит и ждёт добивания
 	if dead:
 		return
 	velocity = v
@@ -650,12 +707,14 @@ func _phys(delta: float) -> void:
 		_respawn()
 	_state_t += delta
 	_since_hit += delta
-	if _state not in ["attack", "windup", "broken", "dead"] and _since_hit > 1.5 and posture > 0.0:
-		posture = maxf(0.0, posture - delta * (14.0 if hp > max_hp * 0.5 else 6.0))
-		_update_bars()
 	var to := _target.global_position - global_position
 	to.y = 0.0
 	var dist := to.length()
+	_conc_idle += delta
+	if _state not in ["attack", "windup", "guard", "parry", "broken", "rise", "dead"] and _conc_idle > CONC_IDLE \
+			and conc < conc_max:                           # отдыхает: выдержка возвращается (раненый — медленнее)
+		var kr := (1.5 if dist > 5.0 else 1.0) * (0.35 + 0.65 * hp / maxf(max_hp, 1.0))
+		conc = minf(conc_max, conc + CONC_REGEN * kr * delta)
 	var dir := to / maxf(dist, 0.001)
 	var side := Vector3(-dir.z, 0.0, dir.x)          # вправо от гоблина, если он смотрит на героя
 	var flat := Vector3.ZERO
@@ -702,17 +761,19 @@ func _phys(delta: float) -> void:
 				else:
 					_play("strafe_r" if _circle_dir > 0.0 else "strafe_l")
 				_wait -= delta
+				if hero_broken and dist < 7.0:
+					_wait = minf(_wait, 0.05)                # герой сломлен — не ждать, наказать
 				if _wait <= 0.0:
-					if _hero_blocking.is_valid() and bool(_hero_blocking.call()) and randf() < 0.4:
+					if not hero_broken and _hero_blocking.is_valid() and bool(_hero_blocking.call()) and randf() < 0.4:
 						_wait = randf_range(0.8, 1.6)    # герой в блоке — подождать, пусть раскроется
 					elif _take_token():
-						_feint = randf() < 0.25
+						_feint = randf() < 0.25 and not hero_broken
 						_set_state("stalk")
 					else:
 						_wait = randf_range(0.5, 1.2)
 		"stalk":
 			_face(dir, delta)
-			flat = dir * STALK_SPEED
+			flat = dir * (RUN_SPEED if hero_broken else STALK_SPEED)
 			_play("walk")
 			if _hero_attacking.is_valid() and bool(_hero_attacking.call()) and dist < 3.0 and not _swing_seen \
 					and randf() < 0.45:
@@ -727,14 +788,27 @@ func _phys(delta: float) -> void:
 				_set_state("circle")
 		"guard":
 			_face(dir, delta * 2.0)
-			_play("hit")
 			_damp(delta)
 			if _state_t > 0.35:
 				if _riposte and dist <= STRIKE_DIST + 0.6:
 					_riposte = false
-					_set_state("attack")                 # ответ без замаха — надо ловить
+					_attack_begin()                      # ответ без замаха — надо ловить
 				else:
 					_set_state("circle")
+		"parry":                                         # отбил удар героя — сразу ответ (герой открыт)
+			_face(dir, delta * 2.0)
+			_damp(delta)
+			if _state_t > 0.32:
+				_riposte = false
+				if dist <= ATTACK_RANGE + 1.4:
+					_attack_begin()
+				else:
+					_set_state("circle")
+		"rise":                                          # встаёт с колен (клип слома дальше), потом — снова в бой
+			_damp(delta)
+			_face(dir, delta * 0.5)
+			if _state_t >= maxf(0.4, (_clip_len("stagger") * (1.0 - KNEEL_AT)) / 1.7 * 0.85) or _clip("stagger") != "stagger":
+				_set_state("circle")
 		"evade":
 			_face(dir, delta)
 			flat = -dir * WALK_SPEED * 1.2 + side * _circle_dir * STRAFE_SPEED
@@ -746,7 +820,7 @@ func _phys(delta: float) -> void:
 			flat = dir * LUNGE_SPEED
 			_play("combat_idle")
 			if _state_t >= _f_windup():
-				_set_state("attack")
+				_attack_begin()
 		"attack":
 			_face(dir, delta * 0.4)
 			var hit_at := _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT
@@ -762,7 +836,7 @@ func _phys(delta: float) -> void:
 			if _state == "attack" and _state_t >= _clip_len("attack") / ATTACK_SPEED * 0.85:
 				if _combo_n < 2 and dist <= ATTACK_RANGE + 1.0 and randf() < _combo_chance:
 					_combo_n += 1                        # серия: следующий удар сразу, без отката
-					_set_state("attack")
+					_attack_begin()
 				else:
 					_combo_n = 0
 					_set_state("recover")
@@ -803,15 +877,16 @@ func _phys(delta: float) -> void:
 				_set_state("circle")
 		"broken":
 			_damp(delta)
-			if _anim != null and _state_t > 0.5:
-				_anim.pause()                            # на коленях, ждёт добивания
+			if _anim != null and _anim.is_playing() and _anim.current_animation != "" \
+					and _anim.current_animation_position >= _anim.current_animation_length * KNEEL_AT:
+				_anim.pause()                            # на коленях — окно Кровожадной атаки
 			if _state_t >= BROKEN_TIME:
 				if _lethal:
-					_die()                               # без добивания — всё равно пал
+					_die()
 				else:
-					posture = max_posture * 0.5
+					conc = conc_max * RISE_CONC          # окно упущено: выдержка частично вернулась
 					_update_bars()
-					_set_state("circle")
+					_set_state("rise")
 		"dead":                                          # отлёт от удара гаснет трением о землю
 			velocity.x = move_toward(velocity.x, 0.0, delta * 7.0)
 			velocity.z = move_toward(velocity.z, 0.0, delta * 7.0)
@@ -827,7 +902,14 @@ func _phys(delta: float) -> void:
 
 ## Замах — короткая пауза с предупреждением (у слабых врагов короче).
 func _f_windup() -> float:
-	return 0.45
+	return 0.25 if hero_broken else 0.45
+
+
+## Начать удар: сам замах тратит концентрацию (усталость); на нуле — слом вместо удара.
+func _attack_begin() -> void:
+	spend(CONC_ATTACK)
+	if _state != "broken" and not dead:
+		_set_state("attack")
 
 
 func _damp(delta: float) -> void:

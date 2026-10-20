@@ -1,16 +1,21 @@
 extends Node
 ## Арена города (центр — config/<город>.json → "arena": [x, z, радиус ямы, сторона главного входа]).
-## Лестница боёв: 1 гоблин → 2 → 3 → 5 → Гхаррок, чемпион арены. После победы решётки поднимаются — можно уйти
-## пешком или начать следующий бой (E); отошёл от ямы — трибуны пустеют. Пока идёт бой, время суток стоит
-## (location.gd → daynight.frozen).
+## Пять этапов — фундамент боевой системы (ДИЗДОК — бой): 1) один гоблин — удары и концентрация; 2) двое — блок
+## и парирование; 3) трое — несколько целей, переключение захвата мышью; 4) ветеран (блокирует и парирует героя)
+## с двумя гоблинами; 5) Гхаррок, орк-чемпион — босс: задержки, финты, удары без парирования, серии, три слома —
+## три фазы. Вход в яму — с первого этапа; ←/→ — выбрать любой открытый (arena_stage — сколько открыто).
+## После победы решётки поднимаются — можно уйти пешком или начать следующий бой (E); отошёл от ямы — трибуны
+## пустеют, выбор снова с первого. Пока идёт бой, время суток стоит (location.gd → daynight.frozen).
 ## Вход в бой: затемнение и мини-загрузка, на трибунах зрители, выходы закрыты решётками; герой — у южного
 ## входа, бойцы — напротив. Выход (X) или поражение: затемнение, пустые трибуны, решётки подняты.
-## Прогресс — в настройке мода arena_stage (сколько ступеней пройдено).
+## Прогресс — в настройке мода arena_stage (сколько этапов открыто: 0 — только первый).
 
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
-const LADDER := [1, 2, 3, 5, 0]               # гоблинов в бою; 0 — чемпион
+const STAGES := [["goblin"], ["goblin", "goblin"], ["goblin", "goblin", "goblin"], ["veteran", "goblin", "goblin"],
+	["orc"]]                                    # кто выходит на каждом этапе
+const LADDER := [1, 2, 3, 3, 0]               # совместимость: бойцов на этапе (0 — чемпион)
 const CROWD_DIR := "models/goblin/"
 const ORC := "orc"
 const GOBLIN := "goblin"
@@ -45,6 +50,7 @@ var _fade_label: Label
 var _busy := false
 var _inside := false
 var _near_hint := false
+var _pick := 0                                # выбранный этап (0 — первый)
 
 
 func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_foe: Callable, heal: Callable) -> void:
@@ -75,13 +81,31 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	_fade.add_child(_fade_label)
 
 
+## Выбранный этап (0…4).
 func stage() -> int:
-	return clampi(int(mod.get_setting("arena_stage", 0)), 0, LADDER.size() - 1)
+	return clampi(_pick, 0, STAGES.size() - 1)
+
+
+## Сколько этапов открыто (последний открытый — индекс).
+func unlocked() -> int:
+	return clampi(int(mod.get_setting("arena_stage", 0)), 0, STAGES.size() - 1)
+
+
+## ←/→ в яме: выбрать этап (с первого до последнего открытого).
+func pick(d: int) -> void:
+	_pick = clampi(_pick + d, 0, unlocked())
+	toast.emit(_prompt_text())
+
+
+func _prompt_text() -> String:
+	var t := mod.tr_key("pax_rpg_arena_prompt") % _foe_text(stage())
+	if unlocked() > 0:
+		t += "  ·  " + mod.tr_key("pax_rpg_arena_pick")
+	return t
 
 
 func _foe_text(i: int) -> String:
-	var n: int = LADDER[i]
-	return mod.tr_key("pax_rpg_orc") if n == 0 else mod.tr_key("pax_rpg_arena_goblins_n") % n
+	return mod.tr_key("pax_rpg_arena_stage_%d" % (i + 1))
 
 
 ## Каждый кадр (location.gd): подсказки, конец боя.
@@ -93,9 +117,11 @@ func tick() -> void:
 	var near := dist < RIM + 6.0 and not inside
 	if near and not _near_hint and not fighting:
 		toast.emit(mod.tr_key("pax_rpg_arena_way_down"))   # где спуск
+	if not near and not inside and _near_hint and not fighting:
+		_pick = 0                                    # ушёл от арены — в следующий раз снова с первого этапа
 	_near_hint = near
 	if inside and not _inside and not fighting:
-		toast.emit(mod.tr_key("pax_rpg_arena_prompt") % _foe_text(stage()))
+		toast.emit(_prompt_text())
 	_inside = inside
 	if not fighting:
 		if _crowd != null and not inside and Vector2(_player.global_position.x - center.x,
@@ -122,13 +148,11 @@ func start() -> void:
 		var south := center + Vector3(0, -_depth + 0.3, pit - 3.0)
 		_player.global_position = south
 		var far := center + Vector3(0, -_depth + 0.3, -pit * 0.45)
-		var n: int = LADDER[i]
-		if n == 0:
-			_foes.append(_spawn_foe.call(ORC, far))
-		else:
-			for k: int in n:
-				var off := Vector3((float(k) - (n - 1) * 0.5) * 2.4, 0.0, -absf(float(k) - (n - 1) * 0.5) * 0.8)
-				_foes.append(_spawn_foe.call(GOBLIN, far + off))
+		var who: Array = STAGES[i]
+		var n := who.size()
+		for k: int in n:
+			var off := Vector3((float(k) - (n - 1) * 0.5) * 2.6, 0.0, -absf(float(k) - (n - 1) * 0.5) * 0.9)
+			_foes.append(_spawn_foe.call(str(who[k]), far + off))
 		for f: Variant in _foes:
 			if is_instance_valid(f):
 				(f as Goblin).respawns = false
@@ -141,9 +165,10 @@ func _win() -> void:
 	fighting = false
 	_foes.clear()
 	var i := stage()
-	var last := i >= LADDER.size() - 1
+	var last := i >= STAGES.size() - 1
 	if not last:
-		mod.set_setting("arena_stage", i + 1)
+		mod.set_setting("arena_stage", maxi(unlocked(), i + 1))
+		_pick = i + 1                                # E — следующий этап
 	_open(true)                                        # решётки поднимаются: выход свободен, E — следующий бой
 	var txt := mod.tr_key("pax_rpg_arena_champion") if last else (mod.tr_key("pax_rpg_arena_next") % _foe_text(i + 1))
 	toast.emit(txt)

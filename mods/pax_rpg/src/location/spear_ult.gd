@@ -1,9 +1,12 @@
 extends Node
 ## Ультимейт копья Тян Луна «Алый Закат» (G) — кат-сцена в духе ульт Genshin: клип UltSpear (3 с) ведёт героя
 ## (root motion), а этот узел — цель, камеру и оформление. По клипу: укол — микростан (STUN), удар с разворота —
-## цель отлетает (SPIN), герой скользит, цепляя копьём пол, — подножка (TRIP), цель падает и встаёт —
-## удар в спину (BACK). Цель на время сцены ведётся по пути (goblin.gd → cine), свою физику не считает.
-## Камера — планы со склейками на ударах; полосы кино, имя приёма, вспышки, замирания на ударах, алые искры.
+## цель отлетает (SPIN), герой скользит, цепляя копьём пол, — подножка (TRIP), цель падает и поднимается —
+## удар в спину (BACK). Цель на время сцены ведётся по пути (goblin.gd → cine), свою физику не считает; стоит на
+## земле (ступни героя — низ его капсулы), смотрит, куда надо (поворот модели, а не тела), её клипы — в темпе сцены.
+## Камера — планы со склейками на ударах (низкий из-за спины, бок на ударе, широкий на отлёте, у земли на
+## скольжении, через плечо на ударе в спину); полосы кино, имя приёма, вспышки, замирания, алые искры.
+## Попал всеми четырьмя ударами — концентрация героя +50 % (ДИЗДОК — бой).
 
 const T_STUN := 0.55
 const T_SPIN := 1.1
@@ -12,19 +15,22 @@ const T_TRIP := 1.97
 const T_GETUP := 2.3
 const T_BACK := 2.63
 const LENGTH := 3.0
+const HITS := 4
 const CRIMSON := Color(1.0, 0.16, 0.12)
 
 var loc: Node                      # location.gd (его поля — без типов: свой класс там не объявлен)
 var hero: Object                   # hero.gd (не узел)
 var target: Node3D                 # враг (goblin.gd) или null
 var _t := 0.0
+var _rt := 0.0                     # настоящее время сцены
 var _on := false
-var _p0 := Vector3.ZERO            # где герой начал
+var _p0 := Vector3.ZERO            # где герой начал (центр капсулы)
 var _fwd := Vector3.FORWARD        # куда смотрит (в мире, по земле)
 var _right := Vector3.RIGHT
-var _ground := 0.0
+var _ground := 0.0                 # высота ступней
 var _t_from := Vector3.ZERO        # откуда цель подтягивается в начале
 var _done := {}                    # какие удары уже были
+var _landed := 0                   # сколько ударов попало
 var _ui: CanvasLayer
 var _bars: Array = []
 var _title: Label
@@ -33,6 +39,7 @@ var _flash: ColorRect
 var _vign: ColorRect
 var _scrape_t := 0.0
 var _freeze := 0.0
+var _side := 1.0                   # с какой стороны схватки камера (случайно — сцена не надоедает)
 
 
 func active() -> bool:
@@ -46,10 +53,13 @@ func start(l: Node, h: Object, tgt: Node3D, p0: Vector3, fwd: Vector3) -> void:
 	_p0 = p0
 	_fwd = Vector3(fwd.x, 0.0, fwd.z).normalized()
 	_right = _fwd.cross(Vector3.UP).normalized()
-	_ground = p0.y
+	_ground = p0.y - float(loc.call("_hf", "capsule_height", 1.8)) * 0.5
 	_t = 0.0
+	_rt = 0.0
 	_on = true
 	_done = {}
+	_landed = 0
+	_side = 1.0 if randf() < 0.5 else -1.0
 	if is_instance_valid(target):
 		target.set("cine", true)
 		target.set("velocity", Vector3.ZERO)
@@ -70,18 +80,27 @@ func stop() -> void:
 	_ui = null
 
 
+## Аниматор героя (anim_ctl.gd — узел с интерфейсом AnimationPlayer, не сам AnimationPlayer).
+func _anim() -> Object:
+	return hero.get("anim") if hero != null else null
+
+
 ## Время сцены — по клипу героя (замирания и замедления клипа — и у сцены).
 func tick(delta: float) -> void:
 	if not _on:
 		return
-	var ap: AnimationPlayer = hero.get("anim")
+	_rt += delta
+	var ap := _anim()
+	var sp := _speed(_t)
 	if _freeze > 0.0:
 		_freeze -= delta
-	elif ap != null:
-		ap.speed_scale = _speed(_t)                    # замедления на ударах — видно каждый момент
-	var t_clip: float = hero.call("ult_time")
+		sp = 0.04
+	if ap != null:
+		ap.set("speed_scale", sp)
+	_enemy_speed(sp)
+	var t_clip := float(hero.call("ult_time"))
 	_t = maxf(_t, t_clip)
-	if str(hero.get("action")) != "Ultimate" or _t >= LENGTH:
+	if str(hero.get("action")) != "Ultimate" or _t >= LENGTH or _rt > 12.0:
 		_finish()
 		return
 	_target_path()
@@ -99,20 +118,39 @@ func tick(delta: float) -> void:
 
 ## Скорость клипа: вся сцена чуть медленнее, у каждого удара — слоу-мо (вход перед ударом, выход после).
 func _speed(t: float) -> float:
-	var s := float(loc.call("_hf", "spear_ult_speed", 0.55))
-	var slow := float(loc.call("_hf", "spear_ult_slowmo", 0.12))
+	var s := float(loc.call("_hf", "spear_ult_speed", 0.7))
+	var slow := float(loc.call("_hf", "spear_ult_slowmo", 0.14))
 	for h: float in [T_STUN, T_SPIN, T_TRIP, T_BACK]:
-		var k := smoothstep(h - 0.2, h - 0.04, t) * (1.0 - smoothstep(h + 0.25, h + 0.5, t))
+		var k := smoothstep(h - 0.16, h - 0.03, t) * (1.0 - smoothstep(h + 0.18, h + 0.4, t))
 		s = lerpf(s, slow, k)
 	return s
 
 
-## Конец сцены: цель отпущена — своя физика и решения снова её, без замирания, лежит после удара в спину и встаёт сама.
+## Клипы цели — в темпе сцены: замедление героя замедляет и её (иначе враг «доигрывает» реакцию раньше удара).
+func _enemy_speed(sp: float) -> void:
+	if not is_instance_valid(target):
+		return
+	var a: Variant = target.get("_anim")
+	if a is AnimationPlayer:
+		var base := 1.0
+		if _t >= T_GETUP and _t < T_BACK:
+			base = 2.2                                    # встаёт быстро: к удару в спину уже на ногах
+		elif _t >= T_TRIP and _t < T_GETUP:
+			base = 1.4
+		(a as AnimationPlayer).speed_scale = base * clampf(sp / 0.7, 0.05, 1.6)
+
+
+## Конец сцены: цель отпущена — своя физика и решения снова её; после удара в спину лежит и встаёт сама.
 func _finish() -> void:
-	var ap: AnimationPlayer = hero.get("anim")
+	var ap := _anim()
 	if ap != null:
-		ap.speed_scale = 1.0
+		ap.set("speed_scale", 1.0)
+	if _landed >= HITS:                                   # все удары попали — выдох: концентрация героя +50 %
+		loc.call("_conc_gain", 0.5)
 	if is_instance_valid(target) and target.has_method("cine_release"):
+		var a: Variant = target.get("_anim")
+		if a is AnimationPlayer:
+			(a as AnimationPlayer).speed_scale = 1.0
 		target.call("cine_release", _fwd * 6.0 + Vector3.UP * 2.0)
 	target = null
 	stop()
@@ -124,7 +162,7 @@ func _hero_pos() -> Vector3:
 
 
 ## Путь цели: подтянуть к копью → стоит (микростан) → летит дугой → спотыкается → подножка — падает → встаёт
-## спиной к герою → после удара в спину отпущена с разгоном (_finish).
+## спиной к герою → после удара в спину отпущена с разгоном (_finish). Высота — земля (ступни героя).
 func _target_path() -> void:
 	if not is_instance_valid(target):
 		return
@@ -134,19 +172,22 @@ func _target_path() -> void:
 		var k := smoothstep(0.0, 0.3, _t)
 		var want := _p0 + _fwd * d
 		var pos := _t_from.lerp(want, k)
-		target.global_position = Vector3(pos.x, _ground, pos.z)
+		target.global_position = Vector3(pos.x, lerpf(_t_from.y, _ground, k), pos.z)
 		_face(-_fwd)
 		return
 	if _t < T_LAND:
 		var u := (_t - T_SPIN) / (T_LAND - T_SPIN)
 		d = lerpf(1.6, 5.2, 1.0 - pow(1.0 - u, 2.0))
 		up = 4.0 * 1.1 * u * (1.0 - u)
+		_face(-_fwd)
 	elif _t < T_TRIP:
 		var u2 := (_t - T_LAND) / (T_TRIP - T_LAND)
 		d = lerpf(5.2, 5.9, u2)                        # спотыкается, гасит отлёт
+		_face(-_fwd)
 	elif _t < T_GETUP:
 		var u3 := (_t - T_TRIP) / (T_GETUP - T_TRIP)
-		d = lerpf(5.9, 6.8, 1.0 - pow(1.0 - u3, 2.0))  # подсекли — падает вперёд
+		d = lerpf(5.9, 6.8, 1.0 - pow(1.0 - u3, 2.0))  # подсекли — падает
+		_face(-_fwd)
 	elif _t < T_BACK:
 		d = 6.8
 		_face(_fwd)                                      # встаёт спиной к герою
@@ -154,13 +195,18 @@ func _target_path() -> void:
 		var u4 := clampf((_t - T_BACK) / (LENGTH - T_BACK), 0.0, 1.0)
 		d = lerpf(6.8, 8.6, 1.0 - pow(1.0 - u4, 2.0))   # удар в спину — летит вперёд
 		up = 4.0 * 0.5 * u4 * (1.0 - u4)
-	target.global_position = _p0 + _fwd * d + Vector3(0.0, _ground - _p0.y + up, 0.0)
+		_face(_fwd)
+	var p := _p0 + _fwd * d
+	target.global_position = Vector3(p.x, _ground + up, p.z)
 
 
+## Лицом по dir: поворачивается модель врага (она смотрит по +Z), а не его тело — иначе повороты складывались.
 func _face(dir: Vector3) -> void:
 	if not is_instance_valid(target) or dir.length() < 0.01:
 		return
-	target.rotation.y = atan2(-dir.x, -dir.z)
+	var m: Variant = target.get("_model")
+	if m is Node3D:
+		(m as Node3D).rotation.y = atan2(dir.x, dir.z)
 
 
 func _hits() -> void:
@@ -183,7 +229,7 @@ func _hits() -> void:
 		loc.call("_sfx_once", "sounds/body_fall.ogg", -2.0)
 	if _t >= T_GETUP and not _done.has("getup"):
 		_done["getup"] = true
-		if is_instance_valid(target) and target.has_method("cine_anim"):
+		if is_instance_valid(target) and target.has_method("cine_anim") and bool(target.call("is_alive")):
 			target.call("cine_anim", "getup")
 	if _t >= T_BACK and not _done.has("back"):
 		_done["back"] = true
@@ -193,26 +239,28 @@ func _hits() -> void:
 		_vignette()
 	if _t >= T_BACK + 0.12 and not _done.has("back_fall"):
 		_done["back_fall"] = true
-		if is_instance_valid(target) and target.has_method("cine_anim"):
+		if is_instance_valid(target) and target.has_method("cine_anim") and bool(target.call("is_alive")):
 			target.call("cine_anim", "fall")
 
 
-## Попадание: урон (цифры, как у обычных ударов), состояние цели, замирание клипа, тряска, вспышка, искры.
+## Попадание: урон (цифры, как у обычных ударов), реакция цели, замирание клипа, тряска, вспышка, искры.
 func _hit(dmg: float, heavy: bool, state: String, stop_t: float, shake: float) -> void:
 	_freeze = stop_t
-	var ap: AnimationPlayer = hero.get("anim")
-	if ap != null:
-		ap.speed_scale = 0.04
 	loc.set("_shake", maxf(float(loc.get("_shake")), shake))
+	loc.set("_shake_amp", 0.05 if not heavy else 0.09)
 	_flash_now(0.45 if heavy else 0.28)
 	if not is_instance_valid(target) or not bool(target.call("is_alive")):
 		return
+	_landed += 1
 	target.set("_state", "hurt")                      # в сцене не блокирует и не в гиперброне
 	target.set("_atk", "")
 	target.call("take_damage", dmg, _hero_pos(), false)
+	if not bool(target.call("is_alive")):
+		return
+	target.set("cine", true)                          # слом в сцене — сцена всё равно ведёт цель
 	if target.has_method("hitstop"):
 		target.call("hitstop", stop_t)
-	if target.has_method("cine_anim") and bool(target.call("is_alive")):
+	if target.has_method("cine_anim"):
 		target.call("cine_anim", state)
 	var nums: Array = loc.get("_numbers")
 	nums.append({"pos": target.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg), "crit": heavy, "t": 0.0})
@@ -233,29 +281,40 @@ func _spear_tip() -> Vector3:
 	return sw.global_transform * tip
 
 
-## Камера: [позиция, точка взгляда]. Сбоку от схватки, медленный облёт вокруг середины между героем и врагом:
-## начало — сбоку-спереди и ближе, отлёт и скольжение — широкий боковой план, удар в спину — низко сбоку.
+## Камера: [позиция, точка взгляда] — планы со склейками на ударах:
+##   до укола — низко из-за спины героя, через плечо на врага; укол и удар с разворота — бок, близко (слоу-мо);
+##   отлёт — широкий бок, следит за врагом; скольжение — у самой земли впереди героя, навстречу искрам;
+##   подъём и удар в спину — через плечо героя на спину врага; финал — отъезд сбоку и вверх.
 func camera() -> Array:
 	var h := _hero_pos()
-	var tg := target.global_position if is_instance_valid(target) else h + _fwd * 2.5
-	var mid := h.lerp(tg, 0.5)
-	var u := clampf(_t / LENGTH, 0.0, 1.0)
-	var ang := lerpf(deg_to_rad(55.0), deg_to_rad(115.0), smoothstep(0.0, 1.0, u))   # от «сбоку-спереди» до «сбоку-сзади»
-	var span := (tg - h).length()
-	var radius := clampf(span * 0.9 + 3.2, 3.6, 7.0)
-	var height := 1.5
-	if _t < T_STUN:
-		radius = 3.0
-	if _t > T_BACK - 0.3:
-		height = 0.9                                     # удар в спину — ниже, драматичнее
-	var dir := (_right * sin(ang) + _fwd * cos(ang)).normalized()
-	return [mid + dir * radius + Vector3.UP * height, mid + Vector3.UP * 0.95]
+	var hf := Vector3(h.x, _ground, h.z)
+	var tg := target.global_position if is_instance_valid(target) else hf + _fwd * 2.5
+	tg.y = _ground
+	var mid := hf.lerp(tg, 0.5)
+	var sd := _right * _side
+	if _t < T_STUN - 0.12:
+		var u := smoothstep(0.0, T_STUN, _t)
+		return [hf - _fwd * lerpf(2.6, 2.1, u) + sd * 0.9 + Vector3.UP * lerpf(0.9, 1.1, u), tg + Vector3.UP * 1.1]
+	if _t < T_SPIN + 0.25:
+		var u2 := smoothstep(T_STUN - 0.12, T_SPIN + 0.25, _t)
+		return [mid + sd * lerpf(3.0, 3.6, u2) - _fwd * 0.4 + Vector3.UP * 1.3, mid + Vector3.UP * 1.0]
+	if _t < T_LAND:
+		return [mid + sd * 6.2 + _fwd * 0.8 + Vector3.UP * 2.1, mid + Vector3.UP * 1.1 + _fwd * 0.6]
+	if _t < T_GETUP:
+		var u3 := smoothstep(T_LAND, T_GETUP, _t)
+		var ahead := hf + _fwd * lerpf(2.6, 1.8, u3) + sd * 1.3
+		return [ahead + Vector3.UP * 0.35, hf + Vector3.UP * 0.6]
+	if _t < T_BACK + 0.15:
+		return [hf - _fwd * 1.6 - sd * 0.8 + Vector3.UP * 1.55, tg + Vector3.UP * 1.0]
+	var u4 := smoothstep(T_BACK + 0.15, LENGTH, _t)
+	return [mid + sd * lerpf(3.4, 5.0, u4) + Vector3.UP * lerpf(0.8, 2.2, u4), mid + Vector3.UP * 0.9]
 
 
 func _build_ui() -> void:
 	_ui = CanvasLayer.new()
 	_ui.layer = 90
 	add_child(_ui)
+	_bars = []
 	for i: int in 2:
 		var b := ColorRect.new()
 		b.color = Color(0, 0, 0, 1)
