@@ -481,8 +481,8 @@ func _perf_gpu(only: String) -> void:
 	var city_mi: Array = []
 	var grass: Array = []
 	for n: Node in _kids("MultiMeshInstance3D"):
-		if n.name.begins_with("Grass"):
-			grass.append(n)
+		if n.get_parent() == vp and is_equal_approx((n as GeometryInstance3D).extra_cull_margin, 1.0):
+			grass.append(n)                                  # ячейки травы (grass.gd): прямо в виде, запас рамки 1 м
 		elif n.get_parent() != null and n.get_parent().name == "City":
 			city_mmi.append(n)
 	for c: Node in location.find_children("City", "", true, false):
@@ -502,6 +502,8 @@ func _perf_gpu(only: String) -> void:
 		steps.append(["GI в полразрешения", func(on: bool) -> void: rs.gi_set_use_half_resolution(not on), 1.5])
 		steps.append(["SDFGI лучи 64→16", func(on: bool) -> void:
 			rs.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_64 if on else RenderingServer.ENV_SDFGI_RAY_COUNT_16), 2.0])
+		steps.append(["SDFGI лучи 64→32", func(on: bool) -> void:
+			rs.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_64 if on else RenderingServer.ENV_SDFGI_RAY_COUNT_32), 2.0])
 	if env.ssil_enabled:
 		steps.append(["SSIL", func(on: bool) -> void: env.ssil_enabled = on, 1.5])
 		steps.append(["SSIL в полразмера", func(on: bool) -> void:
@@ -533,6 +535,18 @@ func _perf_gpu(only: String) -> void:
 	steps.append(["ландшафт", func(on: bool) -> void: vis.call(land, on), 1.0])
 	steps.append(["город MultiMesh", func(on: bool) -> void: vis.call(city_mmi, on), 1.0])
 	steps.append(["город модели", func(on: bool) -> void: vis.call(city_mi, on), 1.0])
+	var casters: Array = (city_mmi + city_mi).filter(func(n: Node) -> bool:
+		return (n as GeometryInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	steps.append(["тени города (отбрасывание)", func(on: bool) -> void:
+		for n: Variant in casters:
+			if is_instance_valid(n):
+				(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if on else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, 1.0])
+	var fades: Array = (city_mmi + city_mi).filter(func(n: Node) -> bool:
+		return (n as GeometryInstance3D).visibility_range_fade_mode != GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED)
+	steps.append(["растворение мелочи (fade)", func(on: bool) -> void:
+		for n: Variant in fades:
+			if is_instance_valid(n):
+				(n as GeometryInstance3D).visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF if on else GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED, 1.0])
 	steps.append(["LOD 1→4 px", func(on: bool) -> void: vp.mesh_lod_threshold = lod if on else 4.0, 1.0])
 	if lens != null:
 		steps.append(["слой камеры (lens)", func(on: bool) -> void: box.material = lens if on else null, 1.0])
@@ -542,6 +556,8 @@ func _perf_gpu(only: String) -> void:
 		rs.get_video_adapter_name(), str(vp.size), steps.size(), lights.size(), bodies.size(), grass.size(), city_mi.size()])
 	var base: Array = await _gpu_sample(rid, root_rid, 3.0)
 	log_info("Pax RPG perf gpu: база — " + _gpu_line(base))
+	log_info("Pax RPG perf gpu: проходы — " + _pass_info(rid) + " · город: MultiMesh %d, модели %d, отбрасывают тень %d" % [
+		city_mmi.size(), city_mi.size(), casters.size()])
 	for st: Array in steps:
 		if only != "" and not str(st[0]).begins_with(only):
 			continue
@@ -554,6 +570,21 @@ func _perf_gpu(only: String) -> void:
 			st[0], a[1], b[1], float(b[1]) - float(a[1]), a[2], b[2], a[0], b[0], a[3], b[3]])
 		await get_tree().create_timer(float(st[2])).timeout
 	log_info("Pax RPG perf gpu: готово")
+
+
+## Вызовы отрисовки, объекты и треугольники вида: видимый проход и тени отдельно; физика — тела, пары, острова.
+func _pass_info(rid: RID) -> String:
+	var rs := RenderingServer
+	var out := []
+	for t: Array in [["вид", RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE], ["тени", RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW]]:
+		out.append("%s: draw %d · obj %d · tri %dk" % [t[0],
+			rs.viewport_get_render_info(rid, t[1], RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+			rs.viewport_get_render_info(rid, t[1], RenderingServer.VIEWPORT_RENDER_INFO_OBJECTS_IN_FRAME),
+			rs.viewport_get_render_info(rid, t[1], RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME) / 1000])
+	out.append("физика: активных %d · пар %d · островов %d · такт %.2f мс" % [
+		Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS),
+		Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
+	return " · ".join(out)
 
 
 func mod_setting_or(key: String, fallback: Variant) -> Variant:
