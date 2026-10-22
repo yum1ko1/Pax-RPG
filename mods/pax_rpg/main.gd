@@ -272,6 +272,9 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "err":
+		_perf_err()
+		return "rpg_perf err: поиск источника ошибок рендера ~1.5 мин, метки в логе ([pax_rpg] err-test)"
 	if args.size() >= 1 and args[0] == "gpu":
 		_perf_gpu(args[1] if args.size() >= 2 else "")
 		return "rpg_perf gpu [часть]: A/B по частям картинки ~4 мин, итог в логе ([pax_rpg] perf gpu)"
@@ -588,6 +591,63 @@ func _pass_info(rid: RID) -> String:
 		Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS),
 		Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
 	return " · ".join(out)
+
+
+## Поиск источника ошибок рендера (И-132, «uniform_set is null» ~1 на кадр): подозреваемые по очереди выключаются на 3 с,
+## в логе — метки «err-test A/B <имя>»; источник — тот, при выключении которого ошибок между метками нет.
+func _perf_err() -> void:
+	var env: Environment = location.get("_env")
+	var vp: SubViewport = location.get("_view")
+	var pl: Variant = location.get("_player")
+	if env == null or vp == null:
+		log_info("Pax RPG err-test: нет локации")
+		return
+	var we: WorldEnvironment = null
+	for n: Node in _kids("WorldEnvironment"):
+		we = n as WorldEnvironment
+	var ca: CameraAttributes = we.camera_attributes if we != null else null
+	var bg := env.background_mode
+	var tm := env.tonemap_mode
+	var vis := func(nodes: Array, on: bool) -> void:
+		for n: Variant in nodes:
+			if is_instance_valid(n) and n is Node3D:
+				(n as Node3D).visible = on
+	var other_mi: Array = []
+	for n: Node in _kids("MeshInstance3D"):
+		var a: Node = n
+		var in_city := false
+		while a != null and a != vp:
+			if a.name == "City" or a is CharacterBody3D:
+				in_city = true
+				break
+			a = a.get_parent()
+		if not in_city and (n as Node3D).visible:
+			other_mi.append(n)
+	var tests: Array = [
+		["весь 3D-вид", func(on: bool) -> void: vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED],
+		["цветокоррекция LUT", func(on: bool) -> void: env.adjustment_enabled = on],
+		["небо → цвет", func(on: bool) -> void: env.background_mode = bg if on else Environment.BG_COLOR],
+		["тонмаппинг ACES → линейный", func(on: bool) -> void: env.tonemap_mode = tm if on else Environment.TONE_MAPPER_LINEAR],
+		["камера: экспозиция", func(on: bool) -> void: if we != null: we.camera_attributes = ca if on else null],
+		["герой", func(on: bool) -> void: if pl is Node3D: (pl as Node3D).visible = on],
+		["прочие сетки вне города", func(on: bool) -> void: vis.call(other_mi, on)],
+		["декали", func(on: bool) -> void: vis.call(_kids("Decal"), on)],
+		["Label3D/Sprite3D", func(on: bool) -> void: vis.call(_kids("Label3D") + _kids("Sprite3D") + _kids("AnimatedSprite3D"), on)],
+		["свет направленный", func(on: bool) -> void: vis.call(_kids("DirectionalLight3D"), on)],
+		["ореол", func(on: bool) -> void: env.glow_enabled = on],
+		["туман", func(on: bool) -> void: env.fog_enabled = on],
+	]
+	log_info("Pax RPG err-test: начало, прочих сеток %d" % other_mi.size())
+	for t: Array in tests:
+		log_info("Pax RPG err-test A " + str(t[0]))
+		await get_tree().create_timer(3.0).timeout
+		(t[1] as Callable).call(false)
+		await get_tree().process_frame
+		log_info("Pax RPG err-test B " + str(t[0]))
+		await get_tree().create_timer(3.0).timeout
+		(t[1] as Callable).call(true)
+		await get_tree().process_frame
+	log_info("Pax RPG err-test: конец")
 
 
 func mod_setting_or(key: String, fallback: Variant) -> Variant:
