@@ -2578,7 +2578,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what := str({"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, ""))
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false

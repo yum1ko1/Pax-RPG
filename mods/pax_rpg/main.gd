@@ -8,6 +8,7 @@ const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
 const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
+const GfxS := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 const MainMenu := preload("res://mods/pax_rpg/src/ui/main_menu.gd")
 const Names := preload("res://mods/pax_rpg/src/location/names.gd")
@@ -271,6 +272,9 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "gpu":
+		_perf_gpu(args[1] if args.size() >= 2 else "")
+		return "rpg_perf gpu [часть]: A/B по частям картинки ~4 мин, итог в логе ([pax_rpg] perf gpu)"
 	var cnt := {"particles": 0, "omni": 0, "omni_shadow": 0, "mesh": 0, "multimesh_inst": 0}
 	var stack: Array = [location]
 	var hide := args.size() >= 2 and args[0] == "off"
@@ -446,3 +450,135 @@ func _perf_prof() -> void:
 		await get_tree().process_frame
 		f += 1
 	log_info("Pax RPG perf prof: fps %.1f · %s" % [f / 5.0, ProfS.report(f)])
+
+
+## Замер видеокарты A/B: каждая часть картинки по очереди выключается (или ставится дешевле), до и после — время
+## видеокарты 3D-вида локации и окна (слой камеры, HUD), FPS и время кадра на процессоре. Камера стоит — сравнение
+## честное. rpg_perf gpu — все части; rpg_perf gpu <начало имени> — одна.
+func _perf_gpu(only: String) -> void:
+	var env: Environment = location.get("_env")
+	var sun: DirectionalLight3D = location.get("_sun")
+	var vp: SubViewport = location.get("_view")
+	var hud: CanvasItem = location.get("_hud")
+	var box: SubViewportContainer = location.get("_box")
+	var gfx: GfxS = location.get("_gfx")
+	if env == null or vp == null or sun == null:
+		log_info("Pax RPG perf gpu: нет локации")
+		return
+	var rs := RenderingServer
+	var rid := vp.get_viewport_rid()
+	var root_rid := get_viewport().get_viewport_rid()
+	rs.viewport_set_measure_render_time(rid, true)
+	rs.viewport_set_measure_render_time(root_rid, true)
+	var lens: Material = box.material if box != null else null
+	var lod := vp.mesh_lod_threshold
+	var sun_far := sun.directional_shadow_max_distance
+	var vis := func(nodes: Array, on: bool) -> void:
+		for n: Variant in nodes:
+			if is_instance_valid(n) and n is Node3D:
+				(n as Node3D).visible = on
+	var city_mmi: Array = []
+	var city_mi: Array = []
+	var grass: Array = []
+	for n: Node in _kids("MultiMeshInstance3D"):
+		if n.name.begins_with("Grass"):
+			grass.append(n)
+		elif n.get_parent() != null and n.get_parent().name == "City":
+			city_mmi.append(n)
+	for c: Node in location.find_children("City", "", true, false):
+		for n: Node in c.find_children("*", "MeshInstance3D", true, false):
+			if not n is MultiMeshInstance3D and (n as Node3D).visible:
+				city_mi.append(n)
+	var pl: Variant = location.get("_player")
+	var bodies: Array = _kids("CharacterBody3D").filter(func(n: Node) -> bool: return n != pl and (n as Node3D).visible)
+	var lights: Array = _kids("OmniLight3D").filter(func(n: Node) -> bool: return (n as Node3D).visible)
+	var parts: Array = (_kids("GPUParticles3D") + _kids("CPUParticles3D")).filter(func(n: Node) -> bool: return (n as Node3D).visible)
+	var fogs: Array = _kids("FogVolume")
+	var land: Array = location.find_children("Landscape", "", true, false)
+	var probes: Array = _kids("ReflectionProbe")
+	var steps: Array = []
+	if env.sdfgi_enabled:
+		steps.append(["SDFGI", func(on: bool) -> void: env.sdfgi_enabled = on, 3.0])
+		steps.append(["GI в полразрешения", func(on: bool) -> void: rs.gi_set_use_half_resolution(not on), 1.5])
+		steps.append(["SDFGI лучи 64→16", func(on: bool) -> void:
+			rs.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_64 if on else RenderingServer.ENV_SDFGI_RAY_COUNT_16), 2.0])
+	if env.ssil_enabled:
+		steps.append(["SSIL", func(on: bool) -> void: env.ssil_enabled = on, 1.5])
+		steps.append(["SSIL в полразмера", func(on: bool) -> void:
+			rs.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, not on, 0.5, 4, 50.0, 300.0), 1.5])
+	if env.ssao_enabled:
+		steps.append(["SSAO", func(on: bool) -> void: env.ssao_enabled = on, 1.5])
+		steps.append(["SSAO в полразмера", func(on: bool) -> void:
+			rs.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, not on, 0.5, 2, 50.0, 300.0), 1.5])
+	if env.ssr_enabled:
+		steps.append(["SSR", func(on: bool) -> void: env.ssr_enabled = on, 1.5])
+	if env.volumetric_fog_enabled:
+		steps.append(["объёмный туман", func(on: bool) -> void: env.volumetric_fog_enabled = on, 1.5])
+	steps.append(["ореол (glow)", func(on: bool) -> void: env.glow_enabled = on, 1.0])
+	steps.append(["TAA", func(on: bool) -> void: vp.use_taa = on, 1.0])
+	steps.append(["тени солнца", func(on: bool) -> void: sun.shadow_enabled = on, 1.0])
+	steps.append(["тени солнца мягкие→низкие", func(on: bool) -> void:
+		rs.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH if on else RenderingServer.SHADOW_QUALITY_SOFT_LOW), 1.0])
+	steps.append(["атлас солнца 8192→4096", func(on: bool) -> void: rs.directional_shadow_atlas_set_size(8192 if on else 4096, true), 1.0])
+	steps.append(["тени солнца дальность→60 м", func(on: bool) -> void: sun.directional_shadow_max_distance = sun_far if on else 60.0, 1.0])
+	if gfx != null:
+		steps.append(["тени огней", func(on: bool) -> void:
+			gfx.set_option("lamp_shadows_n", float(mod_setting_or("gfx_lamp_shadows_n", 40.0)) if on else 0.0), 3.0])
+	steps.append(["огни omni", func(on: bool) -> void: vis.call(lights, on), 1.0])
+	steps.append(["трава", func(on: bool) -> void: vis.call(grass, on), 1.0])
+	steps.append(["частицы", func(on: bool) -> void: vis.call(parts, on), 1.0])
+	steps.append(["дымка огней (FogVolume)", func(on: bool) -> void: vis.call(fogs, on), 1.0])
+	steps.append(["проба отражений", func(on: bool) -> void: vis.call(probes, on), 1.0])
+	steps.append(["жители и враги", func(on: bool) -> void: vis.call(bodies, on), 1.0])
+	steps.append(["ландшафт", func(on: bool) -> void: vis.call(land, on), 1.0])
+	steps.append(["город MultiMesh", func(on: bool) -> void: vis.call(city_mmi, on), 1.0])
+	steps.append(["город модели", func(on: bool) -> void: vis.call(city_mi, on), 1.0])
+	steps.append(["LOD 1→4 px", func(on: bool) -> void: vp.mesh_lod_threshold = lod if on else 4.0, 1.0])
+	if lens != null:
+		steps.append(["слой камеры (lens)", func(on: bool) -> void: box.material = lens if on else null, 1.0])
+	if hud != null:
+		steps.append(["HUD", func(on: bool) -> void: hud.visible = on, 1.0])
+	log_info("Pax RPG perf gpu: %s · вид %s · %d частей · огней %d · тел %d · трава %d · модели %d" % [
+		rs.get_video_adapter_name(), str(vp.size), steps.size(), lights.size(), bodies.size(), grass.size(), city_mi.size()])
+	var base: Array = await _gpu_sample(rid, root_rid, 3.0)
+	log_info("Pax RPG perf gpu: база — " + _gpu_line(base))
+	for st: Array in steps:
+		if only != "" and not str(st[0]).begins_with(only):
+			continue
+		var a: Array = await _gpu_sample(rid, root_rid, 2.0)
+		(st[1] as Callable).call(false)
+		await get_tree().create_timer(float(st[2])).timeout
+		var b: Array = await _gpu_sample(rid, root_rid, 2.0)
+		(st[1] as Callable).call(true)
+		log_info("Pax RPG perf gpu: без «%s» — 3D %.2f→%.2f (%+.2f) · окно %.2f→%.2f · fps %.0f→%.0f · кадр ЦП %.2f→%.2f мс" % [
+			st[0], a[1], b[1], float(b[1]) - float(a[1]), a[2], b[2], a[0], b[0], a[3], b[3]])
+		await get_tree().create_timer(float(st[2])).timeout
+	log_info("Pax RPG perf gpu: готово")
+
+
+func mod_setting_or(key: String, fallback: Variant) -> Variant:
+	var v: Variant = get_setting(key, null)
+	return fallback if v == null else v
+
+
+## [fps, мс видеокарты 3D-вида, мс видеокарты окна, мс процессора на кадр (без ожидания видеокарты не отличить —
+## берём время обработки кадра)] за secs секунд.
+func _gpu_sample(rid: RID, root_rid: RID, secs: float) -> Array:
+	var f := 0
+	var g3 := 0.0
+	var g2 := 0.0
+	var cpu := 0.0
+	var t0 := Time.get_ticks_usec()
+	while Time.get_ticks_usec() - t0 < int(secs * 1000000.0):
+		await get_tree().process_frame
+		f += 1
+		g3 += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+		g2 += RenderingServer.viewport_get_measured_render_time_gpu(root_rid)
+		cpu += RenderingServer.viewport_get_measured_render_time_cpu(rid) + RenderingServer.get_frame_setup_time_cpu()
+	var dt := (Time.get_ticks_usec() - t0) / 1000000.0
+	f = maxi(f, 1)
+	return [f / dt, g3 / f, g2 / f, cpu / f]
+
+
+func _gpu_line(s: Array) -> String:
+	return "fps %.1f · 3D %.2f мс · окно %.2f мс · отрисовка ЦП %.2f мс" % [s[0], s[1], s[2], s[3]]
