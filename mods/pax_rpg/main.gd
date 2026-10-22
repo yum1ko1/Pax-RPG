@@ -552,8 +552,11 @@ func _perf_gpu(only: String) -> void:
 		steps.append(["слой камеры (lens)", func(on: bool) -> void: box.material = lens if on else null, 1.0])
 	if hud != null:
 		steps.append(["HUD", func(on: bool) -> void: hud.visible = on, 1.0])
-	log_info("Pax RPG perf gpu: %s · вид %s · %d частей · огней %d · тел %d · трава %d · модели %d" % [
-		rs.get_video_adapter_name(), str(vp.size), steps.size(), lights.size(), bodies.size(), grass.size(), city_mi.size()])
+	var root := get_tree().root
+	log_info("Pax RPG perf gpu: %s · вид %s ×%.2f · окно %s · корень %s, база %s, режим %d, ×%.2f · контейнер %s · %d частей · огней %d · тел %d · трава %d · модели %d" % [
+		rs.get_video_adapter_name(), str(vp.size), vp.scaling_3d_scale, str(DisplayServer.window_get_size()), str(root.size),
+		str(root.content_scale_size), root.content_scale_mode, root.content_scale_factor, str(box.size if box != null else Vector2.ZERO),
+		steps.size(), lights.size(), bodies.size(), grass.size(), city_mi.size()])
 	var base: Array = await _gpu_sample(rid, root_rid, 3.0)
 	log_info("Pax RPG perf gpu: база — " + _gpu_line(base))
 	log_info("Pax RPG perf gpu: проходы — " + _pass_info(rid) + " · город: MultiMesh %d, модели %d, отбрасывают тень %d" % [
