@@ -623,7 +623,20 @@ func _perf_err() -> void:
 			a = a.get_parent()
 		if not in_city and (n as Node3D).visible:
 			other_mi.append(n)
+	var gfx: GfxS = location.get("_gfx")
+	var rs := RenderingServer
 	var tests: Array = [
+		["глобальные настройки рендера мода", func(on: bool) -> void:
+			if gfx != null:
+				if on: gfx.push_globals()
+				else: gfx.restore_globals()],
+		["фильтр декалей", func(on: bool) -> void:
+			rs.decals_set_filter(RenderingServer.DECAL_FILTER_LINEAR_MIPMAPS_ANISOTROPIC if on else RenderingServer.DECAL_FILTER_LINEAR_MIPMAPS)],
+		["фильтр проекторов", func(on: bool) -> void:
+			rs.light_projectors_set_filter(RenderingServer.LIGHT_PROJECTOR_FILTER_LINEAR_MIPMAPS_ANISOTROPIC if on else RenderingServer.LIGHT_PROJECTOR_FILTER_LINEAR_MIPMAPS)],
+		["SSS качество", func(on: bool) -> void:
+			rs.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_HIGH if on else RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_LOW)],
+		["бикубический ореол", func(on: bool) -> void: rs.environment_glow_set_use_bicubic_upscale(on)],
 		["весь 3D-вид", func(on: bool) -> void: vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED],
 		["цветокоррекция LUT", func(on: bool) -> void: env.adjustment_enabled = on],
 		["небо → цвет", func(on: bool) -> void: env.background_mode = bg if on else Environment.BG_COLOR],
