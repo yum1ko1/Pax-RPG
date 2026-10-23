@@ -299,6 +299,9 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "bench":
+		_perf_bench()
+		return "rpg_perf bench: день и ночь по 8 с (~30 с), итог в логе ([pax_rpg] bench)"
 	if args.size() >= 1 and args[0] == "err":
 		_perf_err()
 		return "rpg_perf err: поиск источника ошибок рендера ~1.5 мин, метки в логе ([pax_rpg] err-test)"
@@ -480,6 +483,56 @@ func _perf_prof() -> void:
 		await get_tree().process_frame
 		f += 1
 	log_info("Pax RPG perf prof: fps %.1f · %s" % [f / 5.0, ProfS.report(f)])
+
+
+## Сравнимый замер «до/после»: камера стоит, 8 с днём (как есть) и 8 с ночью (22:00), потом час — обратно. Средний FPS,
+## 1 % худших кадров, время видеокарты (3D и окно), процессор отрисовки, части мода (Prof), проходы.
+func _perf_bench() -> void:
+	var vp: SubViewport = location.get("_view")
+	var dn: Node = location.get("_daynight")
+	if vp == null:
+		log_info("Pax RPG bench: нет локации")
+		return
+	var rid := vp.get_viewport_rid()
+	var root_rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	RenderingServer.viewport_set_measure_render_time(root_rid, true)
+	var hour0: float = float(dn.get("hour")) if dn != null else 12.0
+	log_info("Pax RPG bench: вид %s · окно %s" % [str(vp.size), str(DisplayServer.window_get_size())])
+	for phase: Array in [["день", hour0], ["ночь", 22.0]]:
+		if dn != null:
+			location.set_hour(float(phase[1]))
+		await get_tree().create_timer(4.0).timeout
+		ProfS.report(1)
+		var times: Array = []
+		var g3 := 0.0
+		var g2 := 0.0
+		var cpu := 0.0
+		var t0 := Time.get_ticks_usec()
+		var last := t0
+		while Time.get_ticks_usec() - t0 < 8000000:
+			await get_tree().process_frame
+			var now := Time.get_ticks_usec()
+			times.append(now - last)
+			last = now
+			g3 += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+			g2 += RenderingServer.viewport_get_measured_render_time_gpu(root_rid)
+			cpu += RenderingServer.viewport_get_measured_render_time_cpu(rid) + RenderingServer.get_frame_setup_time_cpu()
+		var n := maxi(times.size(), 1)
+		var secs := (Time.get_ticks_usec() - t0) / 1000000.0
+		times.sort()
+		var worst := times.slice(int(n * 0.99))
+		var w_avg := 0.0
+		for t: Variant in worst:
+			w_avg += float(t)
+		w_avg /= maxf(worst.size(), 1)
+		log_info("Pax RPG bench %s: fps %.1f · 1%% low %.1f · 3D gpu %.2f мс · окно %.2f мс · отрисовка ЦП %.2f мс · физика(макс) %.2f мс · %s" % [
+			phase[0], n / secs, 1000000.0 / maxf(w_avg, 1.0), g3 / n, g2 / n, cpu / n,
+			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, _pass_info(rid)])
+		log_info("Pax RPG bench %s: мод — %s" % [phase[0], ProfS.report(n)])
+	if dn != null:
+		location.set_hour(hour0)
+	log_info("Pax RPG bench: готово")
 
 
 ## Замер видеокарты A/B: каждая часть картинки по очереди выключается (или ставится дешевле), до и после — время
