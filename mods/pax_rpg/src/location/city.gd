@@ -1269,7 +1269,10 @@ func _small_prop(path: String) -> float:
 ## LOD-копии тяжёлых построек: <name>_lod1.glb (~30 % граней) — от LOD_NEAR до LOD_MID м, <name>_lod2.glb (~12 %) —
 ## дальше (pax_rpg/dev/blender/gharn/make_lods.py); прежние <name>_lo.glb — одна копия дальше LOD_NEAR. Материалы и
 ## текстуры копий — у основной (assets.gd → lod_base). У копий нет коллизий и окклюдеров — они у основной.
-const LOD_COPIES := true
+## Выкл. с 0.4.20Y: копии от make_lods.py (Decimate по несваренной сетке Meshy) выедали куски — дома вдали в дырах.
+## Без потерь их не пересобрать автоматически (pax_rpg/dev/assets/lods: швы UV у Meshy почти на каждом ребре, доски —
+## отдельные оболочки); постройки вдали — полной моделью.
+const LOD_COPIES := false
 const LOD_NEAR := 55.0
 const LOD_MID := 120.0
 var _lod := 0                                            # 0 — обычная, 1 — полная (ближе LOD_NEAR), 2 — лёгкая копия

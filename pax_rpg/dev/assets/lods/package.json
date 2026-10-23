@@ -1,0 +1,6 @@
+{
+  "name": "pax-rpg-lods",
+  "private": true,
+  "type": "module",
+  "dependencies": { "meshoptimizer": "0.25.0" }
+}
