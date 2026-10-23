@@ -81,6 +81,13 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	_fade.add_child(_fade_label)
 
 
+## Затемнение с подписью этапа живёт в интерфейсе локации (ui), а не под ареной: уходит вместе с ареной — раньше
+## каждый вход в город оставлял на локации ещё один невидимый ColorRect с Label.
+func _exit_tree() -> void:
+	if is_instance_valid(_fade):
+		_fade.queue_free()
+
+
 ## Выбранный этап (0…4).
 func stage() -> int:
 	return clampi(_pick, 0, STAGES.size() - 1)
