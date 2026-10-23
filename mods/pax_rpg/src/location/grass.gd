@@ -7,16 +7,23 @@ extends RefCounted
 ## Загрузка: где расти — чистый расчёт в потоке (bg.gd → compute), результат — готовые буферы
 ## MultiMesh (16 чисел на пучок: матрица и цвет) — ставятся одним присваиванием, без цикла по копиям.
 ## Буферы запоминаются (_cache): повторный вход в город — без расчёта.
+##
+## Дальняя трава (до grass_far м, по умолчанию 100): каждый FAR_EVERY-й пучок той же раскладки — простой пучок
+## (две карточки крест-накрест, по 4 острых травинки: 18 вершин вместо 56), ячейки по FAR_CELL м. Тот же шейдер:
+## дальняя вырастает из земли там же, где ближняя в неё уходит (fade_start…fade_end), и сама уходит в землю у grass_far.
 
 const Forest := preload("res://mods/pax_rpg/src/location/forest.gd")
 const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
 const CELL := 16.0
 const OCC := 0.5                   # м на клетку карты занятости
+const FAR_CELL := 32.0
+const FAR_EVERY := 3
 
-static var _cache := {}            # ключ → {Vector2i ячейка: PackedFloat32Array}
+static var _cache := {}            # ключ → {"near": {Vector2i: PackedFloat32Array}, "far": {…}}
 static var _forest_key := ""       # ключ травы последнего леса задания
 
 var count := 0
+var far_count := 0
 var done := false                  # трава поставлена (или её нет)
 
 
@@ -30,6 +37,7 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 		_finish(on_done)
 		return
 	var fade_end := float(cfg.get("grass_distance", 40.0))
+	var far := float(cfg.get("grass_far", 100.0))
 	var gm: Dictionary = layout.get("ground_mask", {})
 	var mask: Image = null
 	var mt: Texture2D = mod.texture(str(gm.get("tex", "")))
@@ -42,7 +50,7 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 	var key := str(hash(var_to_str([density, g, gm.get("tex", ""), rects.size(), layout.get("arena", []),
 		(layout.get("terrain", {}) as Dictionary).get("seed", 0)])))
 	if _cache.has(key):
-		_spawn(parent, _cache[key], sh, fade_end)
+		_spawn(parent, _cache[key], sh, fade_end, far)
 		_finish(on_done)
 		return
 	var tg := Time.get_ticks_msec()
@@ -55,7 +63,7 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 				_cache.erase(_forest_key)                    # каждым новым заданием
 			_forest_key = key
 		if is_instance_valid(parent) and parent.is_inside_tree():
-			_spawn(parent, res as Dictionary, sh, fade_end)
+			_spawn(parent, res as Dictionary, sh, fade_end, far)
 	_finish(on_done)                                     # ошибка в потоке — без травы, но загрузка не виснет
 
 
@@ -65,14 +73,17 @@ func _finish(on_done: Callable) -> void:
 		on_done.call()
 
 
-## Ячейки → MultiMeshInstance3D (главный поток): сетка пучка, материал, буфер.
-func _spawn(parent: Node, cells: Dictionary, sh: Shader, fade_end: float) -> void:
+## Ячейки → MultiMeshInstance3D (главный поток): сетка пучка, материал, буфер. data — {"near": ячейки, "far": ячейки}.
+func _spawn(parent: Node, data: Dictionary, sh: Shader, fade_end: float, far: float) -> void:
+	var cells: Dictionary = data.get("near", {})
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
 	mat.set_shader_parameter("fade_end", fade_end)
 	mat.set_shader_parameter("fade_start", fade_end * 0.7)
 	var mesh := _clump()
 	mesh.surface_set_material(0, mat)
+	if far > fade_end:
+		_spawn_far(parent, data.get("far", {}), sh, fade_end, far)
 	for key: Vector2i in cells:
 		var buf: PackedFloat32Array = cells[key]
 		var mm := MultiMesh.new()
@@ -92,6 +103,41 @@ func _spawn(parent: Node, cells: Dictionary, sh: Shader, fade_end: float) -> voi
 		count += mm.instance_count
 
 
+## Дальняя трава: вырастает, пока ближняя уходит в землю (fade_end·0.7…fade_end), видна до far, у far уходит в землю.
+## Ячейки по FAR_CELL м: ближе begin в ячейке нет ни одного пучка, выросшего из земли, дальше end — ни одного не
+## ушедшего (запас — полдиагонали ячейки и высота камеры), поэтому дальность показа не режет видимое.
+func _spawn_far(parent: Node, cells: Dictionary, sh: Shader, fade_end: float, far: float) -> void:
+	if cells.is_empty():
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	mat.set_shader_parameter("grow_start", fade_end * 0.7)
+	mat.set_shader_parameter("grow_end", fade_end)
+	mat.set_shader_parameter("fade_start", far * 0.8)
+	mat.set_shader_parameter("fade_end", far)
+	var mesh := _far_clump()
+	mesh.surface_set_material(0, mat)
+	var half_diag := FAR_CELL * 0.71
+	for key: Vector2i in cells:
+		var buf: PackedFloat32Array = cells[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = mesh
+		mm.instance_count = buf.size() / 16
+		mm.buffer = buf
+		var mi := MultiMeshInstance3D.new()
+		mi.name = "GrassFar"
+		mi.multimesh = mm
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		mi.extra_cull_margin = 1.0
+		mi.visibility_range_begin = maxf(0.0, fade_end * 0.7 - half_diag - 1.0)
+		mi.visibility_range_end = far + half_diag + 5.0
+		parent.add_child(mi)
+		far_count += mm.instance_count
+
+
 ## Чистый расчёт (поток): где растёт трава. Узлов и мода не трогает.
 static func compute(input: Dictionary) -> Dictionary:
 	var density := float(input.density)
@@ -108,6 +154,8 @@ static func compute(input: Dictionary) -> Dictionary:
 	rng.seed = 1047
 	var step := 1.0 / sqrt(density)
 	var cells := {}
+	var far_cells := {}                                  # каждый FAR_EVERY-й пучок — в дальнюю траву (те же место и цвет)
+	var n := 0
 	var terr: Dictionary = input.get("terrain", {})
 	var tn: FastNoiseLite = Forest.noise(int(terr.get("seed", 0))) if not terr.is_empty() else null   # лес: трава — по рельефу
 	var y := gpos.y + 1.5
@@ -135,11 +183,19 @@ static func compute(input: Dictionary) -> Dictionary:
 			var buf: PackedFloat32Array = cells[key]
 			cells[key] = PackedFloat32Array()             # одна ссылка на буфер — дописываем без копирования
 			var py := Forest.height(tn, px, pz, terr) if tn != null else 0.0
-			buf.append_array(PackedFloat32Array([b.x.x, b.y.x, b.z.x, px, b.x.y, b.y.y, b.z.y, py, b.x.z, b.y.z, b.z.z, pz,
-				rng.randf_range(0.85, 1.1), rng.randf_range(0.88, 1.08), rng.randf_range(0.85, 1.0), 1.0]))
+			var row := PackedFloat32Array([b.x.x, b.y.x, b.z.x, px, b.x.y, b.y.y, b.z.y, py, b.x.z, b.y.z, b.z.z, pz,
+				rng.randf_range(0.85, 1.1), rng.randf_range(0.88, 1.08), rng.randf_range(0.85, 1.0), 1.0])
+			buf.append_array(row)
 			cells[key] = buf
+			n += 1
+			if n % FAR_EVERY == 0:
+				var fk := Vector2i(floori(px / FAR_CELL), floori(pz / FAR_CELL))
+				var fb: PackedFloat32Array = far_cells.get(fk, PackedFloat32Array())
+				far_cells[fk] = PackedFloat32Array()
+				fb.append_array(row)
+				far_cells[fk] = fb
 		y += step
-	return cells
+	return {"near": cells, "far": far_cells}
 
 
 ## Где стоят постройки: 1 — занято (прямоугольники city.rects с запасом), 0 — свободно. Огромные (сама земля) — мимо.
@@ -195,4 +251,30 @@ func _clump() -> ArrayMesh:
 	# одинаковые вершины (углы соседних треугольников и звеньев) — одной: 56 вершин на пучок вместо 126 — вершинный
 	# шейдер травы (ветер, волны, топтание) считается в 2.25 раза реже на те же треугольники
 	st.index()
+	return st.commit()
+
+
+## Дальний пучок: две вертикальные карточки крест-накрест, в каждой 4 острых травинки (треугольники от земли), той
+## же высоты, что ближние травинки, но шире: FAR_EVERY ближних пучков (7 тонких травинок) — один такой, покров тот же.
+## Без наклона: ушедшая в землю (высота 0) карточка вырождается в линию и не рисуется. 18 вершин, 8 треугольников.
+func _far_clump() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	const W := 0.8                                       # ширина карточки, м (4 травинки по 0.2)
+	for c: int in 2:
+		var ang := PI * 0.5 * c + 0.4
+		var along := Vector3(cos(ang), 0.0, sin(ang))
+		var nrm := along.cross(Vector3.UP).normalized()
+		for i: int in 4:
+			var x0 := -W * 0.5 + W * 0.25 * i
+			var hb := rng.randf_range(0.3, 0.56)
+			var tip := along * (x0 + W * 0.125 + rng.randf_range(-0.04, 0.04)) + Vector3(0.0, hb, 0.0)
+			for v: Array in [[along * x0, 0.0], [tip, 1.0], [along * (x0 + W * 0.25), 0.0]]:
+				st.set_normal(nrm)
+				st.set_color(Color.WHITE)
+				st.set_uv(Vector2(0.5, float(v[1])))
+				st.add_vertex(v[0])
+	st.index()                                           # соседние травинки делят угол у земли
 	return st.commit()
