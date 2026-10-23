@@ -235,6 +235,7 @@ static func mana_puff(parent: Node, at: Vector3, seconds: float) -> void:
 	ramp.add_point(0.2, Color(1.6, 0.8, 2.0, 0.9))
 	ramp.set_color(1, Color(0.9, 0.5, 1.4, 0.0))
 	p.color_ramp = ramp
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF      # светящиеся искры тени не дают — не в списках теней
 	parent.add_child(p)
 	p.global_position = at
 	p.emitting = true

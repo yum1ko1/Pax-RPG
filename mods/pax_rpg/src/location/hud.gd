@@ -101,6 +101,9 @@ func apply_theme(id: String) -> void:
 	if is_instance_valid(_deco):
 		_deco_key = Vector2.ZERO
 		_deco.queue_redraw()
+	if is_instance_valid(_cmp):
+		_cmp_sig = 0                                     # цвета компаса — из темы
+		_cmp.queue_redraw()
 var st: Dictionary = {}             # состояние кадра (location.gd)
 var portrait: Texture2D             # портрет врага
 var hero_portrait: Texture2D        # портрет героя (textures/hero_portrait.png — pax_rpg/dev/blender/knight/portrait.py)
@@ -131,6 +134,12 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	_deco.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
+	_cmp = Control.new()
+	_cmp.show_behind_parent = true                        # после оправы, до основного HUD — порядок как был
+	_cmp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cmp.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_cmp.draw.connect(_draw_cmp)
+	add_child(_cmp)
 	_mask = Control.new()
 	_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
@@ -165,19 +174,25 @@ func refresh() -> void:
 	_map.size = _mask.size
 	# весь HUD (≈200 команд рисования и текста) — только когда изменилось состояние или размер экрана; раньше —
 	# каждый кадр. Дышащая монета — свой слой (_coin), он дёшев и рисуется каждый кадр.
-	# миникарта (map_rects — сотни коробок города) в отпечаток не входит: раньше её целиком хешировали каждый кадр,
-	# а меняется она только при постройке города — хватает её размера
-	var rects: Variant = st.get("map_rects")
-	if rects != null:
-		st.erase("map_rects")
+	# в отпечаток основного HUD не входит то, что меняется при ходьбе и повороте камеры (компас — свой слой _cmp,
+	# миникарта — _map), и сама миникарта: map_rects — сотни коробок города, меняется только при постройке
+	var held := {}
+	for k: String in _MOVING:
+		if st.has(k):
+			held[k] = st[k]
+			st.erase(k)
 	var sig := st.hash() ^ hash(Vector3(size.x, size.y, _s))
-	if rects != null:
-		st["map_rects"] = rects
-		if rects is Array:
-			sig ^= (rects as Array).size()
+	for k: String in held:
+		st[k] = held[k]
+	if held.get("map_rects") is Array:
+		sig ^= (held["map_rects"] as Array).size()
 	if sig != _sig:
 		_sig = sig
 		queue_redraw()
+	var csig := hash([held.get("yaw", 0.0), held.get("targets", []), st.get("place", ""), size, _s])
+	if csig != _cmp_sig:
+		_cmp_sig = csig
+		_cmp.queue_redraw()
 	if is_instance_valid(_coin):
 		_coin.queue_redraw()
 	_live_tick()
@@ -206,6 +221,22 @@ func refresh() -> void:
 
 var _sig := 0                        # отпечаток состояния, с которым HUD нарисован последний раз
 var _coin: Control
+var _cmp: Control                    # компас и подписи у миникарты — меняются с каждым поворотом камеры и шагом
+var _cmp_sig := 0
+const _MOVING := ["me", "yaw", "body_yaw", "targets", "enemies", "map_rects"]   # не входят в отпечаток основного HUD
+
+
+## Компас и север у миникарты — свой слой за HUD (там же, где они были в порядке рисования: над оправой, под
+## остальным): при движении мыши и ходьбе перерисовывается он один, а не весь HUD (~200 команд и текст).
+func _draw_cmp() -> void:
+	if st.is_empty():
+		return
+	_ci = _cmp
+	_txt_k = 1.0
+	_cmp.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	_draw_compass()
+	_draw_map_frame()
+	_ci = self
 
 
 func _draw_coin() -> void:
@@ -250,8 +281,18 @@ func _g(k: String, d: Variant = 0.0) -> Variant:
 	return st.get(k, d)
 
 
+var _tr_cache := {}
+
+
+## Перевод строки — один раз за игру (раньше ~15 поисков по словарю языка на каждую перерисовку HUD).
 func _tr(k: String) -> String:
-	return mod.tr_key(k) if mod != null else k
+	if mod == null:
+		return k
+	var v: Variant = _tr_cache.get(k)
+	if v == null:
+		v = mod.tr_key(k)
+		_tr_cache[k] = v
+	return str(v)
 
 
 # ---------- рисование ----------
@@ -268,8 +309,6 @@ func _draw() -> void:
 	_draw_skills()
 	_txt_k = 1.0
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
-	_draw_compass()
-	_draw_map_frame()
 	_draw_quest()
 	_draw_enemy()
 	_draw_marks()
@@ -724,7 +763,7 @@ func _draw_compass() -> void:
 	var line_y := 52.0
 	for i: int in 24:
 		var a := float(i) / 24.0
-		draw_rect(Rect2(cx - 300 + 600 * a, line_y, 600.0 / 24.0, 1), Color(c_text, 0.7 * sin(a * PI)))
+		_ci.draw_rect(Rect2(cx - 300 + 600 * a, line_y, 600.0 / 24.0, 1), Color(c_text, 0.7 * sin(a * PI)))
 	var marks := [["С", 0.0], ["СЗ", 45.0], ["З", 90.0], ["ЮЗ", 135.0], ["Ю", 180.0], ["ЮВ", -135.0], ["В", -90.0],
 		["СВ", -45.0]]
 	for m: Array in marks:
@@ -745,13 +784,13 @@ func _draw_compass() -> void:
 		var x := cx - rel / (PI * 0.5) * 300.0
 		var col: Color = td.color
 		if bool(td.get("ring", false)):
-			draw_arc(Vector2(x, line_y), 6.0, 0.0, TAU, 20, col, 2.0, true)
+			_ci.draw_arc(Vector2(x, line_y), 6.0, 0.0, TAU, 20, col, 2.0, true)
 		else:
-			draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
+			_ci.draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
 		var ly := line_y + (38.0 if bool(td.get("ring", false)) else 22.0)   # ворота — ниже, не налезают на врага
 		_center(Vector2(x, ly), "%d м" % int(td.dist), sans, 13, col, 3)
-	draw_colored_polygon(PackedVector2Array([Vector2(cx - 7, 70), Vector2(cx + 7, 70), Vector2(cx, 60)]), c_gold)   # указатель
-	draw_rect(Rect2(cx - 1, 40, 2, 22), c_gold_hi)
+	_ci.draw_colored_polygon(PackedVector2Array([Vector2(cx - 7, 70), Vector2(cx + 7, 70), Vector2(cx, 60)]), c_gold)   # указатель
+	_ci.draw_rect(Rect2(cx - 1, 40, 2, 22), c_gold_hi)
 
 
 func _draw_map_frame() -> void:

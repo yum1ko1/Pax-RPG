@@ -61,14 +61,21 @@ func hint(text: String) -> void:
 	_show(text)
 
 
+var _hint_tw: Tween
+
+
 func _show(text: String, sec := 2.5) -> void:
+	# прежнее угасание — прочь: иначе подсказка «слушаю» (без срока) гасла по таймеру предыдущей
+	if _hint_tw != null and _hint_tw.is_valid():
+		_hint_tw.kill()
 	_hint.text = text
 	_hint.visible = text != ""
 	_hint.modulate.a = 1.0
 	if sec > 0.0:
-		var tw := _hint.create_tween()
-		tw.tween_interval(sec)
-		tw.tween_property(_hint, "modulate:a", 0.0, 0.6)
+		_hint_tw = _hint.create_tween()
+		_hint_tw.tween_interval(sec)
+		_hint_tw.tween_property(_hint, "modulate:a", 0.0, 0.6)
+		_hint_tw.tween_callback(_hint.hide)               # угасла — не рисуется
 
 
 ## Опрос клавиши — каждый кадр (location.gd → tick): зажата — запись, отпущена — распознавание.
