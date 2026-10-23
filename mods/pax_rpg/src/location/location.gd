@@ -1494,10 +1494,13 @@ func _mana_burst(at: Vector3, c: Color) -> void:
 	if _vfx == null:
 		_vfx = Vfx.new(mod)
 	var p := CPUParticles3D.new()
-	var q := QuadMesh.new()
-	q.size = Vector2(0.22, 0.22)
-	q.material = _vfx._glow_mat(c, 1.8)
-	p.mesh = q
+	var qk := "mq%s" % c
+	if not _fx_res.has(qk):
+		var q := QuadMesh.new()
+		q.size = Vector2(0.22, 0.22)
+		q.material = _vfx._glow_mat(c, 1.8)
+		_fx_res[qk] = q
+	p.mesh = _fx_res[qk]
 	p.one_shot = true
 	p.explosiveness = 0.85
 	p.amount = 34
@@ -1514,11 +1517,13 @@ func _mana_burst(at: Vector3, c: Color) -> void:
 	p.damping_max = 2.5
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.3
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(1, 1, 1, 1))
-	ramp.add_point(0.4, Color(1, 0.8, 1, 0.8))
-	ramp.set_color(1, Color(1, 0.6, 1, 0))
-	p.color_ramp = ramp
+	if not _fx_res.has("mramp"):
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 1))
+		ramp.add_point(0.4, Color(1, 0.8, 1, 0.8))
+		ramp.set_color(1, Color(1, 0.6, 1, 0))
+		_fx_res["mramp"] = ramp
+	p.color_ramp = _fx_res["mramp"]
 	_view.add_child(p)
 	p.global_position = at
 	p.emitting = true
@@ -1791,21 +1796,23 @@ func _on_world_days(_g: Variant, _from: Variant, days: Variant) -> void:
 func _slash_wave() -> void:
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	var node := MeshInstance3D.new()
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := 24
-	for i: int in n:                                      # дуга 150° перед героем: толще в середине, тонко к краям
-		var a0 := deg_to_rad(-75.0 + 150.0 * i / n)
-		var a1 := deg_to_rad(-75.0 + 150.0 * (i + 1) / n)
-		var w0 := 0.28 * sin(PI * float(i) / n) + 0.02
-		var w1 := 0.28 * sin(PI * float(i + 1) / n) + 0.02
-		var p0 := Vector3(sin(a0), 0.0, -cos(a0)) * 1.6
-		var p1 := Vector3(sin(a1), 0.0, -cos(a1)) * 1.6
-		var q0 := Vector3(sin(a0), 0.0, -cos(a0)) * (1.6 - w0)
-		var q1 := Vector3(sin(a1), 0.0, -cos(a1)) * (1.6 - w1)
-		for v: Vector3 in [p0, p1, q1, p0, q1, q0]:
-			st.add_vertex(v)
-	node.mesh = st.commit()
+	if not _fx_res.has("arc"):                            # серп — одна сетка на все волны (материал — свой: гаснет)
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var n := 24
+		for i: int in n:                                  # дуга 150° перед героем: толще в середине, тонко к краям
+			var a0 := deg_to_rad(-75.0 + 150.0 * i / n)
+			var a1 := deg_to_rad(-75.0 + 150.0 * (i + 1) / n)
+			var w0 := 0.28 * sin(PI * float(i) / n) + 0.02
+			var w1 := 0.28 * sin(PI * float(i + 1) / n) + 0.02
+			var p0 := Vector3(sin(a0), 0.0, -cos(a0)) * 1.6
+			var p1 := Vector3(sin(a1), 0.0, -cos(a1)) * 1.6
+			var q0 := Vector3(sin(a0), 0.0, -cos(a0)) * (1.6 - w0)
+			var q1 := Vector3(sin(a1), 0.0, -cos(a1)) * (1.6 - w1)
+			for v: Vector3 in [p0, p1, q1, p0, q1, q0]:
+				st.add_vertex(v)
+		_fx_res["arc"] = st.commit()
+	node.mesh = _fx_res["arc"]
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1903,18 +1910,20 @@ func _quake_debris(c: Vector3, r: float) -> void:
 	p.angular_velocity_max = 360.0
 	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.3
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.11, 0.08, 0.1)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.36, 0.28, 0.21)
-	mat.roughness = 1.0
-	mat.vertex_color_use_as_albedo = true
-	bm.material = mat
-	p.mesh = bm
-	var g := Gradient.new()                                # комья земли и серые камешки вперемешку
-	g.set_color(0, Color(0.42, 0.33, 0.25))
-	g.set_color(1, Color(0.55, 0.52, 0.5))
-	p.color_initial_ramp = g
+	if not _fx_res.has("deb"):                             # сетка, материал и цвета комьев — одни на все волны
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.11, 0.08, 0.1)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.36, 0.28, 0.21)
+		mat.roughness = 1.0
+		mat.vertex_color_use_as_albedo = true
+		bm.material = mat
+		var g := Gradient.new()                            # комья земли и серые камешки вперемешку
+		g.set_color(0, Color(0.42, 0.33, 0.25))
+		g.set_color(1, Color(0.55, 0.52, 0.5))
+		_fx_res["deb"] = [bm, g]
+	p.mesh = (_fx_res["deb"] as Array)[0]
+	p.color_initial_ramp = (_fx_res["deb"] as Array)[1]
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_view.add_child(p)
 	p.global_position = c + Vector3(0, 0.15, 0)
@@ -3250,33 +3259,53 @@ func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
 	p.amount = amount
 	p.lifetime = 0.35
 	p.local_coords = false
-	var pm := ParticleProcessMaterial.new()
-	pm.direction = Vector3.UP
-	pm.spread = 70.0
-	pm.initial_velocity_min = speed * 0.5
-	pm.initial_velocity_max = speed
-	pm.gravity = Vector3(0.0, -9.0, 0.0)
-	pm.damping_min = 1.0
-	pm.damping_max = 3.0
-	p.process_material = pm
+	p.process_material = _spark_pm(speed)
 	p.trail_enabled = true
 	p.trail_lifetime = 0.07
-	var tm := RibbonTrailMesh.new()
-	tm.shape = RibbonTrailMesh.SHAPE_CROSS
-	tm.size = 0.014
-	tm.sections = 3
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.use_particle_trails = true
-	m.albedo_color = Color(color.r * 4.0, color.g * 4.0, color.b * 4.0)   # HDR — ловит bloom
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	tm.material = m
-	p.draw_pass_1 = tm
+	p.draw_pass_1 = _spark_trail(color)
 	_view.add_child(p)
 	p.global_position = at
 	p.emitting = true
 	p.finished.connect(p.queue_free)
 	_flash(at, color, 2.6, 4.0)
+
+
+## Ресурсы боевых эффектов — общие на одинаковые параметры: раньше каждая искра, всплеск маны и облачко пыли
+## заводили свои материал процесса, сетку шлейфа, материал и градиент (новые RID и наборы uniform на сервере рендера
+## посреди боя). Ключей немного — цвета и скорости заданы в коде.
+var _fx_res := {}
+
+
+func _spark_pm(speed: float) -> ParticleProcessMaterial:
+	var key := "pm%s" % speed
+	if not _fx_res.has(key):
+		var pm := ParticleProcessMaterial.new()
+		pm.direction = Vector3.UP
+		pm.spread = 70.0
+		pm.initial_velocity_min = speed * 0.5
+		pm.initial_velocity_max = speed
+		pm.gravity = Vector3(0.0, -9.0, 0.0)
+		pm.damping_min = 1.0
+		pm.damping_max = 3.0
+		_fx_res[key] = pm
+	return _fx_res[key]
+
+
+func _spark_trail(color: Color) -> RibbonTrailMesh:
+	var key := "tr%s" % color
+	if not _fx_res.has(key):
+		var tm := RibbonTrailMesh.new()
+		tm.shape = RibbonTrailMesh.SHAPE_CROSS
+		tm.size = 0.014
+		tm.sections = 3
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.use_particle_trails = true
+		m.albedo_color = Color(color.r * 4.0, color.g * 4.0, color.b * 4.0)   # HDR — ловит bloom
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		tm.material = m
+		_fx_res[key] = tm
+	return _fx_res[key]
 
 
 ## Вспышка света от удара, искр, разреза: короткий огонёк без тени — освещает лицо, клинок и землю вокруг.
@@ -3716,11 +3745,11 @@ func _ground_contact(delta: float) -> void:
 func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	if not bool(mod.get_setting("combat_fx", true)) and not soft:
 		return
-	var p := CPUParticles3D.new()
-	p.one_shot = true
-	p.explosiveness = 0.9
 	if not soft and not running:
 		return                                       # по камню шагом — без пыли (дёшево смотрелось)
+	var p := CPUParticles3D.new()                    # (раньше узел создавался до этой проверки и на камне шагом утекал)
+	p.one_shot = true
+	p.explosiveness = 0.9
 	p.amount = (6 if running else 3) if soft else 2
 	p.lifetime = 1.1
 	p.direction = Vector3(0.0, 1.0, 0.0)
@@ -3732,23 +3761,28 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	p.damping_max = 2.5
 	p.scale_amount_min = 0.08
 	p.scale_amount_max = 0.18
-	var sm := SphereMesh.new()
-	sm.radius = 0.5
-	sm.height = 1.0
-	sm.radial_segments = 6
-	sm.rings = 3
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	sm.material = mat
-	p.mesh = sm
-	var ramp := Gradient.new()
-	var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
-	ramp.set_color(0, Color(c, 0.0))
-	ramp.add_point(0.15, Color(c, 0.09 if soft else 0.04))   # едва заметно
-	ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
-	p.color_ramp = ramp
+	if not _fx_res.has("dmesh"):
+		var sm := SphereMesh.new()
+		sm.radius = 0.5
+		sm.height = 1.0
+		sm.radial_segments = 6
+		sm.rings = 3
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.vertex_color_use_as_albedo = true
+		sm.material = mat
+		_fx_res["dmesh"] = sm
+	p.mesh = _fx_res["dmesh"]
+	var rk := "dramp%s" % soft
+	if not _fx_res.has(rk):
+		var ramp := Gradient.new()
+		var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
+		ramp.set_color(0, Color(c, 0.0))
+		ramp.add_point(0.15, Color(c, 0.09 if soft else 0.04))   # едва заметно
+		ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
+		_fx_res[rk] = ramp
+	p.color_ramp = _fx_res[rk]
 	var h := float(hero_cfg.get("capsule_height", 1.8)) * 0.5
 	_view.add_child(p)
 	p.global_position = at - Vector3(0.0, h - 0.05, 0.0)
