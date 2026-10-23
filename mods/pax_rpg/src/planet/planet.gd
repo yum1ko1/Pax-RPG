@@ -83,7 +83,7 @@ func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("planet._process")
 	if game == null:
 		return
-	if Engine.get_process_frames() % 120 == 0:
+	if Trace.ON and Engine.get_process_frames() % 120 == 0:   # строку собираем, только если след включён
 		var vis := 0
 		for lb: Label in _labels:
 			if is_instance_valid(lb) and lb.visible:

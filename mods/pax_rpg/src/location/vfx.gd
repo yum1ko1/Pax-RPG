@@ -228,18 +228,7 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	fr.set_color(1, Color(1, 0.6, 0.4, 0.0))
 	fl.color_ramp = fr
 	var sp := CPUParticles3D.new()                       # искры: уходят вверх, гаснут
-	var sm := QuadMesh.new()                             # искра — штрих по направлению полёта (как у раскалённых
-	sm.size = Vector2(0.014, 0.075)                      # частиц в жизни: глаз видит след), а не точка
-	var smat := StandardMaterial3D.new()
-	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	smat.albedo_color = Color(3.0, 1.4, 0.4)
-	smat.vertex_color_use_as_albedo = true
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	smat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	smat.billboard_keep_scale = true
-	sm.material = smat
-	sp.mesh = sm
+	sp.mesh = _spark_mesh()
 	sp.particle_flag_align_y = true
 	sp.amount = 10
 	sp.lifetime = 1.6
@@ -265,12 +254,33 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	if with_smoke:
 		smoke(parent, pos + Vector3(0, size * 1.1, 0), size * 0.8, Color(0.22, 0.2, 0.22, 0.3), 8, 0.7)
 	var l := Flicker.new()
+	l.sparks = sp
 	l.light_color = Color(1.0, 0.52, 0.22)
 	l.light_energy = 1.1
 	l.omni_range = 7.0 + size * 3.0
 	l.position = pos + Vector3(0, size * 0.6, 0)
 	parent.add_child(l)
 	return l
+
+
+## Искра — штрих по направлению полёта (как у раскалённых частиц в жизни: глаз видит след), а не точка.
+## Сетка и материал — одни на все огни (были свои у каждого).
+func _spark_mesh() -> QuadMesh:
+	if _mats.has("spark"):
+		return _mats["spark"]
+	var sm := QuadMesh.new()
+	sm.size = Vector2(0.014, 0.075)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.albedo_color = Color(3.0, 1.4, 0.4)
+	smat.vertex_color_use_as_albedo = true
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	smat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	smat.billboard_keep_scale = true
+	sm.material = smat
+	_mats["spark"] = sm
+	return sm
 
 
 ## Ореол у фонаря / кристалла: мягкое свечение вокруг источника, чуть дышит.
@@ -295,9 +305,12 @@ func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) 
 ## в больших движках); дальше FAR м от камеры мерцание не считается — его там не разглядеть.
 class Flicker extends OmniLight3D:
 	const FAR := 60.0
+	const SPARKS_FAR := 66.0         # искры (CPUParticles3D, дальность показа 60 м) дальше — уже не рисуются, но
+	                                 # процессор считал их и слал буфер в сервер рендера каждый кадр; скрытые — стоят
 	static var all: Array = []
 	static var _driver: Flicker
 	var base := -1.0
+	var sparks: CPUParticles3D       # искры этого огня (vfx.fire)
 	var _t := randf() * 100.0
 
 	func _enter_tree() -> void:
@@ -332,11 +345,17 @@ class Flicker extends OmniLight3D:
 			if f.base < 0.0:
 				f.base = f.light_energy
 			f._t += delta
+			var d2 := f.global_position.distance_squared_to(cp) if cam != null else 0.0
+			if f.sparks != null:
+				if not is_instance_valid(f.sparks):
+					f.sparks = null
+				elif (d2 > SPARKS_FAR * SPARKS_FAR) == f.sparks.visible:
+					f.sparks.visible = d2 <= SPARKS_FAR * SPARKS_FAR
 			# выключенный огонь (днём daynight гасит все: base 0, узел скрыт) — энергию не трогаем: раньше каждый
 			# кадр ~100 записей нуля в сервер рендера; включат — следующий кадр выставит её от base
 			if not f.visible:
 				continue
-			if cam != null and f.global_position.distance_squared_to(cp) > FAR * FAR:
+			if d2 > FAR * FAR:
 				continue
 			var t := f._t
 			var n := sin(t * 13.0) * 0.5 + sin(t * 7.3 + 1.7) * 0.3 + sin(t * 23.0 + 0.4) * 0.2

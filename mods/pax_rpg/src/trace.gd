@@ -17,5 +17,7 @@ static var armed_until := -1          # main.gd: на 300 кадров посл�
 
 
 static func tick(who: String) -> void:
+	if not ON:                         # зовётся из каждого _process мода — выключенный след ничего не делает
+		return
 	if Engine.get_process_frames() <= armed_until:
 		mark(who)
