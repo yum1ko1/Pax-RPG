@@ -168,15 +168,17 @@ func _apply_upscale(v: SubViewport) -> void:
 	v.fsr_sharpness = {"quality": 0.2, "balanced": 0.1, "performance": 0.0}.get(mode, 0.2)
 
 
-## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте окна.
-## Выше окна (4K на мониторе 1440p) — суперсэмплинг: рендер больше и сжимается до окна (резче, дороже);
+## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте вида.
+## Выше вида (4K на мониторе 1440p) — суперсэмплинг: рендер больше и сжимается до окна (резче, дороже);
 ## ниже — рендер меньше и растягивается (FSR 2, если выбран, иначе билинейно).
+## Вид — по размеру контейнера в единицах интерфейса игры (база 1920×1080, canvas_items), а не по окну: в окне
+## 2560×1440 вид 1080 строк, и прежний масштаб «1440 / высота окна» = 1.0 давал те же 1080 (native — как было).
 func _apply_resolution(v: SubViewport) -> void:
 	var res := str(_v("resolution", "native")).to_int()
 	if res <= 0:
 		return
-	var win_h := float(maxi(DisplayServer.window_get_size().y, 1))
-	var k := clampf(float(res) / win_h, 0.25, 2.0)
+	var view_h := float(maxi(int(v.get_tree().root.get_visible_rect().size.y), 1))
+	var k := clampf(float(res) / view_h, 0.25, 2.0)
 	if v.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2 and k <= 1.0:
 		v.scaling_3d_scale = k * v.scaling_3d_scale
 	else:
