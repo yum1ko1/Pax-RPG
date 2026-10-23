@@ -1,0 +1,32 @@
+# Отдельные картинки ≥1024 px → <name>.dds BC7 (tex_bc7.gd). mip — игра и так строит им mip (city/landscape _tex,
+# hero _tex_mip), normal — карта нормалей (mip с перенормировкой). Без пометки — без mip (интерфейс, небо планеты,
+# флипбуки частиц — у них mip не было, вид тот же).
+# меню, настройки, инвентарь, загрузка, выбор героя (арты загрузки 1920×1079 и рамка босса 1100×274 — не кратны 4, не берём)
+textures/menu/bg_clean.jpg
+textures/menu/plate.jpg
+textures/menu/robe.png
+textures/menu/fgmask.png
+textures/menu/settings_bg.jpg
+textures/menu/settings_plate.jpg
+textures/menu/settings_fg.png
+textures/inventory_bg.jpg
+textures/loading/death_sheet.png
+textures/chars/swordswoman.png
+textures/chars/hooded.png
+# планета (глобус)
+textures/yuruma_surface.png
+# флипбуки дыма и огня
+textures/vfx/smoke_8x8.png
+textures/vfx/fire_8x8.png
+# земля города и степи (city.gd/landscape.gd → _tex строит mip)
+models/gharn/tex/ground.jpg mip
+models/gharn/tex/ground_r.jpg mip
+models/gharn/tex/ground_n.jpg normal          # mountain.gdshader берёт .xyz — BC7
+models/gharn/tex/cobble.jpg mip
+models/gharn/tex/cobble_r.jpg mip
+models/gharn/tex/cobble_h.jpg mip
+models/gharn/tex/cobble_n.jpg bc5
+textures/gharn_flag.png mip
+# плащ героя (hero.gd → _tex_mip)
+models/items/cape_black.jpg mip
+models/items/cape_black_n.jpg bc5

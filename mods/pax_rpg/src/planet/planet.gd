@@ -1,5 +1,6 @@
 extends Node
 const Bg := preload("res://mods/pax_rpg/src/location/bg.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 ## Юрума вместо Земли и города на ней. Свой шейдер ставится на материал домашней планеты игры (её узел, сетка и
 ## провинции остаются игровыми — меняется только то, как она нарисована); облачная оболочка Земли прячется —
@@ -49,7 +50,7 @@ func setup(m: PaxMod) -> void:
 	mod = m
 	name = "PaxRpgPlanet"
 	_shader = m.shader("shaders/yuruma.gdshader")
-	_surface = m.texture("textures/yuruma_surface.png")
+	_surface = Assets.tex(m, "textures/yuruma_surface.png")   # .dds рядом (BC7) — он
 	var parsed: Variant = JSON.parse_string(m.read_text("config/cities.json"))
 	var cfg: Dictionary = parsed if parsed is Dictionary else {}
 	var list: Variant = cfg.get("cities", [])

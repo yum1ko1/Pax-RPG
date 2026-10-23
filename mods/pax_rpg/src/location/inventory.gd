@@ -52,7 +52,7 @@ func setup(m: PaxMod) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_panel_sh = m.shader("shaders/ui_panel.gdshader")
-	_bg_tex = m.texture("textures/inventory_bg.jpg")
+	_bg_tex = Assets.tex(m, "textures/inventory_bg.jpg")
 	_serif = Hud._sys(["Cormorant Garamond", "Georgia", "Palatino Linotype", "Times New Roman"], 700)
 	_sans = Hud._sys(["Bahnschrift", "Segoe UI", "Arial"], 400)
 	_cjk = Hud._sys(["Yu Mincho", "MS Mincho", "Noto Serif JP", "Noto Serif CJK JP", "SimSun"], 700)

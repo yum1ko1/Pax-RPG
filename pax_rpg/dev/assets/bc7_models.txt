@@ -1,0 +1,36 @@
+# Модели, чьи картинки лежали в glb несжатыми (4096²/2048² RGBA8 в видеопамяти, без mip): bake_textures.gd bc7 →
+# <name>.tex/t<N>.dds (цвет — BC7, нормали — BC5), потом strip_glb.py (картинки в glb → 1×1). Исходники — models_src/.
+# Мелочь (трава 512², растения 128²) не входит: в 1024+ px картинок нет.
+nature/oak_big_1.glb
+nature/oak_big_2.glb
+nature/oak_medium_1.glb
+nature/oak_medium_2.glb
+nature/oak_medium_3.glb
+nature/oak_small_1.glb
+nature/oak_small_2.glb
+nature/log_trunk.glb
+nature/mushrooms.glb
+nature/rock_mossy_6.glb
+nature/rock_mossy_10.glb
+nature/rock_mossy_12.glb
+nature/rock_mossy_16.glb
+nature/rock_mossy_17.glb
+nature/rock_mossy_18.glb
+nature/rock_mossy_27.glb
+nature/snag_mossy.glb
+nature/stone_big_2.glb
+nature/stone_big_4.glb
+nature/stone_mid_1.glb
+nature/stone_mid_3.glb
+nature/stone_runic_5.glb
+nature/stone_runic_6.glb
+nature/stone_small_1.glb
+nature/stone_small_3.glb
+nature/stone_small_6.glb
+nature/stump_1.glb
+nature/stump_2.glb
+heroes/hooded/model.glb
+heroes/swordswoman/model.glb
+heroes/tian_long/model.glb
+weapons/crimson_spear.glb
+weapons/rose_sword.glb

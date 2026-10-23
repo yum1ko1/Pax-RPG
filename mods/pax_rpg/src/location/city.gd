@@ -382,7 +382,7 @@ func _holed_plane(size: Vector2, center: Vector2, hc: Vector2, hr: float) -> Arr
 
 ## Картинка мода с мипмапами (без них плитка вдали рябит при движении камеры).
 func _tex(path: String, normal := false) -> Texture2D:
-	var t := mod.texture(path)
+	var t := Assets.tex(mod, path)                    # .dds рядом (BC7/BC5 с mip) — сразу он
 	if t == null:
 		return null
 	var img := t.get_image()

@@ -6,6 +6,11 @@ extends SceneTree
 ## Запуск (редакторская сборка Godot — в игре сжатия нет):
 ##   godot --headless --path <любой проект> -s bake_textures.gd -- <папка исходных glb> <папка models мода> [bc5]
 ## bc5 — карты нормалей в BC5 (RGTC: два канала по 8 бит, без «кубиков» BC1; z восстанавливает шейдер).
+## bc7 — режим «почти без потерь» (выбор автора для моделей, чьи картинки ещё лежали в glb несжатыми):
+##   godot ... -s bake_textures.gd -- <папка с glb> <папка models мода> bc7 <список bc7_models.txt>
+##   цвет, ORM, маски — BC7 (BPTC, с альфой), нормали — BC5; разрешение исходное (без уменьшения), mip — у всех
+##   (нормали — с перенормировкой), без _lo (без стриминга: игра сразу берёт t<N>.dds). По каждой текстуре —
+##   сверка с исходником (PSNR, наибольшая ошибка канала; у BC5 — по R и G).
 ## Исходники (с JPEG внутри) лежат в pax_rpg/dev/models_src/, в мод уходят glb без картинок (strip_glb.py).
 
 const SLOTS := [BaseMaterial3D.TEXTURE_ALBEDO, BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_ORM,
@@ -69,6 +74,14 @@ func _initialize() -> void:
 	var dst_dir := args[1]
 	var files: Array = []
 	_walk(src_dir, "", files)
+	var bc7 := args.size() > 2 and args[2] == "bc7"
+	if bc7:                                      # только модели из списка (путь от папки моделей, с .glb)
+		var only: Array = []
+		if args.size() > 3:
+			for line: String in FileAccess.get_file_as_string(args[3]).split("\n"):
+				if line.strip_edges() != "" and not line.begins_with("#"):
+					only.append(line.strip_edges())
+		files = files.filter(func(f: String) -> bool: return only.has(f))
 	# 4-й аргумент — файл со списком ближних моделей (по строке: путь без .glb, напр. gharn/khan_palace) — им 4K
 	var near: Array = []
 	if args.size() > 3 and FileAccess.file_exists(args[3]):
@@ -83,7 +96,7 @@ func _initialize() -> void:
 			continue
 		var scene := doc.generate_scene(st)
 		var texs := textures_of(scene)
-		var normals := normals_of(scene) if args.size() > 2 and args[2] == "bc5" else []
+		var normals := normals_of(scene) if args.size() > 2 and args[2] in ["bc5", "bc7"] else []
 		var albedos := albedos_of(scene)
 		if texs.is_empty():
 			scene.free()
@@ -98,6 +111,16 @@ func _initialize() -> void:
 		var out_dir := dst_dir.path_join(rel.get_basename() + ".tex")
 		DirAccess.make_dir_recursive_absolute(out_dir)
 		var t0 := Time.get_ticks_msec()
+		if bc7:
+			for n: int in texs.size():
+				var src: Image = (texs[n] as Texture2D).get_image()
+				if src == null or src.is_empty():
+					continue
+				print("  ", rel, " t", n, ": ", _save_bc7(src, out_dir.path_join("t%d.dds" % n), normals.has(texs[n]),
+					albedos.has(texs[n])))
+			print("%s: %d текстур, BC7/BC5, %d мс" % [rel, texs.size(), Time.get_ticks_msec() - t0])
+			scene.free()
+			continue
 		for n: int in texs.size():
 			var img: Image = (texs[n] as Texture2D).get_image()
 			if img == null or img.is_empty():
@@ -132,6 +155,27 @@ func _save(src: Image, max_px: int, path: String, normal := false) -> void:
 	else:
 		img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_GENERIC)
 	img.save_dds(path)
+
+
+## BC7 (цвет и прочее) или BC5 (нормали), исходное разрешение, mip. Возвращает строку сверки с исходником.
+func _save_bc7(src: Image, path: String, normal: bool, albedo: bool) -> String:
+	var img := src.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	if img.has_mipmaps():
+		img.clear_mipmaps()
+	var alpha := not normal and img.detect_alpha() != Image.ALPHA_NONE
+	img.convert(Image.FORMAT_RGBA8 if alpha else Image.FORMAT_RGB8)
+	var ref := img.duplicate() as Image
+	img.generate_mipmaps(normal)
+	if normal:
+		img.compress(Image.COMPRESS_S3TC, Image.COMPRESS_SOURCE_NORMAL)   # S3TC + нормаль → RGTC (BC5)
+	else:
+		img.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_SRGB if albedo else Image.COMPRESS_SOURCE_GENERIC)
+	img.save_dds(path)
+	var tex_bc7: Script = load(get_script().resource_path.get_base_dir().path_join("tex_bc7.gd"))
+	return "%dx%d %s %d КБ, %s" % [img.get_width(), img.get_height(), "BC5" if normal else "BC7",
+		FileAccess.get_file_as_bytes(path).size() / 1024, tex_bc7.call("compare", ref, path, 2 if normal else 3)]
 
 
 func _tris(n: Node) -> int:
