@@ -173,7 +173,32 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var l1 := k.trim_suffix(".glb") + "_lod1.glb"
 		var l2 := k.trim_suffix(".glb") + "_lod2.glb"
 		var lo := k.trim_suffix(".glb") + "_lo.glb"
-		if LOD_COPIES and mod.read_bytes(l1).size() > 0:
+		var sh := k.trim_suffix(".glb") + "_shadow.glb"
+		if SHADOW_PROXY and mod.read_bytes(sh).size() > 0:
+			# модель видна целой до LOD_MID и сама тень не бросает: тень ближе SHADOW_NEAR — от неё же (только тень,
+			# не для огней), дальше и для огней — от сваренной упрощённой копии без текстур (_shadow.glb, weld.mjs);
+			# за LOD_MID — копия _lod1 (её дыры там меньше пикселя), тоже без своей тени
+			_lod = 1
+			_vr = Vector2(0.0, LOD_MID if mod.read_bytes(l1).size() > 0 else FAR_DRAW)
+			_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_place(k, groups[k])
+			_lod = 2
+			_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			_copy_layer = GfxS.LOD_LAYER
+			_vr = Vector2(0.0, SHADOW_NEAR)
+			_place(k, groups[k])
+			_copy_layer = 0
+			_vr = Vector2(SHADOW_NEAR, FAR_DRAW)
+			_place(sh, groups[k])
+			if mod.read_bytes(l1).size() > 0:
+				_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				_copy_layer = GfxS.LOD_LAYER
+				_vr = Vector2(LOD_MID, FAR_DRAW)
+				_place(l1, groups[k])
+			_cast = -1
+			_lod = 0
+			_copy_layer = 0
+		elif LOD_COPIES and mod.read_bytes(l1).size() > 0:
 			# три уровня: вблизи (до LOD_NEAR) — модель, средняя даль (до LOD_MID) — _lod1 (~30 % граней),
 			# дальше — _lod2 (~12 %); у копий нет коллизий и окклюдеров (dev: make_lods.py)
 			var has2 := mod.read_bytes(l2).size() > 0
@@ -1283,7 +1308,11 @@ var _cast := -1                                          # своя тень у 
 ## _lod1 (~30 % граней, только тень; сама модель видна как была). Каскады солнца 3–4 рисуют втрое меньше граней;
 ## риск — пятна самозатенения там, где упрощённая копия выступает из стены на сантиметры.
 const LOD_SHADOW := false
-const SHADOW_NEAR := 20.0
+## Тени-заместители (0.4.21Y): у построек с <name>_shadow.glb тень дальше SHADOW_NEAR м и тень от огней — от сваренной
+## упрощённой копии (weld.mjs: точки сварены — дыр нет, отклонение у 99 % поверхности ≤ 1.5 см, вершин вчетверо меньше,
+## без UV и текстур); ближе — от самой модели. Модель видна целой до LOD_MID, дальше — _lod1.
+const SHADOW_PROXY := true
+const SHADOW_NEAR := 30.0
 const CELL_WIDE := 48.0
 const WIDE_TRIS := 5000
 
