@@ -659,6 +659,35 @@ func _game_3d(on: bool) -> void:
 	var root := get_tree().root
 	if root != null:
 		root.disable_3d = not on
+	_game_2d(on)
+
+
+## То же с 2D: окна и панели игры и главное меню (слои окна ниже нашего, 100) закрыты непрозрачным 3D-видом, но рисовались
+## каждый кадр — полноэкранный шейдер фона меню, панель слоёв карты, которую игра открывает по TAB (+0.5 мс видеокарты).
+## Пока герой в городе, они спрятаны; новые, что игра откроет под нами, прячутся раз в 0.5 с (_under_t); на выходе
+## возвращаются только те, что спрятали мы. Слои выше нашего (консоль, экран загрузки) не трогаем — их видно.
+var _hidden_2d: Array = []
+var _under_t := 0.0
+
+
+func _game_2d(on: bool) -> void:
+	if on:
+		for n: Variant in _hidden_2d:
+			if is_instance_valid(n):
+				(n as CanvasLayer).visible = true
+		_hidden_2d.clear()
+		return
+	_hide_under()
+
+
+func _hide_under() -> void:
+	var root := get_tree().root
+	for n: Node in root.find_children("*", "CanvasLayer", true, false):
+		var cl := n as CanvasLayer
+		if cl == self or not cl.visible or cl.layer >= layer or cl.get_viewport() != root or is_ancestor_of(cl):
+			continue
+		cl.visible = false
+		_hidden_2d.append(cl)
 
 
 ## Всё построено и трава встала — локацию можно показывать.
@@ -3433,6 +3462,11 @@ func _process(delta: float) -> void:
 		_hud_tick(delta)
 		Prof.add("HUD", t0)
 	_inv_cover_tick()
+	if active and not building:
+		_under_t -= delta
+		if _under_t <= 0.0:
+			_under_t = 0.5
+			_hide_under()
 
 
 var _inv_hides_view := false
