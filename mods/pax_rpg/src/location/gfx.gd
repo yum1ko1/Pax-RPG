@@ -487,8 +487,13 @@ func _process(delta: float) -> void:
 	_camera_lens(delta)
 	if is_instance_valid(player):
 		var pp := player.global_position
-		RenderingServer.global_shader_parameter_set(&"pax_rpg_player", Vector4(pp.x, pp.y, pp.z, 0.0))
+		if pp != _player_sent:                       # стоит — не пишем (глобальный параметр — запрос в сервер рендера)
+			_player_sent = pp
+			RenderingServer.global_shader_parameter_set(&"pax_rpg_player", Vector4(pp.x, pp.y, pp.z, 0.0))
 	Prof.add("графика", t0)
+
+
+var _player_sent := Vector3.INF
 
 
 ## Тени — у ближайших к камере горящих огней; дальние без теней (каждая тень огня — 6 проходов сцены).

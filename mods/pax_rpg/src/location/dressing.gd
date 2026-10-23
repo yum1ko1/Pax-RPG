@@ -10,6 +10,7 @@ const PALETTE := [Color(0.62, 0.06, 0.05), Color(0.06, 0.05, 0.05), Color(0.72, 
 var city                                            # city.gd: root, lights, glass, mod, vfx
 var _mats := {}
 var _font: SystemFont
+var _window: QuadMesh
 
 
 func _init(c) -> void:
@@ -78,16 +79,13 @@ func add(d: Dictionary, pos: Vector3) -> void:
 	rng.seed = int(pos.x * 131.0 + pos.z * 17.0)
 	match k:
 		"window":                                       # тёплое окно: стекло города (ночью светится, daynight.gd)
-			var q := QuadMesh.new()
-			q.size = Vector2(0.62, 0.5)
-			var gm := StandardMaterial3D.new()
-			city._glass(gm)
-			q.material = gm
-			var mi := MeshInstance3D.new()
-			mi.mesh = q
-			mi.transform = Transform3D(b, pos)
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			city.root.add_child(mi)
+			if _window == null:                         # одна сетка и один материал на все окна (были свои у каждого,
+				var gm := StandardMaterial3D.new()      # с одинаковыми настройками) — в пакет города без тени
+				city._glass(gm)
+				_window = QuadMesh.new()
+				_window.size = Vector2(0.62, 0.5)
+				_window.material = gm
+			city.batch_mesh(_window, Transform3D(b, pos), GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 			_box(Vector3(0.74, 0.07, 0.08), pos + b * Vector3(0, -0.29, 0.03), b, _m("wood_d", Color(0.13, 0.08, 0.05)))
 		"smoke":
 			city.vfx.smoke(city.root, pos, 0.7, Color(0.32, 0.3, 0.33, 0.32), 10, 0.45)
