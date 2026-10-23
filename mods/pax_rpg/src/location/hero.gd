@@ -1500,6 +1500,7 @@ func _ground_burst() -> void:
 	q.material = dm
 	dust.mesh = q
 	dust.color = Color(0.55, 0.5, 0.62, 0.55)
+	dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # прозрачная пыль тени не даёт — не в списках теней
 	model.add_child(dust)
 	dust.global_position = at
 	dust.emitting = true
