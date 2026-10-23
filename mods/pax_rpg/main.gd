@@ -303,6 +303,8 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "tex":
+		return _perf_tex()
 	if args.size() >= 1 and args[0] == "vram":
 		_perf_vram(args.size() < 2 or args[1] != "nogpu")
 		return "rpg_perf vram [nogpu]: видеопамять, треугольники и время видеокарты по моделям и частям (~1 мин), итог в логе"
@@ -587,6 +589,86 @@ func _perf_vram(gpu: bool) -> void:
 			int((groups[k] as Dictionary).tris) / 1000])
 		await get_tree().create_timer(0.5).timeout
 	log_info("Pax RPG vram: готово")
+
+
+## Все текстуры, до которых может дотянуться мод: 3D всего окна игры и вида локации (видимые и скрытые узлы), 2D
+## (TextureRect, Sprite2D, панели, параметры шейдеров), кэш образцов моделей (Assets._cache). Без повторов. В лог —
+## суммы по категориям и 40 самых больших: размер, формат, mip, кто держит. Остаток до TEXTURE_MEM_USED — цели рендера
+## движка (атласы теней, буферы SSAO/SSIL/TAA, каскады SDFGI) и текстуры, которых нет в дереве.
+const AssetsS := preload("res://mods/pax_rpg/src/location/assets.gd")
+
+
+func _perf_tex() -> String:
+	var seen := {}                       # текстура → [байты, категория, владелец]
+	var vp: Node = location.get("_view")
+	var add := func(t: Variant, cat: String, owner: String) -> void:
+		if t is Texture2D and not seen.has(t):
+			seen[t] = [_tex_bytes(t as Texture2D), cat, owner]
+	var stack: Array = [get_tree().root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		var cat := "игра 3D"
+		if vp != null and (vp == n or vp.is_ancestor_of(n)):
+			cat = "локация 3D" + ("" if not (n is Node3D) or (n as Node3D).is_visible_in_tree() else " (скрыто)")
+		elif n is CanvasItem:
+			cat = "2D" + (" мод" if is_ancestor_of(n) or location.is_ancestor_of(n) else " игра")
+		var own := str(n.get_meta("pax_rpg_src", n.name))
+		var mats: Array = []
+		if n is GeometryInstance3D:
+			mats.append((n as GeometryInstance3D).material_override)
+			var mesh: Mesh = null
+			if n is MeshInstance3D:
+				mesh = (n as MeshInstance3D).mesh
+				for i: int in (n as MeshInstance3D).get_surface_override_material_count():
+					mats.append((n as MeshInstance3D).get_surface_override_material(i))
+			elif n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh != null:
+				mesh = (n as MultiMeshInstance3D).multimesh.mesh
+			if mesh != null:
+				for si: int in mesh.get_surface_count():
+					mats.append(mesh.surface_get_material(si))
+		if n is CanvasItem:
+			mats.append((n as CanvasItem).material)
+			for prop: String in ["texture", "texture_normal", "texture_progress", "texture_under", "texture_over"]:
+				var tv: Variant = n.get(prop)
+				if tv is Texture2D:
+					add.call(tv, cat, own)
+		for m: Variant in mats:
+			if m is Material:
+				for t: Variant in _mat_textures(m as Material):
+					add.call(t, cat, own)
+	for path: Variant in AssetsS._cache:            # образцы моделей вне дерева (повторный вход — без загрузки)
+		var smp: Variant = AssetsS._cache[path]
+		if smp is Node:
+			for mi: Node in (smp as Node).find_children("*", "MeshInstance3D", true, false):
+				var mesh := (mi as MeshInstance3D).mesh
+				if mesh != null:
+					for si: int in mesh.get_surface_count():
+						var m := mesh.surface_get_material(si)
+						if m != null:
+							for t: Variant in _mat_textures(m):
+								add.call(t, "кэш моделей (вне дерева)", str(path).get_file())
+	var cats := {}
+	var total := 0
+	for t: Variant in seen:
+		var e: Array = seen[t]
+		cats[e[1]] = int(cats.get(e[1], 0)) + int(e[0])
+		total += int(e[0])
+	log_info("Pax RPG tex: найдено %d текстур, %.0f МБ · видеопамять текстур всего %d МБ (остальное — цели рендера движка и вне дерева)" % [
+		seen.size(), total / 1048576.0, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED) / 1048576])
+	for c: Variant in cats:
+		log_info("Pax RPG tex: категория %s — %.0f МБ" % [c, int(cats[c]) / 1048576.0])
+	var keys := seen.keys()
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool: return int((seen[a] as Array)[0]) > int((seen[b] as Array)[0]))
+	for t: Variant in keys.slice(0, 40):
+		var tx := t as Texture2D
+		var e: Array = seen[t]
+		var fmt := "?"
+		if tx is ImageTexture:
+			fmt = str((tx as ImageTexture).get_format())
+		log_info("Pax RPG tex: %6.1f МБ · %dx%d · формат %s · %s · %s · %s" % [int(e[0]) / 1048576.0, tx.get_width(), tx.get_height(),
+			fmt, tx.get_class(), e[1], e[2]])
+	return "rpg_perf tex: %d текстур, %.0f МБ — список в логе" % [seen.size(), total / 1048576.0]
 
 
 ## К какому модулю относится узел: модель города (метка ячейки), трава, ландшафт, житель/враг (по модели), герой, частицы.
