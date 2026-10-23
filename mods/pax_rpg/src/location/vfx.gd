@@ -6,6 +6,7 @@ extends RefCounted
 const SMOKE := "textures/vfx/smoke_8x8.png"
 const FIRE := "textures/vfx/fire_8x8.png"
 const GLOW := "textures/vfx/glow.png"
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 
 var mod: PaxMod
 var _mats := {}
@@ -321,6 +322,7 @@ class Flicker extends OmniLight3D:
 		if _driver != self:
 			set_process(false)
 			return
+		var t0 := Time.get_ticks_usec()
 		var cam := get_viewport().get_camera_3d()
 		var cp := cam.global_position if cam != null else Vector3.ZERO
 		for v: Variant in all:
@@ -330,11 +332,16 @@ class Flicker extends OmniLight3D:
 			if f.base < 0.0:
 				f.base = f.light_energy
 			f._t += delta
+			# выключенный огонь (днём daynight гасит все: base 0, узел скрыт) — энергию не трогаем: раньше каждый
+			# кадр ~100 записей нуля в сервер рендера; включат — следующий кадр выставит её от base
+			if not f.visible:
+				continue
 			if cam != null and f.global_position.distance_squared_to(cp) > FAR * FAR:
 				continue
 			var t := f._t
 			var n := sin(t * 13.0) * 0.5 + sin(t * 7.3 + 1.7) * 0.3 + sin(t * 23.0 + 0.4) * 0.2
 			f.light_energy = f.base * (0.85 + 0.15 * n)
+		Prof.add("огни (мерцание)", t0)
 
 
 ## Ореол — billboard как у StandardMaterial (без масштаба узла: прежнее «дыхание» через scale billboard и так

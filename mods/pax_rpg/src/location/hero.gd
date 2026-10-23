@@ -736,10 +736,74 @@ func _make_collar(c: Dictionary, w: Dictionary, nk: Vector3, cl: Array, mat: Mat
 	c.collar = [mi, holder]
 
 
-## Где точки плаща сейчас «на теле»: верх посередине едет с грудью, углы верха — с плечами, низ — с тазом.
-func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
+## Постоянное для каждой точки плаща — один раз при надевании (раньше — каждый такт и дважды: на грубую решётку и
+## на всю сетку): веса «середина ↔ плечо» и «верх ↔ низ», сторона, отступ от верха своей колонки; для густой
+## сетки — клетка грубой решётки и доли в ней; для ткани — пружина и предел отхода по рядам.
+func _cape_prep(c: Dictionary) -> void:
 	var rest: PackedVector3Array = c.rest
+	var nx: int = c.nx
 	var nz: int = c.nz
+	var cx: int = c.cx
+	var cz: int = c.cz
+	var half: float = c.half
+	var n := nx * nz
+	var wl := PackedFloat32Array()
+	var ws := PackedFloat32Array()
+	var side := PackedByteArray()
+	var dcol := PackedVector3Array()
+	wl.resize(n)
+	ws.resize(n)
+	side.resize(n)
+	dcol.resize(n)
+	for k: int in n:
+		var row := floorf(float(k) / nx) / float(nz - 1)
+		wl[k] = smoothstep(0.15, 0.9, row)
+		var u := rest[k].x / half
+		ws[k] = smoothstep(0.3, 1.0, absf(u)) * (1.0 - smoothstep(0.0, 0.35, row))
+		side[k] = 1 if u > 0.0 else 0
+		dcol[k] = rest[k] - rest[k % nx]
+	c.wl = wl
+	c.ws = ws
+	c.side = side
+	c.dcol = dcol
+	# густая сетка: в какой клетке грубой решётки точка и где в ней (по рядам и по колонкам)
+	var j0r := PackedInt32Array()
+	var tvr := PackedFloat64Array()
+	for j: int in nz:
+		var fv := float(j) / (nz - 1) * (cz - 1)
+		var j0 := mini(int(fv), cz - 2)
+		j0r.append(j0 * cx)
+		tvr.append(fv - j0)
+	var i0c := PackedInt32Array()
+	var tuc := PackedFloat64Array()
+	for i: int in nx:
+		var fu := float(i) / (nx - 1) * (cx - 1)
+		var i0 := mini(int(fu), cx - 2)
+		i0c.append(i0)
+		tuc.append(fu - i0)
+	c.j0r = j0r
+	c.tvr = tvr
+	c.i0c = i0c
+	c.tuc = tuc
+	# ткань: пружина к месту на теле (у подола слабее) и предел отхода — по рядам грубой решётки
+	var it: Dictionary = c.get("item", {})
+	var fr := PackedFloat64Array()
+	var lim := PackedFloat64Array()
+	for j: int in cz:
+		var row := float(j) / float(cz - 1)
+		fr.append(lerpf(1.0, _iv(it, "follow_hem", 0.12), row))
+		lim.append(_iv(it, "max_dist", 0.5) * pow(row, 1.15))
+	c.fr = fr
+	c.lim = lim
+	c.hang_w = _iv(it, "hang", 0.75)
+
+
+## Где точки плаща сейчас «на теле» — все точки сетки за один проход: верх посередине едет с грудью, углы верха —
+## с плечами, низ — с тазом. Кости — один раз за такт (раньше дважды: для решётки и для сетки).
+func _cape_targets_all(c: Dictionary) -> PackedVector3Array:
+	if not c.has("wl"):
+		_cape_prep(c)
+	var rest: PackedVector3Array = c.rest
 	var nx: int = c.nx
 	var mg := model.global_transform
 	var t_top := _bone_world(int(c.top_b)) * _bone_world(int(c.top_b), true).affine_inverse()
@@ -749,30 +813,49 @@ func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
 	if int(c.left_b) >= 0 and int(c.right_b) >= 0:
 		t_l = _bone_world(int(c.left_b)) * _bone_world(int(c.left_b), true).affine_inverse()
 		t_r = _bone_world(int(c.right_b)) * _bone_world(int(c.right_b), true).affine_inverse()
-	var half: float = c.half
-	var it_cape: Dictionary = c.get("item", {})
-	var hang_w := _iv(it_cape, "hang", 0.75)
+	c.t_top = t_top                                      # воротник едет с ним (_cape_draw)
+	var hang_w: float = c.hang_w
 	var yaw := Basis(Vector3.UP, atan2(t_low.basis.z.x, t_low.basis.z.z))   # поворот таза от покоя, только по горизонтали
-	var top_cols := PackedVector3Array()                  # точка крепления каждой колонки (верхний ряд) — раз за вызов
+	# точка тела = кость · модель · покой: произведение «кость · модель» — раз за такт, а не на каждую точку
+	var a_top := t_top * mg
+	var a_low := t_low * mg
+	var a_l := t_l * mg
+	var a_r := t_r * mg
+	var yb := yaw * mg.basis
+	var top_cols := PackedVector3Array()                  # точка крепления каждой колонки (верхний ряд)
 	top_cols.resize(nx)
 	for col_i: int in nx:
-		top_cols[col_i] = t_top * (mg * rest[col_i])
+		top_cols[col_i] = a_top * rest[col_i]
+	var wl: PackedFloat32Array = c.wl
+	var ws: PackedFloat32Array = c.ws
+	var side: PackedByteArray = c.side
+	var dcol: PackedVector3Array = c.dcol
+	var n := rest.size()
+	var out := PackedVector3Array()
+	out.resize(n)
+	for k: int in n:
+		var r := rest[k]
+		var up := a_top * r
+		var s := ws[k]
+		if s > 0.0:                                       # к плечу — только у верхних углов
+			up = up.lerp((a_l if side[k] == 1 else a_r) * r, s)
+		var w := wl[k]
+		if w > 0.0:
+			# ниже лопаток ткань висит под своим весом: от точки крепления этой колонки — прямо вниз (с поворотом
+			# корпуса по горизонтали), а не по наклону спины — иначе в боевой стойке середина выгибается горбом
+			var low := (a_low * r).lerp(top_cols[k % nx] + yb * dcol[k], hang_w)
+			up = up.lerp(low, w)
+		out[k] = up
+	return out
+
+
+## То же для части точек (idx) — при надевании.
+func _cape_targets(c: Dictionary, idx: PackedInt32Array) -> PackedVector3Array:
+	var all := _cape_targets_all(c)
 	var out := PackedVector3Array()
 	out.resize(idx.size())
 	for k: int in idx.size():
-		var p := mg * rest[idx[k]]
-		var row := floorf(float(idx[k]) / nx) / float(nz - 1)
-		var wl := smoothstep(0.15, 0.9, row)
-		var u := rest[idx[k]].x / half
-		var ws := smoothstep(0.3, 1.0, absf(u)) * (1.0 - smoothstep(0.0, 0.35, row))
-		var up := (t_top * p).lerp((t_l if u > 0.0 else t_r) * p, ws)
-		# ниже лопаток ткань висит под своим весом: от точки крепления этой колонки — прямо вниз (с поворотом
-		# корпуса по горизонтали), а не по наклону спины — иначе в боевой стойке середина выгибается горбом
-		var col := idx[k] % nx
-		var d := mg.basis * (rest[idx[k]] - rest[col])
-		var hang := top_cols[col] + yaw * d
-		var low := (t_low * p).lerp(hang, hang_w)
-		out[k] = up.lerp(low, wl)
+		out[k] = all[idx[k]]
 	return out
 
 
@@ -781,58 +864,68 @@ func _cape_tick(w: Dictionary, delta: float) -> void:
 	var it: Dictionary = w.item
 	var cx: int = c.cx
 	var cz: int = c.cz
-	var tg := _cape_targets(c, c.c_idx)
+	var t0 := Time.get_ticks_usec()
+	var base := _cape_targets_all(c)                     # вся сетка «на теле»; решётке — её узлы
+	var c_idx: PackedInt32Array = c.c_idx
+	var tg := PackedVector3Array()
+	tg.resize(c_idx.size())
+	for k: int in c_idx.size():
+		tg[k] = base[c_idx[k]]
 	var x: PackedVector3Array = c.x
 	var prev: PackedVector3Array = c.prev
 	var dt := clampf(delta, 0.001, 0.05)
 	var damp := _iv(it, "damping", 0.9)
 	var grav := Vector3(0.0, -_iv(it, "gravity", 9.8), 0.0) * dt * dt
 	var follow := _iv(it, "follow", 0.12)
-	var max_d := _iv(it, "max_dist", 0.5)
 	var floor_y := model.global_position.y + 0.03
-	for k: int in x.size():
-		var row := floorf(float(k) / cx) / float(cz - 1)
-		if k < cx:                                   # верхний ряд пришит
-			x[k] = tg[k]
-			prev[k] = tg[k]
-			continue
+	var fr: PackedFloat64Array = c.fr
+	var lim: PackedFloat64Array = c.lim
+	var n := x.size()
+	for k: int in cx:                                    # верхний ряд пришит
+		x[k] = tg[k]
+		prev[k] = tg[k]
+	for k: int in range(cx, n):
 		var v := (x[k] - prev[k]) * damp
 		prev[k] = x[k]
 		x[k] += v + grav
-		x[k] += (tg[k] - x[k]) * follow * lerpf(1.0, _iv(it, "follow_hem", 0.12), row)   # верх держит форму, низ — инерция
+		x[k] += (tg[k] - x[k]) * follow * fr[k / cx]     # верх держит форму, низ — инерция
+	var len_h: float = c.len_h
+	var len_v: float = c.len_v
 	for _it: int in int(_iv(it, "iterations", 4)):
+		# связи соседей: длина как в покое (верхний ряд не двигается) — прямо здесь, без вызова на каждую связь
 		for j: int in cz:
 			for i: int in cx:
 				var k := j * cx + i
 				if i + 1 < cx and j > 0:
-					_cape_link(x, k, k + 1, float(c.len_h), false)
+					var d := x[k + 1] - x[k]
+					var dl := d.length()
+					if dl >= 0.0001:
+						var corr := d * ((dl - len_h) / dl)
+						x[k] += corr * 0.5
+						x[k + 1] -= corr * 0.5
 				if j + 1 < cz:
-					_cape_link(x, k, k + cx, float(c.len_v), j == 0)
-		for k: int in range(cx, x.size()):
-			var row := floorf(float(k) / cx) / float(cz - 1)
-			var lim := max_d * pow(row, 1.15)
+					var b := k + cx
+					var d := x[b] - x[k]
+					var dl := d.length()
+					if dl >= 0.0001:
+						var corr := d * ((dl - len_v) / dl)
+						if j == 0:
+							x[b] -= corr
+						else:
+							x[k] += corr * 0.5
+							x[b] -= corr * 0.5
+		for k: int in range(cx, n):                       # дальше max_dist от места на теле не уходит
 			var d := x[k] - tg[k]
-			if d.length() > lim:
-				x[k] = tg[k] + d.normalized() * lim
-			x[k] = _push_out(x[k], tg[k])
-			x[k].y = maxf(x[k].y, floor_y)
+			if d.length() > lim[k / cx]:
+				x[k] = tg[k] + d.normalized() * lim[k / cx]
+		_push_all(x, tg, cx)
+		for k: int in range(cx, n):
+			if x[k].y < floor_y:
+				x[k].y = floor_y
 	c.x = x
 	c.prev = prev
-	_cape_draw(c, tg)
-
-
-## Связь двух соседних точек решётки: длина как в покое (верхний ряд не двигается).
-static func _cape_link(x: PackedVector3Array, a: int, b: int, rest_len: float, a_pinned: bool) -> void:
-	var d := x[b] - x[a]
-	var n := d.length()
-	if n < 0.0001:
-		return
-	var corr := d * ((n - rest_len) / n)
-	if a_pinned:
-		x[b] -= corr
-	else:
-		x[a] += corr * 0.5
-		x[b] -= corr * 0.5
+	Prof.add("плащ: ткань", t0)
+	_cape_draw(c, base, tg)
 
 
 ## Вытолкнуть точку ткани из капсул тела. ref — где ткань должна быть (цель): если нога «перешагнула» точку и та
@@ -841,6 +934,7 @@ var _cap_pos := PackedVector3Array()     # капсулы тела на этот
 var _cap_axis := PackedVector3Array()
 var _cap_half := PackedFloat32Array()
 var _cap_r := PackedFloat32Array()
+var _cap_reach := PackedFloat32Array()   # квадрат «полудлина + радиус»: дальше от центра — капсула точку не трогает
 
 
 var _phys_on := true                     # формы капсул включены (нужны только SoftBody3D)
@@ -854,11 +948,13 @@ func _cache_dims(phys: bool) -> void:
 		_cap_axis.resize(n)
 		_cap_half.resize(n)
 		_cap_r.resize(n)
+		_cap_reach.resize(n)
 		for i: int in n:
 			var body: AnimatableBody3D = _colliders[i][0]
 			var cap: CapsuleShape3D = (body.get_child(0) as CollisionShape3D).shape
 			_cap_half[i] = cap.height * 0.5 - cap.radius
 			_cap_r[i] = cap.radius + 0.03
+			_cap_reach[i] = pow(_cap_half[i] + _cap_r[i] + 0.01, 2.0)
 		_phys_on = not phys                           # набор сменился — формы выставить заново
 	if _phys_on != phys:
 		_phys_on = phys
@@ -888,66 +984,124 @@ func _push_out(p: Vector3, ref := Vector3.INF) -> Vector3:
 	return p
 
 
-## Сетка плаща: смещение каждой её точки от «места на теле» — билинейно по грубой решётке.
-func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
+## _push_out для точек p[from..] (ref — их места на теле) одним проходом: капсула, до центра которой дальше
+## полудлины и радиуса, точку не трогает — пропускается одним сравнением (большая часть пар «точка — капсула»).
+func _push_all(p: PackedVector3Array, ref: PackedVector3Array, from: int) -> void:
+	var nc := _cap_pos.size()
+	for k: int in range(from, p.size()):
+		var q := p[k]
+		var moved := false
+		for ci: int in nc:
+			var rel := q - _cap_pos[ci]
+			if rel.length_squared() > _cap_reach[ci]:
+				continue
+			var axis := _cap_axis[ci]
+			var half := _cap_half[ci]
+			var nearest := _cap_pos[ci] + axis * clampf(rel.dot(axis), -half, half)
+			var off := q - nearest
+			var dist := off.length()
+			var r := _cap_r[ci]
+			if dist < r:
+				var dir := off / dist if dist > 0.0001 else Vector3.ZERO
+				var want := ref[k] - nearest
+				want -= axis * want.dot(axis)
+				if want.length() > 0.0001 and (dir == Vector3.ZERO or dir.dot(want) < 0.0):
+					dir = want.normalized()
+				if dir != Vector3.ZERO:
+					q = nearest + dir * r
+					moved = true
+		if moved:
+			p[k] = q
+
+
+## Сетка плаща: смещение каждой её точки от «места на теле» — билинейно по грубой решётке; потом вдвое гуще
+## и гладко (Catmull-Rom), нормали — по соседям. base — вся сетка на теле, tg — узлы решётки на теле.
+func _cape_draw(c: Dictionary, base: PackedVector3Array, tg: PackedVector3Array) -> void:
+	var t0 := Time.get_ticks_usec()
 	if c.has("collar"):
-		var t_top := _bone_world(int(c.top_b)) * _bone_world(int(c.top_b), true).affine_inverse()
+		var t_top: Transform3D = c.t_top
 		for nd: Node3D in c.collar:
 			if is_instance_valid(nd):
 				nd.global_transform = t_top * model.global_transform
 	var nx: int = c.nx
 	var nz: int = c.nz
 	var cx: int = c.cx
-	var cz: int = c.cz
 	var x: PackedVector3Array = c.x
-	var all_idx := PackedInt32Array()
-	all_idx.resize(nx * nz)
-	for k: int in nx * nz:
-		all_idx[k] = k
-	var base := _cape_targets(c, all_idx)
+	var off := PackedVector3Array()                       # сдвиг узлов решётки от места на теле
+	off.resize(tg.size())
+	for k: int in tg.size():
+		off[k] = x[k] - tg[k]
+	var j0r: PackedInt32Array = c.j0r
+	var tvr: PackedFloat64Array = c.tvr
+	var i0c: PackedInt32Array = c.i0c
+	var tuc: PackedFloat64Array = c.tuc
 	var pos := PackedVector3Array()
 	pos.resize(nx * nz)
 	for j: int in nz:
-		var fv := float(j) / (nz - 1) * (cz - 1)
-		var j0 := mini(int(fv), cz - 2)
-		var tv := fv - j0
+		var r0 := j0r[j]
+		var tv := tvr[j]
+		var row := j * nx
 		for i: int in nx:
-			var fu := float(i) / (nx - 1) * (cx - 1)
-			var i0 := mini(int(fu), cx - 2)
-			var tu := fu - i0
-			var k00 := j0 * cx + i0
-			var o00 := x[k00] - tg[k00]
-			var o10 := x[k00 + 1] - tg[k00 + 1]
-			var o01 := x[k00 + cx] - tg[k00 + cx]
-			var o11 := x[k00 + cx + 1] - tg[k00 + cx + 1]
-			var off := o00.lerp(o10, tu).lerp(o01.lerp(o11, tu), tv)
-			pos[j * nx + i] = _push_out(base[j * nx + i] + off, base[j * nx + i])   # и густую сетку — не режет ноги
-	# вдвое гуще и гладко (Catmull-Rom по сетке): без углов на складках
-	var sub := int(c.get("sub", 2))
+			var k00 := r0 + i0c[i]
+			var tu := tuc[i]
+			pos[row + i] = base[row + i] + off[k00].lerp(off[k00 + 1], tu).lerp(off[k00 + cx].lerp(off[k00 + cx + 1], tu), tv)
+	_push_all(pos, base, 0)                              # и густую сетку — не режет ноги
+	# вдвое гуще и гладко (Catmull-Rom по сетке): без углов на складках. Середина отрезка у Catmull-Rom —
+	# (−p0 + 9·p1 + 9·p2 − p3) / 16, узлы — как есть: без общей формулы и вызова на каждую точку
+	var sub := 2
 	var mx := (nx - 1) * sub + 1
 	var mz := (nz - 1) * sub + 1
-	var rows := PackedVector3Array()
+	var rows := PackedVector3Array()                      # сначала вдоль колонок
 	rows.resize(nx * mz)
 	for i: int in nx:
-		for j2: int in mz:
-			rows[j2 * nx + i] = _cr_at(pos, i, nx, nz, float(j2) / sub, true)
-	var sp := PackedVector3Array()
+		var p0 := pos[i]
+		var p1 := pos[i]
+		var p2 := pos[nx + i]
+		for k: int in nz - 1:
+			var p3 := pos[mini(k + 2, nz - 1) * nx + i]
+			rows[k * sub * nx + i] = p1
+			rows[(k * sub + 1) * nx + i] = (p1 + p2) * 0.5625 - (p0 + p3) * 0.0625
+			p0 = p1
+			p1 = p2
+			p2 = p3
+		rows[(mz - 1) * nx + i] = pos[(nz - 1) * nx + i]
+	var sp := PackedVector3Array()                        # потом вдоль рядов
 	sp.resize(mx * mz)
 	for j2: int in mz:
-		for i2: int in mx:
-			sp[j2 * mx + i2] = _cr_at(rows, j2, nx, mz, float(i2) / sub, false)
-	var nrm := PackedVector3Array()
+		var rb := j2 * nx
+		var o := j2 * mx
+		var p0 := rows[rb]
+		var p1 := rows[rb]
+		var p2 := rows[rb + 1]
+		for k: int in nx - 1:
+			var p3 := rows[rb + mini(k + 2, nx - 1)]
+			sp[o + k * sub] = p1
+			sp[o + k * sub + 1] = (p1 + p2) * 0.5625 - (p0 + p3) * 0.0625
+			p0 = p1
+			p1 = p2
+			p2 = p3
+		sp[o + mx - 1] = rows[rb + nx - 1]
+	var nrm := PackedVector3Array()                       # нормаль — по соседям слева-справа и сверху-снизу
 	nrm.resize(mx * mz)
 	for j: int in mz:
-		for i: int in mx:
-			var l := sp[j * mx + maxi(i - 1, 0)]
-			var r := sp[j * mx + mini(i + 1, mx - 1)]
-			var u := sp[maxi(j - 1, 0) * mx + i]
-			var d := sp[mini(j + 1, mz - 1) * mx + i]
-			nrm[j * mx + i] = (r - l).cross(d - u).normalized()
-	# индексы, UV и оттенок — один раз; за кадр движку уходят только позиции и нормали (раньше ImmediateMesh
-	# по вершине: ~50 тыс. вызовов из GDScript на кадр — 13 мс)
-	if not c.has("idx"):
+		var o := j * mx
+		var ou := maxi(j - 1, 0) * mx
+		var od := mini(j + 1, mz - 1) * mx
+		nrm[o] = (sp[o + 1] - sp[o]).cross(sp[od] - sp[ou]).normalized()
+		for i: int in range(1, mx - 1):
+			nrm[o + i] = (sp[o + i + 1] - sp[o + i - 1]).cross(sp[od + i] - sp[ou + i]).normalized()
+		nrm[o + mx - 1] = (sp[o + mx - 1] - sp[o + mx - 2]).cross(sp[od + mx - 1] - sp[ou + mx - 1]).normalized()
+	Prof.add("плащ: сетка", t0)
+	_cape_upload(c, sp, nrm, mx, mz, sub)
+
+
+## Индексы, UV и оттенок — один раз; за такт движку уходят только позиции и нормали (раньше ImmediateMesh
+## по вершине: ~50 тыс. вызовов из GDScript на кадр — 13 мс).
+func _cape_upload(c: Dictionary, sp: PackedVector3Array, nrm: PackedVector3Array, mx: int, mz: int, sub: int) -> void:
+	var t0 := Time.get_ticks_usec()
+	var nx: int = c.nx
+	var nz: int = c.nz
+	if not c.has("arr"):
 		var shade: PackedFloat32Array = c.shade
 		var idx := PackedInt32Array()
 		for j: int in mz - 1:
@@ -966,51 +1120,23 @@ func _cape_draw(c: Dictionary, tg: PackedVector3Array) -> void:
 			var s := shade[sj * nx + si] if sj * nx + si < shade.size() else 1.0
 			col[k] = Color(s, s, s)
 			uv[k] = Vector2(float(ii) / (mx - 1), float(jj) / (mz - 1))
-		c.idx = idx
-		c.uv = uv
-		c.col = col
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = sp
-	arr[Mesh.ARRAY_NORMAL] = nrm
-	arr[Mesh.ARRAY_TEX_UV] = c.uv
-	arr[Mesh.ARRAY_COLOR] = c.col
-	arr[Mesh.ARRAY_INDEX] = c.idx
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_TEX_UV] = uv
+		arr[Mesh.ARRAY_COLOR] = col
+		arr[Mesh.ARRAY_INDEX] = idx
+		c.arr = arr
+	var arr2: Array = c.arr
+	arr2[Mesh.ARRAY_VERTEX] = sp
+	arr2[Mesh.ARRAY_NORMAL] = nrm
 	var mesh: ArrayMesh = c.mesh
 	mesh.clear_surfaces()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)    # одна поверхность: лицо — ткань, изнанка — next_pass
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr2)    # одна поверхность: лицо — ткань, изнанка — next_pass
 	var mat: Material = c.mat
 	if mat.next_pass != c.lining:
 		mat.next_pass = c.lining                                  # подкладка (cull front) — тем же буфером, без второй загрузки
 	mesh.surface_set_material(0, mat)
-
-
-## Catmull-Rom по сетке: along_j — вдоль колонки i (параметр t в рядах), иначе вдоль ряда (строка = i).
-static func _cr_at(g: PackedVector3Array, i: int, nx: int, nz: int, t: float, along_j: bool) -> Vector3:
-	var n := nz if along_j else nx
-	var k := mini(int(t), n - 2)
-	var f := t - k
-	# индексы четырёх соседей — без лямбды (раньше на каждый из ~1700 вызовов за кадр создавалась своя)
-	var m0 := clampi(k - 1, 0, n - 1)
-	var m1 := clampi(k, 0, n - 1)
-	var m2 := clampi(k + 1, 0, n - 1)
-	var m3 := clampi(k + 2, 0, n - 1)
-	var p0: Vector3
-	var p1: Vector3
-	var p2: Vector3
-	var p3: Vector3
-	if along_j:
-		p0 = g[m0 * nx + i]
-		p1 = g[m1 * nx + i]
-		p2 = g[m2 * nx + i]
-		p3 = g[m3 * nx + i]
-	else:
-		p0 = g[i * nx + m0]
-		p1 = g[i * nx + m1]
-		p2 = g[i * nx + m2]
-		p3 = g[i * nx + m3]
-	return 0.5 * ((2.0 * p1) + (-p0 + p2) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f * f
-		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * f * f * f)
+	Prof.add("плащ: загрузка", t0)
 
 
 func _wear_rigid(it: Dictionary, w: Dictionary) -> bool:
@@ -1146,28 +1272,32 @@ func _pin_cloth(w: Dictionary) -> bool:
 ## и тела не двигаются в мире физики — капсулы живут числами в _cap_* (их читает _push_out плаща).
 func _move_colliders(phys: bool) -> void:
 	_cache_dims(phys)
+	var sg := _skel.global_transform
 	for i: int in _colliders.size():
 		var c: Array = _colliders[i]
-		var body: AnimatableBody3D = c[0]
-		var xf := Transform3D.IDENTITY
+		var o := Vector3(0, -1000, 0)
+		var ax := Vector3.UP
 		if int(c[1]) < 0:                              # меч за спиной: по его узлу; в руке — капсула убрана
-			if _sword_cap.is_empty() or not _sword_back.is_visible_in_tree():
-				xf.origin = Vector3(0, -1000, 0)
-			else:
+			if not _sword_cap.is_empty() and _sword_back.is_visible_in_tree():
 				var sx := _sword_back.global_transform
-				var ax := (sx.basis * (_sword_cap[2] as Vector3)).normalized()
-				xf = Transform3D(Basis(Quaternion(Vector3.UP, ax)), sx * (_sword_cap[1] as Vector3))
+				ax = (sx.basis * (_sword_cap[2] as Vector3)).normalized()
+				o = sx * (_sword_cap[1] as Vector3)
 		else:
-			var a := _bone_world(int(c[1])).origin
-			var b := _bone_world(int(c[2])).origin
+			# концы кости — только точки (без поворота и ортонормировки всей кости, как в _bone_world)
+			var a := sg * _skel.get_bone_global_pose(int(c[1])).origin
+			var b := sg * _skel.get_bone_global_pose(int(c[2])).origin
 			var dir := b - a
 			if dir.length() < 0.001:
 				continue
-			xf = Transform3D(Basis(Quaternion(Vector3.UP, dir.normalized())), (a + b) * 0.5)
-		_cap_pos[i] = xf.origin
-		_cap_axis[i] = xf.basis.y
-		if phys:
-			body.global_transform = xf
+			ax = dir.normalized()
+			o = (a + b) * 0.5
+		_cap_pos[i] = o
+		if phys:                                       # тело в мире физики — только мягкой ткани
+			var xf := Transform3D(Basis(Quaternion(Vector3.UP, ax)), o)
+			_cap_axis[i] = xf.basis.y
+			(c[0] as AnimatableBody3D).global_transform = xf
+		else:
+			_cap_axis[i] = ax                          # ось капсулы — сама ось кости (знак не важен)
 
 
 func _items_tick(delta: float) -> void:

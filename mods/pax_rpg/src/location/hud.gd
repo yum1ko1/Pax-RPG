@@ -165,7 +165,16 @@ func refresh() -> void:
 	_map.size = _mask.size
 	# весь HUD (≈200 команд рисования и текста) — только когда изменилось состояние или размер экрана; раньше —
 	# каждый кадр. Дышащая монета — свой слой (_coin), он дёшев и рисуется каждый кадр.
+	# миникарта (map_rects — сотни коробок города) в отпечаток не входит: раньше её целиком хешировали каждый кадр,
+	# а меняется она только при постройке города — хватает её размера
+	var rects: Variant = st.get("map_rects")
+	if rects != null:
+		st.erase("map_rects")
 	var sig := st.hash() ^ hash(Vector3(size.x, size.y, _s))
+	if rects != null:
+		st["map_rects"] = rects
+		if rects is Array:
+			sig ^= (rects as Array).size()
 	if sig != _sig:
 		_sig = sig
 		queue_redraw()
@@ -1183,6 +1192,7 @@ var _lay := {}                         # ключ → что рисовать с
 var _bar_sh: Shader
 var _foe_id := -1
 var _foe_e: Dictionary = {}
+var _bar_par := {}                     # ключ → [fill/ghost/low/broken, alpha, aspect], уже отданные шейдеру полосы
 
 
 func _ht(name_: String) -> Texture2D:
@@ -1278,31 +1288,50 @@ func _place(key: String, frame_key: String, tex_name: String, r: Rect2, slot: Ar
 	var a := smoothstep(0.0, 1.0, float(b.a))
 	var sr := Rect2(r.position + r.size * Vector2(float(slot[0]), float(slot[1])), r.size * Vector2(float(slot[2]), float(slot[3])))
 	var n := _bar_node(key, cols, centered, vertical)
-	n.position = (sr.position - Vector2(2, 2)) * _s
-	n.size = (sr.size + Vector2(4, 4)) * _s
-	n.visible = a > 0.01
+	var shown := a > 0.01
+	# узлы и шейдер — только при изменении: каждое присваивание — вызов в сервер рендера (материал полосы
+	# перезаливался каждый кадр, даже у скрытой полосы)
+	var np := (sr.position - Vector2(2, 2)) * _s
+	if n.position != np:
+		n.position = np
+	var ns := (sr.size + Vector2(4, 4)) * _s
+	if n.size != ns:
+		n.size = ns
+	if n.visible != shown:
+		n.visible = shown
 	var m := n.material as ShaderMaterial
-	if m != null:
-		m.set_shader_parameter("fill", float(b.v))
-		m.set_shader_parameter("ghost", float(b.ghost))
-		m.set_shader_parameter("low", 1.0 if low else 0.0)
-		m.set_shader_parameter("broken", 1.0 if broken else 0.0)
-		m.set_shader_parameter("alpha", a)
-		m.set_shader_parameter("aspect", maxf(sr.size.x, sr.size.y) / maxf(minf(sr.size.x, sr.size.y), 1.0))
+	if m != null and shown:                                   # скрытой полосе параметры не нужны — выставятся при показе
+		var pv := Vector4(float(b.v), float(b.ghost), 1.0 if low else 0.0, 1.0 if broken else 0.0)
+		var asp := maxf(sr.size.x, sr.size.y) / maxf(minf(sr.size.x, sr.size.y), 1.0)
+		var last: Variant = _bar_par.get(key)
+		if not (last is Array) or (last as Array)[0] != pv or float((last as Array)[1]) != a or float((last as Array)[2]) != asp:
+			_bar_par[key] = [pv, a, asp]
+			m.set_shader_parameter("fill", pv.x)
+			m.set_shader_parameter("ghost", pv.y)
+			m.set_shader_parameter("low", pv.z)
+			m.set_shader_parameter("broken", pv.w)
+			m.set_shader_parameter("alpha", a)
+			m.set_shader_parameter("aspect", asp)
 	if frame_key != "":
 		var f := _frame_node(frame_key, tex_name)
-		f.position = r.position * _s
-		f.size = r.size * _s
-		f.visible = a > 0.01
-		f.modulate.a = a
+		var fp := r.position * _s
+		if f.position != fp:
+			f.position = fp
+		var fs := r.size * _s
+		if f.size != fs:
+			f.size = fs
+		if f.visible != shown:
+			f.visible = shown
+		if f.modulate.a != a:
+			f.modulate.a = a
 	_lay[key] = {"rect": sr, "vertical": vertical, "centered": centered, "low": low, "broken": broken, "a": a, "b": b}
 
 
 func _hide(keys: Array) -> void:
 	for k: String in keys:
-		if _bar_nodes.has(k):
+		if _bar_nodes.has(k) and (_bar_nodes[k] as Control).visible:
 			(_bar_nodes[k] as Control).visible = false
-		if _frame_nodes.has(k):
+		if _frame_nodes.has(k) and (_frame_nodes[k] as Control).visible:
 			(_frame_nodes[k] as Control).visible = false
 		_lay.erase(k)
 
@@ -1357,7 +1386,18 @@ func _live_tick() -> void:
 		_place("foe_hp", "foe", "enemy_frame", er, FOE_HP, HP_COLS, false, true, fh, false, false)
 		_place("foe_conc", "", "", er, FOE_CONC, CONC_COLS, true, true, fc, float(fc.v) < 1.0 / 3.0, bool(e.get("broken", false)))
 		_lay["foe_frame"] = {"rect": er}
-	_over.queue_redraw()
+	# верхний слой — только когда на нём что-то есть (и один раз после — стереть): вне боя полоса героя скрыта,
+	# а пустой слой перерисовывался каждый кадр
+	var busy := _lay.has("boss_hp") or _lay.has("foe_frame")
+	for k: String in ["hero", "boss_conc", "foe_conc"]:
+		if _lay.has(k) and float((_lay[k] as Dictionary).get("a", 0.0)) > 0.01:
+			busy = true
+	if busy or _over_busy:
+		_over.queue_redraw()
+	_over_busy = busy
+
+
+var _over_busy := true
 
 
 ## Верхний слой: тумблеры и шевроны у краёв концентрации, метка центра, слом; аватар врага в медальоне, имена,
