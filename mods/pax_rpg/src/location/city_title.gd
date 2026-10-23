@@ -20,6 +20,8 @@ const SLIDE_TO := 0.98                        # где срывается (у о
 var _name := ""
 var sub := ""                                 # под названием мелко: время суток (location.gd)
 var _t := -1.0                                # время заставки, с (<0 — ещё не началась)
+var _stage_on := false                        # сцена катан перерисовывается каждый кадр
+const STAGE_END := 2.6                        # с этого мига в сцене катан ничего не видно (см. _process)
 var _stage: Katana3D
 var _kat: Node3D
 var _saya: Node3D
@@ -61,6 +63,9 @@ func setup(mod: PaxMod, place: String) -> void:
 		add_child(_snd_scrape)
 	_stage = Katana3D.new()
 	_stage.setup(mod, Vector2i(1600, 900), 2.0)      # кадр шире — катаны мельче (раньше 1.35)
+	# сцена катан (1600×900, MSAA 4×) рисуется, только пока клинки в кадре: раньше — с постройки города, всю задержку
+	# перед титром (_draw её не показывает при _t < 0) и ещё ~6 с пустой после того, как клинки улетели за край
+	_stage.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_stage)
 	_kat = _stage.pivot
 	_saya = _stage.piece("models/weapons/katana_saya.glb")
@@ -153,6 +158,14 @@ func _process(delta: float) -> void:
 	if _t < 0.0:
 		return
 	var t := _t
+	if not _stage_on and t < STAGE_END:
+		_stage_on = true
+		_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	elif _stage_on and t >= STAGE_END:
+		# с 2.5 с клинки за левым краем (x < −2.5 м при полуширине кадра 1.78 м), чужой и ножны скрыты, блик погас:
+		# последний кадр — пустой, дальше сцена стоит (текстура та же)
+		_stage_on = false
+		_stage.render_target_update_mode = SubViewport.UPDATE_ONCE
 	_flash = maxf(0.0, _flash - delta * 1.6)
 	_shake = maxf(0.0, _shake - delta * 1.4)
 	# 1. влёт в ножнах (0 … 0.5 с): из-за левого края, пол-оборота вокруг клинка; ножны и клинок — одним целым

@@ -95,6 +95,16 @@ func _fit() -> void:
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
 
 
+## Окно закрывает весь экран непрозрачным фоном (картинка во весь экран, без полос по краям) — location.gd тогда
+## не рисует 3D-вид под ним.
+func covers_screen() -> bool:
+	if _bg_tex == null or not visible:
+		return false
+	var s := minf(size.x / W, size.y / H)
+	return absf(W * s - size.x) < 0.5 and absf(H * s - size.y) < 0.5 and _frame.position.length() < 0.5 \
+		and absf(_frame.scale.x - s) < 0.001
+
+
 ## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, conc, level, xp_abs, xp_need;
 ## attributes — характеристики персонажа из config/hero.json).
 func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dictionary) -> void:
