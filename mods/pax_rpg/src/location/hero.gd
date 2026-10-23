@@ -623,7 +623,7 @@ func _wear_cape(it: Dictionary, w: Dictionary) -> bool:
 func _tex_mip(path: String, normal: bool) -> Texture2D:
 	if path == "":
 		return null
-	var t := _mod.texture(path)
+	var t := Assets.tex(_mod, path)                  # .dds рядом (BC7/BC5 с mip) — сразу он
 	if t == null:
 		return null
 	var img := t.get_image()

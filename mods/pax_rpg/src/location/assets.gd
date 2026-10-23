@@ -152,6 +152,56 @@ static func _swap(mod: PaxMod, s: Dictionary, hi: bool) -> void:
 	s.hi_on = hi
 
 
+## Отдельная картинка мода: если рядом лежит <name>.dds (BC7/BC5 — pax_rpg/dev/assets/tex_bc7.gd), берём его — в
+## видеопамяти вчетверо меньше несжатой, mip — те же, что строила игра (или их нет — как у картинки); иначе — как раньше,
+## mod.texture. Одна текстура на путь, пока её кто-то держит (слабая ссылка: кэш не держит видеопамять сам).
+static var _dds_tex := {}            # путь → WeakRef на ImageTexture из .dds
+static var _no_dds := {}             # пути, у которых .dds нет (файл не читаем повторно)
+
+
+static func tex(mod: PaxMod, path: String) -> Texture2D:
+	if path == "" or _no_dds.has(path):
+		return mod.texture(path)
+	var w: WeakRef = _dds_tex.get(path)
+	if w != null:
+		var t := w.get_ref() as Texture2D
+		if t != null:
+			return t
+	var img := _dds(mod, path.get_basename() + ".dds")
+	if img == null:
+		_no_dds[path] = true
+		return mod.texture(path)
+	var it := ImageTexture.create_from_image(img)
+	_dds_tex[path] = weakref(it)
+	return it
+
+
+## Текстура из DDS, общая для всех моделей с тем же содержимым файла (ключ — MD5 байтов). Слабая ссылка: держат её
+## материалы моделей (кэш образцов), не этот словарь.
+static var _shared_tex := {}
+
+
+static func _shared(mod: PaxMod, rel: String) -> ImageTexture:
+	var b := mod.read_bytes(rel)
+	if b.is_empty():
+		return null
+	var hc := HashingContext.new()
+	hc.start(HashingContext.HASH_MD5)
+	hc.update(b)
+	var key := hc.finish().hex_encode()
+	var w: WeakRef = _shared_tex.get(key)
+	if w != null:
+		var t := w.get_ref() as ImageTexture
+		if t != null:
+			return t
+	var img := Image.new()
+	if img.load_dds_from_buffer(b) != OK:
+		return null
+	var it := ImageTexture.create_from_image(img)
+	_shared_tex[key] = weakref(it)
+	return it
+
+
 static func _dds(mod: PaxMod, rel: String) -> Image:
 	var b := mod.read_bytes(rel)
 	if b.is_empty():
@@ -164,6 +214,7 @@ static func _dds(mod: PaxMod, rel: String) -> Image:
 static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 	var dir := path.get_basename() + ".tex/"
 	var seen: Array = []
+	var repl := {}                                       # картинка glb → общая текстура из DDS
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
 		if inst.mesh == null:
@@ -184,6 +235,9 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				bm3.subsurf_scatter_skin_mode = true
 			for slot: int in SLOTS:
 				var t: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
+				if t != null and repl.has(t):
+					(mat as BaseMaterial3D).set_texture(slot, repl[t])   # та же картинка у другой поверхности модели
+					continue
 				if t == null or seen.has(t):
 					continue
 				seen.append(t)
@@ -191,6 +245,14 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				var hi := dir + "t%d.dds" % n
 				var lo := dir + "t%d_lo.dds" % n
 				var has_lo := not mod.read_bytes(lo).is_empty()
+				if not has_lo:
+					# без стриминга (лёгкой копии нет): одинаковый DDS у разных моделей — одна текстура в видеопамяти
+					# (у семи дубов одни и те же кора, листва и нормали 4096²: было по копии на каждый)
+					var sh := _shared(mod, hi)
+					if sh != null:
+						repl[t] = sh
+						(mat as BaseMaterial3D).set_texture(slot, sh)
+					continue                                   # нет файла — остаётся как в glb
 				var img := _dds(mod, lo if has_lo else hi)
 				if img == null:
 					continue                                   # не упакована — остаётся как в glb

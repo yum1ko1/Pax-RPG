@@ -7,6 +7,7 @@ const SMOKE := "textures/vfx/smoke_8x8.png"
 const FIRE := "textures/vfx/fire_8x8.png"
 const GLOW := "textures/vfx/glow.png"
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 
 var mod: PaxMod
 var _mats := {}
@@ -30,7 +31,7 @@ func _flip_mat(tex: String, additive: bool, energy: float) -> StandardMaterial3D
 	m.particles_anim_v_frames = 8
 	m.particles_anim_loop = false
 	m.vertex_color_use_as_albedo = true
-	m.albedo_texture = mod.texture(tex)
+	m.albedo_texture = Assets.tex(mod, tex)          # флипбуки дыма и огня — .dds рядом (BC7), если есть
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	m.proximity_fade_enabled = true                      # мягкие частицы: без резкого среза о стены и землю

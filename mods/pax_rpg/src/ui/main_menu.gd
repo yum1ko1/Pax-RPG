@@ -7,6 +7,7 @@ extends CanvasLayer
 ## настройки, сеть; вернулся игрок на главный шаг меню — снова наш экран.
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const MenuSettings := preload("res://mods/pax_rpg/src/ui/menu_settings.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
 const RING := Vector2(0.766, 0.195)              # кольцо в небе — доля картинки
@@ -79,7 +80,7 @@ func _build() -> void:
 	add_child(_root)
 	_bg = TextureRect.new()
 	_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_bg.texture = mod.texture("textures/menu/bg_clean.jpg")   # камни вырезаны (dev: menu_rocks) — они летают сами
+	_bg.texture = Assets.tex(mod, "textures/menu/bg_clean.jpg")   # камни вырезаны (dev: menu_rocks) — они летают сами
 	_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -87,12 +88,12 @@ func _build() -> void:
 	sh.code = BG
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
-	_mat.set_shader_parameter("depth", mod.texture("textures/menu/depth.png"))
+	_mat.set_shader_parameter("depth", Assets.tex(mod, "textures/menu/depth.png"))
 	_mat.set_shader_parameter("ring", RING)
 	_mat.set_shader_parameter("tip", TIP)
-	_mat.set_shader_parameter("robe", mod.texture("textures/menu/robe.png"))
-	_mat.set_shader_parameter("plate", mod.texture("textures/menu/plate.jpg"))      # фон без скалы с самураем
-	_mat.set_shader_parameter("fgmask", mod.texture("textures/menu/fgmask.png"))    # передний план: скала, самурай
+	_mat.set_shader_parameter("robe", Assets.tex(mod, "textures/menu/robe.png"))
+	_mat.set_shader_parameter("plate", Assets.tex(mod, "textures/menu/plate.jpg"))      # фон без скалы с самураем
+	_mat.set_shader_parameter("fgmask", Assets.tex(mod, "textures/menu/fgmask.png"))    # передний план: скала, самурай
 	_bg.material = _mat
 	_root.add_child(_bg)
 	_make_rocks()

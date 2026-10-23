@@ -271,7 +271,7 @@ func _mountain_mat() -> Material:
 
 ## Картинка мода с мипмапами (без них даль рябит).
 func _tex(path: String, normal: bool) -> Texture2D:
-	var tex := mod.texture(path)
+	var tex := Assets.tex(mod, path)                 # .dds рядом (BC7/BC5 с mip) — сразу он
 	if tex == null:
 		return null
 	var img := tex.get_image()
