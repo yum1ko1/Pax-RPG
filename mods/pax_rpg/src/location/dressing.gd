@@ -3,6 +3,7 @@
 ## мусор, зарево. Простые формы и материалы города — потом часть заменим моделями, расстановка останется.
 ## Люди (guard/crier/person) — не здесь: жители-гоблины (location.gd → _spawn_dressing_npcs).
 extends RefCounted
+const GfxS := preload("res://mods/pax_rpg/src/location/gfx.gd")
 
 const PALETTE := [Color(0.62, 0.06, 0.05), Color(0.06, 0.05, 0.05), Color(0.72, 0.5, 0.12), Color(0.48, 0.03, 0.03),
 	Color(0.1, 0.28, 0.27)]                            # киноварь, чёрный, золото, тёмная киноварь, бирюза (редко)
@@ -59,6 +60,7 @@ func _cloth(size: Vector2, col: Color, xf: Transform3D, amp := 0.06, tex_path :=
 		m.set_shader_parameter("tex", tx)
 		m.set_shader_parameter("amp", amp)
 		mi.material_override = m
+		mi.layers = GfxS.SWAY_LAYER                    # качается в шейдере: в тенях огней — только у героя (gfx.gd)
 	else:
 		var sm := StandardMaterial3D.new()
 		sm.albedo_color = col
@@ -167,8 +169,9 @@ func add(d: Dictionary, pos: Vector3) -> void:
 			city.root.add_child(mi2)
 		"ruts":                                         # колеи повозок
 			var ln2 := float(d.get("len", 20.0))
-			for s: float in [-0.8, 0.8]:
-				_box(Vector3(0.32, 0.012, ln2), pos + b * Vector3(s, 0.03, 0), b, _m("rut", Color(0.06, 0.045, 0.035), 0.95))
+			for s: float in [-0.8, 0.8]:                   # 1.2 см над землёй — без тени (её не видно: колея темнее тени)
+				city.batch_box(Vector3(0.32, 0.012, ln2), b, pos + b * Vector3(s, 0.03, 0), _m("rut", Color(0.06, 0.045, 0.035), 0.95),
+					GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 		"petals":                                       # лепестки сакуры пятном
 			var r := float(d.get("w", 3.0))
 			var pm := _m("petal", Color(0.86, 0.42, 0.55), 0.8)

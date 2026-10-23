@@ -43,6 +43,7 @@ var _prompt: Label3D
 # дальше FAR м — анимация 15 раз в секунду (с 30+ м глаз разницы не видит); за кадром — не рисуется, анимация стоит, шаг пути —
 # раз в PHYS_SKIP тактов физики с накопленным временем (маршрут тот же, просто реже считается)
 const FAR := 30.0
+const HIDE := 85.0                   # = visibility_range_end 80 + запас 5 (setup)
 const PHYS_SKIP := 4
 var _anim_acc := 0.0
 var _phys_acc := 0.0
@@ -233,7 +234,12 @@ func _proc_tick(delta: float) -> void:
 			if pl.distance_to(p) > 1.0:
 				_seen = false
 				break
-		_far = p.distance_to(cam.global_position) > FAR
+		var dc := p.distance_to(cam.global_position)
+		_far = dc > FAR
+		if dc > HIDE:
+			_seen = false                               # дальше дальности видимости модели (80 + 5 м) его и так не видно,
+			                                            # но тени огней дальность не проверяют: поза двигалась — тень огня
+			                                            # перерисовывалась каждый кадр (и с тенью невидимого жителя)
 		if _model != null and _model.visible != _seen:
 			_model.visible = _seen                      # вне кадра не рисуется совсем (и тень не считается)
 	_anim_acc += delta

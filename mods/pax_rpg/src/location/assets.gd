@@ -39,6 +39,8 @@ static func model(mod: PaxMod, path: String) -> Node3D:
 			_textures(mod, path, m)
 		var t2 := Time.get_ticks_msec()
 		_lods(m)
+		if SHADOW_PROXY.has(path):
+			_shadow_proxy(m)
 		var t3 := Time.get_ticks_msec()
 		if t3 - t0 > 150:                               # журнал загрузки: что из моделей долгое
 			print("[pax_rpg] load: model %s — glb %d, textures %d, lod %d ms" % [path.get_file(), t1 - t0, t2 - t1, t3 - t2])
@@ -258,6 +260,8 @@ static func _pbr(m: BaseMaterial3D) -> void:
 const SKIN_LOD := true
 const STATIC_LOD := false             # постройки 10–40k треугольников — дёшево и без LOD (было: грани и пятна вблизи)
 static func _lods(m: Node3D) -> void:
+	if _lod_ok == 0:
+		_lod_ok = 1 if _lod_works() else -1
 	if _lod_ok < 0:
 		return
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
@@ -277,10 +281,111 @@ static func _lods(m: Node3D) -> void:
 		var im := ImporterMesh.new()
 		for si: int in am.get_surface_count():
 			im.add_surface(am.surface_get_primitive_type(si), am.surface_get_arrays(si), [], {},
-				am.surface_get_material(si), am.surface_get_name(si))
+				am.surface_get_material(si), am.surface_get_name(si),
+				am.surface_get_format(si) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 		im.generate_lods(25.0, 60.0, [])
-		if im.get_surface_count() == 0 or im.get_surface_lod_count(0) == 0:
-			_lod_ok = -1                                     # упрощения сеток в этой сборке нет — не пробовать
-			return
-		_lod_ok = 1
-		inst.mesh = im.get_mesh()
+		var any := false
+		for si: int in im.get_surface_count():
+			any = any or im.get_surface_lod_count(si) > 0
+		# сетку, которая не упростилась (швы UV Meshy на каждой вершине), оставляем как есть. Раньше такая сетка
+		# первой поверхностью выключала LOD у всех моделей до конца игры (_lod_ok = -1)
+		if any:
+			inst.mesh = im.get_mesh()
+
+
+## Есть ли в этой сборке упрощение сеток (meshoptimizer): шар 64×32 упрощается всегда.
+static func _lod_works() -> bool:
+	var im := ImporterMesh.new()
+	im.add_surface(Mesh.PRIMITIVE_TRIANGLES, SphereMesh.new().get_mesh_arrays())
+	im.generate_lods(25.0, 60.0, [])
+	return im.get_surface_count() > 0 and im.get_surface_lod_count(0) > 0
+
+
+## Тень лёгкой на вид, но тяжёлой модели (катана с ножнами на поясе героя — 87k треугольников, 18 сеток): она в
+## каждом каскаде солнца и в 6 гранях тени каждого огня рядом с героем (тень огня у героя перерисовывается каждый кадр).
+## Тень даёт одна копия: все сетки модели одной, вершины сварены по месту (швы UV и нормалей тени не нужны), у неё LOD
+## движка — его погрешность меньше пикселя с камеры (выбирает по расстоянию до камеры и в проходах теней). Сами
+## сетки тень не отбрасывают, видны как были. Копия — дочерний узел модели: прячется и двигается вместе с ней.
+const SHADOW_PROXY := ["models/weapons/katana.glb", "models/weapons/katana_saya.glb", "models/weapons/katana_sheathed.glb"]
+static var _proxy_mat: StandardMaterial3D
+
+
+static func _shadow_proxy(m: Node3D) -> void:
+	if _lod_ok < 0:
+		return
+	var verts := PackedVector3Array()
+	var idx := PackedInt32Array()
+	var at := {}                                         # место вершины → номер (сварка)
+	var parts: Array = []                                # в осях корня модели: копия — его дочерний узел
+	if m is MeshInstance3D and (m as MeshInstance3D).mesh != null:
+		parts.append([m, Transform3D.IDENTITY])
+	for c: Node in m.get_children():
+		_mesh_nodes(c, Transform3D.IDENTITY, parts)
+	if parts.is_empty():
+		return
+	for pr: Array in parts:
+		var inst: MeshInstance3D = pr[0]
+		var xf: Transform3D = pr[1]
+		for si: int in inst.mesh.get_surface_count():
+			if inst.mesh.surface_get_primitive_type(si) != Mesh.PRIMITIVE_TRIANGLES:
+				return                                   # не треугольники — без копии, как было
+			var arr := inst.mesh.surface_get_arrays(si)
+			var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var ix: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+			var remap := PackedInt32Array()
+			remap.resize(vs.size())
+			for i: int in vs.size():
+				var p := xf * vs[i]
+				var k: int = at.get(p, -1)
+				if k < 0:
+					k = verts.size()
+					at[p] = k
+					verts.append(p)
+				remap[i] = k
+			if ix.is_empty():
+				for i: int in vs.size():
+					idx.append(remap[i])
+			else:
+				for i: int in ix:
+					idx.append(remap[i])
+	var nrm := PackedVector3Array()                      # гладкие нормали — LOD бережёт форму по ним
+	nrm.resize(verts.size())
+	for t: int in range(0, idx.size() - 2, 3):
+		var fn := (verts[idx[t + 1]] - verts[idx[t]]).cross(verts[idx[t + 2]] - verts[idx[t]])
+		nrm[idx[t]] += fn
+		nrm[idx[t + 1]] += fn
+		nrm[idx[t + 2]] += fn
+	for i: int in nrm.size():
+		nrm[i] = nrm[i].normalized() if nrm[i].length_squared() > 0.0 else Vector3.UP
+	if _proxy_mat == null:
+		_proxy_mat = StandardMaterial3D.new()
+		_proxy_mat.cull_mode = BaseMaterial3D.CULL_DISABLED   # как у сеток модели (Meshy/Blender — двусторонние)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = nrm
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var im := ImporterMesh.new()
+	im.add_surface(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, _proxy_mat, "shadow")
+	im.generate_lods(60.0, 60.0, [])
+	if im.get_surface_count() == 0 or im.get_surface_lod_count(0) == 0:
+		return                                           # не упростилась — пусть тень дают сами сетки
+	var px := MeshInstance3D.new()
+	px.name = "ShadowLod"
+	px.mesh = im.get_mesh()
+	px.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	px.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	m.add_child(px)
+	for pr: Array in parts:
+		(pr[0] as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Сетки модели (не скинованные) и их место в осях модели — модель ещё вне дерева, по локальным преобразованиям.
+static func _mesh_nodes(n: Node, xf: Transform3D, out: Array) -> void:
+	var here := xf
+	if n is Node3D:
+		here = xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and (n as MeshInstance3D).skin == null:
+		out.append([n, here])
+	for c: Node in n.get_children():
+		_mesh_nodes(c, here, out)
