@@ -403,12 +403,15 @@ func push_globals() -> void:
 	for k: String in PS_KEYS:                                # И-50: всё, что меняем ниже, — запомнить как было в игре
 		_saved[k] = ProjectSettings.get_setting(k, PS_KEYS[k])
 	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)), true)
-	# качество эффектов движка (рендер Godot): полное разрешение SSAO/SSIL, гладкие шероховатые отражения, больше лучей
+	# качество эффектов движка (рендер Godot): SSAO/SSIL высокого качества, гладкие шероховатые отражения, больше лучей
 	# SDFGI, бикубический ореол, сглаженный объёмный туман, SSS кожи, анизотропные декали
-	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, false, 0.5, 2, 50.0, 300.0)
-	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, false, 0.5, 4, 50.0, 300.0)
+	# SSAO и SSIL — высокое качество в полразмера (как по умолчанию в Godot): с TAA разницы почти не видно, а полный
+	# размер стоил ~0.7 мс видеокарты (замер rpg_perf gpu, 0.4.16Y; решение автора)
+	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, true, 0.5, 2, 50.0, 300.0)
+	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, true, 0.5, 4, 50.0, 300.0)
 	RenderingServer.environment_set_ssr_roughness_quality(RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_HIGH)
-	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_64)   # свет статичный, сходится за 30 кадров — 64 луча не видно
+	# 32 луча на пробу: свет копится за 30 кадров, так что разница с 64 почти не видна, а это −0.6 мс видеокарты
+	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_32)
 	RenderingServer.environment_glow_set_use_bicubic_upscale(true)
 	RenderingServer.environment_set_volumetric_fog_filter_active(true)
 	RenderingServer.environment_set_volumetric_fog_volume_size(64, 64)   # туман тонкий — грубая сетка незаметна
