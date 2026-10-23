@@ -701,8 +701,10 @@ func _lantern_tex() -> ImageTexture:
 
 ## Фонарь-маятник в шейдере: наклон по ветру + порыв + лёгкая дрожь — то, что раньше считал Swing (скрипт) по
 ## каждому фонарю каждый кадр (сила ветра · 0.12 / ω², ω² = g / длина подвеса; дрожь 0.08 · 0.12 / ω²).
+## Вершины — сразу в мировых осях (world_vertex_coords): качание считается в мире, и обратно в оси сетки
+## переводить не нужно (прежде — inverse(MODEL_MATRIX) 4×4 в каждой вершине каждого прохода, ночью и в тенях огней).
 const LANTERN_SH := """shader_type spatial;
-render_mode diffuse_burley, specular_schlick_ggx;
+render_mode diffuse_burley, specular_schlick_ggx, world_vertex_coords;
 global uniform vec4 pax_rpg_wind;
 uniform bool paper = false;
 uniform sampler2D tex : source_color, filter_linear_mipmap;
@@ -719,14 +721,14 @@ void vertex() {
 	float ph = fract(sin(dot(pivot, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.2832;
 	vec2 ang = (force + flutter) * 0.12 / k + 0.004 * vec2(sin(TIME * w + ph), cos(TIME * w * 0.9 + ph));
 	ang = clamp(ang, vec2(-0.45), vec2(0.45));
-	vec3 wv = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - pivot;
+	vec3 wv = VERTEX - pivot;
 	float cx = cos(-ang.y);
 	float sx = sin(-ang.y);
 	float cz = cos(ang.x);
 	float sz = sin(ang.x);
 	wv = vec3(wv.x, cx * wv.y - sx * wv.z, sx * wv.y + cx * wv.z);
 	wv = vec3(cz * wv.x - sz * wv.y, sz * wv.x + cz * wv.y, wv.z);
-	VERTEX = (inverse(MODEL_MATRIX) * vec4(wv + pivot, 1.0)).xyz;
+	VERTEX = wv + pivot;
 }
 void fragment() {
 	if (paper) {
@@ -1176,11 +1178,12 @@ func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 	if sh == null or src == null:
 		return null
 	var m := ShaderMaterial.new()
-	m.shader = sh
+	var use_alpha := src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+	m.shader = sh if use_alpha else _foliage_opaque(sh)
 	if src.albedo_texture != null:
 		m.set_shader_parameter("albedo_tex", src.albedo_texture)
 	m.set_shader_parameter("albedo_col", src.albedo_color)
-	m.set_shader_parameter("use_alpha", src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED)
+	m.set_shader_parameter("use_alpha", use_alpha)
 	var f := path.get_file()
 	if f.begins_with("grass_") or f.begins_with("plant_"):
 		m.set_shader_parameter("push", 0.35)              # трава и цветы раздвигаются героем
@@ -1197,6 +1200,17 @@ func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 			m.set_shader_parameter("canopy", 1.0)
 	_fol_mats[key] = m
 	return m
+
+
+static var _fol_opaque: Shader
+
+
+## Шейдер ветра без альфа-среза (FOLIAGE_OPAQUE) — для непрозрачных поверхностей: глубина и тени без discard.
+static func _foliage_opaque(sh: Shader) -> Shader:
+	if _fol_opaque == null:
+		_fol_opaque = Shader.new()
+		_fol_opaque.code = sh.code.replace("shader_type spatial;", "shader_type spatial;\n#define FOLIAGE_OPAQUE")
+	return _fol_opaque
 
 
 ## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
