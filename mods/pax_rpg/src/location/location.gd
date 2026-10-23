@@ -197,6 +197,50 @@ func setup(m: PaxMod) -> void:
 	_net = NetSync.new()                                   # сетевая игра: герои других игроков в том же городе
 	_net.setup(m, net_pose, hero_cfg_of)
 	add_child(_net)
+	for last: bool in [false, true]:                       # замер такта физики (rpg_perf): начало и конец прохода узлов
+		var tp := TickProbe.new()
+		tp.last = last
+		tp.process_physics_priority = 2000000000 if last else -2000000000
+		tp.process_priority = -2000000000
+		add_child(tp)
+
+
+## Замер такта физики для rpg_perf (пока Prof копит; иначе — пустой вызов): первый узел дерева по
+## process_physics_priority — начало, последний — конец всех _physics_process (мод и игра, деревья анимаций в такте
+## физики). Таймер физики, заведённый последним, срабатывает после очереди отложенных вызовов того же такта (поза
+## скелетов, модификаторы — IK стоп, поворот головы). Первый _process кадра, где прошёл ровно один такт, — после
+## шага сервера физики и уведомлений о трансформах: «хвост» такта и такт целиком (≈, с началом кадра).
+class TickProbe extends Node:
+	const P := preload("res://mods/pax_rpg/src/location/prof.gd")
+	static var t0 := 0                   # начало прохода узлов такта
+	static var t_end := 0                # после отложенных вызовов такта
+	var last := false
+	var _pf := -1
+
+	func _physics_process(_delta: float) -> void:
+		if not P.on:
+			return
+		if not last:
+			t0 = Time.get_ticks_usec()
+			return
+		P.add("такт: все _physics_process", t0)
+		P.peak("такт: все _physics_process", t0)
+		get_tree().create_timer(0.0, true, true).timeout.connect(_after)
+
+	func _after() -> void:
+		t_end = Time.get_ticks_usec()
+		P.add("такт: с отложенными (скелеты)", t0)
+		P.peak("такт: с отложенными (скелеты)", t0)
+
+	func _process(_delta: float) -> void:
+		if last or not P.on:
+			return
+		var pf := Engine.get_physics_frames()
+		if pf == _pf + 1 and t_end > t0:
+			P.add("такт: шаг сервера и уведомления (≈)", t_end)
+			P.peak("такт: шаг сервера и уведомления (≈)", t_end)
+			P.peak("такт целиком (≈)", t0)
+		_pf = pf
 
 
 func _f(key: String, fallback: float) -> float:
@@ -1431,6 +1475,7 @@ func _physics_process(delta: float) -> void:
 	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
+	Prof.peak("локация физика", t0)
 
 
 ## «Земной разлом» (T): тратит концентрацию героя (риск — переполнится, стойка сломана), перезарядка quake_cooldown;
@@ -1877,6 +1922,7 @@ func _quake_debris(c: Vector3, r: float) -> void:
 
 
 func _physics_body(delta: float) -> void:
+	var tp := Time.get_ticks_usec()                      # метки частей такта (rpg_perf prof); без замера — пустые вызовы
 	var on_floor := _player.is_on_floor()
 	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
 	var f := (Input.is_physical_key_pressed(KEY_F) or Input.is_key_pressed(KEY_F)) and not _typing()
@@ -2055,10 +2101,14 @@ func _physics_body(delta: float) -> void:
 		var bf := Vector3(-sin(by), 0.0, -cos(by))
 		var br := Vector3(cos(by), 0.0, -sin(by))
 		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
+	Prof.add("физ: ввод и поворот", tp)
+	tp = Time.get_ticks_usec()
 	if _hero != null:
 		var th := Time.get_ticks_usec()
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		Prof.add("герой (с плащом)", th)
+		Prof.peak("герой (с плащом)", th)
+		tp = Time.get_ticks_usec()
 		if _hero.action != _prev_action and (_hero.action.begins_with("Attack") or _hero.action in Hero.SPECIALS):
 			var cy2 := _combo_yaw()
 			if cy2 != INF:
@@ -2097,7 +2147,8 @@ func _physics_body(delta: float) -> void:
 			_hero.slash_wave = false
 			_slash_wave()
 		_tilt = lerpf(_tilt, _tilt_want, 1.0 - exp(-delta * 16.0))
-		if _hero.model != null:
+		# тот же наклон (стоит, вне удара) — не пишем: каждая запись гнала пересчёт трансформов по всей модели героя
+		if _hero.model != null and absf(_hero.model.rotation.z - _tilt) > 1e-6:
 			_hero.model.rotation.z = _tilt
 		_quake_step()
 		if _sult != null and _sult.active():
@@ -2164,9 +2215,11 @@ func _physics_body(delta: float) -> void:
 		_recoil = Weight.spring(_recoil, delta, _w.f("recoil_k", 60.0), _w.f("recoil_damp", 9.0))
 	_player.velocity = vel
 	var was := _player.global_position
+	Prof.add("физ: бой и способности", tp)
 	var tm := Time.get_ticks_usec()
 	_player.move_and_slide()
 	Prof.add("движение героя", tm)
+	tp = Time.get_ticks_usec()
 	if is_instance_valid(_sfx):
 		var d := _player.global_position - was
 		d.y = 0.0
@@ -2201,6 +2254,8 @@ func _physics_body(delta: float) -> void:
 				_step_left = not _step_left
 				_weather.footprint(_player.global_position, _body_mesh.rotation.y, _step_left)
 				_dust(_player.global_position, _sfx.soft, running)
+	Prof.add("физ: шаги и следы", tp)
+	tp = Time.get_ticks_usec()
 	_ground_contact(delta)
 	if _hero != null:
 		_hero.cape_wind(_player.velocity)
@@ -2212,10 +2267,12 @@ func _physics_body(delta: float) -> void:
 	if _player.position.y < FALL_Y:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
+	Prof.add("физ: контакт и захват", tp)
 	var tc := Time.get_ticks_usec()
 	_follow_camera(delta)
 	_flash_tick(delta)
 	Prof.add("камера", tc)
+	tp = Time.get_ticks_usec()
 	if is_instance_valid(_arena):
 		_arena.tick()
 	_quest_pickup()
@@ -2223,6 +2280,7 @@ func _physics_body(delta: float) -> void:
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
+	Prof.add("физ: арена и ворота", tp)
 
 
 ## Отладка (консоль rpg_probe): всё видимое в радиусе 2 м от героя — имя, родитель, высота над ступнями.
@@ -2352,7 +2410,9 @@ func _follow_camera(delta := 0.0) -> void:
 		var e := smoothstep(0.0, 1.0, _combo_cam)
 		pos = look + (pos - look) * (1.0 - _hf("cam_combo_push", 0.12) * e)
 		_fov_punch = maxf(0.0, _fov_punch - delta / 0.28)
-		_cam.fov = _cam_fov0() - _hf("cam_final_fov", 5.0) * sin(_fov_punch * PI * 0.5)
+		var fov := _cam_fov0() - _hf("cam_final_fov", 5.0) * sin(_fov_punch * PI * 0.5)
+		if absf(_cam.fov - fov) > 1e-6:                  # без толчка — тот же угол: камеру в сервер рендера не шлём
+			_cam.fov = fov
 	if _sult != null and _sult.active():             # кат-сцена ульты копья — своя камера
 		var cc: Array = _sult.camera()
 		pos = cc[0]
@@ -2383,6 +2443,8 @@ func _cam_fov0() -> float:
 ## встаёт перед препятствием. Подлетает к стене сразу, отходит обратно плавно (без рывков у углов).
 var _cam_pull := 1.0                # доля пути от головы до камеры, что свободна (сглажена)
 var _cam_shape: SphereShape3D
+var _cam_q: PhysicsShapeQueryParameters3D
+var _cam_q_rid := RID()
 
 
 func _cam_collide(pos: Vector3, delta: float) -> Vector3:
@@ -2395,12 +2457,17 @@ func _cam_collide(pos: Vector3, delta: float) -> Vector3:
 	if _cam_shape == null:
 		_cam_shape = SphereShape3D.new()
 		_cam_shape.radius = 0.3
-	var q := PhysicsShapeQueryParameters3D.new()
-	q.shape = _cam_shape
+	if _cam_q == null:                                   # один запрос на всё время, а не новый объект каждый такт
+		_cam_q = PhysicsShapeQueryParameters3D.new()
+		_cam_q.shape = _cam_shape
+		_cam_q.collision_mask = 1
+	var prid := _player.get_rid()
+	if prid != _cam_q_rid:                               # новый герой (новая стройка) — исключаем его
+		_cam_q_rid = prid
+		_cam_q.exclude = [prid]
+	var q := _cam_q
 	q.transform = Transform3D(Basis(), head)
 	q.motion = motion
-	q.collision_mask = 1
-	q.exclude = [_player.get_rid()]
 	var r := _player.get_world_3d().direct_space_state.cast_motion(q)
 	var free := clampf(float(r[0]) if r.size() > 0 else 1.0, 0.0, 1.0)
 	if free < _cam_pull:
@@ -3602,6 +3669,9 @@ func _input(event: InputEvent) -> void:
 			_f_queued = true
 
 
+var _yaw0 := INF                      # поворот тела в прошлом такте (было — мета узла: запись словаря каждый такт)
+
+
 ## Контакт с землёй: мягкое тёмное пятно под ногами (Decal, сверху вниз) — тает, когда герой в воздухе; и крен
 ## в повороте (на ходу и на бегу герой наклоняется внутрь дуги, как живой, а не едет по рельсам).
 func _ground_contact(delta: float) -> void:
@@ -3622,17 +3692,23 @@ func _ground_contact(delta: float) -> void:
 		_contact.lower_fade = 0.6
 		_view.add_child(_contact)
 	var h := 0.9 if _hero == null else float(hero_cfg.get("capsule_height", 1.8)) * 0.5
-	_contact.global_position = _player.global_position - Vector3(0.0, h - 0.4, 0.0)
+	# стоит — пятно, его прозрачность и крен те же: не пишем (каждая запись — пересчёт трансформа / вызов рендера)
+	var cp := _player.global_position - Vector3(0.0, h - 0.4, 0.0)
+	if _contact.global_position != cp:
+		_contact.global_position = cp
 	var air := 0.0 if _player.is_on_floor() else 1.0
-	_contact.modulate.a = lerpf(_contact.modulate.a, 0.55 * (1.0 - air), 1.0 - exp(-delta * 10.0))
+	var ca := lerpf(_contact.modulate.a, 0.55 * (1.0 - air), 1.0 - exp(-delta * 10.0))
+	if absf(ca - _contact.modulate.a) > 1e-6:
+		_contact.modulate.a = ca
 	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
 	var yaw := _body_mesh.rotation.y
-	var turn := wrapf(yaw - float(get_meta("pax_rpg_yaw0", yaw)), -PI, PI) / delta     # рад/с
-	set_meta("pax_rpg_yaw0", yaw)
+	var turn := wrapf(yaw - (yaw if _yaw0 == INF else _yaw0), -PI, PI) / delta     # рад/с
+	_yaw0 = yaw
 	var busy := _hero != null and _hero.action != ""
 	var want := 0.0 if busy or not _player.is_on_floor() else clampf(-turn * hs * _hf("lean", 0.012), -0.12, 0.12)
 	_lean = lerpf(_lean, want, 1.0 - exp(-delta * 6.0))
-	_body_mesh.rotation.z = _lean
+	if absf(_body_mesh.rotation.z - _lean) > 1e-6:
+		_body_mesh.rotation.z = _lean
 
 
 ## Пыль из-под ног: на земле и песке — заметное облачко, на камне — едва видное; на бегу — больше.
