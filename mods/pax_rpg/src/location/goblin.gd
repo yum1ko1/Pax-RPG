@@ -512,10 +512,28 @@ func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, 
 	if glow:
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 		p.emission_sphere_radius = 0.4
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	p.scale_amount_curve = curve
+	if _burst_curve == null:
+		_burst_curve = Curve.new()
+		_burst_curve.add_point(Vector2(0.0, 1.0))
+		_burst_curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = _burst_curve
+	p.mesh = _burst_mesh(color, size, glow)
+	get_parent().add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+## Сетки и материалы брызг — общие на одинаковые (цвет, размер, свечение): раньше каждый удар создавал свою сферу и
+## материал — новые ресурсы на сервере рендера в разгар боя. Видов немного (цвета в коде), кэш не растёт.
+static var _burst_curve: Curve
+static var _burst_meshes := {}
+
+
+static func _burst_mesh(color: Color, size: float, glow: bool) -> SphereMesh:
+	var key := "%s|%s|%s" % [color, size, glow]
+	if _burst_meshes.has(key):
+		return _burst_meshes[key]
 	var q := SphereMesh.new()
 	q.radius = size
 	q.height = size * 2.0
@@ -529,11 +547,8 @@ func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, 
 		m.emission = color
 		m.emission_energy_multiplier = 3.0
 	q.material = m
-	p.mesh = q
-	get_parent().add_child(p)
-	p.global_position = at
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+	_burst_meshes[key] = q
+	return q
 
 
 ## Предупреждение перед выпадом: вспышка над оружием (как красный иероглиф опасности в Sekiro — здесь мана).
