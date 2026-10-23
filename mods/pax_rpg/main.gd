@@ -637,14 +637,36 @@ func _perf_err() -> void:
 		["ореол", func(on: bool) -> void: env.glow_enabled = on],
 		["туман", func(on: bool) -> void: env.fog_enabled = on],
 	]
-	log_info("Pax RPG err-test: начало, прочих сеток %d" % other_mi.size())
+	# все SubViewport игры: размер, обновление, свой мир — что ещё рисуется каждый кадр
+	var root := get_tree().root
+	for n: Node in root.find_children("*", "SubViewport", true, false):
+		var sv := n as SubViewport
+		log_info("Pax RPG err-test: SubViewport %s · %s · обновление %d · 3D %s · в дереве под %s" % [sv.get_path(), str(sv.size),
+			sv.render_target_update_mode, str(not sv.disable_3d), sv.get_parent().name])
+	# видимые 2D-узлы до 3 уровней от корня: каждый — отдельной пробой
+	var cis: Array = []
+	var st: Array = [[root, 0]]
+	while not st.is_empty():
+		var e: Array = st.pop_back()
+		var n: Node = e[0]
+		if int(e[1]) >= 3:
+			continue
+		for c: Node in n.get_children():
+			if c is CanvasItem and (c as CanvasItem).visible and c != location.get("_box"):
+				cis.append(c)
+			if c is CanvasLayer or c is Window or c == self or c is Control:
+				st.append([c, int(e[1]) + 1])
+	for c: Variant in cis:
+		var ci := c as CanvasItem
+		tests.append(["2D " + str(ci.get_path()).right(60), func(on: bool) -> void: if is_instance_valid(ci): ci.visible = on])
+	log_info("Pax RPG err-test: начало, прочих сеток %d, 2D-узлов %d" % [other_mi.size(), cis.size()])
 	for t: Array in tests:
 		log_info("Pax RPG err-test A " + str(t[0]))
-		await get_tree().create_timer(3.0).timeout
+		await get_tree().create_timer(1.5).timeout
 		(t[1] as Callable).call(false)
 		await get_tree().process_frame
 		log_info("Pax RPG err-test B " + str(t[0]))
-		await get_tree().create_timer(3.0).timeout
+		await get_tree().create_timer(1.5).timeout
 		(t[1] as Callable).call(true)
 		await get_tree().process_frame
 	log_info("Pax RPG err-test: конец")
