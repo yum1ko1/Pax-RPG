@@ -303,8 +303,11 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "vram":
+		_perf_vram(args.size() < 2 or args[1] != "nogpu")
+		return "rpg_perf vram [nogpu]: видеопамять, треугольники и время видеокарты по моделям и частям (~1 мин), итог в логе"
 	if args.size() >= 1 and args[0] == "ui":
-		return _perf_ui()
+		return _perf_ui(get_tree().root if args.size() >= 2 and args[1] == "all" else location)
 	if args.size() >= 1 and args[0] == "bench":
 		_perf_bench()
 		return "rpg_perf bench: день и ночь по 8 с (~30 с), итог в логе ([pax_rpg] bench)"
@@ -491,23 +494,200 @@ func _perf_prof() -> void:
 	log_info("Pax RPG perf prof: fps %.1f · %s" % [f / 5.0, ProfS.report(f)])
 
 
+## Замер по модулям: для каждой модели города (метка pax_rpg_src у ячеек), травы, ландшафта, жителей, героя, частиц —
+## видеопамять (текстуры, сетки с LOD, буферы MultiMesh — без повторов общих ресурсов), треугольники × копии; затем для
+## самых тяжёлых — A/B времени видеокарты (группа скрыта на 2 с). Итог — таблица в логе, по убыванию.
+func _perf_vram(gpu: bool) -> void:
+	var vp: SubViewport = location.get("_view")
+	if vp == null:
+		log_info("Pax RPG vram: нет локации")
+		return
+	var pl: Variant = location.get("_player")
+	var groups := {}                     # имя → {nodes, tex_b, mesh_b, mm_b, tris}
+	var seen := {}                       # ресурс → уже посчитан (общий — у первой группы)
+	var stack: Array = [vp]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if not n is GeometryInstance3D or not (n as Node3D).is_visible_in_tree():
+			continue
+		var key := _vram_group(n, pl, vp)
+		if not groups.has(key):
+			groups[key] = {"nodes": [], "tex": 0, "mesh": 0, "mm": 0, "tris": 0}
+		var g: Dictionary = groups[key]
+		(g.nodes as Array).append(n)
+		var mesh: Mesh = null
+		var copies := 1
+		var mats: Array = []
+		if n is MultiMeshInstance3D and (n as MultiMeshInstance3D).multimesh != null:
+			var mm := (n as MultiMeshInstance3D).multimesh
+			mesh = mm.mesh
+			copies = mm.visible_instance_count if mm.visible_instance_count >= 0 else mm.instance_count
+			var floats := (12 if mm.transform_format == MultiMesh.TRANSFORM_3D else 8) + (4 if mm.use_colors else 0) + (4 if mm.use_custom_data else 0)
+			if not seen.has(mm):
+				seen[mm] = true
+				g.mm = int(g.mm) + mm.instance_count * floats * 4
+		elif n is MeshInstance3D:
+			mesh = (n as MeshInstance3D).mesh
+			for i: int in (n as MeshInstance3D).get_surface_override_material_count():
+				mats.append((n as MeshInstance3D).get_surface_override_material(i))
+		mats.append((n as GeometryInstance3D).material_override)
+		if mesh != null:
+			for si: int in mesh.get_surface_count():
+				mats.append(mesh.surface_get_material(si))
+				g.tris = int(g.tris) + _surf_tris(mesh, si) * copies
+			if not seen.has(mesh):
+				seen[mesh] = true
+				g.mesh = int(g.mesh) + _mesh_bytes(mesh)
+		for m: Variant in mats:
+			if m == null:
+				continue
+			for t: Texture2D in _mat_textures(m as Material):
+				if not seen.has(t):
+					seen[t] = true
+					g.tex = int(g.tex) + _tex_bytes(t)
+	var keys := groups.keys()
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool:
+		var ga: Dictionary = groups[a]
+		var gb: Dictionary = groups[b]
+		return int(ga.tex) + int(ga.mesh) + int(ga.mm) > int(gb.tex) + int(gb.mesh) + int(gb.mm))
+	var total := 0
+	for k: Variant in keys:
+		var g: Dictionary = groups[k]
+		total += int(g.tex) + int(g.mesh) + int(g.mm)
+	log_info("Pax RPG vram: %d групп, посчитано %.0f МБ · видеопамять всего %d МБ (текстуры %d, буферы %d)" % [keys.size(),
+		total / 1048576.0, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED) / 1048576,
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED) / 1048576,
+		RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_BUFFER_MEM_USED) / 1048576])
+	for k: Variant in keys:
+		var g: Dictionary = groups[k]
+		log_info("Pax RPG vram: %-28s · %6.1f МБ (текстуры %.1f · сетки %.1f · копии %.1f) · %5dk треуг. · узлов %d" % [str(k),
+			(int(g.tex) + int(g.mesh) + int(g.mm)) / 1048576.0, int(g.tex) / 1048576.0, int(g.mesh) / 1048576.0,
+			int(g.mm) / 1048576.0, int(g.tris) / 1000, (g.nodes as Array).size()])
+	if not gpu:
+		return
+	# время видеокарты: 15 групп с наибольшим числом треугольников — каждая скрыта на 2 с
+	keys.sort_custom(func(a: Variant, b: Variant) -> bool: return int((groups[a] as Dictionary).tris) > int((groups[b] as Dictionary).tris))
+	var rid := vp.get_viewport_rid()
+	var root_rid := get_viewport().get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	RenderingServer.viewport_set_measure_render_time(root_rid, true)
+	for k: Variant in keys.slice(0, 15):
+		var nodes: Array = (groups[k] as Dictionary).nodes
+		var a: Array = await _gpu_sample(rid, root_rid, 1.5)
+		for nd: Variant in nodes:
+			if is_instance_valid(nd):
+				(nd as Node3D).visible = false
+		await get_tree().create_timer(0.5).timeout
+		var b: Array = await _gpu_sample(rid, root_rid, 1.5)
+		for nd: Variant in nodes:
+			if is_instance_valid(nd):
+				(nd as Node3D).visible = true
+		log_info("Pax RPG vram gpu: %-28s · 3D %.2f→%.2f мс (%+.2f) · %dk треуг." % [str(k), a[1], b[1], float(b[1]) - float(a[1]),
+			int((groups[k] as Dictionary).tris) / 1000])
+		await get_tree().create_timer(0.5).timeout
+	log_info("Pax RPG vram: готово")
+
+
+## К какому модулю относится узел: модель города (метка ячейки), трава, ландшафт, житель/враг (по модели), герой, частицы.
+func _vram_group(n: Node, pl: Variant, vp: Node) -> String:
+	if n is GPUParticles3D or n is CPUParticles3D:
+		return "частицы"
+	if n.has_meta("pax_rpg_src"):
+		return "город: " + str(n.get_meta("pax_rpg_src")).trim_suffix(".glb")
+	if n is MultiMeshInstance3D and n.get_parent() == vp and is_equal_approx((n as GeometryInstance3D).extra_cull_margin, 1.0):
+		return "трава"
+	var a: Node = n
+	while a != null and a != vp:
+		if a == pl:
+			return "герой"
+		if a is CharacterBody3D:
+			return "тело: " + str(a.get_script().resource_path.get_file().get_basename() if a.get_script() != null else a.get_class())
+		if a.name == "Landscape":
+			return "ландшафт"
+		if a.name == "City":
+			return "город: прочее (" + n.get_class() + ")"
+		a = a.get_parent()
+	return "прочее (" + n.get_class() + ")"
+
+
+func _surf_tris(mesh: Mesh, si: int) -> int:
+	if mesh is ArrayMesh:
+		var am := mesh as ArrayMesh
+		var ic := am.surface_get_array_index_len(si)
+		return (ic if ic > 0 else am.surface_get_array_len(si)) / 3
+	return 0
+
+
+## Байты сетки на видеокарте: вершины, атрибуты, скин, индексы и индексы всех LOD (как их хранит сервер рендера).
+func _mesh_bytes(mesh: Mesh) -> int:
+	var b := 0
+	for si: int in mesh.get_surface_count():
+		var d: Dictionary = RenderingServer.mesh_get_surface(mesh.get_rid(), si)
+		for k: String in ["vertex_data", "attribute_data", "skin_data", "index_data"]:
+			if d.has(k):
+				b += (d[k] as PackedByteArray).size()
+		for l: Variant in d.get("lods", []):
+			if l is Dictionary and (l as Dictionary).has("index_data"):
+				b += ((l as Dictionary)["index_data"] as PackedByteArray).size()
+	return b
+
+
+func _mat_textures(m: Material) -> Array:
+	var out: Array = []
+	if m is BaseMaterial3D:
+		for slot: int in BaseMaterial3D.TEXTURE_MAX:
+			var t := (m as BaseMaterial3D).get_texture(slot)
+			if t != null:
+				out.append(t)
+	elif m is ShaderMaterial and (m as ShaderMaterial).shader != null:
+		for u: Dictionary in (m as ShaderMaterial).shader.get_shader_uniform_list():
+			var v: Variant = (m as ShaderMaterial).get_shader_parameter(str(u.get("name", "")))
+			if v is Texture2D:
+				out.append(v)
+	if m != null and m.next_pass != null:
+		out.append_array(_mat_textures(m.next_pass))
+	return out
+
+
+## Байты текстуры на видеокарте по размеру и формату (mip-уровни — +1/3); не ImageTexture — как RGBA8 с mip.
+func _tex_bytes(t: Texture2D) -> int:
+	var px := t.get_width() * t.get_height()
+	var bpp := 4.0
+	if t is ImageTexture:
+		match (t as ImageTexture).get_format():
+			Image.FORMAT_DXT1, Image.FORMAT_RGTC_R, Image.FORMAT_ETC2_RGB8:
+				bpp = 0.5
+			Image.FORMAT_DXT3, Image.FORMAT_DXT5, Image.FORMAT_RGTC_RG, Image.FORMAT_BPTC_RGBA, Image.FORMAT_ETC2_RGBA8:
+				bpp = 1.0
+			Image.FORMAT_L8, Image.FORMAT_R8:
+				bpp = 1.0
+			Image.FORMAT_LA8, Image.FORMAT_RG8:
+				bpp = 2.0
+			Image.FORMAT_RGBAH:
+				bpp = 8.0
+			Image.FORMAT_RGBAF:
+				bpp = 16.0
+	return int(px * bpp * 4.0 / 3.0)
+
+
 ## Видимые 2D-узлы локации (путь, размер, материал) — в лог: что рисуется в окне поверх 3D (сравнить до/после окна).
-func _perf_ui() -> String:
+func _perf_ui(from: Node) -> String:
 	var n := 0
-	var st: Array = [location]
+	var st: Array = [from]
 	while not st.is_empty():
 		var c: Node = st.pop_back()
 		for k: Node in c.get_children():
 			if k is CanvasItem and not (k as CanvasItem).is_visible_in_tree():
 				continue
-			if k is SubViewport:
-				continue
+			if k is SubViewport or k == location and from != location:
+				continue                                       # 3D-вид и (для «all») слой локации — не наш вопрос
 			st.append(k)
 			if k is Control or k is Node2D:
 				n += 1
 				var ci := k as CanvasItem
 				var sz := (k as Control).size if k is Control else Vector2.ZERO
-				log_info("Pax RPG ui: %s · %s · %s · мат %s" % [str(k.get_path()).trim_prefix(str(location.get_path())), k.get_class(), str(sz),
+				log_info("Pax RPG ui: %s · %s · %s · мат %s" % [str(k.get_path()), k.get_class(), str(sz),
 					ci.material.get_class() if ci.material != null else "-"])
 	return "rpg_perf ui: %d видимых 2D-узлов, список в логе" % n
 

@@ -1358,6 +1358,7 @@ func _place(path: String, list: Array) -> void:
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
+			mi.set_meta("pax_rpg_src", path.get_file())        # чья это ячейка — для замера по моделям (rpg_perf vram)
 			var shadow_copy := _cast == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 			if house and not shadow_copy:                  # постройки — детали камня и дерева (копии для тени — без них)
 				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
