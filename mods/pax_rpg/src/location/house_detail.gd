@@ -3,6 +3,8 @@
 ## где атлас тёплый и насыщенный, камень (japanese_stone_wall) — где серый. Детали меняют только яркость (±) и
 ## рельеф (нормали смешиваются с нормалями атласа), цвет остаётся атласа — вблизи стена из волокон и швов, а не мыла.
 ## Вдали детали гаснут (detail_far м) — рябь мипов не мерцает.
+## Цена пикселя: выборки деталей — только там, где их видно (ближе detail_far), только нужный материал (камень или
+## дерево; оба — лишь на их стыке) и только оси трипланара с заметным весом — вместо 12 выборок на каждый пиксель.
 extends RefCounted
 
 const SH := """shader_type spatial;
@@ -36,29 +38,62 @@ vec3 unpack(vec2 rg) {
 	return vec3(xy, sqrt(max(0.0, 1.0 - dot(xy, xy))));
 }
 
+// Есть ли в квадрате 2×2 пикселя (по нему видеокарта считает мип выборки) хоть один v > 0 — ответ один на все
+// четыре: выборки внутри такой ветки получают верный мип, на границе ветки нет шва и ряби.
+// В Compatibility (GLES3) точных производных нет — там ветки не пропускаются (всё считается, как раньше).
+vec4 quad_any(vec4 v) {
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	return vec4(1.0);
+#else
+	v = max(v, vec4(0.0));
+	v += abs(dFdxFine(v));
+	return v + abs(dFdyFine(v));
+#endif
+}
+
 void fragment() {
 	vec3 base = texture(atlas, UV).rgb;
 	float mx = max(base.r, max(base.g, base.b));
 	float mn = min(base.r, min(base.g, base.b));
 	float sat = (mx - mn) / max(mx, 0.001);
 	float wood = smoothstep(0.16, 0.34, sat) * smoothstep(-0.02, 0.06, base.r - base.b);
-	vec3 w = pow(abs(wn), vec3(4.0));
-	w /= (w.x + w.y + w.z);
-	float ts = tile_stone;
-	float tw = tile_wood;
-	vec3 sa = texture(stone_a, wp.zy * ts).rgb * w.x + texture(stone_a, wp.xz * ts).rgb * w.y + texture(stone_a, wp.xy * ts).rgb * w.z;
-	vec3 wa = texture(wood_a, wp.zy * tw).rgb * w.x + texture(wood_a, wp.xz * tw).rgb * w.y + texture(wood_a, wp.xy * tw).rgb * w.z;
-	vec2 sn = texture(stone_n, wp.zy * ts).rg * w.x + texture(stone_n, wp.xz * ts).rg * w.y + texture(stone_n, wp.xy * ts).rg * w.z;
-	vec2 wnn = texture(wood_n, wp.zy * tw).rg * w.x + texture(wood_n, wp.xz * tw).rg * w.y + texture(wood_n, wp.xy * tw).rg * w.z;
 	float dist = length(VERTEX);
 	float k = 1.0 - smoothstep(detail_far * 0.6, detail_far, dist);
-	float ls = dot(sa, vec3(0.299, 0.587, 0.114)) / stone_avg;
-	float lw = dot(wa, vec3(0.299, 0.587, 0.114)) / wood_avg;
-	float l = mix(ls, lw, wood);
-	ALBEDO = base * mix(1.0, clamp(l, 0.35, 1.8), strength * k);
 	vec3 an = has_n ? unpack(texture(atlas_n, UV).rg) : vec3(0.0, 0.0, 1.0);
-	vec3 dn = unpack(mix(sn, wnn, wood));
-	dn.xy *= n_strength * k;
+	// трипланар: ось с весом < 0.001 (стена ±10° от оси, вертикаль у стен) не выбирается, остальные — к сумме 1:
+	// сверено рендером — разница ≤ 1/255 (0.005 уже давало 3/255 и мерцание бликов)
+	vec3 w = wn * wn;
+	w *= w;
+	w /= (w.x + w.y + w.z);
+	w *= step(vec3(0.001), w);
+	w /= (w.x + w.y + w.z);
+	vec4 need = quad_any(vec4(k, 1.0 - wood, wood, 0.0));   // детали видны · нужен камень · нужно дерево
+	vec3 axes = quad_any(vec4(w, 0.0)).xyz;
+	float l = 1.0;                                          // без деталей — яркость и рельеф атласа как есть
+	vec3 dn = vec3(0.0, 0.0, 1.0);
+	if (need.x > 0.0) {
+		vec2 px = wp.zy, py = wp.xz, pz = wp.xy;
+		float ts = tile_stone;
+		float tw = tile_wood;
+		vec3 sa = vec3(0.0), wa = vec3(0.0);
+		vec2 sn = vec2(0.0), wnn = vec2(0.0);
+		if (need.y > 0.0) {
+			if (axes.x > 0.0) { sa += texture(stone_a, px * ts).rgb * w.x; sn += texture(stone_n, px * ts).rg * w.x; }
+			if (axes.y > 0.0) { sa += texture(stone_a, py * ts).rgb * w.y; sn += texture(stone_n, py * ts).rg * w.y; }
+			if (axes.z > 0.0) { sa += texture(stone_a, pz * ts).rgb * w.z; sn += texture(stone_n, pz * ts).rg * w.z; }
+		}
+		if (need.z > 0.0) {
+			if (axes.x > 0.0) { wa += texture(wood_a, px * tw).rgb * w.x; wnn += texture(wood_n, px * tw).rg * w.x; }
+			if (axes.y > 0.0) { wa += texture(wood_a, py * tw).rgb * w.y; wnn += texture(wood_n, py * tw).rg * w.y; }
+			if (axes.z > 0.0) { wa += texture(wood_a, pz * tw).rgb * w.z; wnn += texture(wood_n, pz * tw).rg * w.z; }
+		}
+		float ls = dot(sa, vec3(0.299, 0.587, 0.114)) / stone_avg;
+		float lw = dot(wa, vec3(0.299, 0.587, 0.114)) / wood_avg;
+		l = mix(ls, lw, wood);
+		dn = unpack(mix(sn, wnn, wood));
+		dn.xy *= n_strength * k;
+	}
+	ALBEDO = base * mix(1.0, clamp(l, 0.35, 1.8), strength * k);
 	vec3 n = normalize(vec3(an.xy + dn.xy, an.z * dn.z));   // whiteout: швы атласа + волокна и сколы деталей
 	NORMAL_MAP = n * 0.5 + 0.5;
 	ROUGHNESS = mix(0.92, 0.8, wood) - (l - 1.0) * 0.08 * k;

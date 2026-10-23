@@ -33,12 +33,15 @@ void fragment() {
 	if (clip_on && dot(lp, clip.xyz) - clip.w < 0.0) {
 		discard;
 	}
-	float n = noise(wp * 6.0) * 0.6 + noise(wp * 17.0) * 0.4;
-	if (n < dissolve * 1.05) {
-		discard;
+	float edge = 0.0;
+	if (dissolve > 0.0) {                                 // шум (16 хэшей) — только пока тело растворяется
+		float n = noise(wp * 6.0) * 0.6 + noise(wp * 17.0) * 0.4;
+		if (n < dissolve * 1.05) {
+			discard;
+		}
+		edge = 1.0 - smoothstep(0.0, 0.09, n - dissolve * 1.05);
 	}
 	vec4 a = texture(albedo_tex, UV) * albedo_col;
-	float edge = 1.0 - smoothstep(0.0, 0.09, n - dissolve * 1.05);
 	ALBEDO = a.rgb;
 	ROUGHNESS = roughness;
 	EMISSION = mana * edge * 3.0 * step(0.001, dissolve);

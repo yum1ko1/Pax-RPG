@@ -35,6 +35,18 @@ void vertex() {
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
+// Есть ли в квадрате 2×2 пикселя (по нему видеокарта считает мип выборки) хоть один v > 0 — ответ один на все
+// четыре: выборка внутри такой ветки получает верный мип. В Compatibility (GLES3) — всегда да (как раньше).
+vec4 quad_any(vec4 v) {
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	return vec4(1.0);
+#else
+	v = max(v, vec4(0.0));
+	v += abs(dFdxFine(v));
+	return v + abs(dFdyFine(v));
+#endif
+}
+
 void fragment() {
 	float slope = 1.0 - clamp(wn.y, 0.0, 1.0);                     // 0 — ровно, 1 — стена
 	float n = fbm(wp.xz * 0.004);
@@ -50,12 +62,17 @@ void fragment() {
 	vec2 wd = normalize(pax_rpg_wind.xy + vec2(1e-4));
 	float cl = smoothstep(0.48, 0.62, fbm(wp.xz * 0.0016 - wd * pax_rpg_time * 0.012));
 	c *= 1.0 - cl * clouds;
-	// трипланарная деталь нормалей (whiteout)
-	vec3 bw = pow(abs(wn), vec3(4.0));
+	// трипланарная деталь нормалей (whiteout); ось с весом < 0.001 не выбирается (остальные — к сумме 1)
+	vec3 bw = wn * wn;
+	bw *= bw;
 	bw /= bw.x + bw.y + bw.z;
-	vec3 tx = texture(detail_n, wp.zy * detail_scale).xyz * 2.0 - 1.0;
-	vec3 ty = texture(detail_n, wp.xz * detail_scale).xyz * 2.0 - 1.0;
-	vec3 tz = texture(detail_n, wp.xy * detail_scale).xyz * 2.0 - 1.0;
+	bw *= step(vec3(0.001), bw);
+	bw /= bw.x + bw.y + bw.z;
+	vec3 axes = quad_any(vec4(bw, 0.0)).xyz;
+	vec3 tx = vec3(0.0), ty = vec3(0.0), tz = vec3(0.0);
+	if (axes.x > 0.0) { tx = texture(detail_n, wp.zy * detail_scale).xyz * 2.0 - 1.0; }
+	if (axes.y > 0.0) { ty = texture(detail_n, wp.xz * detail_scale).xyz * 2.0 - 1.0; }
+	if (axes.z > 0.0) { tz = texture(detail_n, wp.xy * detail_scale).xyz * 2.0 - 1.0; }
 	tx = vec3(tx.xy + wn.zy, abs(tx.z) * wn.x);
 	ty = vec3(ty.xy + wn.xz, abs(ty.z) * wn.y);
 	tz = vec3(tz.xy + wn.xy, abs(tz.z) * wn.z);

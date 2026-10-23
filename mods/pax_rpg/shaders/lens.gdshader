@@ -53,18 +53,24 @@ void fragment() {
 	float r2 = dot(d, d);
 	float rr = r2 / dot(vec2(0.5) * asp, vec2(0.5) * asp);          // 0 — центр, 1 — угол кадра
 	vec2 fe = d * (1.0 - (distortion + k * strength) * (1.0 - rr));
-	vec2 dc = (UV - center) * asp;
-	float rc = length(dc);
-	float front = wave > 0.0 ? exp(-pow((rc - wave) / 0.012, 2.0)) : 0.0;
-	fe += normalize(dc + 1e-5) * front * 0.025;
+	float front = 0.0;
+	if (wave > 0.0) {                                // волна иая — только пока она идёт
+		vec2 dc = (UV - center) * asp;
+		front = exp(-pow((length(dc) - wave) / 0.012, 2.0));
+		fe += normalize(dc + 1e-5) * front * 0.025;
+	}
 	vec2 base = fe / asp + vec2(0.5);
-	// аберрация: R/B разъезжаются к краям (у иая — сильнее)
+	// аберрация: R/B разъезжаются к краям (у иая — сильнее); без сдвига — одна выборка вместо трёх
 	float shift = (ca + k * 0.006) * (0.3 + rr * 1.7) + front * 0.012;
-	vec2 dir = normalize(d + 1e-5) / asp;
 	vec3 col;
-	col.r = textureLod(TEXTURE, base + dir * shift, 0.0).r;
-	col.g = textureLod(TEXTURE, base, 0.0).g;
-	col.b = textureLod(TEXTURE, base - dir * shift, 0.0).b;
+	if (shift > 0.0) {
+		vec2 dir = normalize(d + 1e-5) / asp;
+		col.r = textureLod(TEXTURE, base + dir * shift, 0.0).r;
+		col.g = textureLod(TEXTURE, base, 0.0).g;
+		col.b = textureLod(TEXTURE, base - dir * shift, 0.0).b;
+	} else {
+		col = textureLod(TEXTURE, base, 0.0).rgb;
+	}
 	// размытие поворота: вдоль смещения кадра, по краям сильнее, центр (герой) резкий
 	float mb_len = length(mblur);
 	if (mb_len > 0.0005) {
@@ -85,21 +91,26 @@ void fragment() {
 	// лучи солнца: сумма ярких точек на пути к солнцу (чем дальше по пути — тем слабее)
 	if (rays > 0.001) {
 		vec2 stepv = (sun_uv - base) / 32.0;
-		vec2 p = base + stepv * ign(FRAGCOORD.xy);
+		float j = ign(FRAGCOORD.xy);
+		vec2 p = base + stepv * j;
 		float acc = 0.0;
-		float w = 1.0;
+		// светит небо у солнца, а не огонь и гербы: near_sun = exp(−2.6 · |p − солнце|); точки идут по прямой к солнцу,
+		// до него (i + 1 + j) / 32 пути — вес шага (затухание · near_sun) растёт геометрически, без exp и length на шаг
+		float ds = length((base - sun_uv) * asp);
+		float w = exp(-ds * 2.6 * (31.0 - j) / 32.0);
+		float wk = rays_decay * exp(ds * 2.6 / 32.0);
+		float w_last = pow(rays_decay, 31.0) * exp(-ds * 2.6 * j / 32.0);   // последняя точка — уже за солнцем
 		for (int i = 0; i < 32; i++) {
 			p += stepv;
 			vec2 q = clamp(p, vec2(0.0), vec2(1.0));
 			vec3 sc = textureLod(TEXTURE, q, 0.0).rgb;
 			float l = dot(sc, vec3(0.2126, 0.7152, 0.0722));
 			float edge = step(abs(p.x - 0.5), 0.5) * step(abs(p.y - 0.5), 0.5);   // за кадром — не знаем, что там
-			float near_sun = exp(-length((p - sun_uv) * asp) * 2.6);              // светит небо у солнца, а не огонь и гербы
-			acc += smoothstep(rays_thr, 1.0, l) * w * mix(0.6, 1.0, edge) * near_sun;
-			w *= rays_decay;
+			acc += smoothstep(rays_thr, 1.0, l) * (i == 31 ? w_last : w) * mix(0.6, 1.0, edge);
+			w *= wk;
 		}
 		acc /= 32.0;
-		float fall = exp(-length((base - sun_uv) * asp) * 1.1);
+		float fall = exp(-ds * 1.1);
 		col += sun_col * acc * fall * rays * 2.6;
 	}
 	// киношный цвет
@@ -128,25 +139,29 @@ void fragment() {
 		vec2 sv = (UV - sun_uv) * asp;
 		float sd = length(sv);
 		vec3 f = sun_col * (exp(-sd * 15.0) * 0.18 + exp(-sd * 48.0) * 0.35);       // ореол у солнца — плотный, не заливает кадр
-		f += sun_col * exp(-abs(sv.y) * 260.0) * exp(-abs(sv.x) * 2.2) * 0.35 * ghosts;   // горизонтальная полоса
-		vec2 axis = vec2(0.5) - sun_uv;
-		for (int i = 0; i < 4; i++) {                                              // «призраки» линз
-			float tpos = 0.55 + float(i) * 0.42;
-			vec2 gp = (UV - (sun_uv + axis * tpos * 2.0)) * asp;
-			float gr = 0.03 + 0.025 * float(i);
-			float ghost = smoothstep(gr, gr * 0.55, length(gp));
-			vec3 gc = mix(vec3(0.5, 0.75, 1.0), vec3(1.0, 0.55, 0.8), float(i) / 3.0);
-			f += gc * ghost * 0.07 * ghosts;
+		if (ghosts > 0.0) {                                                        // в RPG их нет (ghosts = 0) — не считаем
+			f += sun_col * exp(-abs(sv.y) * 260.0) * exp(-abs(sv.x) * 2.2) * 0.35 * ghosts;   // горизонтальная полоса
+			vec2 axis = vec2(0.5) - sun_uv;
+			for (int i = 0; i < 4; i++) {                                          // «призраки» линз
+				float tpos = 0.55 + float(i) * 0.42;
+				vec2 gp = (UV - (sun_uv + axis * tpos * 2.0)) * asp;
+				float gr = 0.03 + 0.025 * float(i);
+				float ghost = smoothstep(gr, gr * 0.55, length(gp));
+				vec3 gc = mix(vec3(0.5, 0.75, 1.0), vec3(1.0, 0.55, 0.8), float(i) / 3.0);
+				f += gc * ghost * 0.07 * ghosts;
+			}
+			float ring = exp(-pow((length((UV - vec2(0.5)) * asp + (sun_uv - vec2(0.5)) * asp * 0.4) - 0.32) / 0.02, 2.0));
+			f += vec3(0.85, 0.7, 1.0) * ring * 0.035 * ghosts;                      // кольцо-гало
 		}
-		float ring = exp(-pow((length((UV - vec2(0.5)) * asp + (sun_uv - vec2(0.5)) * asp * 0.4) - 0.32) / 0.02, 2.0));
-		f += vec3(0.85, 0.7, 1.0) * ring * 0.035 * ghosts;                          // кольцо-гало
 		col += f * sun_vis * flare;
 	}
 	// зерно сенсора: в каждом кадре своё, в тенях заметнее, в светах почти нет
-	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-	vec2 gp = floor(FRAGCOORD.xy / grain_size);
-	float g = hash(gp + fract(TIME * 17.0) * 113.0) - 0.5;
-	col += g * grain * (1.25 - smoothstep(0.0, 0.8, lum));
+	if (grain > 0.0) {
+		float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+		vec2 gp = floor(FRAGCOORD.xy / grain_size);
+		float g = hash(gp + fract(TIME * 17.0) * 113.0) - 0.5;
+		col += g * grain * (1.25 - smoothstep(0.0, 0.8, lum));
+	}
 	col = mix(col, vec3(1.0, 0.95, 1.0), flash);
 	COLOR = vec4(max(col, vec3(0.0)), 1.0);
 }
