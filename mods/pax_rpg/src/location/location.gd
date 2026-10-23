@@ -99,6 +99,7 @@ var _stagger := 0.0                # с, сломанная стойка — у�
 var _lock: Node3D                  # захваченный враг (Q): камера держит его, герой стоит к нему лицом
 var _lock_mark: MeshInstance3D
 var _rmb := false
+var _cam_mouse := 0                 # мс: когда игрок последний раз крутил камеру мышью (автоповорот ждёт)
 var _cam_lock := 0.0               # 0 — свободная камера, 1 — за плечом при захвате (плавно между)
 var _lock_point := Vector3.ZERO
 var _kills := 0
@@ -2315,6 +2316,8 @@ func _physics_body(delta: float) -> void:
 	if _lock != null:
 		var d := _lock.global_position - _player.global_position
 		_yaw = lerp_angle(_yaw, atan2(-d.x, -d.z), minf(1.0, delta * 6.0))
+	else:
+		_auto_yaw(delta)
 	if is_instance_valid(_lock_mark):
 		_lock_mark.visible = false                   # прицел захвата рисует HUD
 	if _player.position.y < FALL_Y:
@@ -2391,6 +2394,25 @@ func cine(n: int) -> String:
 	return "camera: shot %d/%d" % [n, _shots.size()]
 
 
+## Камера за спиной: на бегу вперёд и наискосок она плавно заходит за героя и смотрит по ходу движения. Вбок и на
+## камеру — не крутится (иначе шаг вбок водил бы героя по кругу: движение считается от взгляда камеры). Крутил мышью —
+## автоповорот ждёт camera_auto_wait с. camera_auto — скорость (0 — выкл.).
+func _auto_yaw(delta: float) -> void:
+	var rate := _f("camera_auto", 1.4)
+	if rate <= 0.0 or not is_instance_valid(_player) or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if Time.get_ticks_msec() - _cam_mouse < int(_f("camera_auto_wait", 1.0) * 1000.0):
+		return
+	var v := Vector2(_player.velocity.x, _player.velocity.z)
+	var sp := v.length()
+	if sp < 0.5:
+		return
+	var off := angle_difference(_yaw, atan2(-v.x, -v.y))
+	var w := maxf(0.0, cos(off))                     # вперёд — 1, наискосок — меньше, вбок и назад — 0
+	var run := clampf(sp / maxf(_f("run_speed", 5.0), 0.1), 0.0, 1.0)
+	_yaw += off * (1.0 - exp(-delta * rate * w * run))
+
+
 func _follow_camera(delta := 0.0) -> void:
 	if is_instance_valid(_iai) and _iai.cam_override:
 		return                                       # камерой правит «Иай»
@@ -2417,8 +2439,8 @@ func _follow_camera(delta := 0.0) -> void:
 	if delta > 0.0:
 		_zoom = lerpf(_zoom, _zoom_want, 1.0 - exp(-delta * _f("zoom_smooth", 3.0)))
 	var z := smoothstep(0.0, 1.0, _zoom)
-	var ch := lerpf(_f("camera_height", 3.5), _f("lock_camera_height", 1.75) - 0.9, z)
-	var cd := lerpf(_f("camera_distance", 7.0), _f("lock_camera_distance", 3.2), z)
+	var ch := lerpf(_f("camera_height", 2.4), _f("camera_near_height", 1.6) - 0.9, z)
+	var cd := lerpf(_f("camera_distance", 5.0), _f("camera_near_distance", 2.6), z)
 	var free_pos := target + Vector3(0.0, ch, cd).rotated(Vector3.UP, _yaw)
 	var look := target
 	var pos := free_pos
@@ -3719,6 +3741,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock == null:
 			_yaw -= (event as InputEventMouseMotion).relative.x * _f("turn_speed", 0.004) * _sens
+			_cam_mouse = Time.get_ticks_msec()
 		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock != null:
 			_lock_flick((event as InputEventMouseMotion).relative)
 		return
