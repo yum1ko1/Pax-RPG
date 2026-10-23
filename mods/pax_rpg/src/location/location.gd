@@ -3432,6 +3432,26 @@ func _process(delta: float) -> void:
 		var t0 := Time.get_ticks_usec()
 		_hud_tick(delta)
 		Prof.add("HUD", t0)
+	_inv_cover_tick()
+
+
+var _inv_hides_view := false
+
+
+## Открытый инвентарь закрывает экран целиком (непрозрачный фон 1920×1080 во весь экран 16:9): город под ним не
+## виден ни пикселем, а 3D-вид рисовался каждый кадр (мир на паузе, видеокарта считала кадр целиком). Пока закрыт —
+## вид стоит; на другом соотношении сторон по краям сквозь затемнение 4 % виден город — тогда рисуется, как раньше.
+func _inv_cover_tick() -> void:
+	var want := active and is_instance_valid(_inv) and _inv.visible and is_instance_valid(_view) and _inv.covers_screen()
+	if want == _inv_hides_view:
+		return
+	_inv_hides_view = want
+	if not is_instance_valid(_view):
+		return
+	if want:
+		_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	elif not (is_instance_valid(_talk) and _talk.visible):   # разговор держит вид выключенным сам (_talk_focus)
+		_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
