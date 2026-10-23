@@ -211,9 +211,25 @@ static func _dds(mod: PaxMod, rel: String) -> Image:
 
 
 ## Картинки glb (их уже нет — 1×1) → DDS из <name>.tex/: тот же обход, что у bake_textures.gd.
+## Номер t<N>.dds, записанный в заглушку картинки glb (pax_rpg/dev/assets/mark_glb.py: пиксель 1×1 = (N, 90, 165)); -1 —
+## заглушка без номера (тогда номер — по обходу). Загрузчик игры обходит и делит картинки не так, как Godot при сжатии:
+## у героя из 10 картинок номера съезжали, и в цвет и металл попадали чужие карты (жёлтый блеск).
+static func _mark(t: Texture2D) -> int:
+	if t.get_width() != 1 or t.get_height() != 1:
+		return -1
+	var img := t.get_image()
+	if img == null or img.is_compressed():
+		return -1
+	var c := img.get_pixel(0, 0)
+	if absi(c.g8 - 90) > 1 or absi(c.b8 - 165) > 1:
+		return -1
+	return c.r8
+
+
 static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 	var dir := path.get_basename() + ".tex/"
-	var seen: Array = []
+	var seen: Array = []                                 # картинки по порядку обхода — номер в .tex/t<N>.dds
+	var done: Array = []                                 # уже заменённые
 	var repl := {}                                       # картинка glb → общая текстура из DDS
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
@@ -225,6 +241,12 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				mat = inst.mesh.surface_get_material(si)
 			if not (mat is BaseMaterial3D):
 				continue
+			# запасной номер (заглушка без номера) — по обходу до _pbr, как в bake_textures.gd: _pbr снимает карту
+			# шероховатости у неметаллов, и номера следующих картинок съехали бы
+			for slot: int in SLOTS:
+				var t0: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
+				if t0 != null and not seen.has(t0):
+					seen.append(t0)
 			_pbr(mat as BaseMaterial3D)
 			if DETAIL.any(func(k: String) -> bool: return path.contains(k)):
 				_detail(mod, mat as BaseMaterial3D)
@@ -238,10 +260,12 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				if t != null and repl.has(t):
 					(mat as BaseMaterial3D).set_texture(slot, repl[t])   # та же картинка у другой поверхности модели
 					continue
-				if t == null or seen.has(t):
+				if t == null or done.has(t):
 					continue
-				seen.append(t)
-				var n := seen.size() - 1
+				done.append(t)
+				var n := _mark(t)
+				if n < 0:
+					n = seen.find(t)
 				var hi := dir + "t%d.dds" % n
 				var lo := dir + "t%d_lo.dds" % n
 				var has_lo := not mod.read_bytes(lo).is_empty()

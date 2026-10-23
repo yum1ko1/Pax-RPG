@@ -305,6 +305,8 @@ func _perf_command(args: PackedStringArray) -> String:
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
 	if args.size() >= 1 and args[0] == "tex":
 		return _perf_tex()
+	if args.size() >= 2 and args[0] == "mats":
+		return _perf_mats(args[1])
 	if args.size() >= 1 and args[0] == "vram":
 		_perf_vram(args.size() < 2 or args[1] != "nogpu")
 		return "rpg_perf vram [nogpu]: видеопамять, треугольники и время видеокарты по моделям и частям (~1 мин), итог в логе"
@@ -596,6 +598,34 @@ func _perf_vram(gpu: bool) -> void:
 ## суммы по категориям и 40 самых больших: размер, формат, mip, кто держит. Остаток до TEXTURE_MEM_USED — цели рендера
 ## движка (атласы теней, буферы SSAO/SSIL/TAA, каскады SDFGI) и текстуры, которых нет в дереве.
 const AssetsS := preload("res://mods/pax_rpg/src/location/assets.gd")
+
+
+## Как загрузчик игры раскладывает картинки модели (сырой glb, без Assets): сетка/материал → слот = номер картинки по
+## порядку обхода — тот же номер t<N>.dds должен дать bake_textures.gd. В лог.
+func _perf_mats(path: String) -> String:
+	var m := model(path)
+	if m == null:
+		return "rpg_perf mats: нет модели " + path
+	var seen: Array = []
+	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (mi as MeshInstance3D).mesh
+		if mesh == null:
+			continue
+		for si: int in mesh.get_surface_count():
+			var mat := mesh.surface_get_material(si) as BaseMaterial3D
+			if mat == null:
+				continue
+			var line := "%s/%s:" % [mi.name, mat.resource_name]
+			for slot: int in AssetsS.SLOTS:
+				var t := mat.get_texture(slot)
+				if t == null:
+					continue
+				if not seen.has(t):
+					seen.append(t)
+				line += " slot%d=t%d" % [slot, seen.find(t)]
+			print("[pax_rpg] mats " + line)
+	m.free()
+	return "rpg_perf mats: %d картинок, в логе" % seen.size()
 
 
 func _perf_tex() -> String:
