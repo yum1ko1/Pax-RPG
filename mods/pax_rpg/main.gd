@@ -303,6 +303,8 @@ func _perf_command(args: PackedStringArray) -> String:
 	if args.size() >= 1 and args[0] == "auto":
 		_perf_auto()
 		return "rpg_perf auto: замер ~70 с, итог в логе ([pax_rpg] perf)"
+	if args.size() >= 1 and args[0] == "ui":
+		return _perf_ui()
 	if args.size() >= 1 and args[0] == "bench":
 		_perf_bench()
 		return "rpg_perf bench: день и ночь по 8 с (~30 с), итог в логе ([pax_rpg] bench)"
@@ -487,6 +489,27 @@ func _perf_prof() -> void:
 		await get_tree().process_frame
 		f += 1
 	log_info("Pax RPG perf prof: fps %.1f · %s" % [f / 5.0, ProfS.report(f)])
+
+
+## Видимые 2D-узлы локации (путь, размер, материал) — в лог: что рисуется в окне поверх 3D (сравнить до/после окна).
+func _perf_ui() -> String:
+	var n := 0
+	var st: Array = [location]
+	while not st.is_empty():
+		var c: Node = st.pop_back()
+		for k: Node in c.get_children():
+			if k is CanvasItem and not (k as CanvasItem).is_visible_in_tree():
+				continue
+			if k is SubViewport:
+				continue
+			st.append(k)
+			if k is Control or k is Node2D:
+				n += 1
+				var ci := k as CanvasItem
+				var sz := (k as Control).size if k is Control else Vector2.ZERO
+				log_info("Pax RPG ui: %s · %s · %s · мат %s" % [str(k.get_path()).trim_prefix(str(location.get_path())), k.get_class(), str(sz),
+					ci.material.get_class() if ci.material != null else "-"])
+	return "rpg_perf ui: %d видимых 2D-узлов, список в логе" % n
 
 
 ## Сравнимый замер «до/после»: камера стоит, 8 с днём (как есть) и 8 с ночью (22:00), потом час — обратно. Средний FPS,
