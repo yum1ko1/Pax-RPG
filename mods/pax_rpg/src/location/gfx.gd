@@ -42,6 +42,14 @@ var _dyn_t := 0.0
 var _probe_step := -1
 var _rim: DirectionalLight3D
 const RIM_LAYER := 1 << 19          # слой видимости 20 — только герой, на него светит контровой свет
+## Тени огней (shadow_caster_mask). Движок держит тень огня в атласе и перерисовывает её (6 проходов сцены у куба), только
+## когда в её радиусе что-то сдвинулось или у отбрасывающего тень шейдер с TIME в вершинах (качание) — тогда каждый кадр.
+const LOD_LAYER := 1 << 17          # слой 18 — LOD-копии построек: в тенях огней дальность видимости не действует, и тень
+                                    # рисовали модель и обе её копии разом; форма та же — тень даёт полная модель
+const SWAY_LAYER := 1 << 16         # слой 17 — полотнища на ветру (flag.gdshader, TIME): тень от солнца; от огня — только
+                                    # рядом с героем (там тень огня и так перерисовывается — герой в её радиусе двигается)
+const LAMP_SKIP := LOD_LAYER | SWAY_LAYER
+var _sh_fading: Array = []         # огни, у которых сила тени ещё в пути к цели (_fade_shadows — каждый кадр)
 var _time := 0.0                   # время ветра для шейдеров; иай замораживает этот узел — и трава замирает
 var _saved := {}
 var _mb: MotionBlur
@@ -460,6 +468,7 @@ func _process(delta: float) -> void:
 	if _shadow_t <= 0.0:
 		_shadow_t = 0.5
 		_lamp_shadows()
+	_fade_shadows(delta)
 	_dyn_t -= delta
 	if _dyn_t <= 0.0:
 		_dyn_t = 1.0
@@ -507,11 +516,18 @@ func _lamp_shadows() -> void:
 			ol.set_meta("pax_rpg_lamp", true)
 			ol.light_size = 0.12                         # мягкий край тени фонаря
 			ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # подсвечивает воздух рядом, а не туманный шар
+			ol.shadow_caster_mask &= ~LAMP_SKIP          # без LOD-копий и полотнищ (своё исключение каменного фонаря — остаётся)
 		# по расстоянию до героя, а не по кадру: тень огня за краем кадра всё равно лежит в кадре, а проверка «в кадре»
 		# от покачивания камеры включала и выключала тени — они прыгали. Яркость — базовая (без мерцания огня)
-		var d := ol.global_position.distance_to(hp)
+		var dh := ol.global_position.distance_to(hp)
+		var d := dh
 		if ol.shadow_enabled:
 			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
+		# полотнища в тени огня — только когда герой в её радиусе (+1 м, отпускаем с +4 м): там тень огня и так
+		# перерисовывается каждый кадр, а дальше качание одного полотнища заставляло перерисовывать все 6 граней куба
+		var has_sway := (ol.shadow_caster_mask & SWAY_LAYER) != 0
+		if has_sway != (dh < ol.omni_range + (4.0 if has_sway else 1.0)):
+			ol.shadow_caster_mask ^= SWAY_LAYER
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
 		var seen := _reaches_view(ol, frustum)
@@ -526,7 +542,7 @@ func _lamp_shadows() -> void:
 		var want := i < n
 		lo.set_meta("pax_rpg_sh_want", want)
 	# тень не щёлкает: включается с нулевой силы и разгорается, гаснет плавно и только потом выключается
-	var dt := get_process_delta_time()
+	var dpf := _f("lamp_dp_far", 0.0)
 	for l: Array in lights:
 		var so := l[0] as OmniLight3D
 		if not is_instance_valid(so):
@@ -538,16 +554,48 @@ func _lamp_shadows() -> void:
 		if so.shadow_enabled and not w and not bool(so.get_meta("pax_rpg_in_view", true)):
 			so.shadow_enabled = false                      # свет ушёл из кадра — гасить тень плавно некому смотреть
 			continue
+		if so.shadow_enabled and not w and so.shadow_opacity <= 0.001:
+			so.shadow_enabled = false                      # уже погасла (или не успела разгореться)
+			continue
 		if so.shadow_enabled:
-			var far := clampf((so.global_position.distance_to(hp) - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
+			var dh := so.global_position.distance_to(hp)
+			var far := clampf((dh - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
 			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
 			if not is_equal_approx(bl, so.shadow_blur):   # присваивание пересчитывает свет — только при смене ступени
 				so.shadow_blur = bl
-			var o := move_toward(so.shadow_opacity, (snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0), dt * 0.8)
-			if not is_equal_approx(o, so.shadow_opacity):
-				so.shadow_opacity = o
-			if not w and o <= 0.0:
-				so.shadow_enabled = false
+			var to := snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0
+			so.set_meta("pax_rpg_sh_to", to)
+			if not is_equal_approx(to, so.shadow_opacity) and not _sh_fading.has(so):
+				_sh_fading.append(so)                      # к цели — плавно, каждый кадр (_fade_shadows)
+			# lamp_dp_far > 0: дальше стольких метров от героя тень огня — две полусферы (2 прохода вместо 6 у куба;
+			# мягкая и бледная вдали, но на крупных плоских гранях полусферы чуть кривят тень) — по умолчанию выкл.
+			var dp := so.omni_shadow_mode == OmniLight3D.SHADOW_DUAL_PARABOLOID
+			var want_dp := dpf > 0.0 and dh > (dpf if dp else dpf + 5.0)
+			if want_dp != dp:
+				so.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID if want_dp else OmniLight3D.SHADOW_CUBE
+
+
+## Сила тени огня — к цели на 0.8 в секунду (от нуля до полной ~1.25 с), каждый кадр и только у тех, что в пути.
+## Раньше шаг считался от длины кадра (~0.013 с), а звался раз в 0.5 с: тень разгоралась и гасла около минуты,
+## и выбывшие из ближних огни столько же держали включённую тень (лишние проходы). Сила тени её не перерисовывает.
+func _fade_shadows(delta: float) -> void:
+	if _sh_fading.is_empty():
+		return
+	var keep: Array = []
+	for v: Variant in _sh_fading:
+		if not is_instance_valid(v):
+			continue
+		var so := v as OmniLight3D
+		if not so.shadow_enabled:
+			continue
+		var to := float(so.get_meta("pax_rpg_sh_to", 0.0))
+		var o := move_toward(so.shadow_opacity, to, minf(delta, 0.1) * 0.8)
+		so.shadow_opacity = o
+		if not is_equal_approx(o, to):
+			keep.append(so)
+		elif to <= 0.0 and not bool(so.get_meta("pax_rpg_sh_want", false)):
+			so.shadow_enabled = false
+	_sh_fading = keep
 
 
 ## Двигающиеся тела (герой, враги, жители) — динамические для отражённого света; новые (волны арены) — тоже.
