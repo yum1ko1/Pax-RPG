@@ -709,6 +709,10 @@ func _perf_err() -> void:
 			other_mi.append(n)
 	var gfx: GfxS = location.get("_gfx")
 	var rs := RenderingServer
+	var shown := func(n: Node) -> bool: return (n as Node3D).visible   # пробуем только видимое — после пробы его же и показываем
+	var decals: Array = _kids("Decal").filter(shown)
+	var labels: Array = (_kids("Label3D") + _kids("Sprite3D") + _kids("AnimatedSprite3D")).filter(shown)
+	var suns: Array = _kids("DirectionalLight3D").filter(shown)
 	var tests: Array = [
 		["глобальные настройки рендера мода", func(on: bool) -> void:
 			if gfx != null:
@@ -732,9 +736,9 @@ func _perf_err() -> void:
 		["камера: экспозиция", func(on: bool) -> void: if we != null: we.camera_attributes = ca if on else null],
 		["герой", func(on: bool) -> void: if pl is Node3D: (pl as Node3D).visible = on],
 		["прочие сетки вне города", func(on: bool) -> void: vis.call(other_mi, on)],
-		["декали", func(on: bool) -> void: vis.call(_kids("Decal"), on)],
-		["Label3D/Sprite3D", func(on: bool) -> void: vis.call(_kids("Label3D") + _kids("Sprite3D") + _kids("AnimatedSprite3D"), on)],
-		["свет направленный", func(on: bool) -> void: vis.call(_kids("DirectionalLight3D"), on)],
+		["декали", func(on: bool) -> void: vis.call(decals, on)],
+		["Label3D/Sprite3D", func(on: bool) -> void: vis.call(labels, on)],
+		["свет направленный", func(on: bool) -> void: vis.call(suns, on)],
 		["ореол", func(on: bool) -> void: env.glow_enabled = on],
 		["туман", func(on: bool) -> void: env.fog_enabled = on],
 	]
