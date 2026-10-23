@@ -61,6 +61,7 @@ func _mod_loaded() -> void:
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
 	Pax.register_command("rpg_weather", _weather_command, "rpg_weather <clear|cloudy|fog|rain|storm|auto> — погода в локации (перестраивает её)")
 	Pax.register_command("rpg_time", _time_command, "rpg_time H — время суток в локации (0–24)")
+	Pax.register_command("rpg_gfx", _gfx_command, "rpg_gfx <sdfgi_rays 8..128|ssil_half 0/1|ssao_half 0/1|hide_hud 0/1> — качество рендера на лету (сравнение A/B)")
 	# Для разработки: pax_rpg/dev/arena.ps1 ставит настройку autostart_arena — арена откроется сразу после запуска.
 	# Флаг одноразовый: следующий обычный запуск идёт как всегда.
 	var city := str(get_setting("autostart_city", ""))
@@ -257,6 +258,32 @@ func _weather_command(args: PackedStringArray) -> String:
 		return "rpg_weather: " + "|".join(W.KINDS) + "|auto"
 	W.forced = "" if k == "auto" else k
 	return "rpg_weather: %s — войдите в локацию заново (выйти и зайти), погода применится" % k
+
+
+## Консоль F8: rpg_gfx <ключ> <значение> — внутренние ручки качества на время сеанса (для скриншотов A/B).
+func _gfx_command(args: PackedStringArray) -> String:
+	if args.size() < 2:
+		return "rpg_gfx sdfgi_rays 8|16|32|64|96|128 · ssil_half 0|1 · ssao_half 0|1 · hide_hud 0|1"
+	var v := args[1].to_int()
+	match args[0]:
+		"sdfgi_rays":
+			var rc: Dictionary = {8: RenderingServer.ENV_SDFGI_RAY_COUNT_8, 16: RenderingServer.ENV_SDFGI_RAY_COUNT_16,
+				32: RenderingServer.ENV_SDFGI_RAY_COUNT_32, 64: RenderingServer.ENV_SDFGI_RAY_COUNT_64,
+				96: RenderingServer.ENV_SDFGI_RAY_COUNT_96, 128: RenderingServer.ENV_SDFGI_RAY_COUNT_128}
+			if not rc.has(v):
+				return "sdfgi_rays: 8, 16, 32, 64, 96, 128"
+			RenderingServer.environment_set_sdfgi_ray_count(rc[v])
+		"ssil_half":
+			RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, v == 1, 0.5, 4, 50.0, 300.0)
+		"ssao_half":
+			RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, v == 1, 0.5, 2, 50.0, 300.0)
+		"hide_hud":
+			var hud: Variant = location.get("_hud")
+			if hud is CanvasItem:
+				(hud as CanvasItem).visible = v == 0
+		_:
+			return "rpg_gfx: неизвестный ключ " + args[0]
+	return "rpg_gfx %s = %d" % [args[0], v]
 
 
 func _time_command(args: PackedStringArray) -> String:
