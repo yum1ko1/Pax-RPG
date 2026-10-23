@@ -638,6 +638,10 @@ func _perf_err() -> void:
 			rs.sub_surface_scattering_set_quality(RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_HIGH if on else RenderingServer.SUB_SURFACE_SCATTERING_QUALITY_LOW)],
 		["бикубический ореол", func(on: bool) -> void: rs.environment_glow_set_use_bicubic_upscale(on)],
 		["весь 3D-вид", func(on: bool) -> void: vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED],
+		["контейнер 3D-вида (вывод на экран)", func(on: bool) -> void:
+			var b: Variant = location.get("_box")
+			if b is CanvasItem: (b as CanvasItem).visible = on],
+		["весь слой локации", func(on: bool) -> void: location.visible = on],
 		["цветокоррекция LUT", func(on: bool) -> void: env.adjustment_enabled = on],
 		["небо → цвет", func(on: bool) -> void: env.background_mode = bg if on else Environment.BG_COLOR],
 		["тонмаппинг ACES → линейный", func(on: bool) -> void: env.tonemap_mode = tm if on else Environment.TONE_MAPPER_LINEAR],
