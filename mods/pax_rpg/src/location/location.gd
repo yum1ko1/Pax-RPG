@@ -160,6 +160,7 @@ var _wrist: Wrist                  # наручный терминал (TAB / Es
 const VoiceTalk := preload("res://mods/pax_rpg/src/location/voice_talk.gd")
 var _vtalk: VoiceTalk                   # голосом к жителю по имени (эксперимент, настройка voice_talk)
 var _talk: Talk                    # разговор с жителем (E рядом) — через нейросеть игры
+var _title: Node                   # титр города (city_title.gd) — сам уходит, доиграв; при выходе из города — сразу
 var _talk_npc: Node                # ближайший житель в 2.5 м (ему — подсказка «E · имя»)
 var _npcs: Array = []
 var _talk_t := 0.0
@@ -609,7 +610,8 @@ func build(city: Dictionary) -> void:
 		if _daynight != null:
 			ct.sub = DayNight.label(mod, _daynight.hour)   # под названием — время суток (в городе оно стоит)
 		add_child(ct)
-		ct.play(3.4)                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
+		ct.play(3.4)
+		_title = ct                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
 	_zoom = 0.0
 	_zoom_want = 0.0
 	_yaw = 0.0
@@ -712,8 +714,9 @@ func clear() -> void:
 	_turning = false
 	# голос к жителям (_vtalk) тоже: раньше каждый вход в город добавлял новый, а прежний оставался подписанным
 	# на распознавание речи игры — фраза приходила дважды
+	# титр города (_title) — тоже: ушли из города до конца заставки — она доигрывала под картой мира (со звуком)
 	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal,
-			_vtalk]:
+			_vtalk, _title]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -1470,6 +1473,12 @@ func _physics_process(delta: float) -> void:
 	for g: Variant in _goblins:                          # павшие на арене — удалены; новый массив — только если кто-то исчез
 		if not is_instance_valid(g):
 			_goblins = _goblins.filter(func(x: Variant) -> bool: return is_instance_valid(x))
+			var seen := {}                         # отметки павших — только живущих узлов: в долгом бою волнами
+			for x: Variant in _goblins:            # словарь рос на каждого врага
+				var xid := (x as Object).get_instance_id()
+				if _dead_seen.has(xid):
+					seen[xid] = _dead_seen[xid]
+			_dead_seen = seen
 			break
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)

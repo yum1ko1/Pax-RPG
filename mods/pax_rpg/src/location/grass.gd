@@ -14,6 +14,7 @@ const CELL := 16.0
 const OCC := 0.5                   # м на клетку карты занятости
 
 static var _cache := {}            # ключ → {Vector2i ячейка: PackedFloat32Array}
+static var _forest_key := ""       # ключ травы последнего леса задания
 
 var count := 0
 var done := false                  # трава поставлена (или её нет)
@@ -49,6 +50,10 @@ func start(mod: PaxMod, parent: Node, layout: Dictionary, rects: Array, cfg: Dic
 	print("[pax_rpg] load: grass computed %d ms (%s)" % [Time.get_ticks_msec() - tg, "ok" if res is Dictionary else "failed"])
 	if res is Dictionary:
 		_cache[key] = res
+		if not (input.terrain as Dictionary).is_empty():   # лес задания: у каждого свой seed — свой ключ; храним только
+			if _forest_key != "" and _forest_key != key:     # последний лес (буферы — мегабайты), иначе кэш рос с
+				_cache.erase(_forest_key)                    # каждым новым заданием
+			_forest_key = key
 		if is_instance_valid(parent) and parent.is_inside_tree():
 			_spawn(parent, res as Dictionary, sh, fade_end)
 	_finish(on_done)                                     # ошибка в потоке — без травы, но загрузка не виснет

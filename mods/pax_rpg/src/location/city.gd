@@ -37,12 +37,14 @@ var cancelled := false             # локацию убрали посреди 
 func _slice() -> bool:
 	if cancelled or not is_instance_valid(root) or not root.is_inside_tree():
 		cancelled = true
+		_dress = null                                 # убранство держит город (city) — без этого оба не освобождаются
 		return false
 	if Time.get_ticks_usec() - _t0 > BUDGET_US:
 		await root.get_tree().process_frame
 		_t0 = Time.get_ticks_usec()
 		if not is_instance_valid(root) or not root.is_inside_tree():
 			cancelled = true
+			_dress = null
 			return false
 	return true
 
@@ -149,6 +151,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if _movable(k):
 			pos = _off_road(pos)                         # реквизит не загораживает дорогу — к её краю
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
+	_dress = null                                     # убранство поставлено; оно держит ссылку на город — цикл ссылок
+	                                                  # RefCounted: город (с маской дорог, пакетами, материалами) не освобождался
 	print("[pax_rpg] load: city items placed, %d model groups" % groups.size())
 	for k: String in groups:
 		if not await _slice():
