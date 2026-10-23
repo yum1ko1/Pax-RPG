@@ -379,6 +379,7 @@ func build(city: Dictionary) -> void:
 		_prog = Progress.new()
 		_prog.setup(mod, hero_cfg.get("progress", {}))
 	_orbs.clear()
+	_yaw0 = INF                                      # крен в повороте — с нуля, не от героя прошлого города
 	test_mode = false
 	_hp = _hp_max()
 	_city_name = mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
