@@ -873,23 +873,27 @@ func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
 	root.add_child(m)
 	Assets.track("models/goblin/goblin_rigged.glb", m)
 	var ap := _find_player(m)
-	var src := Assets.model(mod, "models/goblin/idle.glb")
-	if ap != null and src != null:
-		var sa := _find_player(src)
+	if ap != null and _idle_lib == null:              # клип покоя — один на всех торговцев (раньше копия glb и клипа на каждого)
+		var src := Assets.model(mod, "models/goblin/idle.glb")
+		var sa: AnimationPlayer = _find_player(src) if src != null else null
 		if sa != null and sa.get_animation_list().size() > 0:
 			var an: Animation = sa.get_animation(sa.get_animation_list()[0]).duplicate()
 			an.loop_mode = Animation.LOOP_LINEAR
-			var lib := AnimationLibrary.new()
-			lib.add_animation("idle", an)
-			if not ap.has_animation_library("m"):
-				ap.add_animation_library("m", lib)
-			ap.play("m/idle")
-			ap.seek(rng.randf() * 2.0, true)
-			ap.speed_scale = rng.randf_range(0.85, 1.15)
-			_anim_track(ap, m, 1.5)
-	if src != null:
-		src.free()
+			_idle_lib = AnimationLibrary.new()
+			_idle_lib.add_animation("idle", an)
+		if src != null:
+			src.free()
+	if ap != null and _idle_lib != null:
+		if not ap.has_animation_library("m"):
+			ap.add_animation_library("m", _idle_lib)
+		ap.play("m/idle")
+		ap.seek(rng.randf() * 2.0, true)
+		ap.speed_scale = rng.randf_range(0.85, 1.15)
+		_anim_track(ap, m, 1.5)
 	count += 1
+
+
+var _idle_lib: AnimationLibrary
 
 
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
@@ -1339,6 +1343,7 @@ func _place(path: String, list: Array) -> void:
 			if not cells.has(key):
 				cells[key] = []
 			(cells[key] as Array).append(i)
+		var house := BUILDINGS.any(func(b: String) -> bool: return path.contains(b)) and mesh.get_surface_count() > 0
 		for key: Vector3i in cells:
 			var ids: Array = cells[key]
 			var mm := MultiMesh.new()
@@ -1350,8 +1355,7 @@ func _place(path: String, list: Array) -> void:
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
 			var shadow_copy := _cast == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
-			if BUILDINGS.any(func(b: String) -> bool: return path.contains(b)) and mesh.get_surface_count() > 0 \
-					and not shadow_copy:                  # постройки — детали камня и дерева (копии для тени — без них)
+			if house and not shadow_copy:                  # постройки — детали камня и дерева (копии для тени — без них)
 				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
 				if hm != null:
 					mi.material_override = hm
@@ -1539,7 +1543,16 @@ static var _grime_tex: ImageTexture
 static var _moss_tex: ImageTexture
 
 
+## GRIME выкл.: декали грязи никогда не появлялись в игре — у Decal нет visibility_range_end, присваивание падало
+## SCRIPT ERROR на первой же декали каждой группы (декаль оставалась вне дерева — утечка узла), остальные не ставились.
+## Картинка без них — та, что видел автор. Включить (true) — добавит ~300 декалей (дальность — distance_fade, 70 м):
+## решение автора, это и вид, и цена кадра.
+const GRIME := false
+
+
 func _grime(path: String, list: Array) -> void:
+	if not GRIME:
+		return
 	var f := path.get_file()
 	var moss := f.begins_with("rock_mossy") or f.begins_with("stone_") or f.begins_with("oak_")
 	var house := f.begins_with("house") or f.begins_with("yurt") or f.begins_with("tavern") or f.begins_with("guild") \
@@ -1573,7 +1586,9 @@ func _grime(path: String, list: Array) -> void:
 		d.lower_fade = 0.3
 		d.cull_mask = 0xFFFFF & ~(1 << 19)
 		d.modulate = Color(1, 1, 1, 0.75)
-		d.visibility_range_end = 70.0
+		d.distance_fade_enabled = true                # дальше 70 м не рисуется (у Decal — distance_fade, не visibility_range)
+		d.distance_fade_begin = 62.0
+		d.distance_fade_length = 8.0
 		root.add_child(d)
 		d.global_position = t.origin + Vector3(0, 0.2, 0)
 		d.rotation.y = randf() * TAU

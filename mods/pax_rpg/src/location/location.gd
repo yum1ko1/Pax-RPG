@@ -710,11 +710,16 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal]:
+	# голос к жителям (_vtalk) тоже: раньше каждый вход в город добавлял новый, а прежний оставался подписанным
+	# на распознавание речи игры — фраза приходила дважды
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal,
+			_vtalk]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
 	_goblins.clear()
+	_npcs.clear()                                    # жители прошлых городов (освобождённые узлы) — раньше копились
+	_talk_npc = null
 	test_mode = false
 	_lock = null
 	_box = null
@@ -3195,7 +3200,12 @@ func _apply_volfog(v: float) -> void:
 
 ## LUT 17³ (цветокоррекция сцены): тени уходят в холодную бирюзу, света — в тёплое золото, мягкая S-кривая.
 ## Делаем в коде — без файлов и без потерь при сжатии.
+static var _lut: ImageTexture3D
+
+
 static func _grade_lut() -> ImageTexture3D:
+	if _lut != null:
+		return _lut                                  # одна на сессию (раньше новая текстура на каждый вход в город)
 	var n := 17
 	var layers: Array[Image] = []
 	var lilac := Vector3(0.9, 0.97, 1.08)            # тени — в холодную бирюзу поверхности Юрумы (контраст тёплым огням)
@@ -3213,9 +3223,9 @@ static func _grade_lut() -> ImageTexture3D:
 				c += (c - Vector3.ONE * 0.5) * 0.06
 				img.set_pixel(r, g, Color(clampf(c.x, 0, 1), clampf(c.y, 0, 1), clampf(c.z, 0, 1)))
 		layers.append(img)
-	var t := ImageTexture3D.new()
-	t.create(Image.FORMAT_RGB8, n, n, n, false, layers)
-	return t
+	_lut = ImageTexture3D.new()
+	_lut.create(Image.FORMAT_RGB8, n, n, n, false, layers)
+	return _lut
 
 
 ## Виньетка: мягко темнит и чуть сиренит края кадра (поверх 3D, под HUD).
