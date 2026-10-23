@@ -143,8 +143,12 @@ func apply_viewport(v: SubViewport) -> void:
 	_apply_aa(v)
 	v.use_debanding = _b("debanding", true)
 	_lens_layer(v)
-	v.use_occlusion_culling = _b("occlusion", false)     # выкл.: на краях стен модели пропадали и появлялись
+	# отсечение заслонённым: окклюдеры — коробки строго внутри стен (city.gd _occluder_box); растр окклюзии плотнее
+	# (лучей на поток 512 → 2048) — края стен точнее, модели у краёв не мигают (было причиной выключения в 0.3.x)
+	v.use_occlusion_culling = _b("occlusion", true)
 	occlusion_on = v.use_occlusion_culling
+	if occlusion_on:
+		RenderingServer.viewport_set_occlusion_rays_per_thread(2048)
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
@@ -433,6 +437,8 @@ func _ps(k: String) -> Variant:
 func restore_globals() -> void:
 	if _saved.is_empty():
 		return
+	RenderingServer.viewport_set_occlusion_rays_per_thread(int(ProjectSettings.get_setting(
+		"rendering/occlusion_culling/occlusion_rays_per_thread", 512)))
 	RenderingServer.directional_shadow_atlas_set_size(int(_saved["atlas"]), true)
 	RenderingServer.environment_set_sdfgi_frames_to_converge(int(_saved["conv"]) as RenderingServer.EnvironmentSDFGIFramesToConverge)
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(int(_saved["upd"]) as RenderingServer.EnvironmentSDFGIFramesToUpdateLight)

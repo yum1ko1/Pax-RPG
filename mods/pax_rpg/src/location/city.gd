@@ -1136,6 +1136,20 @@ func _occludes(path: String) -> bool:
 	return false
 
 
+## Коробка окклюдера постройки — строго внутри её стен: по стенам на высоте тела (_body_box — без крыш, свесов, навесов
+## и прилавков), ещё на 10 % уже, в высоту — 70 % модели (конёк и свесы крыши не заслоняют). Юрта круглая: коробка,
+## вписанная в круг (×0.7 — углы не выходят за стену). Прежняя (рамка модели × 0.8) у юрт торчала углами за стену,
+## у лавок закрывала просветы под навесами — модели за краями стен пропадали, и окклюзию выключили.
+func _occluder_box(path: String, parts: Array, aabb: AABB) -> AABB:
+	var bb := _body_box(parts)
+	if bb.size == Vector3.ZERO:
+		bb = AABB(aabb.position + aabb.size * 0.1, aabb.size * 0.8)
+	var k := 0.9 * (0.7 if path.get_file().begins_with("yurt") else 1.0)
+	var c := bb.get_center()
+	var sz := Vector3(bb.size.x * k, aabb.size.y * 0.7, bb.size.z * k)
+	return AABB(Vector3(c.x - sz.x * 0.5, aabb.position.y, c.z - sz.z * 0.5), sz)
+
+
 ## Окклюдер-коробка: рамка модели, ужатая shrink (крыши со свесами и проёмы не должны заслонять лишнего).
 func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
 	if not GfxS.occlusion_on:                            # отсечение заслонённым выключено (location.json) — сотни узлов-
@@ -1406,8 +1420,9 @@ func _place(path: String, list: Array) -> void:
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
 	if not first and _lod != 2 and _occludes(path):                    # дома, юрты, стены — заслоняют то, что за ними (окклюзия)
+		var ob := _occluder_box(path, parts, aabb)
 		for e: Array in list:
-			_occluder(e[0] as Transform3D, aabb, Vector3(0.8, 0.85, 0.8))
+			_occluder(e[0] as Transform3D, ob, Vector3.ONE)
 	var pts: Array = []
 	for e: Array in list:
 		pts.append((e[0] as Transform3D).origin)

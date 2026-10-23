@@ -61,7 +61,7 @@ func _mod_loaded() -> void:
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
 	Pax.register_command("rpg_weather", _weather_command, "rpg_weather <clear|cloudy|fog|rain|storm|auto> — погода в локации (перестраивает её)")
 	Pax.register_command("rpg_time", _time_command, "rpg_time H — время суток в локации (0–24)")
-	Pax.register_command("rpg_gfx", _gfx_command, "rpg_gfx <sdfgi_rays 8..128|ssil_half 0/1|ssao_half 0/1|hide_hud 0/1> — качество рендера на лету (сравнение A/B)")
+	Pax.register_command("rpg_gfx", _gfx_command, "rpg_gfx <sdfgi_rays 8..128|ssil_half 0/1|ssao_half 0/1|occlusion 0/1|hide_hud 0/1> — качество рендера на лету (сравнение A/B)")
 	# Для разработки: pax_rpg/dev/arena.ps1 ставит настройку autostart_arena — арена откроется сразу после запуска.
 	# Флаг одноразовый: следующий обычный запуск идёт как всегда.
 	var city := str(get_setting("autostart_city", ""))
@@ -277,6 +277,10 @@ func _gfx_command(args: PackedStringArray) -> String:
 			RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, v == 1, 0.5, 4, 50.0, 300.0)
 		"ssao_half":
 			RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, v == 1, 0.5, 2, 50.0, 300.0)
+		"occlusion":
+			var vp: Variant = location.get("_view")
+			if vp is Viewport:
+				(vp as Viewport).use_occlusion_culling = v == 1
 		"hide_hud":
 			var hud: Variant = location.get("_hud")
 			if hud is CanvasItem:
