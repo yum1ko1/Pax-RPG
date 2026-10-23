@@ -231,6 +231,10 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 	var seen: Array = []                                 # картинки по порядку обхода — номер в .tex/t<N>.dds
 	var done: Array = []                                 # уже заменённые
 	var repl := {}                                       # картинка glb → общая текстура из DDS
+	var sb := mod.read_bytes(dir + "slots.json")
+	var parsed: Variant = JSON.parse_string(sb.get_string_from_utf8()) if not sb.is_empty() else null
+	var slots: Dictionary = parsed if parsed is Dictionary else {}   # материал → слот → t<N> (tex_map.gd)
+	var by_n := {}                                       # t<N> → текстура этой модели
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
 		if inst.mesh == null:
@@ -255,8 +259,16 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				bm3.subsurf_scatter_enabled = true
 				bm3.subsurf_scatter_strength = 0.25
 				bm3.subsurf_scatter_skin_mode = true
+			var ms: Dictionary = slots.get(mat.resource_name, {})
 			for slot: int in SLOTS:
 				var t: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
+				if t != null and ms.has(str(slot)):
+					# номер — по имени материала и слоту (slots.json): загрузчик игры раскладывает картинки glb
+					# по-своему (у героя меч получал картинку глаза), имя материала и слот у него те же
+					var tn := _tex_n(mod, path, dir, int(ms[str(slot)]), by_n)
+					if tn != null:
+						(mat as BaseMaterial3D).set_texture(slot, tn)
+					continue
 				if t != null and repl.has(t):
 					(mat as BaseMaterial3D).set_texture(slot, repl[t])   # та же картинка у другой поверхности модели
 					continue
@@ -293,6 +305,28 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 					idx.append(_streams.size())
 					_by_path[path] = idx
 					_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+
+
+## Текстура t<N>.dds модели — одна на модель (by_n): без лёгкой копии — общая по содержимому (_shared), с копией
+## _lo — своя, со стримингом (вблизи — полная).
+static func _tex_n(mod: PaxMod, path: String, dir: String, n: int, by_n: Dictionary) -> Texture2D:
+	if by_n.has(n):
+		return by_n[n]
+	var hi := dir + "t%d.dds" % n
+	var lo := dir + "t%d_lo.dds" % n
+	var t: Texture2D = null
+	if mod.read_bytes(lo).is_empty():
+		t = _shared(mod, hi)
+	else:
+		var img := _dds(mod, lo)
+		if img != null:
+			t = ImageTexture.create_from_image(img)
+			var idx: Array = _by_path.get(path, [])
+			idx.append(_streams.size())
+			_by_path[path] = idx
+			_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+	by_n[n] = t
+	return t
 
 
 ## Большие постройки Meshy: вся модель — на одном атласе 2048, и вблизи стена из 2–3 пикселей на сантиметр
