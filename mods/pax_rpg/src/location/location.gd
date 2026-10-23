@@ -2578,7 +2578,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what := str({"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, ""))
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false
@@ -3251,20 +3251,20 @@ func _weapon_skills(act: String) -> Array:
 	var out: Array = []
 	match _weapon_skill("main"):
 		"spear_ult":
-			out.append({"k": "槍", "key": "G", "label": mod.tr_key("pax_rpg_ult_spear_name"), "on": act == "Ultimate",
+			out.append({"k": "槍", "key": "G", "label": _t("pax_rpg_ult_spear_name"), "on": act == "Ultimate",
 				"color": Color(1.0, 0.22, 0.18), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0),
 				"cd_s": ceili(_ult_cd), "ready": _ult_cd <= 0.0})
 		"crush":
-			out.append({"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
+			out.append({"k": "砕", "key": "G", "label": _t("pax_rpg_hud_ult"), "on": act == "Ultimate",
 				"color": Color(1.0, 0.45, 0.25), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
 				"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))})   # серый — не бежит
 	match _weapon_skill("iai"):
 		"rift":
-			out.append({"k": "震", "key": "V", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
+			out.append({"k": "震", "key": "V", "label": _t("pax_rpg_hud_quake"), "on": act == "Quake",
 				"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
 				"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0})
 		"iai":
-			out.append({"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
+			out.append({"k": "居", "key": "V", "label": _t("pax_rpg_hud_iai"), "on": act == "Iai",
 				"color": Color(0.75, 0.6, 1.0), "icon": _icon_tex("iai"), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 				"ready": _iai_cd <= 0.0})
 	return out
@@ -3414,7 +3414,8 @@ func _hud_tick(delta: float) -> void:
 	elif _since_hit > 0.6:
 		_hp_ghost = move_toward(_hp_ghost, hp, delta * 0.6)
 	_hint_t = maxf(0.0, _hint_t - delta)
-	var fighting := _hud_enemy() != null or _lock != null or (is_instance_valid(_arena) and _arena.fighting) or _broken_t > 0.0
+	var e := _hud_enemy()                            # ближний враг в бою — один поиск на кадр (раньше два)
+	var fighting := e != null or _lock != null or (is_instance_valid(_arena) and _arena.fighting) or _broken_t > 0.0
 	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "conc": _conc / _conc_max(),
 		"conc_on": fighting, "conc_broken": _broken_t > 0.0, "conc_low": _conc < _conc_max() / 3.0,
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
@@ -3443,7 +3444,6 @@ func _hud_tick(delta: float) -> void:
 		"color": Color(0.47, 0.84, 1.0), "ring": true})
 	st["targets"] = targets
 	st["enemies"] = enemies
-	var e := _hud_enemy()
 	if e != null:
 		st["enemy"] = {"name": _t(e.display_key), "hp": e.hp / e.max_hp,
 			"conc": e.conc / e.conc_max, "broken": e.can_deathblow(), "boss": e.boss, "phase": e.phase,

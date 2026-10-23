@@ -115,6 +115,7 @@ func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dic
 	_fill_attrs(st.get("attributes", {}) as Dictionary)
 	_update_cape()
 	visible = true
+	set_process(true)
 	_fit()
 
 
@@ -204,8 +205,9 @@ func close() -> void:
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("inventory._process")
 	if not visible:
-		if _pv.render_target_update_mode != SubViewport.UPDATE_DISABLED:
+		if _pv != null and _pv.render_target_update_mode != SubViewport.UPDATE_DISABLED:
 			_pv.render_target_update_mode = SubViewport.UPDATE_DISABLED   # закрыт — превью героя не рисуется
+		set_process(false)                               # и окно не обрабатывается, пока его снова не откроют
 		return
 	_t += delta
 	_place_camera()

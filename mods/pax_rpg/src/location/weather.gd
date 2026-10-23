@@ -112,6 +112,7 @@ func _to_gpu() -> void:
 	var map := Vfx.to_gpu_list(list)
 	_dust = map.get(_dust, _dust)
 	_flies = map.get(_flies, _flies)
+	_cam_last = Vector3.INF
 	_moth_lamps.clear()
 
 
@@ -148,6 +149,7 @@ func _make_cloud_shadows() -> void:
 # ---------- дождь ----------
 
 func _make_rain() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_rain = GPUParticles3D.new()
 	_rain.amount = 7000
 	_rain.lifetime = 1.0                                   # долетают до земли и в низинах, и на ровном
@@ -199,6 +201,7 @@ var _splash: GPUParticles3D
 
 
 func _make_splashes() -> void:
+	_splash_last = Vector3.INF
 	_splash = GPUParticles3D.new()
 	_splash.amount = 700
 	_splash.lifetime = 0.25
@@ -261,6 +264,7 @@ static func _radial() -> ImageTexture:
 
 
 func _make_dust() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_dust = CPUParticles3D.new()
 	_dust.mesh = _soft_dot(Color(1.0, 0.95, 0.85, 0.5), 0.04, 0.2)
 	_dust.amount = 220
@@ -283,6 +287,7 @@ func _make_dust() -> void:
 
 
 func _make_flies() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_flies = CPUParticles3D.new()
 	_flies.mesh = _soft_dot(Color(0.75, 1.0, 0.45, 1.0), 0.07, 2.0)
 	_flies.amount = 90
@@ -469,19 +474,28 @@ func footprint(pos: Vector3, yaw: float, left: bool) -> void:
 	tw.tween_property(d, "modulate:a", 0.0, 4.0)
 
 
+var _cam_last := Vector3.INF
+var _splash_last := Vector3.INF
+
+
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("weather._process")
 	var t0 := Time.get_ticks_usec()
 	if is_instance_valid(_cam):
 		var cp := _cam.global_position
-		if _rain != null:
-			_rain.global_position = cp + Vector3(0, 14, 0)
-		if _splash != null and _player_pos != Vector3.INF:
+		# дождь, пыль и светлячки едут за камерой — только когда она сдвинулась (каждое присваивание — пересчёт
+		# трансформа и вызов в сервер рендера на каждую систему частиц)
+		if cp != _cam_last:
+			_cam_last = cp
+			if _rain != null:
+				_rain.global_position = cp + Vector3(0, 14, 0)
+			if _dust != null:
+				_dust.global_position = cp + Vector3(0, -0.5, 0)
+			if _flies != null:
+				_flies.global_position = Vector3(cp.x, cp.y - 1.8, cp.z)
+		if _splash != null and _player_pos != Vector3.INF and _player_pos != _splash_last:
+			_splash_last = _player_pos
 			_splash.global_position = _player_pos + Vector3(0, 0.05, 0)
-		if _dust != null:
-			_dust.global_position = cp + Vector3(0, -0.5, 0)
-		if _flies != null:
-			_flies.global_position = Vector3(cp.x, cp.y - 1.8, cp.z)
 		if _shadow != null:                                 # облака плывут по ветру
 			_drift += Vector2(delta, delta)                 # плавно туда-обратно (без скачка при повторе)
 			_shadow.global_position = Vector3(sin(_drift.x * 0.006) * 70.0, 20.0, sin(_drift.y * 0.0041 + 1.3) * 70.0)
@@ -523,7 +537,7 @@ func _storm_tick(delta: float) -> void:
 		_flash_t -= delta
 		var k := _flash_t / 0.45
 		_flash.light_energy = (6.0 if fmod(_flash_t, 0.15) > 0.07 else 1.5) * k
-	else:
+	elif _flash.light_energy != 0.0:                       # погасла — один раз, а не запись нуля каждый кадр
 		_flash.light_energy = 0.0
 	if _thunder_in > 0.0:
 		_thunder_in -= delta

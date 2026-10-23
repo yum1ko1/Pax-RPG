@@ -182,8 +182,10 @@ func _process(delta: float) -> void:
 	if _driver != self:
 		set_process(false)
 		return
+	var t0 := Time.get_ticks_usec()
 	for n: Variant in all:
 		n._proc_tick(delta)
+	Prof.add("NPC анимация", t0)                      # видимость и позы жителей (кадр; физика — «NPC»)
 
 
 func _physics_process(delta: float) -> void:
