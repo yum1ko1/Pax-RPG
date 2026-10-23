@@ -603,6 +603,10 @@ const AssetsS := preload("res://mods/pax_rpg/src/location/assets.gd")
 ## Как загрузчик игры раскладывает картинки модели (сырой glb, без Assets): сетка/материал → слот = номер картинки по
 ## порядку обхода — тот же номер t<N>.dds должен дать bake_textures.gd. В лог.
 func _perf_mats(path: String) -> String:
+	if path == "hero":
+		return _perf_mats_live()
+	if not path.ends_with(".glb"):
+		path += ".glb"                                   # точку консоль игры не пропускает: путь без .glb
 	var m := model(path)
 	if m == null:
 		return "rpg_perf mats: нет модели " + path
@@ -626,6 +630,41 @@ func _perf_mats(path: String) -> String:
 			print("[pax_rpg] mats " + line)
 	m.free()
 	return "rpg_perf mats: %d картинок, в логе" % seen.size()
+
+
+## Что на самом деле стоит в материалах героя (модель, оружие, вещи): слот → размер, формат, номер заглушки. В лог.
+func _perf_mats_live() -> String:
+	var h: Variant = location.get("_hero") if location != null else null
+	var root: Node = (h as Object).get("model") if h is Object else null
+	if root == null:
+		return "rpg_perf mats hero: героя нет"
+	var n := 0
+	for mi: Node in root.find_children("*", "MeshInstance3D", true, false):
+		var inst := mi as MeshInstance3D
+		if inst.mesh == null:
+			continue
+		for si: int in inst.mesh.get_surface_count():
+			var mat := inst.material_override as BaseMaterial3D
+			if mat == null:
+				mat = inst.get_surface_override_material(si) as BaseMaterial3D
+			if mat == null:
+				mat = inst.mesh.surface_get_material(si) as BaseMaterial3D
+			if mat == null:
+				continue
+			var line := "%s/%s m%.2f r%.2f:" % [inst.name, mat.resource_name, mat.metallic, mat.roughness]
+			for slot: int in AssetsS.SLOTS:
+				var t := mat.get_texture(slot)
+				if t == null:
+					continue
+				var img := t.get_image() if t.get_width() == 1 else null
+				var mark := "" if img == null else " px%s" % str(img.get_pixel(0, 0))
+				for k: String in AssetsS._shared_tex:                 # общая из DDS — начало MD5 файла
+					if (AssetsS._shared_tex[k] as WeakRef).get_ref() == t:
+						mark += " dds" + k.left(8)
+				line += " slot%d=%dx%d%s" % [slot, t.get_width(), t.get_height(), mark]
+			print("[pax_rpg] mats hero " + line)
+			n += 1
+	return "rpg_perf mats hero: %d поверхностей, в логе" % n
 
 
 func _perf_tex() -> String:
