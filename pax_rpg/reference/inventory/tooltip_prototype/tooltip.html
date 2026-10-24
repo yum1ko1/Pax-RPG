@@ -403,7 +403,18 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
         opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
 .mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
 /* описание приёма / пассива: та же рамка, что у мини-подсказки, шире; иконка слева от названия */
-.mini.skt { width: 292px; z-index: 8; }
+.mini.skt { width: 300px; z-index: 8; }
+.mini.skt.show { pointer-events: auto; }
+.mini.sk2 { width: 310px; z-index: 9; }
+.skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
+.skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
+.skt .cost { color: var(--text); font-size: 12.5px; }
+.skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
+.sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
+.sk2 .bd span { color: var(--muted); } .sk2 .bd b { color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.sk2 .bd .good { color: #8fe09e; }
+.sk2 .bd .sum { color: #f0cf8a; padding-top: 4px; border-top: 1px solid rgba(201, 163, 92, .25); }
+.sk2 .note { margin-top: 7px; font-size: 12px; }
 .skh { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-bottom: 7px; }
 .skh .ski { width: 44px; height: 44px; display: grid; place-items: center; background-position: center; background-size: cover; background-repeat: no-repeat; border: 1px solid var(--gold-dim); border-radius: 2px;
             box-shadow: 0 0 8px rgba(0, 0, 0, .6); }
@@ -473,6 +484,7 @@ td.r { font-weight: 700; }
     <div class="tt" id="tt" role="tooltip" aria-hidden="true"></div>
     <div class="mini" id="mini" role="tooltip" aria-hidden="true"></div>
     <div class="mini skt" id="skt" role="tooltip" aria-hidden="true"></div>
+    <div class="mini sk2" id="sk2" role="tooltip" aria-hidden="true"></div>
     <div class="menu" id="menu" role="dialog" aria-label="Выбор вещи" aria-hidden="true"></div>
   </div>
 
@@ -969,15 +981,50 @@ td.r { font-weight: 700; }
   // у каждого оружия два приёма: [когда основное, когда второе]; каждый — только своим оружием
   const WEAPONS = { spear: { name: "Копьё Алого Заката", attr: "Сила", skills: [["sunset", "Алый Закат"], ["vine", "Вихрь алой лозы"]] },
                     katana: { name: "Катана", attr: "Ловкость", skills: [["moon", "Лунный росчерк"], ["iai", "Иай: остановка времени"]] } };
-  const SKILL_INFO = {
-    sunset: { key: "G", text: ["Кат-сцена из четырёх ударов: укол оглушает, удар с разворота отбрасывает, скольжение с подсечкой роняет, удар в спину добивает.",
-                               "Попала всеми четырьмя — концентрация Тянь Лун +50 %."] },
-    vine: { text: ["Тянь Лун раскручивает копьё в руке и бросает его, как бумеранг: копьё летит по дуге и задевает врагов на пути туда и обратно.",
-                   "Возвращается — она ловит его на лету и снова убирает за спину."] },
-    moon: { text: ["Рывок-разрез сквозь цель: Тянь Лун проскальзывает мимо врага, за ней остаётся шрам-полумесяц. Через миг шрам вспыхивает — урон и −40 концентрации.",
-                   "Концентрация врага ниже трети — сразу слом и окно Кровожадной атаки."] },
-    iai: { key: "V", text: ["Клинок выходит из ножен на палец — и время останавливается: мир замирает, по врагам в досягаемости проходят 20 линий разреза.",
-                            "Время отматывается назад, и с щелчком ножен все задетые получают урон разом. Удар по Тянь Лун до щелчка цубы срывает приём."] } };
+  // приёмы: числа — из игры (config/hero*.json, weapons.json, spear_ult.gd, location.gd → _iai_cut); у «Вихря» и «Росчерка»
+  // кода ещё нет — числа предварительные. Урон = база приёма × уровень героя (+3 % за уровень) × оружие от характеристик
+  // (Progress.scaling_mult: 1 + Σ оценка × насыщение характеристики)
+  const SKILLS = {
+    sunset: { weapon: "spear", base: 45, hits: [0.35, 0.6, 0.2, 1.5], cd: 12, range: 7 },
+    vine: { weapon: "spear", base: 18, hits: [1, 1], ha: 20, cd: 8, conc: 10, range: 10, draft: true },
+    moon: { weapon: "katana", base: 50, ha: 25, cd: 10, conc: 40, range: 6, draft: true },
+    iai: { weapon: "katana", base: 60, cd: 90, concBoss: 40 } };
+  const SCALING = { spear: { agility: "A" }, katana: { agility: "B", strength: "D" } };
+  const GRADES = { S: 1.4, A: 1.1, B: 0.85, C: 0.6, D: 0.35, E: 0.15 };
+  const ATTR = { agility: 60, strength: 30 }, ATTR_NAME = { agility: "Ловкость", strength: "Сила" };
+  function saturation(v) {   // как в progress.gd: до 10 — ничего, 10→20 быстро, 20→40 ровно, после 60 отдача падает
+    const pts = [[10, 0], [20, 0.35], [40, 0.75], [60, 0.9], [99, 1]];
+    if (v <= 10) return 0;
+    for (let i = 1; i < pts.length; i++) if (v <= pts[i][0]) return pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * (v - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]);
+    return 1;
+  }
+  function heroAttrs() { const a = { ...ATTR }; if (weapons[0] === PASSIVE.synergy.weapon) a.agility = Math.round(a.agility * PASSIVE.synergy.agi); return a; }
+  function dmgCalc(sk) {
+    const S = SKILLS[sk], lvl = +heroIn.value, lm = 1 + 0.03 * (lvl - 1), a = heroAttrs();
+    const parts = Object.entries(SCALING[S.weapon]).map(([k, g]) => ({ k, g, v: a[k], add: GRADES[g] * saturation(a[k]) }));
+    const wm = 1 + parts.reduce((t, x) => t + x.add, 0), one = S.base * lm * wm;
+    const hits = (S.hits || [1]).map(h => Math.round(one * h));
+    return { S, lvl, lm, parts, wm, one, hits, total: hits.reduce((t, x) => t + x, 0) };
+  }
+  const num = v => String(+(+v).toFixed(2)).replace(".", ",");
+  const N = (kind, sk, text) => `<span class="num" data-k="${kind}" data-s="${sk}" tabindex="0">${text}</span>`;
+  function skillText(sk) {
+    const d = dmgCalc(sk), S = d.S;
+    const dmg = d.hits.length > 1 ? `${N("dmg", sk, d.hits.join(" + ") + " = " + d.total)}` : N("dmg", sk, d.total);
+    const ha = S.ha ? `Стоимость ${N("ha", sk, S.ha + " ха")} · откат ${S.cd} с` : `Откат ${S.cd} с`;
+    const T = {
+      sunset: [`Серия из 4 ударов по одной цели до ${S.range} м. Урон: ${dmg}.`,
+               "1-й удар оглушает, 2-й отбрасывает, 3-й сбивает с ног, 4-й бьёт по лежащему.",
+               "Все 4 удара попали — концентрация Тянь Лун +50 %."],
+      vine: [`Бросок копья по дуге до ${S.range} м; копьё возвращается в руку. Каждый враг на пути получает 2 удара — туда и обратно.`,
+             `Урон: ${dmg}, концентрация врага ${N("conc", sk, "−" + S.conc)} за каждый удар.`],
+      moon: [`Рывок на ${S.range} м сквозь цель. Урон: ${dmg}, концентрация цели ${N("conc", sk, "−" + S.conc)}.`,
+             "Если у цели концентрация ниже 33 — сразу слом и окно Кровожадной атаки."],
+      iai: [`Бьёт всех врагов в досягаемости. Урон: ${dmg} каждому.`,
+            `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % концентрации")}.`,
+            "Удар по Тянь Лун в первые 0,6 с срывает приём."] }[sk];
+    return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "");
+  }
   const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], sk: [460, 333.5, 515.5, 393], dy: "14px" },
                   { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], sk: [460, 574, 515.5, 633.5], dy: "-14px" }];
   const HERO_PANEL = [548, 138, 938, 928], SWAP_AT = [413, 414];   // центр с героем; медальон смены — на перекладине между окнами
@@ -990,7 +1037,7 @@ td.r { font-weight: 700; }
     win.innerHTML = '<div class="wicon"></div>'; stage.appendChild(win);
     const ui = document.createElement("div"); ui.className = "wui wui" + (w + 1); pct(ws.ui, ui); stage.appendChild(ui);
     const sk = document.createElement("div"); sk.className = "wsk"; sk.id = "wsk-" + w; pct(ws.sk, sk); stage.appendChild(sk);
-    sk.addEventListener("mouseenter", () => showSkill(w)); sk.addEventListener("mouseleave", hideSkt);
+    sk.addEventListener("mouseenter", () => showSkill(w)); sk.addEventListener("mouseleave", hideSktSoon);
     sk.addEventListener("click", () => { hideSkt(); if (menuClosedAt.k === 100 + w && Date.now() - menuClosedAt.t < 350) return; openWeaponMenu(w); });
     const b = document.createElement("button"); b.type = "button"; b.className = "wslot"; b.id = "wslot-" + w; pct(ws.rect, b);
     b.innerHTML = `<span class="wtag">${ws.tag}</span>`;
@@ -1016,7 +1063,7 @@ td.r { font-weight: 700; }
   pas.setAttribute("aria-label", "Пассивный навык: " + PASSIVE.name); pas.tabIndex = 0;
   pas.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M27 6a15 15 0 1 0 7 22 12 12 0 1 1-7-22z" fill="#e8c27a"/>' +
     '<path d="M12 31 29 10l1.6 1.4-17 21z" fill="#ff5a48"/><path d="M29 10l4-3-1 5z" fill="#ff8a6a"/></svg>';
-  pas.addEventListener("mouseenter", showPassive); pas.addEventListener("mouseleave", hideSkt);
+  pas.addEventListener("mouseenter", showPassive); pas.addEventListener("mouseleave", hideSktSoon);
   pas.addEventListener("focus", showPassive); pas.addEventListener("blur", hideSkt);
   stage.appendChild(pas);
 
@@ -1031,14 +1078,56 @@ td.r { font-weight: 700; }
     skt.classList.remove("show"); void skt.offsetWidth; skt.classList.add("show"); skt.setAttribute("aria-hidden", "false");
   }
   function showSkill(w) {
-    const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w], info = SKILL_INFO[sk];
+    clearTimeout(sktT); hideSk2();
+    const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
     skt.innerHTML = `<div class="skh"><i class="ski sk-${sk}"></i><div><h3>${name}</h3>` +
-      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}${info.key ? " · " + info.key : ""}</div></div></div>` +
-      info.text.map(t => `<p>${t}</p>`).join("") +
+      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk) +
       `<div class="st on">Работает, пока ${key === "spear" ? "копьё" : "катана"} — ${w ? "второе" : "основное"} оружие</div>`;
     placeSkt(WSLOTS[w].sk);
   }
+  // разбор числа: откуда урон / ха / концентрация
+  const sk2 = document.getElementById("sk2");
+  function breakdown(kind, sk) {
+    const d = dmgCalc(sk), S = d.S, syn = PASSIVE.synergy, synOn = weapons[0] === syn.weapon;
+    const row = (a, b, cls) => `<span${cls ? ` class="${cls}"` : ""}>${a}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b>`;
+    if (kind === "dmg") {
+      const pc = v => (v >= 0 ? "+" : "") + Math.round(v * 100) + " %";
+      let r = row("База приёма", S.base) +
+        (S.hits && S.hits.length > 1 ? row("Удары, доля базы", S.hits.map(h => Math.round(h * 100) + " %").join(" / ")) : "") +
+        row(`Уровень Тянь Лун ${d.lvl}`, `×${num(d.lm)} (${pc(d.lm - 1)})`) +
+        d.parts.map(x => row(`${ATTR_NAME[x.k]} ${x.v}, оценка оружия ${x.g}`, pc(x.add))).join("") +
+        row(`${WEAPONS[S.weapon].name}: от характеристик`, `×${num(d.wm)}`);
+      if (synOn) r += row(`Синергия: Ловкость ${ATTR.agility} → ${heroAttrs().agility}`, "учтена", "good");
+      r += row("База с бонусами", `${S.base} × ${num(d.lm)} × ${num(d.wm)} = ${num(Math.round(d.one * 10) / 10)}`, "sum");
+      if (d.hits.length > 1) r += row("По ударам", `${d.hits.join(" + ")} = ${d.total}`, "sum");
+      return `<h3>Урон: ${d.total}</h3><div class="bd">${r}</div>` +
+        `<p class="note">Сверху, если идёт серия: «${PASSIVE.name}» — до +${PASSIVE.streak[PASSIVE.streak.length - 1][1]} % за удары подряд без полученного урона.</p>`;
+    }
+    if (kind === "ha") return `<h3>Стоимость: ${S.ha} ха</h3><p>Ха — запас сил на приёмы, копится ударами и восстанавливается со временем; тратится при применении.</p>` +
+      `<div class="bd">${row("Восстановление ха", synOn ? `×${num(syn.ha)} — синергия Копья Алого Заката` : "обычное", synOn ? "good" : "")}</div>`;
+    return `<h3>Концентрация</h3><p>Выдержка врага: в начале боя у всех 100, на 0 — слом и окно Кровожадной атаки.</p>` +
+      `<div class="bd">${S.concBoss ? row("У босса", `−${S.concBoss} % полоски`) : row("Обычный враг, из 100", `−${S.conc}${S.hits && S.hits.length > 1 ? " за удар" : ""}`)}</div>`;
+  }
+  function showSk2(el) {
+    sk2.innerHTML = breakdown(el.dataset.k, el.dataset.s);
+    const hb = holder.getBoundingClientRect(), eb = el.getBoundingClientRect(), tb = skt.getBoundingClientRect();
+    const w = sk2.offsetWidth || 260;
+    let left = tb.right - hb.left + 8, dir = "-6px";
+    if (left + w > hb.width - 4) { left = tb.left - hb.left - w - 8; dir = "6px"; }
+    sk2.style.left = Math.max(4, left) + "px"; sk2.style.top = Math.max(4, eb.top - hb.top - 14) + "px"; sk2.style.setProperty("--mx", dir);
+    sk2.classList.remove("show"); void sk2.offsetWidth; sk2.classList.add("show"); sk2.setAttribute("aria-hidden", "false");
+  }
+  function hideSk2() { sk2.classList.remove("show"); sk2.setAttribute("aria-hidden", "true"); }
+  // описание можно навести: курсор переходит с гнезда в окно описания — оно остаётся, цифры в нём раскрываются
+  let sktT = 0;
+  function hideSktSoon() { clearTimeout(sktT); sktT = setTimeout(hideSkt, 140); }
+  skt.addEventListener("mouseenter", () => clearTimeout(sktT));
+  skt.addEventListener("mouseleave", hideSktSoon);
+  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num"); if (n) showSk2(n); });
+  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
+  skt.addEventListener("focusin", e => { const n = e.target.closest(".num"); if (n) showSk2(n); });
   function showPassive() {
+    clearTimeout(sktT); hideSk2();
     const syn = PASSIVE.synergy, on = weapons[0] === syn.weapon, num = v => String(v).replace(".", ",");
     skt.innerHTML = `<div class="skh"><i class="ski" style="background:radial-gradient(circle at 50% 45%,#4a1414,#140808 72%)">${pas.innerHTML}</i>` +
       `<div><h3>${PASSIVE.name}</h3><div class="sks">Пассивный навык · Тянь Лун</div></div></div>` +
@@ -1050,7 +1139,7 @@ td.r { font-weight: 700; }
       `<div class="st ${on ? "on" : "off"}">${on ? `Активна: Ловкость ${HERO_AGI} → ${Math.round(HERO_AGI * syn.agi)}` : "Не активна: копьё сейчас не основное оружие"}</div></div>`;
     placeSkt(PAS_RECT);
   }
-  function hideSkt() { skt.classList.remove("show"); skt.setAttribute("aria-hidden", "true"); }
+  function hideSkt() { clearTimeout(sktT); hideSk2(); skt.classList.remove("show"); skt.setAttribute("aria-hidden", "true"); }
 
   function weaponArt() {
     wwin.forEach((win, w) => { const wp = WEAPONS[weapons[w]], [sk, skName] = wp.skills[w];
