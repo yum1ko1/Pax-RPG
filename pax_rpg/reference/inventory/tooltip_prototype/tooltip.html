@@ -760,7 +760,11 @@ td.r { font-weight: 700; }
   }
 
   function open(idx, instant) {
-    if (pinned || menuSlot >= 0) return;
+    if (menuSlot >= 0) return;
+    if (pinned) {   // закреплённое: курсор ещё в нём или не заходил — другие слоты не открывают; уже вышел — закрываем и открываем новое
+      if (inTT || !ttEntered) return;
+      clearTimeout(ttLeaveT); hide();
+    }
     clearTimeout(hideT); clearTimeout(showT); leaving = false;
     const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); };   // кольцо — только когда курсор в самом окне
     instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
