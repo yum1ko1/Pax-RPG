@@ -403,8 +403,13 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
         opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
 .mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
 /* описание приёма / пассива: та же рамка, что у мини-подсказки, шире; иконка слева от названия */
-.mini.skt { width: 300px; z-index: 8; }
-.mini.skt.show { pointer-events: auto; }
+.mini.skt { width: 300px; z-index: 8; --pgc: 201 163 92; --pgl: 212 181 125; }
+.mini.skt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
+.skt .pin { top: -10px; right: -10px; }
+.skt.arming .pin .full { animation: arm var(--pin) linear forwards; }
+.skt.pinned .pin .full { --p: 360deg; }
+.skt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
+.pas-ic { background-image: url("ui/pas_dance_s.jpg"); }
 .mini.sk2 { width: 310px; z-index: 9; }
 .skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
 .skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
@@ -412,9 +417,8 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
 .sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
 .sk2 .bd span { color: var(--muted); } .sk2 .bd b { color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.sk2 .bd .good { color: #8fe09e; }
 .sk2 .bd .sum { color: #f0cf8a; padding-top: 4px; border-top: 1px solid rgba(201, 163, 92, .25); }
-.sk2 .note { margin-top: 7px; font-size: 12px; }
+
 .skh { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-bottom: 7px; }
 .skh .ski { width: 44px; height: 44px; display: grid; place-items: center; background-position: center; background-size: cover; background-repeat: no-repeat; border: 1px solid var(--gold-dim); border-radius: 2px;
             box-shadow: 0 0 8px rgba(0, 0, 0, .6); }
@@ -426,15 +430,12 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skt .pb b { display: block; font: 600 12.5px var(--font-caps); letter-spacing: .06em; color: #f0cf8a; margin-bottom: 2px; }
 .skt .tiers { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin-top: 4px; font-size: 13px; color: var(--text); }
 .skt .tiers span:nth-child(odd) { color: var(--muted); }
-.skt .st { margin-top: 5px; font-size: 12px; }
-.skt .st.on { color: #8fe09e; } .skt .st.off { color: var(--muted); }
 .wsk { pointer-events: auto !important; cursor: pointer; z-index: 4 !important; }
 .wsk:hover { filter: brightness(1.15); }
 /* пассивный навык — в гнезде «Пас» над героем */
 .wpas { position: absolute; z-index: 4; cursor: help; display: grid; place-items: center;
         clip-path: polygon(10% 0, 90% 0, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0 90%, 0 10%);
-        background: radial-gradient(circle at 50% 45%, #4a1414, #140808 72%); }
-.wpas svg { width: 78%; height: 78%; filter: drop-shadow(0 0 4px rgba(255, 90, 70, .55)); }
+        background: url("ui/pas_dance_s.jpg") center / cover no-repeat; }
 .wpas:hover { filter: brightness(1.2); }
 .heronote { margin-top: 9px; padding: 4px 8px; font-size: 12.5px; color: #f0cf8a; border-left: 2px solid var(--gold);
             background: linear-gradient(90deg, rgba(201, 163, 92, .12), transparent); }
@@ -1010,18 +1011,18 @@ td.r { font-weight: 700; }
   const N = (kind, sk, text) => `<span class="num" data-k="${kind}" data-s="${sk}" tabindex="0">${text}</span>`;
   function skillText(sk) {
     const d = dmgCalc(sk), S = d.S;
-    const dmg = d.hits.length > 1 ? `${N("dmg", sk, d.hits.join(" + ") + " = " + d.total)}` : N("dmg", sk, d.total);
-    const ha = S.ha ? `Стоимость ${N("ha", sk, S.ha + " ха")} · откат ${S.cd} с` : `Откат ${S.cd} с`;
+    const dmg = N("dmg", sk, d.total);   // в описании — только итог; разбор — при наведении
+    const ha = S.ha ? `Стоимость ${N("ha", sk, S.ha + " ХА")} · откат ${S.cd} с` : `Откат ${S.cd} с`;
     const T = {
       sunset: [`Серия из 4 ударов по одной цели до ${S.range} м. Урон: ${dmg}.`,
                "1-й удар оглушает, 2-й отбрасывает, 3-й сбивает с ног, 4-й бьёт по лежащему.",
-               "Все 4 удара попали — концентрация Тянь Лун +50 %."],
+               "Все 4 удара попали — ХА Тянь Лун +50 %."],
       vine: [`Бросок копья по дуге до ${S.range} м; копьё возвращается в руку. Каждый враг на пути получает 2 удара — туда и обратно.`,
-             `Урон: ${dmg}, концентрация врага ${N("conc", sk, "−" + S.conc)} за каждый удар.`],
-      moon: [`Рывок на ${S.range} м сквозь цель. Урон: ${dmg}, концентрация цели ${N("conc", sk, "−" + S.conc)}.`,
-             "Если у цели концентрация ниже 33 — сразу слом и окно Кровожадной атаки."],
+             `Урон: ${dmg}, ХА врага ${N("conc", sk, "−" + S.conc)} за каждый удар.`],
+      moon: [`Рывок на ${S.range} м сквозь цель. Урон: ${dmg}, ХА цели ${N("conc", sk, "−" + S.conc)}.`,
+             "Если у цели ХА ниже 33 — сразу слом и окно Кровожадной атаки."],
       iai: [`Бьёт всех врагов в досягаемости. Урон: ${dmg} каждому.`,
-            `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % концентрации")}.`,
+            `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % ХА")}.`,
             "Удар по Тянь Лун в первые 0,6 с срывает приём."] }[sk];
     return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "");
   }
@@ -1037,7 +1038,7 @@ td.r { font-weight: 700; }
     win.innerHTML = '<div class="wicon"></div>'; stage.appendChild(win);
     const ui = document.createElement("div"); ui.className = "wui wui" + (w + 1); pct(ws.ui, ui); stage.appendChild(ui);
     const sk = document.createElement("div"); sk.className = "wsk"; sk.id = "wsk-" + w; pct(ws.sk, sk); stage.appendChild(sk);
-    sk.addEventListener("mouseenter", () => showSkill(w)); sk.addEventListener("mouseleave", hideSktSoon);
+    sk.addEventListener("mouseenter", () => showSkill(w)); sk.addEventListener("mouseleave", sktLeaveSocket);
     sk.addEventListener("click", () => { hideSkt(); if (menuClosedAt.k === 100 + w && Date.now() - menuClosedAt.t < 350) return; openWeaponMenu(w); });
     const b = document.createElement("button"); b.type = "button"; b.className = "wslot"; b.id = "wslot-" + w; pct(ws.rect, b);
     b.innerHTML = `<span class="wtag">${ws.tag}</span>`;
@@ -1057,14 +1058,12 @@ td.r { font-weight: 700; }
   swapBtn.addEventListener("click", () => { closeMenu(); chooseWeapon(0, weapons[1]); });
   stage.appendChild(swapBtn);
 
-  // гнездо «Пас» над героем — пассивный навык (пока своя эмблема: полумесяц и наконечник копья)
+  // гнездо «Пас» над героем — пассивный навык
   const PAS_RECT = [575, 163, 635, 225];
   const pas = document.createElement("div"); pas.className = "wpas"; pct(PAS_RECT, pas);
   pas.setAttribute("aria-label", "Пассивный навык: " + PASSIVE.name); pas.tabIndex = 0;
-  pas.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M27 6a15 15 0 1 0 7 22 12 12 0 1 1-7-22z" fill="#e8c27a"/>' +
-    '<path d="M12 31 29 10l1.6 1.4-17 21z" fill="#ff5a48"/><path d="M29 10l4-3-1 5z" fill="#ff8a6a"/></svg>';
-  pas.addEventListener("mouseenter", showPassive); pas.addEventListener("mouseleave", hideSktSoon);
-  pas.addEventListener("focus", showPassive); pas.addEventListener("blur", hideSkt);
+  pas.addEventListener("mouseenter", showPassive); pas.addEventListener("mouseleave", sktLeaveSocket);
+  pas.addEventListener("focus", showPassive); pas.addEventListener("blur", sktLeaveSocket);
   stage.appendChild(pas);
 
   const skt = document.getElementById("skt");
@@ -1077,35 +1076,59 @@ td.r { font-weight: 700; }
     skt.style.left = Math.max(4, left) + "px"; skt.style.top = top + "px"; skt.style.setProperty("--mx", dir);
     skt.classList.remove("show"); void skt.offsetWidth; skt.classList.add("show"); skt.setAttribute("aria-hidden", "false");
   }
-  function showSkill(w) {
-    clearTimeout(sktT); hideSk2();
-    const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
-    skt.innerHTML = `<div class="skh"><i class="ski sk-${sk}"></i><div><h3>${name}</h3>` +
-      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk) +
-      `<div class="st on">Работает, пока ${key === "spear" ? "копьё" : "катана"} — ${w ? "второе" : "основное"} оружие</div>`;
-    placeSkt(WSLOTS[w].sk);
+  // описания приёмов и пассива закрепляются как подсказка экипировки: кольцо копится, пока курсор на гнезде (1,2 с);
+  // увёл раньше — описание пропадает. Закреплённое ловит курсор (цифры раскрывают разбор), закрывается кликом в любом
+  // месте, Esc или когда курсор, зайдя в него, выйдет за рамку
+  const PIN_HTML = '<div class="pin"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>';
+  let sktT = 0, sktPinT = 0, sktPinned = false, sktEntered = false, inSkt = false;
+  function sktOpen(html, rect) {
+    if (sktPinned) { if (inSkt || !sktEntered) return; hideSkt(); }
+    clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
+    skt.innerHTML = PIN_HTML + html;
+    skt.classList.remove("arming", "pinned");
+    placeSkt(rect);
+    void skt.offsetWidth; skt.classList.add("arming");
+    sktPinT = setTimeout(pinSkt, PIN_MS);
   }
-  // разбор числа: откуда урон / ха / концентрация
+  function pinSkt() { sktPinned = true; sktEntered = inSkt; skt.classList.remove("arming"); skt.classList.add("pinned"); }
+  function sktLeaveSocket() {
+    if (sktPinned) return;
+    clearTimeout(sktPinT); clearTimeout(sktT); sktT = setTimeout(hideSkt, 30);
+  }
+  function hideSkt() {
+    clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
+    sktPinned = sktEntered = inSkt = false;
+    skt.classList.remove("show", "arming", "pinned"); skt.setAttribute("aria-hidden", "true");
+  }
+  skt.addEventListener("mouseenter", () => { inSkt = true; if (sktPinned) { sktEntered = true; clearTimeout(sktT); } });
+  skt.addEventListener("mouseleave", () => { inSkt = false; if (sktPinned && sktEntered) sktT = setTimeout(hideSkt, 150); });
+  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num"); if (n && sktPinned) showSk2(n); });
+  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
+  document.addEventListener("pointerdown", () => { if (sktPinned) hideSkt(); }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") hideSkt(); });
+
+  function showSkill(w) {
+    const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
+    sktOpen(`<div class="skh"><i class="ski sk-${sk}"></i><div><h3>${name}</h3>` +
+      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk), WSLOTS[w].sk);
+  }
+  // разбор числа: откуда урон / сколько ХА
   const sk2 = document.getElementById("sk2");
   function breakdown(kind, sk) {
-    const d = dmgCalc(sk), S = d.S, syn = PASSIVE.synergy, synOn = weapons[0] === syn.weapon;
+    const d = dmgCalc(sk), S = d.S;
     const row = (a, b, cls) => `<span${cls ? ` class="${cls}"` : ""}>${a}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b>`;
     if (kind === "dmg") {
       const pc = v => (v >= 0 ? "+" : "") + Math.round(v * 100) + " %";
       let r = row("База приёма", S.base) +
         (S.hits && S.hits.length > 1 ? row("Удары, доля базы", S.hits.map(h => Math.round(h * 100) + " %").join(" / ")) : "") +
-        row(`Уровень Тянь Лун ${d.lvl}`, `×${num(d.lm)} (${pc(d.lm - 1)})`) +
-        d.parts.map(x => row(`${ATTR_NAME[x.k]} ${x.v}, оценка оружия ${x.g}`, pc(x.add))).join("") +
-        row(`${WEAPONS[S.weapon].name}: от характеристик`, `×${num(d.wm)}`);
-      if (synOn) r += row(`Синергия: Ловкость ${ATTR.agility} → ${heroAttrs().agility}`, "учтена", "good");
-      r += row("База с бонусами", `${S.base} × ${num(d.lm)} × ${num(d.wm)} = ${num(Math.round(d.one * 10) / 10)}`, "sum");
-      if (d.hits.length > 1) r += row("По ударам", `${d.hits.join(" + ")} = ${d.total}`, "sum");
-      return `<h3>Урон: ${d.total}</h3><div class="bd">${r}</div>` +
-        `<p class="note">Сверху, если идёт серия: «${PASSIVE.name}» — до +${PASSIVE.streak[PASSIVE.streak.length - 1][1]} % за удары подряд без полученного урона.</p>`;
+        row(`Уровень Тянь Лун ${d.lvl}`, pc(d.lm - 1)) +
+        d.parts.map(x => row(`${ATTR_NAME[x.k]} ${x.v} (оценка ${x.g})`, pc(x.add))).join("");
+      if (d.hits.length > 1) r += row("По ударам", d.hits.join(" + "));
+      r += row("Итого", d.total, "sum");
+      return `<h3>Урон: ${d.total}</h3><div class="bd">${r}</div>`;
     }
-    if (kind === "ha") return `<h3>Стоимость: ${S.ha} ха</h3><p>Ха — запас сил на приёмы, копится ударами и восстанавливается со временем; тратится при применении.</p>` +
-      `<div class="bd">${row("Восстановление ха", synOn ? `×${num(syn.ha)} — синергия Копья Алого Заката` : "обычное", synOn ? "good" : "")}</div>`;
-    return `<h3>Концентрация</h3><p>Выдержка врага: в начале боя у всех 100, на 0 — слом и окно Кровожадной атаки.</p>` +
+    if (kind === "ha") return `<h3>Стоимость: ${S.ha} ХА</h3><p>Приём тратит ХА Тянь Лун — выдержку бойца: ХА уходит на удары и приёмы и восстанавливается, пока она не бьёт; на 0 — слом.</p>`;
+    return `<h3>ХА врага</h3><p>Выдержка врага: в начале боя у всех 100, на 0 — слом и окно Кровожадной атаки.</p>` +
       `<div class="bd">${S.concBoss ? row("У босса", `−${S.concBoss} % полоски`) : row("Обычный враг, из 100", `−${S.conc}${S.hits && S.hits.length > 1 ? " за удар" : ""}`)}</div>`;
   }
   function showSk2(el) {
@@ -1118,28 +1141,17 @@ td.r { font-weight: 700; }
     sk2.classList.remove("show"); void sk2.offsetWidth; sk2.classList.add("show"); sk2.setAttribute("aria-hidden", "false");
   }
   function hideSk2() { sk2.classList.remove("show"); sk2.setAttribute("aria-hidden", "true"); }
-  // описание можно навести: курсор переходит с гнезда в окно описания — оно остаётся, цифры в нём раскрываются
-  let sktT = 0;
-  function hideSktSoon() { clearTimeout(sktT); sktT = setTimeout(hideSkt, 140); }
-  skt.addEventListener("mouseenter", () => clearTimeout(sktT));
-  skt.addEventListener("mouseleave", hideSktSoon);
-  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num"); if (n) showSk2(n); });
-  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
-  skt.addEventListener("focusin", e => { const n = e.target.closest(".num"); if (n) showSk2(n); });
   function showPassive() {
-    clearTimeout(sktT); hideSk2();
-    const syn = PASSIVE.synergy, on = weapons[0] === syn.weapon, num = v => String(v).replace(".", ",");
-    skt.innerHTML = `<div class="skh"><i class="ski" style="background:radial-gradient(circle at 50% 45%,#4a1414,#140808 72%)">${pas.innerHTML}</i>` +
+    const syn = PASSIVE.synergy, num = v => String(v).replace(".", ",");
+    sktOpen(`<div class="skh"><i class="ski pas-ic"></i>` +
       `<div><h3>${PASSIVE.name}</h3><div class="sks">Пассивный навык · Тянь Лун</div></div></div>` +
       `<div class="pb"><b>Плащ по плечу</b><p>Плащи на Тянь Лун: все статы плаща ×${num(PASSIVE.cloak)}.</p></div>` +
       `<div class="pb"><b>Танец без ран</b><p>Удары подряд, пока Тянь Лун не получает урон, усиливают каждый следующий удар:</p>` +
       `<div class="tiers">${PASSIVE.streak.map(([n, d]) => `<span>больше ${n} ударов</span><span>+${d} % урона</span>`).join("")}</div>` +
       `<p style="margin-top:4px">Пропущенный удар обнуляет серию.</p></div>` +
-      `<div class="pb"><b>Синергия: ${WEAPONS[syn.weapon].name}</b><p>Когда копьё в руках (основное оружие): Ловкость ×${num(syn.agi)}, ха восстанавливается в ${num(syn.ha)} раза быстрее.</p>` +
-      `<div class="st ${on ? "on" : "off"}">${on ? `Активна: Ловкость ${HERO_AGI} → ${Math.round(HERO_AGI * syn.agi)}` : "Не активна: копьё сейчас не основное оружие"}</div></div>`;
-    placeSkt(PAS_RECT);
+      `<div class="pb"><b>Синергия: ${WEAPONS[syn.weapon].name}</b><p>Когда копьё в руках (основное оружие): Ловкость ×${num(syn.agi)}, ХА восстанавливается в ${num(syn.ha)} раза быстрее.</p></div>`,
+      PAS_RECT);
   }
-  function hideSkt() { clearTimeout(sktT); hideSk2(); skt.classList.remove("show"); skt.setAttribute("aria-hidden", "true"); }
 
   function weaponArt() {
     wwin.forEach((win, w) => { const wp = WEAPONS[weapons[w]], [sk, skName] = wp.skills[w];
