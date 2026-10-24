@@ -102,9 +102,10 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .kind .kn { display: grid; line-height: 1.15; }
 .kind .kn b { font: 700 15px var(--font-body); color: var(--text); letter-spacing: .02em; }
 .kind .kn small { font-size: 12px; color: var(--muted); }
-.lvlp { display: grid; justify-items: center; align-content: center; min-width: 54px; padding: 3px 8px 4px; border-radius: 2px; line-height: 1.05;
+.lvlp { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 8px; min-width: 108px; padding: 5px 10px; border-radius: 2px; line-height: 1.05;
         border: 1px solid var(--gold-dim); background: linear-gradient(180deg, #24170f, #140c0a); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6); }
-.lvlp small { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lvlp small { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lvlp em { grid-column: 1 / -1; text-align: center; margin-top: 2px; }
 .lvlp b { font: 700 18px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; }
 .lvlp em { font: normal 10px var(--font-body); color: #ffb3a8; }
 .lvlp.bad { border-color: #b3242b; background: linear-gradient(180deg, #3a0f10, #1c0809);
@@ -404,7 +405,7 @@ td.r { font-weight: 700; }
   // плашка уровня: золотая, если уровень героя достаточен, красная — если нет
   function lvlPlaque(item) {
     const hero = +heroIn.value, bad = item.lvl > hero;
-    return `<span class="lvlp${bad ? " bad" : ""}"><small>Треб. ур.</small><b>${item.lvl}</b>${bad ? `<em>у вас ${hero}</em>` : ""}</span>`;
+    return `<span class="lvlp${bad ? " bad" : ""}"><small>Требуется<br>уровень</small><b>${item.lvl}</b>${bad ? `<em>у вас ${hero}</em>` : ""}</span>`;
   }
   const KIND = { helmet: "Доспех · голова", chest: "Доспех · тело", gloves: "Доспех · руки", shoulders: "Доспех · плечи",
                  boots: "Доспех · ноги", cloak: "Накидка · спина", ring: "Украшение · палец", amulet: "Украшение · шея" };
