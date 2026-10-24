@@ -47,6 +47,37 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
          background: #120a0b url("inventory.jpg") center / 100% 100% no-repeat; }
 .slot { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: default; }
 .slot:hover { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); }
+/* оружие: верхнее окно — основное, среднее — второе; слои поверх макета: серый фон и оружие, сверху — кружок, гнездо
+   навыка и перемычки, вырезанные с макета; герой в центре держит основное оружие */
+.wwin { position: absolute; z-index: 1; overflow: hidden; pointer-events: none; background: url("ui/wpn_bg_s.jpg") center / cover no-repeat;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, .55); }
+.wicon { position: absolute; inset: 3% 4%; background: center / contain no-repeat; transition: opacity 220ms ease-out, transform 320ms cubic-bezier(.22, 1, .36, 1); }
+.wk-spear { background-image: url("ui/wpn_spear_s.png"); }
+.wk-katana { background-image: url("ui/wpn_katana_s.png"); }
+.wwin.out .wicon { opacity: 0; transform: translateY(var(--dy)) scale(.96); transition: opacity 170ms ease-in, transform 170ms ease-in; }
+.wui { position: absolute; z-index: 2; pointer-events: none; background: center / 100% 100% no-repeat; }
+.wui1 { background-image: url("ui/wui_1_s.png"); }
+.wui2 { background-image: url("ui/wui_2_s.png"); }
+.whero { position: absolute; z-index: 1; pointer-events: none; background: url("ui/hero_katana_s.jpg") center / 100% 100% no-repeat;
+         opacity: 0; transition: opacity 450ms ease-in-out; }
+.whero.on { opacity: 1; }
+.wslot { position: absolute; z-index: 3; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: pointer; }
+.wslot:hover, .wslot:focus-visible { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); outline: none; }
+.wslot .wtag { position: absolute; left: 6%; top: 4%; font: 600 10px var(--font-caps); letter-spacing: .12em; text-transform: uppercase;
+               color: var(--gold); text-shadow: 0 1px 3px #000, 0 0 6px #000; opacity: .9; }
+/* кнопка смены: медальон на перекладине между окнами, при смене поворачивается */
+.wswap { position: absolute; z-index: 4; width: 2.1%; aspect-ratio: 1; transform: translate(-50%, -50%); padding: 0; cursor: pointer;
+         border: 1.5px solid #d9b26a; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #3a2414, #120a0b 70%);
+         box-shadow: 0 0 0 2px rgba(10, 6, 7, .85), 0 0 10px rgba(255, 200, 120, .35); color: #f0cf8a; display: grid; place-items: center; }
+.wswap svg { width: 62%; height: 62%; transition: transform 420ms cubic-bezier(.22, 1, .36, 1); }
+.wswap:hover, .wswap:focus-visible { outline: none; border-color: #ffe3a6; box-shadow: 0 0 0 2px rgba(10, 6, 7, .85), 0 0 14px rgba(255, 210, 140, .7); }
+.wswap.turn svg { transform: rotate(180deg); }
+.mgrid.w2 { grid-template-columns: repeat(2, 1fr); }
+.mi.wmi { aspect-ratio: 3 / 4; --rc: var(--gold-dim); background: center / contain no-repeat, url("ui/wpn_bg_s.jpg") center / cover no-repeat; }
+.mi.wmi.wk-spear { background-image: url("ui/wpn_spear_s.png"), url("ui/wpn_bg_s.jpg"); }
+.mi.wmi.wk-katana { background-image: url("ui/wpn_katana_s.png"), url("ui/wpn_bg_s.jpg"); }
+.mi.wmi .wother { position: absolute; left: 4px; bottom: 4px; font: 600 9.5px var(--font-caps); letter-spacing: .08em; text-transform: uppercase;
+                  color: var(--gold); background: rgba(10, 6, 7, .8); padding: 1px 5px; border-radius: 1px; }
 .hint { position: absolute; left: 1.2%; bottom: 1.6%; font-size: 12px; color: var(--text); background: rgba(10, 6, 7, .72);
         border: 1px solid var(--gold-dim); padding: 4px 9px; border-radius: 2px; pointer-events: none; }
 
@@ -220,7 +251,7 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 .mi:hover, .mi:focus-visible { transform: translateY(-2px); outline: none;
       box-shadow: 0 0 0 1px var(--rc), 0 0 12px color-mix(in srgb, var(--rc) 70%, transparent), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); }
 .mi.eq::after { content: ""; position: absolute; inset: -4px; border: 2px solid var(--set); border-radius: 3px; box-shadow: 0 0 8px var(--set); pointer-events: none; }
-.mi.eq::before { content: "✓"; position: absolute; right: 1px; top: 0; z-index: 1; font: 700 11px var(--font-body); color: #0b1714;
+.mi.eq::before, .mi.wmi.eq::before { content: "✓"; position: absolute; right: 1px; top: 0; z-index: 1; font: 700 11px var(--font-body); color: #0b1714;
                  background: var(--set); width: 13px; height: 13px; line-height: 13px; text-align: center; border-radius: 1px; }
 .mcap { margin-top: 8px; min-height: 34px; padding-top: 6px; border-top: 1px solid rgba(201, 163, 92, .2); display: grid; gap: 1px; }
 .mcap b { color: var(--rc, var(--text)); font-size: 14px; }
@@ -279,12 +310,12 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 
 /* пропитано маной: центр — цвет редкости, рамка переливается розовым */
 @keyframes manaText { to { background-position: 300% 0; } }
-/* рамка слота с кристаллами (35): линия рамки — в 10,5 % от края картинки, поэтому картинка шире слота на 13,3 % с каждой стороны */
+/* рамка слота с кристаллами (35): у иконки в окне чуть выходит за край, в слотах и плитках — целиком внутри, чтобы рамки не наслаивались */
 .icon.mrim { position: relative; }
-.mrim::after, .mi .mr { content: ""; position: absolute; inset: -13.3%; pointer-events: none; z-index: 1;
+.mrim::after, .mi .mr { content: ""; position: absolute; inset: -3%; pointer-events: none; z-index: 1;
   background: url("ui/mana_rim_s.png") 0 0 / 100% 100% no-repeat; animation: manaRim 4s ease-in-out infinite; }
-.slotArt.mrim::after { inset: -9%; }   /* в колонке экипировки кристаллы не залезают на соседние слоты */
-@keyframes manaRim { 0%, 100% { opacity: .82; filter: brightness(1); } 50% { opacity: 1; filter: brightness(1.22) drop-shadow(0 0 4px rgba(255, 95, 208, .55)); } }
+.slotArt.mrim::after, .mi .mr { inset: 0; }   /* рамка целиком внутри плитки — тонкая, соседние рамки не наслаиваются */
+@keyframes manaRim { 0%, 100% { opacity: .7; filter: brightness(.95); } 50% { opacity: .92; filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 95, 208, .45)); } }
 /* уголки окна с кристаллами (36) и плавающие частицы маны (38) */
 .mcorners { position: absolute; inset: -52.8px -52.8px -36.2px -56.6px; pointer-events: none; z-index: 2; }
 .mcorners .c { position: absolute; width: 96px; background: center / contain no-repeat; animation: manaRim 4s ease-in-out infinite; }
@@ -380,7 +411,7 @@ td.r { font-weight: 700; }
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если держать курсор, кольцо в углу заполнится и подсказка закрепится, тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости.</p>
+    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если перевести курсор на само окно и подержать, кольцо в углу заполнится и подсказка закрепится, тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости. Оружие: верхнее окно — основное, среднее — второе; клик по окну — выбрать оружие, медальон между окнами — поменять их местами. Одно оружие не может стоять сразу в обоих слотах, герой в центре держит основное.</p>
   </div>
 
   <div class="bar">
@@ -657,7 +688,7 @@ td.r { font-weight: 700; }
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut");
   const heroIn = document.getElementById("hero"), heroOut = document.getElementById("heroOut");
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
-  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, leaving = false, suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
+  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, leaving = false, inTT = false, lastXY = [-1, -1], suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
 
   function generate() {
     const lvl = +lvlIn.value;
@@ -668,12 +699,13 @@ td.r { font-weight: 700; }
     }))));
     slotArt();
     if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
-    if (menuSlot >= 0) openMenu(menuSlot);
+    if (menuSlot >= 100) openWeaponMenu(menuSlot - 100); else if (menuSlot >= 0) openMenu(menuSlot);
   }
 
-  function sideOf(idx, w, h) {
+  function sideOf(idx, w, h) { return sideOfRect(idx >= 100 ? WSLOTS[idx - 100].rect : SLOTS[idx].rect, w, h); }
+  function sideOfRect(rect, w, h) {
     // вплотную слева от той вещи, на которую навели, — курсор переходит в окно, не задевая соседние слоты
-    const [x0, y0, x1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 6;
+    const [x0, y0, x1] = rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 6;
     let left = x0 * k - w - gap, origin = "100%";
     if (left < 8) { left = x1 * k + gap; origin = "0%"; }
     const top = Math.max(8, Math.min(Math.max(8, y0 * k - 8), H - h - 8));
@@ -715,20 +747,20 @@ td.r { font-weight: 700; }
   function pin() {
     clearTimeout(pinT);
     if (leaving) return;   // курсор уже ушёл со слота и не дошёл до окна — не закрепляем
-    pinned = true; ttEntered = false;
+    pinned = true; ttEntered = inTT;   // закрепилось под курсором — выход за рамку закроет окно
     tt.classList.remove("arming"); tt.classList.add("pinned");
   }
 
   function open(idx, instant) {
     if (pinned || menuSlot >= 0) return;
     clearTimeout(hideT); clearTimeout(showT); leaving = false;
-    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); arm(); };
+    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); };   // кольцо — только когда курсор в самом окне
     instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
   }
   function hide() {
     clearTimeout(showT); clearTimeout(pinT); hideMini();
     pinned = false;
-    tt.classList.remove("show", "pinned", "arming", "live"); tt.setAttribute("aria-hidden", "true"); current = -1;
+    tt.classList.remove("show", "pinned", "arming", "live"); tt.setAttribute("aria-hidden", "true"); current = -1; inTT = false;
   }
   function leave() {
     if (pinned) return;
@@ -775,13 +807,18 @@ td.r { font-weight: 700; }
   function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
 
   // закреплённая: курсор зашёл в подсказку и вышел за её рамку — подсказка закрывается (0,15 с на возврат)
-  // незакреплённая: курсор перешёл со слота в окно — окно остаётся, кольцо продолжает заполняться; ушёл из окна — закрывается
+  // незакреплённая: кольцо закрепления заполняется, только пока курсор в самом окне; вышел раньше — кольцо сбрасывается,
+  // окно остаётся, если курсор вернулся на слот, иначе закрывается
+  document.addEventListener("pointermove", e => { lastXY = [e.clientX, e.clientY]; }, { passive: true });
   tt.addEventListener("mouseenter", () => {
+    inTT = true;
     if (pinned) { ttEntered = true; clearTimeout(ttLeaveT); return; }
-    if (tt.classList.contains("show")) { clearTimeout(hideT); clearTimeout(showT); leaving = false; if (!tt.classList.contains("arming")) arm(); }
+    if (tt.classList.contains("show") && tt.classList.contains("live")) { clearTimeout(hideT); clearTimeout(showT); leaving = false; arm(); }
   });
   tt.addEventListener("mouseleave", e => {
+    inTT = false;
     if (pinned) { if (ttEntered) ttLeaveT = setTimeout(() => { if (pinned) hide(); }, 150); return; }
+    clearTimeout(pinT); tt.classList.remove("arming");
     if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".slot"))) leave();
   });
   tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
@@ -813,6 +850,7 @@ td.r { font-weight: 700; }
       `background-position:${x0 / (sh.w - cw) * 100}% ${y0 / (sh.h - ch) * 100}%`;
   }
   function menuCaption(btn) {
+    if (btn.dataset.w) return weaponCaption(btn.dataset.w);
     const k = menuSlot, it = bag[k].find(x => x.id === btn.dataset.id), cap = document.getElementById("mcap");
     if (!it || !cap) return;
     cap.style.setProperty("--rc", `var(${RC[it.r]})`);
@@ -827,8 +865,13 @@ td.r { font-weight: 700; }
   }
   menu.addEventListener("click", e => {
     const b = e.target.closest(".mi"); if (!b) return;
+    if (b.dataset.w) { const w = menuSlot - 100; closeMenu(); chooseWeapon(w, b.dataset.w); return; }
     const k = menuSlot; equipped[k] = b.dataset.id;
-    closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false; arm();   // кольцо закрепления идёт сразу, как только окно показалось
+    closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false;
+    requestAnimationFrame(() => {   // окно встало под курсор — кольцо пошло
+      const el = document.elementFromPoint(lastXY[0], lastXY[1]);
+      if (el && tt.contains(el)) { inTT = true; arm(); }
+    });
   });
 
   // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой; открытый список — кликом вне него;
@@ -861,6 +904,79 @@ td.r { font-weight: 700; }
     });
     stage.appendChild(b);
   });
+
+  // ── оружие: основное и второе; одно и то же оружие не может стоять в обоих слотах — выбор занятого меняет их местами
+  const WEAPONS = { spear: { name: "Копьё", attr: "Сила" }, katana: { name: "Катана", attr: "Ловкость" } };
+  const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], dy: "14px" },
+                  { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], dy: "-14px" }];
+  const HERO_PANEL = [548, 138, 938, 928], SWAP_AT = [413, 414];   // центр с героем; медальон смены — на перекладине между окнами
+  const weapons = ["spear", "katana"];                              // [основное, второе]
+  const pct = (r, el) => Object.assign(el.style, { left: r[0] / STAGE.w * 100 + "%", top: r[1] / STAGE.h * 100 + "%",
+    width: (r[2] - r[0]) / STAGE.w * 100 + "%", height: (r[3] - r[1]) / STAGE.h * 100 + "%" });
+  const hero = document.createElement("div"); hero.className = "whero"; pct(HERO_PANEL, hero); stage.appendChild(hero);
+  const wwin = WSLOTS.map((ws, w) => {
+    const win = document.createElement("div"); win.className = "wwin"; win.style.setProperty("--dy", ws.dy); pct(ws.rect, win);
+    win.innerHTML = '<div class="wicon"></div>'; stage.appendChild(win);
+    const ui = document.createElement("div"); ui.className = "wui wui" + (w + 1); pct(ws.ui, ui); stage.appendChild(ui);
+    const b = document.createElement("button"); b.type = "button"; b.className = "wslot"; b.id = "wslot-" + w; pct(ws.rect, b);
+    b.innerHTML = `<span class="wtag">${ws.tag}</span>`;
+    b.addEventListener("click", () => {
+      if (menuClosedAt.k === 100 + w && Date.now() - menuClosedAt.t < 350) return;
+      openWeaponMenu(w);
+    });
+    stage.appendChild(b);
+    return win;
+  });
+  const swapBtn = document.createElement("button");
+  swapBtn.type = "button"; swapBtn.className = "wswap"; swapBtn.title = "Поменять основное и второе оружие местами";
+  swapBtn.setAttribute("aria-label", swapBtn.title);
+  Object.assign(swapBtn.style, { left: SWAP_AT[0] / STAGE.w * 100 + "%", top: SWAP_AT[1] / STAGE.h * 100 + "%" });
+  swapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M8 4v15M4 15l4 4 4-4M16 20V5M12 9l4-4 4 4"/></svg>';
+  swapBtn.addEventListener("click", () => { closeMenu(); chooseWeapon(0, weapons[1]); });
+  stage.appendChild(swapBtn);
+
+  function weaponArt() {
+    wwin.forEach((win, w) => { win.querySelector(".wicon").className = "wicon wk-" + weapons[w];
+      document.getElementById("wslot-" + w).setAttribute("aria-label", `${WSLOTS[w].name}: ${WEAPONS[weapons[w]].name} — выбрать`); });
+    hero.classList.toggle("on", weapons[0] === "katana");
+  }
+  let swapT = 0;
+  function chooseWeapon(w, key) {
+    if (weapons[w] === key) return;
+    const other = 1 - w;
+    if (weapons[other] === key) weapons[other] = weapons[w];      // это оружие уже во втором слоте — меняем местами
+    weapons[w] = key;
+    clearTimeout(swapT);
+    wwin.forEach(win => win.classList.add("out"));
+    swapBtn.classList.toggle("turn");
+    hero.classList.toggle("on", weapons[0] === "katana");          // герой берёт в руки новое основное
+    swapT = setTimeout(() => { weaponArt(); wwin.forEach(win => win.classList.remove("out")); }, 170);
+  }
+  function openWeaponMenu(w) {
+    hide();
+    menuSlot = 100 + w;
+    menu.innerHTML = `<div class="mhead">${WSLOTS[w].name}<span>${Object.keys(WEAPONS).length} в сумке</span></div><div class="mgrid w2">` +
+      Object.keys(WEAPONS).map((key, n) => { const eq = weapons[w] === key, inOther = weapons[1 - w] === key;
+        return `<button type="button" class="mi wmi wk-${key}${eq ? " eq" : ""}" data-w="${key}" style="--n:${n}" ` +
+          `aria-label="${WEAPONS[key].name}${eq ? ", надето" : inOther ? ", во втором слоте — поменяются местами" : ""}">` +
+          `${inOther ? `<span class="wother">${w ? "Основное" : "Второе"}</span>` : ""}</button>`; }).join("") +
+      `</div><div class="mcap" id="mcap"></div>`;
+    weaponCaption(weapons[w]);
+    menu.classList.remove("show"); void menu.offsetWidth;
+    if (!narrow()) { const p = sideOfRect(WSLOTS[w].rect, menu.offsetWidth || 336, menu.offsetHeight || 320);
+      menu.style.left = p.left + "px"; menu.style.top = p.top + "px"; menu.style.setProperty("--ox", p.origin); }
+    menu.classList.add("show"); menu.setAttribute("aria-hidden", "false");
+    const eqBtn = menu.querySelector(".mi.eq"); if (eqBtn) eqBtn.focus({ preventScroll: true });
+  }
+  function weaponCaption(key) {
+    const cap = document.getElementById("mcap"), w = menuSlot - 100;
+    if (!cap || w < 0) return;
+    const state = weapons[w] === key ? "надето" : weapons[1 - w] === key ? `сейчас ${w ? "основное" : "второе"} — поменяются местами` : "";
+    cap.innerHTML = `<b>${WEAPONS[key].name}</b><span>Главный атрибут — ${WEAPONS[key].attr}${state ? " · " + state : ""}</span>`;
+  }
+  weaponArt();
+
   window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); slotArt(); closeMenu(); });
 
   document.getElementById("reroll").addEventListener("click", generate);
