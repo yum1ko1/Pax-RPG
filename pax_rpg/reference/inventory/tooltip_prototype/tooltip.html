@@ -55,6 +55,14 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .wk-spear { background-image: url("ui/wpn_spear_s.png"); }
 .wk-katana { background-image: url("ui/wpn_katana_s.png"); }
 .wwin.out .wicon { opacity: 0; transform: translateY(var(--dy)) scale(.96); transition: opacity 170ms ease-in, transform 170ms ease-in; }
+/* иконка приёма — внутри гнезда навыка (восьмиугольник со срезанными углами), поверх его тёмного дна, под золотой каймой */
+.wsk { position: absolute; z-index: 2; pointer-events: none; background: center / cover no-repeat; transition: opacity 220ms ease-out;
+       clip-path: polygon(11% 0, 89% 0, 100% 11%, 100% 89%, 89% 100%, 11% 100%, 0 89%, 0 11%); }
+.wsk.out { opacity: 0; transition: opacity 170ms ease-in; }
+.sk-sunset { background-image: url("ui/sk_sunset_s.jpg"); }
+.sk-vine { background-image: url("ui/sk_vine_s.jpg"); }
+.sk-moon { background-image: url("ui/sk_moon_s.jpg"); }
+.sk-iai { background-image: url("ui/sk_iai_s.jpg"); }
 .wui { position: absolute; z-index: 2; pointer-events: none; background: center / 100% 100% no-repeat; }
 .wui1 { background-image: url("ui/wui_1_s.png"); }
 .wui2 { background-image: url("ui/wui_2_s.png"); }
@@ -923,9 +931,11 @@ td.r { font-weight: 700; }
   });
 
   // ── оружие: основное и второе; одно и то же оружие не может стоять в обоих слотах — выбор занятого меняет их местами
-  const WEAPONS = { spear: { name: "Копьё", attr: "Сила" }, katana: { name: "Катана", attr: "Ловкость" } };
-  const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], dy: "14px" },
-                  { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], dy: "-14px" }];
+  // у каждого оружия два приёма: [когда основное, когда второе]; каждый — только своим оружием
+  const WEAPONS = { spear: { name: "Копьё", attr: "Сила", skills: [["sunset", "Алый Закат"], ["vine", "Вихрь алой лозы"]] },
+                    katana: { name: "Катана", attr: "Ловкость", skills: [["moon", "Лунный росчерк"], ["iai", "Иай: остановка времени"]] } };
+  const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], sk: [460, 333.5, 515.5, 393], dy: "14px" },
+                  { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], sk: [460, 574, 515.5, 633.5], dy: "-14px" }];
   const HERO_PANEL = [548, 138, 938, 928], SWAP_AT = [413, 414];   // центр с героем; медальон смены — на перекладине между окнами
   const weapons = ["spear", "katana"];                              // [основное, второе]
   const pct = (r, el) => Object.assign(el.style, { left: r[0] / STAGE.w * 100 + "%", top: r[1] / STAGE.h * 100 + "%",
@@ -935,6 +945,7 @@ td.r { font-weight: 700; }
     const win = document.createElement("div"); win.className = "wwin"; win.style.setProperty("--dy", ws.dy); pct(ws.rect, win);
     win.innerHTML = '<div class="wicon"></div>'; stage.appendChild(win);
     const ui = document.createElement("div"); ui.className = "wui wui" + (w + 1); pct(ws.ui, ui); stage.appendChild(ui);
+    const sk = document.createElement("div"); sk.className = "wsk"; sk.id = "wsk-" + w; pct(ws.sk, sk); stage.appendChild(sk);
     const b = document.createElement("button"); b.type = "button"; b.className = "wslot"; b.id = "wslot-" + w; pct(ws.rect, b);
     b.innerHTML = `<span class="wtag">${ws.tag}</span>`;
     b.addEventListener("click", () => {
@@ -954,8 +965,11 @@ td.r { font-weight: 700; }
   stage.appendChild(swapBtn);
 
   function weaponArt() {
-    wwin.forEach((win, w) => { win.querySelector(".wicon").className = "wicon wk-" + weapons[w];
-      document.getElementById("wslot-" + w).setAttribute("aria-label", `${WSLOTS[w].name}: ${WEAPONS[weapons[w]].name} — выбрать`); });
+    wwin.forEach((win, w) => { const wp = WEAPONS[weapons[w]], [sk, skName] = wp.skills[w];
+      win.querySelector(".wicon").className = "wicon wk-" + weapons[w];
+      document.getElementById("wsk-" + w).className = "wsk sk-" + sk;
+      const b = document.getElementById("wslot-" + w);
+      b.setAttribute("aria-label", `${WSLOTS[w].name}: ${wp.name}, приём «${skName}» — выбрать`); b.title = `${wp.name} · приём «${skName}»`; });
     hero.classList.toggle("on", weapons[0] === "katana");
   }
   let swapT = 0;
@@ -965,10 +979,10 @@ td.r { font-weight: 700; }
     if (weapons[other] === key) weapons[other] = weapons[w];      // это оружие уже во втором слоте — меняем местами
     weapons[w] = key;
     clearTimeout(swapT);
-    wwin.forEach(win => win.classList.add("out"));
+    wwin.forEach(win => win.classList.add("out")); document.querySelectorAll(".wsk").forEach(el => el.classList.add("out"));
     swapBtn.classList.toggle("turn");
     hero.classList.toggle("on", weapons[0] === "katana");          // герой берёт в руки новое основное
-    swapT = setTimeout(() => { weaponArt(); wwin.forEach(win => win.classList.remove("out")); }, 170);
+    swapT = setTimeout(() => { weaponArt(); wwin.forEach(win => win.classList.remove("out")); document.querySelectorAll(".wsk").forEach(el => el.classList.remove("out")); }, 170);
   }
   function openWeaponMenu(w) {
     hide();
@@ -990,7 +1004,9 @@ td.r { font-weight: 700; }
     const cap = document.getElementById("mcap"), w = menuSlot - 100;
     if (!cap || w < 0) return;
     const state = weapons[w] === key ? "надето" : weapons[1 - w] === key ? `сейчас ${w ? "основное" : "второе"} — поменяются местами` : "";
-    cap.innerHTML = `<b>${WEAPONS[key].name}</b><span>Главный атрибут — ${WEAPONS[key].attr}${state ? " · " + state : ""}</span>`;
+    const [, m] = WEAPONS[key].skills[0], [, sec] = WEAPONS[key].skills[1];
+    cap.innerHTML = `<b>${WEAPONS[key].name}</b><span>Главный атрибут — ${WEAPONS[key].attr}${state ? " · " + state : ""}</span>` +
+      `<span>Основным — «${m}», вторым — «${sec}»</span>`;
   }
   weaponArt();
 
