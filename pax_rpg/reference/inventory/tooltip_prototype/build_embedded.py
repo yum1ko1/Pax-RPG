@@ -5,7 +5,7 @@ def uri(path):
     ext = path.rsplit('.', 1)[1]
     return f"data:image/{'jpeg' if ext == 'jpg' else ext};base64," + base64.b64encode(open(os.path.join(d, path), 'rb').read()).decode()
 s = re.sub(r'url\("((?:ui/)?[\w_]+\.(?:png|jpg))"\)', lambda m: f'url("{uri(m.group(1))}")', s)
-s = re.sub(r'"(items(?:_gharn)?\.jpg)"', lambda m: '"' + uri(m.group(1)) + '"', s)
+s = re.sub(r'"((?:ui/[\w]+\.png)|items(?:_gharn)?\.jpg)"', lambda m: '"' + uri(m.group(1)) + '"', s)
 keys = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"]
 sti = "const STI = {" + ",".join(f'{k}:"{uri(f"ui/st_{k}_s.png")}"' for k in keys) + "};\n"
 assert 'src="ui/st_${key}_s.png"' in s

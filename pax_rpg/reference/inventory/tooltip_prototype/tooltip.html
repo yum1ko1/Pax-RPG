@@ -140,41 +140,53 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 .tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
 .tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
-/* список вещей слота */
-.menu { position: absolute; z-index: 7; width: 300px; max-height: 80%; overflow-y: auto; overscroll-behavior: contain; padding: 0;
+/* список вещей слота: сетка иконок — строки по сетам, столбцы по редкости */
+.menu { position: absolute; z-index: 7; width: 336px; padding: 0;
         border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
         filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .7)); pointer-events: none;
         opacity: 0; transform: translateY(8px) scale(.97); transform-origin: var(--ox, 100%) 10%;
         transition: opacity 110ms ease-in, transform 130ms ease-in; }
 .menu.show { opacity: 1; transform: none; pointer-events: auto; transition: opacity 180ms ease-out, transform 240ms cubic-bezier(.16, 1, .3, 1); }
-.mhead { display: flex; align-items: baseline; gap: 8px; font: 700 19px var(--font-display); color: var(--gold); padding: 2px 4px 6px; }
+.mhead { display: flex; align-items: baseline; gap: 8px; font: 700 19px var(--font-display); color: var(--gold); padding: 0 2px 4px; }
 .mhead span { margin-left: auto; font: 400 12px var(--font-body); color: var(--muted); }
-.mset { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--set); padding: 8px 4px 4px; }
-.mlist { display: grid; gap: 2px; }
-.mi { display: grid; grid-template-columns: 36px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
-      padding: 4px 6px; background: transparent; border: 1px solid transparent; border-radius: 2px; cursor: pointer; }
-.mi:hover, .mi:focus-visible { background: rgba(201, 163, 92, .1); border-color: var(--gold-dim); outline: none; }
-.mi.eq { border-color: color-mix(in srgb, var(--set) 70%, transparent); background: color-mix(in srgb, var(--set) 10%, transparent); }
-.mic { grid-row: span 2; width: 34px; height: 36px; border: 1px solid var(--rc); background-color: #120a0b; background-repeat: no-repeat; border-radius: 2px;
-       box-shadow: 0 0 6px color-mix(in srgb, var(--rc) 45%, transparent); }
-.mn { color: var(--rc); font-weight: 700; font-size: 14px; }
-.mr { color: var(--muted); font-size: 12px; }
+.mset { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--set); padding: 6px 2px 4px; }
+.mset i { width: 18px; height: 18px; background: center / contain no-repeat; }
+.mgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.mi { position: relative; aspect-ratio: 156 / 170; max-width: 100%; padding: 0; border: 1px solid var(--rc); border-radius: 2px; cursor: pointer;
+      background-color: #120a0b; background-repeat: no-repeat; box-shadow: inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent);
+      transition: transform 120ms, box-shadow 120ms; }
+.mi:hover, .mi:focus-visible { transform: translateY(-2px); outline: none;
+      box-shadow: 0 0 0 1px var(--rc), 0 0 12px color-mix(in srgb, var(--rc) 70%, transparent), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); }
+.mi.eq::after { content: ""; position: absolute; inset: -4px; border: 2px solid var(--set); border-radius: 3px; box-shadow: 0 0 8px var(--set); pointer-events: none; }
+.mi.eq::before { content: "✓"; position: absolute; right: 1px; top: 0; z-index: 1; font: 700 11px var(--font-body); color: #0b1714;
+                 background: var(--set); width: 13px; height: 13px; line-height: 13px; text-align: center; border-radius: 1px; }
+.mcap { margin-top: 8px; min-height: 34px; padding-top: 6px; border-top: 1px solid rgba(201, 163, 92, .2); display: grid; gap: 1px; }
+.mcap b { color: var(--rc, var(--text)); font-size: 14px; }
+.mcap span { color: var(--muted); font-size: 12px; }
 
-/* сет */
-.setbox { margin-top: 10px; display: grid; gap: 4px; }
-.sethead { display: flex; align-items: baseline; gap: 8px; }
-.sethead b { font-family: var(--font-display); font-size: 17px; color: var(--set); text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); }
-.sethead span { margin-left: auto; color: var(--set); font-variant-numeric: tabular-nums; font-size: 13px; }
-.dots { display: flex; gap: 6px; margin: 1px 0 3px; }
-.dots i { width: 8px; height: 8px; transform: rotate(45deg); border: 1px solid color-mix(in srgb, var(--set) 55%, transparent); }
-.dots i.on { background: var(--set); box-shadow: 0 0 6px var(--set); border-color: var(--set); }
-.dots i.me { outline: 1px solid #fff3dc; outline-offset: 2px; }
-ul.setb li { grid-template-columns: 30px 1fr; align-items: start; font-size: 13.5px; line-height: 1.3; }
-ul.setb li .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* сет: плашка с эмблемой, значки слотов, печати порогов */
+.setbox { margin-top: 10px; display: grid; gap: 6px; }
+.plaque { position: relative; height: 46px; margin: 0 -4px; border-style: solid; border-width: 10px 27px 10px 62px;
+          border-image: url("ui/set_plaque_s.png") 25 65 25 150 fill / 10px 27px 10px 62px stretch;
+          display: flex; align-items: center; gap: 8px; }
+.plaque .emb { position: absolute; left: -45px; top: -5px; width: 36px; height: 36px; background: center / contain no-repeat;
+               filter: drop-shadow(0 0 4px color-mix(in srgb, var(--set) 60%, transparent)); }
+.plaque b { font-family: var(--font-display); font-size: 16.5px; line-height: 1; color: var(--set); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); padding-left: 4px; }
+.plaque span { margin-left: auto; color: #dffbf5; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; }
+.pips { display: flex; justify-content: space-between; padding: 0 6px; }
+.pips i { width: 24px; height: 24px; background: center / contain no-repeat; opacity: .7; }
+.pips i.on { opacity: 1; }
+.pips i.me { transform: scale(1.18); filter: drop-shadow(0 0 3px #fff3dc); }
+ul.setb { gap: 4px; }
+ul.setb li { grid-template-columns: 26px 1fr; align-items: center; font-size: 13.5px; line-height: 1.3; padding: 2px 4px; }
+ul.setb li .n { width: 26px; height: 26px; display: grid; place-items: center; background: url("ui/seal_off_s.png") center / contain no-repeat;
+                font: 700 12px var(--font-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+ul.setb li.act .n { background-image: url("ui/seal_on_s.png"); color: #eafff9; text-shadow: 0 0 4px #000; }
 ul.setb li .t { color: var(--muted); }
-ul.setb li.act .n, ul.setb li.act .t { color: var(--set); }
+ul.setb li.act .t { color: var(--set); }
 ul.setb li.act .t b { color: #dffbf5; font-weight: 700; }
-ul.setb li:not(.act) { opacity: .62; }
+ul.setb li:not(.act) { opacity: .7; }
 .setnote { font-size: 12px; color: var(--muted); }
 .sub .settag { color: var(--set); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
 
@@ -303,7 +315,9 @@ td.r { font-weight: 700; }
     rows: [[8,179],[185,360],[366,528],[535,708],[714,887],[894,1118],[1124,1292],[1298,1530]] };
   const SETS = {};
   SHEET.img = "items.jpg"; SHEET_GHARN.img = "items_gharn.jpg";
-  SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "",
+  const PIPS = {}; ["helmet", "chest", "gloves", "shoulders", "boots", "cloak", "ring", "amulet"].forEach(k => {
+    PIPS[k + "_on"] = "ui/pip_" + k + "_on_s.png"; PIPS[k + "_off"] = "ui/pip_" + k + "_off_s.png"; });
+  SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "", emblem: "ui/emb_samurai_s.png",
     names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
     lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
     bonuses: [
@@ -316,7 +330,7 @@ td.r { font-weight: 700; }
       { n: 8, title: "Восход Хоэна", text: "при ОЗ ниже <b>30 %</b>: 6 с стойка не ломается, <b>+25 %</b> скорость атаки, Кровожадный удар лечит <b>15 %</b> ОЗ",
         info: "Срабатывает само, раз в 90 с. Кто пережил ночь Раскола, встречает рассвет." },
     ] };
-  SETS.gharn = { name: "Воитель песков Гхарна", sheet: SHEET_GHARN, cls: "gharn",
+  SETS.gharn = { name: "Воитель песков Гхарна", sheet: SHEET_GHARN, cls: "gharn", emblem: "ui/emb_gharn_s.png",
     names: ["Шлем Песков", "Куяк Песков", "Наручи Песков", "Оплечья Песков", "Гутулы Песков", "Бурка Песков", "Перстень Клыка", "Оберег Клыка"],
     lore: "Доспехи туменов, что идут сквозь пыльные бури плато. Хаан правит, пока побеждает — и воин тоже.",
     bonuses: [
@@ -406,13 +420,15 @@ td.r { font-weight: 700; }
       `background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - h / s) / 2) * s}px`;
   }
 
+  const PIP = ["helmet", "chest", "gloves", "shoulders", "boots", "cloak", "ring", "amulet"];
   function setBox(item, idx, next) {
     const S = SETS[item.setKey], n = setCount(item.setKey);
-    return `<div class="setbox"><div class="orn"></div>
-      <div class="sethead"><b>${S.name}</b><span>${n} / ${SLOTS.length}</span></div>
-      <div class="dots" aria-hidden="true">${SLOTS.map((_, k) => `<i class="${itemAt(k).setKey === item.setKey ? "on" : ""}${k === idx ? " me" : ""}" title="${SLOTS[k].type}"></i>`).join("")}</div>
+    return `<div class="setbox">
+      <div class="plaque"><i class="emb" style="background-image:url(${S.emblem})"></i><b>${S.name}</b><span>${n} / ${SLOTS.length}</span></div>
+      <div class="pips">${SLOTS.map((sl, k) => { const on = itemAt(k).setKey === item.setKey;
+        return `<i class="${on ? "on" : ""}${k === idx ? " me" : ""}" title="${sl.type}" style="background-image:url(${PIPS[PIP[k] + (on ? "_on" : "_off")]})"></i>`; }).join("")}</div>
       <ul class="setb">${S.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
-        `<span class="n">(${b.n})</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
+        `<span class="n">${b.n}</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
       <div class="setnote"><i>${S.lore}</i><br>Действует при любой редкости вещей сета.</div></div>`;
   }
 
@@ -544,20 +560,34 @@ td.r { font-weight: 700; }
   function openMenu(k) {
     hide();
     menuSlot = k;
-    const s = SLOTS[k];
+    const s = SLOTS[k], cur = itemAt(k);
     menu.innerHTML = `<div class="mhead">${s.type}<span>${bag[k].length} в сумке</span></div>` +
-      SET_KEYS.map(key => `<div class="mset">${SETS[key].name}</div><div class="mlist">` +
+      SET_KEYS.map(key => `<div class="mset"><i style="background-image:url(${SETS[key].emblem})"></i>${SETS[key].name}</div><div class="mgrid">` +
         bag[k].filter(it => it.setKey === key).map(it => { const eq = it.id === equipped[k];
-          return `<button type="button" class="mi${eq ? " eq" : ""}" data-id="${it.id}" style="--rc:var(${RC[it.r]})">` +
-            `<span class="mic" style="${sprite(k, it.r, SETS[key].sheet, 34, 36)}"></span>` +
-            `<span class="mn">${it.name}</span><span class="mr">${RAR[it.r].name}${eq ? " · надето" : ""}</span></button>`; }).join("") +
-        `</div>`).join("");
+          return `<button type="button" class="mi${eq ? " eq" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${eq ? ", надето" : ""}" ` +
+            `style="--rc:var(${RC[it.r]});${spriteCover(k, it.r, SETS[key].sheet)}"></button>`; }).join("") +
+        `</div>`).join("") +
+      `<div class="mcap" id="mcap" style="--rc:var(${RC[cur.r]})"><b>${cur.name}</b><span>${RAR[cur.r].name} · надето</span></div>`;
     menu.classList.remove("show"); void menu.offsetWidth;
-    if (!narrow()) { const p = sideOf(k, menu.offsetWidth || 300, Math.min(menu.scrollHeight, holder.clientHeight * 0.8));
+    if (!narrow()) { const p = sideOf(k, menu.offsetWidth || 336, menu.offsetHeight || 320);
       menu.style.left = p.left + "px"; menu.style.top = p.top + "px"; menu.style.setProperty("--ox", p.origin); }
     menu.classList.add("show"); menu.setAttribute("aria-hidden", "false");
     const eqBtn = menu.querySelector(".mi.eq"); if (eqBtn) eqBtn.focus({ preventScroll: true });
   }
+  // плитка — ячейка листа целиком (по размеру кнопки, проценты — без пересчёта при ресайзе)
+  function spriteCover(k, r, sh) {
+    const [x0, x1] = sh.cols[r], [y0, y1] = sh.rows[k], cw = x1 - x0, ch = y1 - y0;
+    return `background-image:url(${sh.img});background-size:${sh.w / cw * 100}% ${sh.h / ch * 100}%;` +
+      `background-position:${x0 / (sh.w - cw) * 100}% ${y0 / (sh.h - ch) * 100}%`;
+  }
+  function menuCaption(btn) {
+    const k = menuSlot, it = bag[k].find(x => x.id === btn.dataset.id), cap = document.getElementById("mcap");
+    if (!it || !cap) return;
+    cap.style.setProperty("--rc", `var(${RC[it.r]})`);
+    cap.innerHTML = `<b>${it.name}</b><span>${SETS[it.setKey].name} · ${RAR[it.r].name}${it.id === equipped[k] ? " · надето" : ""}</span>`;
+  }
+  menu.addEventListener("mouseover", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
+  menu.addEventListener("focusin", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
   function closeMenu() {
     if (menuSlot < 0) return;
     menuClosedAt = { k: menuSlot, t: Date.now() };
