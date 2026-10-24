@@ -23,6 +23,13 @@ RARITY = [((0.7, 0.7, 0.7), 0.0, 0.0, 0, 0),
           ((1.0, 0.22, 0.12), 0.85, 0.5, 0, 16)]
 
 
+def pulse_at(r: int, ph: float, t: float) -> float:
+    """Яркость рамки ряда r в миг t (0..1) со сдвигом фазы ph."""
+    if r == 5:                                         # мифическое — неровное мерцание, два удара за цикл
+        return 0.6 + 0.25 * math.sin(2 * math.pi * (2 * t + ph)) + 0.15 * math.sin(2 * math.pi * (5 * t + 3 * ph))
+    return 0.55 + 0.45 * math.sin(2 * math.pi * (t + ph))
+
+
 def render(src: str) -> list:
     """Кадры анимации листа (PIL RGB, размер листа)."""
     base = np.asarray(Image.open(src).convert("RGB"), np.float32) / 255
@@ -54,10 +61,7 @@ def render(src: str) -> list:
             if a_border == 0:
                 continue
             sl, ph = k["sl"], k["ph"]
-            if k["r"] == 5:                              # мифическое — неровное мерцание, два удара за цикл
-                pulse = 0.6 + 0.25 * math.sin(2 * math.pi * (2 * t + ph)) + 0.15 * math.sin(2 * math.pi * (5 * t + 3 * ph))
-            else:
-                pulse = 0.55 + 0.45 * math.sin(2 * math.pi * (t + ph))
+            pulse = pulse_at(k["r"], ph, t)
             add = k["border"] * col * (a_border * pulse)
             if a_sweep:
                 s = ((t + ph) % 1.0) * 1.6 - 0.3          # полоса света по диагонали, вне ячейки — пауза цикла
