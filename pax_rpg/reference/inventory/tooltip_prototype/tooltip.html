@@ -79,11 +79,10 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 
 .tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 0 30px 10px 0; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
-.tt.gharn .icon { background-image: url("items_gharn.jpg"); }
-.slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b url("items_gharn.jpg") no-repeat; border-radius: 2px;
+.slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b no-repeat; border-radius: 2px;
            box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 12px color-mix(in srgb, var(--rc) 55%, transparent); }
 .icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
-        background-color: #120a0b; background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
+        background-color: #120a0b; background-repeat: no-repeat; border-radius: 2px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
         text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
 .sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
@@ -141,8 +140,25 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 .tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
 .tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
-.tt .state { padding: 0 0 4px; font-size: 12px; color: var(--gold-dim); }
-.tt.pinned .state { color: var(--gold); }
+/* список вещей слота */
+.menu { position: absolute; z-index: 7; width: 300px; max-height: 80%; overflow-y: auto; overscroll-behavior: contain; padding: 0;
+        border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
+        filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .7)); pointer-events: none;
+        opacity: 0; transform: translateY(8px) scale(.97); transform-origin: var(--ox, 100%) 10%;
+        transition: opacity 110ms ease-in, transform 130ms ease-in; }
+.menu.show { opacity: 1; transform: none; pointer-events: auto; transition: opacity 180ms ease-out, transform 240ms cubic-bezier(.16, 1, .3, 1); }
+.mhead { display: flex; align-items: baseline; gap: 8px; font: 700 19px var(--font-display); color: var(--gold); padding: 2px 4px 6px; }
+.mhead span { margin-left: auto; font: 400 12px var(--font-body); color: var(--muted); }
+.mset { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--set); padding: 8px 4px 4px; }
+.mlist { display: grid; gap: 2px; }
+.mi { display: grid; grid-template-columns: 36px 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; text-align: left;
+      padding: 4px 6px; background: transparent; border: 1px solid transparent; border-radius: 2px; cursor: pointer; }
+.mi:hover, .mi:focus-visible { background: rgba(201, 163, 92, .1); border-color: var(--gold-dim); outline: none; }
+.mi.eq { border-color: color-mix(in srgb, var(--set) 70%, transparent); background: color-mix(in srgb, var(--set) 10%, transparent); }
+.mic { grid-row: span 2; width: 34px; height: 36px; border: 1px solid var(--rc); background-color: #120a0b; background-repeat: no-repeat; border-radius: 2px;
+       box-shadow: 0 0 6px color-mix(in srgb, var(--rc) 45%, transparent); }
+.mn { color: var(--rc); font-weight: 700; font-size: 14px; }
+.mr { color: var(--muted); font-size: 12px; }
 
 /* сет */
 .setbox { margin-top: 10px; display: grid; gap: 4px; }
@@ -198,33 +214,21 @@ td.r { font-weight: 700; }
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на предмет в колонке экипировки. Вещи сета показывают бонусы сета внизу подсказки. Переключатели задают, какой сет надет (Самурай Восхода Юрумы или Воитель песков Гхарна) и сколько его вещей. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
+    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если держать курсор, кольцо в углу заполнится и подсказка закрепится, тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости.</p>
   </div>
 
   <div class="bar">
     <button id="reroll" type="button">Перебросить статы</button>
     <label for="lvl">Уровень предмета <input id="lvl" type="range" min="1" max="50" value="10"> <span class="lvl" id="lvlOut">10</span></label>
-    <label for="setK">Сет
-      <select id="setK"><option value="samurai">Самурай Восхода Юрумы</option><option value="gharn">Воитель песков Гхарна</option></select>
-    </label>
-    <label for="setN">Вещей сета надето
-      <select id="setN"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option></select>
-    </label>
-    <label for="rar">Редкость
-      <select id="rar">
-        <option value="demo">как на макете</option>
-        <option value="0">обычное</option><option value="1">необычное</option><option value="2">редкое</option>
-        <option value="3">эпическое</option><option value="4">легендарное</option><option value="5">мифическое</option>
-      </select>
-    </label>
   </div>
 
   <div class="ttHolder" id="holder">
     <div class="stage" id="stage">
-      <div class="hint">Наведите на предмет экипировки и задержите курсор</div>
+      <div class="hint">Наведите на вещь — подсказка, клик — выбрать другую</div>
     </div>
     <div class="tt" id="tt" role="tooltip" aria-hidden="true"></div>
     <div class="mini" id="mini" role="tooltip" aria-hidden="true"></div>
+    <div class="menu" id="menu" role="dialog" aria-label="Выбор вещи" aria-hidden="true"></div>
   </div>
 
   <div class="ref">
@@ -298,6 +302,7 @@ td.r { font-weight: 700; }
     cols: [[12,165],[180,335],[345,509],[515,679],[685,850],[856,1016]],
     rows: [[8,179],[185,360],[366,528],[535,708],[714,887],[894,1118],[1124,1292],[1298,1530]] };
   const SETS = {};
+  SHEET.img = "items.jpg"; SHEET_GHARN.img = "items_gharn.jpg";
   SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "",
     names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
     lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
@@ -324,7 +329,6 @@ td.r { font-weight: 700; }
       { n: 8, title: "Бунчук Хаана", text: "при <b>5</b> зарядах Права сильного удар — рёв орды: враги в 4 м оглушены <b>1,5 с</b>, <b>+40</b> к их концентрации",
         info: "Заряды сгорают. Оглушённые ближе к Кровожадному удару. Раз в 30 с." },
     ] };
-  let SET = SETS.samurai;
   const MINOR = 0.45, MINOR_W = 0.6;
 
   // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
@@ -388,69 +392,82 @@ td.r { font-weight: 700; }
   const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
     `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
 
-  function setBox(idx, next) {
-    const n = setCount();
+  // вещи игрока: в тестовой версии — все вещи обоих сетов во всех редкостях; сет считается по надетым вещам
+  const SET_KEYS = ["samurai", "gharn"];
+  let bag = [];                                          // bag[k] — вещи для слота k
+  const equipped = SLOTS.map(s => `samurai-${s.demo}`);  // по умолчанию — полный сет Самурая с редкостями макета
+  const itemAt = k => bag[k].find(it => it.id === equipped[k]);
+  const setCount = key => SLOTS.reduce((n, _, k) => n + (itemAt(k).setKey === key ? 1 : 0), 0);
+
+  function sprite(slotIdx, r, sheet, w, h) {
+    const [x0, x1] = sheet.cols[r], [y0, y1] = sheet.rows[slotIdx];
+    const s = w / (x1 - x0);
+    return `background-image:url(${sheet.img});background-size:${sheet.w * s}px ${sheet.h * s}px;` +
+      `background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - h / s) / 2) * s}px`;
+  }
+
+  function setBox(item, idx, next) {
+    const S = SETS[item.setKey], n = setCount(item.setKey);
     return `<div class="setbox"><div class="orn"></div>
-      <div class="sethead"><b>${SET.name}</b><span>${n} / ${SET.names.length}</span></div>
-      <div class="dots" aria-hidden="true">${SET.names.map((_, k) => `<i class="${k < n ? "on" : ""}${k === idx ? " me" : ""}"></i>`).join("")}</div>
-      <ul class="setb">${SET.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
+      <div class="sethead"><b>${S.name}</b><span>${n} / ${SLOTS.length}</span></div>
+      <div class="dots" aria-hidden="true">${SLOTS.map((_, k) => `<i class="${itemAt(k).setKey === item.setKey ? "on" : ""}${k === idx ? " me" : ""}" title="${SLOTS[k].type}"></i>`).join("")}</div>
+      <ul class="setb">${S.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
         `<span class="n">(${b.n})</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
-      <div class="setnote"><i>${SET.lore}</i><br>Действует при любой редкости вещей сета.</div></div>`;
+      <div class="setnote"><i>${S.lore}</i><br>Действует при любой редкости вещей сета.</div></div>`;
   }
 
   function render(item, idx) {
     let i = 0;
     return `<div class="sweep"></div><div class="inner">
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
-      <header><div class="icon" style="${iconStyle(idx, item.r, item.set ? SET.sheet : SHEET)}"></div>
+      <header><div class="icon" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
-          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span>${item.set ? '<span class="settag">Сет</span>' : ""}<span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
+          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="settag">Сет</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
         <ul class="main">${item.main.map((e, j) => line(e, i++, j, "main", "")).join("")}</ul>
         <div class="branch"><div class="cap">Дополнительные</div>
           <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
-        ${item.set ? setBox(idx, () => i++) : ""}
+        ${setBox(item, idx, () => i++)}
       </div>
-      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>
-      <div class="state" id="ttState">Задержите курсор, чтобы закрепить</div></div>`;
+      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer></div>`;
   }
 
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
-  const tt = document.getElementById("tt"), mini = document.getElementById("mini");
-  const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut"), rarSel = document.getElementById("rar");
-  const setSel = document.getElementById("setN"), setKind = document.getElementById("setK");
-  const setCount = () => +setSel.value;
+  const tt = document.getElementById("tt"), mini = document.getElementById("mini"), menu = document.getElementById("menu");
+  const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut");
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
-  let items = [], current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0;
+  let current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
 
   function generate() {
-    const lvl = +lvlIn.value, forced = rarSel.value;
-    items = SLOTS.map((s, k) => {
-      const it = makeItem(s, forced === "demo" ? s.demo : +forced, lvl);
-      if (k < setCount()) { it.set = true; it.name = SET.names[k]; }
-      return it;
-    });
+    const lvl = +lvlIn.value;
+    bag = SLOTS.map((s, k) => SET_KEYS.flatMap(key => RAR.map((_, r) => {
+      const it = makeItem(s, r, lvl);
+      return Object.assign(it, { set: true, setKey: key, name: SETS[key].names[k], id: `${key}-${r}` });
+    })));
     slotArt();
     if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
+    if (menuSlot >= 0) openMenu(menuSlot);
   }
 
+  function sideOf(idx, w, h) {
+    const [x0, y0, x1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 12;
+    let left = x0 * k - w - gap, origin = "100%";
+    if (left < 8) { left = x1 * k + gap; origin = "0%"; }
+    const top = Math.max(8, Math.min(Math.max(8, y0 * k - 8), H - h - 8));
+    return { left, top, origin };
+  }
   function place(idx) {
     if (narrow()) return;
-    const [x0, y0, x1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight;
-    const k = W / STAGE.w, gap = 12, tw = tt.offsetWidth, th = tt.offsetHeight;
-    let left = x0 * k - tw - gap, origin = "100%";
-    if (left < 8) { left = x1 * k + gap; origin = "0%"; }
-    const top = Math.min(Math.max(8, y0 * k - 8), H - th - 8);
-    tt.style.left = left + "px"; tt.style.top = Math.max(8, top) + "px"; tt.style.setProperty("--ox", origin);
+    const p = sideOf(idx, tt.offsetWidth, tt.offsetHeight);
+    tt.style.left = p.left + "px"; tt.style.top = p.top + "px"; tt.style.setProperty("--ox", p.origin);
   }
 
   function fill(idx, keepShown) {
     current = idx;
-    const it = items[idx];
+    const it = itemAt(idx);
     tt.style.setProperty("--rc", `var(${RC[it.r]})`);
-    tt.classList.toggle("gharn", it.set && SET.cls === "gharn");
     tt.innerHTML = render(it, idx);
     tt.querySelectorAll("li.boost").forEach(li => { li.style.setProperty("--bc", `var(${RC[it.r]})`); li.classList.add("b" + it.r); });
     if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
@@ -467,12 +484,10 @@ td.r { font-weight: 700; }
     clearTimeout(pinT);
     pinned = true;
     tt.classList.remove("arming"); tt.classList.add("pinned");
-    const st = document.getElementById("ttState");
-    if (st) st.textContent = "Закреплено · наведите на стат, чтобы узнать, что он даёт · клик — закрыть";
   }
 
   function open(idx, instant) {
-    if (pinned) return;
+    if (pinned || menuSlot >= 0) return;
     clearTimeout(hideT); clearTimeout(showT);
     const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); arm(); };
     instant ? go() : (showT = setTimeout(go, tt.classList.contains("show") ? 40 : 110));
@@ -491,7 +506,7 @@ td.r { font-weight: 700; }
   // мини-подсказка стата (только у закреплённой)
   function showMini(li) {
     if (li.dataset.part === "set") return showSetMini(li);
-    const it = items[current], e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
+    const it = itemAt(current), e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
     let tag = "";
     if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
     else if (e.minor) tag = "Основной стат в роли дополнительного · 45 % силы";
@@ -502,7 +517,7 @@ td.r { font-weight: 700; }
     positionMini(li);
   }
   function showSetMini(li) {
-    const b = SET.bonuses[+li.dataset.j], n = setCount();
+    const key = itemAt(current).setKey, b = SETS[key].bonuses[+li.dataset.j], n = setCount(key);
     mini.style.setProperty("--bc", "var(--set)");
     mini.innerHTML = `<h3>(${b.n}) ${b.title}</h3><p>${b.text}. ${b.info}</p>` +
       `<div class="here">Нужно вещей сета: <b>${b.n}</b> · надето: <b>${n}</b></div>` +
@@ -525,20 +540,50 @@ td.r { font-weight: 700; }
   tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
   tt.addEventListener("mouseout", e => { const li = e.target.closest("li"); if (li && !li.contains(e.relatedTarget)) hideMini(); });
 
-  // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой;
+  // выпадающий список вещей слота: только вещи этого типа, по сетам
+  function openMenu(k) {
+    hide();
+    menuSlot = k;
+    const s = SLOTS[k];
+    menu.innerHTML = `<div class="mhead">${s.type}<span>${bag[k].length} в сумке</span></div>` +
+      SET_KEYS.map(key => `<div class="mset">${SETS[key].name}</div><div class="mlist">` +
+        bag[k].filter(it => it.setKey === key).map(it => { const eq = it.id === equipped[k];
+          return `<button type="button" class="mi${eq ? " eq" : ""}" data-id="${it.id}" style="--rc:var(${RC[it.r]})">` +
+            `<span class="mic" style="${sprite(k, it.r, SETS[key].sheet, 34, 36)}"></span>` +
+            `<span class="mn">${it.name}</span><span class="mr">${RAR[it.r].name}${eq ? " · надето" : ""}</span></button>`; }).join("") +
+        `</div>`).join("");
+    menu.classList.remove("show"); void menu.offsetWidth;
+    if (!narrow()) { const p = sideOf(k, menu.offsetWidth || 300, Math.min(menu.scrollHeight, holder.clientHeight * 0.8));
+      menu.style.left = p.left + "px"; menu.style.top = p.top + "px"; menu.style.setProperty("--ox", p.origin); }
+    menu.classList.add("show"); menu.setAttribute("aria-hidden", "false");
+    const eqBtn = menu.querySelector(".mi.eq"); if (eqBtn) eqBtn.focus({ preventScroll: true });
+  }
+  function closeMenu() {
+    if (menuSlot < 0) return;
+    menuClosedAt = { k: menuSlot, t: Date.now() };
+    menuSlot = -1; menu.classList.remove("show"); menu.setAttribute("aria-hidden", "true");
+  }
+  menu.addEventListener("click", e => {
+    const b = e.target.closest(".mi"); if (!b) return;
+    const k = menuSlot; equipped[k] = b.dataset.id;
+    closeMenu(); slotArt(); fill(k, false);
+  });
+
+  // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой; открытый список — кликом вне него;
   // касание стата на телефоне показывает его мини-подсказку
   document.addEventListener("pointerdown", e => {
+    if (menuSlot >= 0 && !(e.target.closest && e.target.closest("#menu"))) closeMenu();
     if (!pinned) return;
     const li = e.target.closest && e.target.closest("#tt li");
     if (li && e.pointerType !== "mouse") { showMini(li); return; }
     hide(); suppressUntil = Date.now() + 350;
   }, true);
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && current >= 0) hide(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenu(); if (current >= 0) hide(); } });
 
   SLOTS.forEach((s, idx) => {
     const b = document.createElement("button");
     b.className = "slot"; b.type = "button"; b.id = "slot-" + s.key;
-    b.setAttribute("aria-label", s.type);
+    b.setAttribute("aria-label", s.type + " — выбрать вещь");
     const [x0, y0, x1, y1] = s.rect;
     Object.assign(b.style, { left: x0 / STAGE.w * 100 + "%", top: y0 / STAGE.h * 100 + "%",
       width: (x1 - x0) / STAGE.w * 100 + "%", height: (y1 - y0) / STAGE.h * 100 + "%" });
@@ -546,33 +591,30 @@ td.r { font-weight: 700; }
     b.addEventListener("mouseleave", leave);
     b.addEventListener("focus", () => open(idx));
     b.addEventListener("blur", leave);
-    b.addEventListener("click", e => {
+    b.addEventListener("click", () => {
       if (Date.now() < suppressUntil) return;
-      if (e.pointerType && e.pointerType !== "mouse") { open(idx, true); pin(); }   // касание — сразу закрепить
-      else if (!pinned) open(idx, true);
+      if (menuClosedAt.k === idx && Date.now() - menuClosedAt.t < 350) return;   // второй клик по тому же слоту — закрыть
+      openMenu(idx);
     });
     stage.appendChild(b);
   });
-  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); slotArt(); });
+  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); slotArt(); closeMenu(); });
 
   document.getElementById("reroll").addEventListener("click", generate);
   lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
-  rarSel.addEventListener("change", generate);
-  setSel.addEventListener("change", generate);
-  setKind.addEventListener("change", () => { SET = SETS[setKind.value]; generate(); });
 
-  // иконки сета Гхарна поверх слотов макета (на макете нарисованы вещи Самурая)
+  // иконки надетых вещей поверх слотов макета
   function slotArt() {
     SLOTS.forEach((s, k) => {
-      const b = document.getElementById("slot-" + s.key); let art = b.querySelector(".slotArt");
-      const show = SET.cls === "gharn" && items[k] && items[k].set;
-      if (!show) { if (art) art.remove(); return; }
+      const b = document.getElementById("slot-" + s.key), it = itemAt(k), sh = SETS[it.setKey].sheet;
+      let art = b.querySelector(".slotArt");
       if (!art) { art = document.createElement("span"); art.className = "slotArt"; b.appendChild(art); }
-      const sh = SET.sheet, [x0, x1] = sh.cols[items[k].r], [y0, y1] = sh.rows[k];
+      const [x0, x1] = sh.cols[it.r], [y0, y1] = sh.rows[k];
       const w = b.clientWidth, h = b.clientHeight, sc = Math.max(w / (x1 - x0), h / (y1 - y0));
+      art.style.backgroundImage = `url(${sh.img})`;
       art.style.backgroundSize = `${sh.w * sc}px ${sh.h * sc}px`;
       art.style.backgroundPosition = `${-(x0 * sc - (w - (x1 - x0) * sc) / 2)}px ${-(y0 * sc - (h - (y1 - y0) * sc) / 2)}px`;
-      art.style.setProperty("--rc", `var(${RC[items[k].r]})`);
+      art.style.setProperty("--rc", `var(${RC[it.r]})`);
     });
   }
 
@@ -590,6 +632,6 @@ td.r { font-weight: 700; }
       return `<tr><td>${s.name}</td><td>${s.lo}–${s.hi}${s.pct ? " %" : ""}</td><td>${slots}</td></tr>`; }).join("");
 
   generate();
-  fill(1, false);   // при загрузке — открытая подсказка нагрудника из сета, чтобы страница не была пустой
+  fill(1, false);   // при загрузке — открытая подсказка нагрудника, чтобы страница не была пустой
 })();
 </script>
