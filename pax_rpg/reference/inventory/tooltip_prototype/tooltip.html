@@ -1,0 +1,354 @@
+<title>Подсказка предмета Pax RPG</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Макет: инвентарь игры во всю ширину, подсказка всплывает рядом со слотом; ниже — короткая справка по системе.
+   Один тёмный мир игры (лак, багрянец, старое золото), без светлой темы — как в самой игре. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0708;
+  --panel: #150d0e;
+  --panel-2: #1d1213;
+  --line: #3a2a1f;
+  --gold: #c9a35c;
+  --gold-dim: #7c6036;
+  --text: #ecdfcb;
+  --muted: #a39280;
+  --crimson: #b3242b;
+  --r0: #a4a4a4; --r1: #57c46b; --r2: #4f8dff; --r3: #b46fff; --r4: #f2b84b; --r5: #ff4436;
+  --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+  --font-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+        padding-block: 18px 40px; max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; margin: 0; letter-spacing: .02em; text-wrap: balance; }
+.lead { margin: 4px 0 0; color: var(--muted); max-width: 70ch; line-height: 1.45; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.bar label { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
+button, select { font: 500 14px var(--font-body); color: var(--text); background: var(--panel-2); border: 1px solid var(--gold-dim);
+                 border-radius: 3px; padding: 7px 12px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--gold); }
+button:focus-visible, select:focus-visible, input:focus-visible, .slot:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+input[type=range] { accent-color: var(--gold); width: 140px; }
+.lvl { font-variant-numeric: tabular-nums; color: var(--gold); min-width: 2ch; display: inline-block; }
+
+/* инвентарь */
+.stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1536 / 1024; border: 1px solid var(--line);
+         background: url("inventory.jpg") center / 100% 100% no-repeat; }
+.slot { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: default; }
+.slot:hover { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); }
+.hint { position: absolute; left: 1.2%; bottom: 1.6%; font-size: 12px; color: var(--text); background: rgba(10, 6, 7, .72);
+        border: 1px solid var(--gold-dim); padding: 4px 9px; border-radius: 2px; pointer-events: none; }
+
+/* подсказка */
+.tt { position: absolute; z-index: 5; width: 312px; max-width: calc(100% - 16px); pointer-events: none;
+      background: linear-gradient(180deg, var(--panel-2), var(--panel) 38%);
+      border: 1px solid var(--gold-dim); border-radius: 3px;
+      box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px rgba(201, 163, 92, .35), 0 18px 40px rgba(0, 0, 0, .65), 0 0 0 1px #000;
+      opacity: 0; transform: translateY(8px) scale(.965); filter: blur(3px); transform-origin: var(--ox, 100%) 20%;
+      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 120ms ease-in; }
+.tt.show { opacity: 1; transform: none; filter: none;
+           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 220ms ease-out; }
+.tt::before, .tt::after { content: ""; position: absolute; width: 9px; height: 9px; border: 1px solid var(--gold); transform: rotate(45deg);
+                          background: var(--panel); top: -5px; }
+.tt::before { left: 12px; } .tt::after { right: 12px; }
+.tt .sweep { position: absolute; inset: 0; border-radius: 3px; pointer-events: none; overflow: hidden; }
+.tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
+                     background: linear-gradient(105deg, transparent 42%, rgba(255, 230, 180, .16) 50%, transparent 58%); }
+.tt.show .sweep::before { animation: sweep 900ms 120ms cubic-bezier(.3, .6, .2, 1) both; }
+@keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
+
+.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 14px 10px; position: relative;
+             background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
+.icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
+        background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
+.name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
+        text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
+.sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+.sub .rar { color: var(--rc); letter-spacing: .05em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
+.sub .ilvl { margin-left: auto; color: var(--gold); font-variant-numeric: tabular-nums; }
+.orn { height: 11px; margin: 0 14px; position: relative; }
+.orn::before { content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 1px;
+               background: linear-gradient(90deg, transparent, var(--gold-dim) 18%, var(--gold) 50%, var(--gold-dim) 82%, transparent); }
+.orn::after { content: ""; position: absolute; left: 50%; top: 1px; width: 7px; height: 7px; margin-left: -4px; transform: rotate(45deg);
+              background: var(--panel); border: 1px solid var(--gold); }
+.orn.thin::after { display: none; }
+ul { list-style: none; margin: 0; padding: 8px 14px; display: grid; gap: 4px; }
+li { display: grid; grid-template-columns: 18px auto 1fr; align-items: center; gap: 8px; font-size: 14.5px; position: relative; padding: 2px 6px; margin: 0 -6px; border-radius: 2px; }
+li svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+li .v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+li .k { color: var(--muted); }
+ul.main li { font-size: 16px; }
+ul.main li .v { color: #fff3dc; font-size: 17px; }
+ul.main li .k { color: var(--text); }
+li.minor .v { color: var(--text); font-weight: 500; }
+li.boost { background: linear-gradient(90deg, color-mix(in srgb, var(--bc) 20%, transparent), transparent 85%); }
+li.boost .v, li.boost .k { color: var(--bc); text-shadow: 0 0 8px color-mix(in srgb, var(--bc) 60%, transparent); }
+li.boost svg { stroke: var(--bc); }
+li.boost::after { content: "✦"; position: absolute; right: 4px; color: var(--bc); font-size: 11px; text-shadow: 0 0 6px var(--bc); }
+.tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
+@keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--bc) 30%, transparent); } }
+.tt.show li { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 28ms + 90ms); }
+.tt.show li.boost { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both, glow 3.6s ease-in-out infinite;
+                    animation-delay: calc(var(--i) * 28ms + 90ms), calc(var(--i) * 28ms + 400ms); }
+@keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
+.tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* справка */
+.ref { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.card { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 3px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-size: 20px; margin: 0 0 8px; color: var(--gold); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+td.r { font-weight: 700; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 8px 0 0; }
+
+.ttHolder { position: relative; }
+@media (max-width: 760px) {
+  .tt { position: relative; left: auto !important; top: auto !important; width: auto; max-width: none; margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt, .tt.show { transform: none !important; filter: none !important; transition: opacity 120ms linear; }
+  .tt.show li, .tt.show li.boost, .tt.show .sweep::before { animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Подсказка предмета</h1>
+    <p class="lead">Наведите курсор на предмет в правой колонке экипировки или выберите слот клавишей Tab. Статы собираются генератором по примерной системе: количество и сила статов зависят от редкости, у эпических и выше часть статов усилена свечением.</p>
+  </div>
+
+  <div class="bar">
+    <button id="reroll" type="button">Перебросить статы</button>
+    <label for="lvl">Уровень предмета <input id="lvl" type="range" min="1" max="50" value="10"> <span class="lvl" id="lvlOut">10</span></label>
+    <label for="rar">Редкость
+      <select id="rar">
+        <option value="demo">как на макете</option>
+        <option value="0">обычное</option><option value="1">необычное</option><option value="2">редкое</option>
+        <option value="3">эпическое</option><option value="4">легендарное</option><option value="5">мифическое</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="ttHolder">
+    <div class="stage" id="stage">
+      <div class="hint">Наведите на предмет экипировки</div>
+    </div>
+    <div class="tt" id="tt" role="tooltip" aria-hidden="true"></div>
+  </div>
+
+  <div class="ref">
+    <div class="card">
+      <h2>Редкость</h2>
+      <div class="scroll"><table id="rarTable"></table></div>
+      <p class="note">Значения статов умножаются на множитель редкости. Усиленный стат дополнительно умножается на коэффициент свечения. Числа примерные, для настройки баланса.</p>
+    </div>
+    <div class="card">
+      <h2>Статы</h2>
+      <div class="scroll"><table id="statTable"></table></div>
+      <p class="note">Диапазоны указаны для обычного предмета 1-го уровня. Уровень предмета: числовые статы ×(1 + 0,1·(ур − 1)), проценты ×(1 + 0,03·(ур − 1)). Основной стат в роли дополнительного даёт 45% своего диапазона.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const SHEET = { w: 1024, h: 1536,
+    cols: [[16,172],[182,341],[350,508],[517,676],[684,844],[852,1010]],
+    rows: [[16,177],[185,348],[357,519],[528,691],[701,870],[878,1065],[1073,1258],[1267,1462]] };
+  const STAGE = { w: 1536, h: 1024 };
+
+  const RAR = [
+    { name: "Обычное",     mult: 1.00, main: 1, extra: 2, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 52  },
+    { name: "Необычное",   mult: 1.25, main: 1, extra: 3, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 27  },
+    { name: "Редкое",      mult: 1.55, main: 1, extra: 4, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 13  },
+    { name: "Эпическое",   mult: 1.90, main: 1, extra: 5, guar: 0, rnd: 1, chance: 0.40, boost: 1.35, drop: 6   },
+    { name: "Легендарное", mult: 2.35, main: 2, extra: 6, guar: 1, rnd: 1, chance: 0.35, boost: 1.60, drop: 1.6 },
+    { name: "Мифическое",  mult: 2.90, main: 2, extra: 6, guar: 2, rnd: 2, chance: 0.30, boost: 2.00, drop: 0.4 },
+  ];
+
+  const ICON = {
+    atk:  '<path d="M3 13 13 3M10 3h3v3M4 10l2 2M2.5 14.5l1.5-1.5"/>',
+    arm:  '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/>',
+    hp:   '<path d="M8 13.8S2 10.2 2 6.1A3 3 0 0 1 8 4.4a3 3 0 0 1 6 1.7c0 4.1-6 7.7-6 7.7z"/>',
+    ha:   '<path d="M8 2.2a5.8 5.8 0 1 0 5.8 5.8"/><path d="M8 5.2A2.8 2.8 0 1 0 10.8 8"/><path d="M13.8 2.2v3.4h-3.4"/>',
+    crit: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="2.2"/><path d="M8 .8v2.6M8 12.6v2.6M.8 8h2.6M12.6 8h2.6"/>',
+    cdmg: '<path d="M8 1.5 9.6 6l4.8.2-3.8 3 1.4 4.6L8 11.1l-4 2.7 1.4-4.6-3.8-3L6.4 6z"/>',
+    rphy: '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/><path d="M5.5 6.5l5 3M10.5 6.5l-5 3"/>',
+    rele: '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/><path d="M8 5.2c1.4 1.6 2 2.6 2 3.6a2 2 0 0 1-4 0c0-1 .6-2 2-3.6z"/>',
+    aspd: '<path d="M2 5h7M4 8h8M2 11h7"/><path d="M11 3.5 14 8l-3 4.5"/>',
+  };
+
+  // база — обычный предмет 1-го уровня; pct — проценты
+  const STATS = {
+    atk:  { name: "Атака",            lo: 2, hi: 4,  pct: false, main: true },
+    arm:  { name: "Броня",            lo: 3, hi: 6,  pct: false, main: true },
+    hp:   { name: "ОЗ",               lo: 8, hi: 15, pct: false, main: true },
+    ha:   { name: "ХА",               lo: 3, hi: 6,  pct: false, main: true },
+    crit: { name: "Шанс крита",       lo: 1, hi: 3,  pct: true },
+    cdmg: { name: "Крит. урон",       lo: 5, hi: 10, pct: true },
+    rphy: { name: "СПР физ. урону",   lo: 2, hi: 5,  pct: false },
+    rele: { name: "СПР стих. урону",  lo: 2, hi: 5,  pct: false },
+    aspd: { name: "Скорость атаки",   lo: 1, hi: 3,  pct: true },
+  };
+  const ORDER = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"];
+  const MINOR = 0.45, MINOR_W = 0.6;
+
+  // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
+  const SLOTS = [
+    { key: "helmet", type: "Шлем", main: ["atk", "arm", "hp"], w: { rele: 1.5 }, rect: [961, 210, 1086, 361], demo: 4,
+      names: ["Ржавая дзингаса", "Кабуто ополченца", "Кабуто Синего прилива", "Рогатый шлем Они", "Шлем Золотого дракона", "Корона Кровавой луны"] },
+    { key: "chest", type: "Нагрудник", main: ["arm", "hp"], w: { rphy: 2 }, rect: [1098, 210, 1224, 361], demo: 5,
+      names: ["Стёганая куртка", "Ламеллярный до", "Доспех Синей стражи", "Панцирь Аметистового демона", "Нагрудник Феникса", "Доспех Алой бездны"] },
+    { key: "gloves", type: "Перчатки", main: ["atk", "ha"], w: { crit: 2, aspd: 2, cdmg: 1.3 }, rect: [961, 372, 1086, 531], demo: 3,
+      names: ["Тканевые обмотки", "Кожаные котэ", "Латные котэ", "Когти Аметиста", "Когти Золотого дракона", "Когти Кровавой луны"] },
+    { key: "shoulders", type: "Наплечники", main: ["arm", "hp"], w: { rphy: 1.5 }, rect: [1098, 372, 1224, 531], demo: 2,
+      names: ["Кожаный наплечник", "Лёгкие содэ", "Содэ Синего прилива", "Наплечники Лика они", "Крылья Феникса", "Наплечники Черепа они"] },
+    { key: "boots", type: "Сапоги", main: ["arm", "ha"], w: { rphy: 1.3, rele: 1.3, aspd: 1.2 }, rect: [961, 542, 1086, 706], demo: 1,
+      names: ["Варадзи странника", "Кожаные таби", "Поножи Синей стражи", "Поножи Фиолетового пламени", "Поножи Золотого рассвета", "Поножи Кровавого следа"] },
+    { key: "cloak", type: "Плащ", main: ["atk", "hp", "ha"], w: { rele: 1.6 }, rect: [1098, 542, 1224, 706], demo: 0,
+      names: ["Соломенная мино", "Дорожный плащ", "Хаори Синего прилива", "Плащ Духов пламени", "Хаори Золотого дракона", "Плащ Алых лепестков"] },
+    { key: "ring", type: "Кольцо", main: ["atk", "arm", "hp", "ha"], w: { crit: 1.4, cdmg: 1.6 }, rect: [961, 716, 1086, 917], demo: 5,
+      names: ["Железное кольцо", "Нефритовое кольцо", "Сапфировое кольцо", "Шипастое кольцо Аметиста", "Кольцо Свернувшегося дракона", "Кольцо Кровавой луны"] },
+    { key: "amulet", type: "Амулет", main: ["atk", "arm", "hp", "ha"], w: { cdmg: 1.3, rele: 1.3 }, rect: [1098, 716, 1224, 917], demo: 4,
+      names: ["Деревянный омамори", "Нефритовая магатама", "Сапфировая подвеска", "Подвеска Лунного серпа", "Солнечный медальон Феникса", "Талисман Кровавой луны"] },
+  ];
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pickW = (items) => { let s = items.reduce((t, it) => t + it.w, 0), r = Math.random() * s;
+    for (const it of items) { r -= it.w; if (r <= 0) return it; } return items[items.length - 1]; };
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const lvlMult = (pct, lvl) => pct ? 1 + 0.03 * (lvl - 1) : 1 + 0.1 * (lvl - 1);
+  const roll = (key, r, lvl, minor) => {
+    const s = STATS[key]; let v = rnd(s.lo, s.hi) * RAR[r].mult * lvlMult(s.pct, lvl) * (minor ? MINOR : 1);
+    return s.pct ? Math.round(v * 10) / 10 : Math.max(1, Math.round(v));
+  };
+
+  function makeItem(slot, r, lvl) {
+    const R = RAR[r];
+    const mains = shuffle(slot.main.slice()).slice(0, R.main);
+    const main = mains.map(k => ({ key: k, v: roll(k, r, lvl, false) }));
+    let pool = ORDER.filter(k => !mains.includes(k)).map(k => ({ key: k, w: STATS[k].main ? MINOR_W : (slot.w[k] || 1) }));
+    const extra = [];
+    for (let i = 0; i < R.extra && pool.length; i++) { const it = pickW(pool); pool = pool.filter(p => p !== it); extra.push({ key: it.key, minor: !!STATS[it.key].main }); }
+    extra.forEach(e => { e.v = roll(e.key, r, lvl, e.minor); });
+    const order = shuffle(extra.map((_, i) => i));
+    let boosted = order.slice(0, R.guar);
+    order.slice(R.guar, R.guar + R.rnd).forEach(i => { if (Math.random() < R.chance) boosted.push(i); });
+    boosted.forEach(i => { const e = extra[i], s = STATS[e.key]; e.boost = true;
+      e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
+    extra.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+    const price = Math.round(12 * R.mult * R.mult * (1 + 0.15 * (lvl - 1)) * (1 + 0.25 * boosted.length));
+    return { slot, r, lvl, name: slot.names[r], main, extra, price };
+  }
+
+  const fmt = (key, v) => { const s = STATS[key];
+    return s.pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v; };
+  const RC = ["--r0", "--r1", "--r2", "--r3", "--r4", "--r5"];
+
+  function iconStyle(slotIdx, r) {
+    const [x0, x1] = SHEET.cols[r], [y0, y1] = SHEET.rows[slotIdx];
+    const s = 64 / (x1 - x0);
+    return `background-size:${SHEET.w * s}px ${SHEET.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
+  }
+  const line = (e, i, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}"><svg viewBox="0 0 16 16" aria-hidden="true">${ICON[e.key]}</svg>` +
+    `<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span></li>`;
+
+  function render(item, idx) {
+    const rc = `var(${RC[item.r]})`;
+    let i = 0;
+    return `<div class="sweep"></div>
+      <header><div class="icon" style="${iconStyle(idx, item.r)}"></div>
+        <div><p class="name">${item.name}</p>
+          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
+      <div class="orn"></div>
+      <ul class="main">${item.main.map(e => line(e, i++, "")).join("")}</ul>
+      <div class="orn thin"></div>
+      <ul>${item.extra.map(e => line(e, i++, e.minor ? "minor" : "")).join("")}</ul>
+      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>`;
+  }
+
+  const stage = document.getElementById("stage"), tt = document.getElementById("tt");
+  const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut"), rarSel = document.getElementById("rar");
+  let items = [], current = -1, showT = 0, hideT = 0;
+
+  function generate() {
+    const lvl = +lvlIn.value, forced = rarSel.value;
+    items = SLOTS.map(s => makeItem(s, forced === "demo" ? s.demo : +forced, lvl));
+    if (current >= 0) open(current, true);
+  }
+
+  function place(idx) {
+    const [x0, y0, x1, y1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight;
+    const k = W / STAGE.w, gap = 12;
+    if (window.matchMedia("(max-width: 760px)").matches) return;
+    const tw = tt.offsetWidth, th = tt.offsetHeight;
+    let left = x0 * k - tw - gap, origin = "100%";
+    if (left < 8) { left = x1 * k + gap; origin = "0%"; }
+    let top = Math.min(Math.max(8, y0 * k - 8), H - th - 8);
+    tt.style.left = left + "px"; tt.style.top = Math.max(8, top) + "px"; tt.style.setProperty("--ox", origin);
+  }
+
+  function open(idx, instant) {
+    clearTimeout(hideT); clearTimeout(showT);
+    const go = () => {
+      const same = current === idx && tt.classList.contains("show");
+      current = idx;
+      tt.style.setProperty("--rc", `var(${RC[items[idx].r]})`);
+      tt.innerHTML = render(items[idx], idx);
+      tt.querySelectorAll("li.boost").forEach(li => li.style.setProperty("--bc", `var(${RC[items[idx].r]})`));
+      if (!same) { tt.classList.remove("show"); void tt.offsetWidth; }
+      place(idx);
+      tt.classList.add("show"); tt.setAttribute("aria-hidden", "false");
+    };
+    instant ? go() : (showT = setTimeout(go, tt.classList.contains("show") ? 40 : 110));
+  }
+  function close() {
+    clearTimeout(showT);
+    hideT = setTimeout(() => { tt.classList.remove("show"); tt.setAttribute("aria-hidden", "true"); current = -1; }, 90);
+  }
+
+  SLOTS.forEach((s, idx) => {
+    const b = document.createElement("button");
+    b.className = "slot"; b.type = "button"; b.id = "slot-" + s.key;
+    b.setAttribute("aria-label", s.type);
+    const [x0, y0, x1, y1] = s.rect;
+    Object.assign(b.style, { left: x0 / STAGE.w * 100 + "%", top: y0 / STAGE.h * 100 + "%",
+      width: (x1 - x0) / STAGE.w * 100 + "%", height: (y1 - y0) / STAGE.h * 100 + "%" });
+    b.addEventListener("mouseenter", () => open(idx));
+    b.addEventListener("mouseleave", close);
+    b.addEventListener("focus", () => open(idx));
+    b.addEventListener("blur", close);
+    b.addEventListener("click", () => open(idx, true));
+    stage.appendChild(b);
+  });
+  window.addEventListener("resize", () => { if (current >= 0) place(current); });
+
+  document.getElementById("reroll").addEventListener("click", generate);
+  lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
+  rarSel.addEventListener("change", generate);
+
+  // справочные таблицы
+  const pct = v => v.toString().replace(".", ",");
+  document.getElementById("rarTable").innerHTML =
+    "<tr><th>Редкость</th><th>Осн.</th><th>Доп.</th><th>Усилено</th><th>Множ.</th><th>Свечение</th><th>Выпадение</th></tr>" +
+    RAR.map((R, i) => `<tr><td class="r" style="color:var(${RC[i]})">${R.name}</td><td>${R.main}</td><td>${R.extra}</td>` +
+      `<td>${R.guar ? R.guar + " гарант." : ""}${R.guar && R.rnd ? " + " : ""}${R.rnd ? R.rnd + " × " + Math.round(R.chance * 100) + " %" : ""}${!R.guar && !R.rnd ? "—" : ""}</td>` +
+      `<td>×${pct(R.mult.toFixed(2))}</td><td>${R.boost > 1 ? "×" + pct(R.boost.toFixed(2)) : "—"}</td><td>${pct(R.drop)} %</td></tr>`).join("");
+  document.getElementById("statTable").innerHTML =
+    "<tr><th>Стат</th><th>Диапазон</th><th>Основной у слотов</th></tr>" +
+    ORDER.map(k => { const s = STATS[k];
+      const slots = SLOTS.filter(sl => sl.main.includes(k)).map(sl => sl.type).join(", ") || "только доп.";
+      return `<tr><td>${s.name}</td><td>${s.lo}–${s.hi}${s.pct ? " %" : ""}</td><td>${slots}</td></tr>`; }).join("");
+
+  generate();
+  open(0, true);
+})();
+</script>
