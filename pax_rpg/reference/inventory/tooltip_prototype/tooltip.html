@@ -191,6 +191,10 @@ ul.setb li.act .t { color: var(--set); }
 ul.setb li.act .t b { color: #dffbf5; font-weight: 700; }
 ul.setb li:not(.act) { opacity: .7; }
 .setnote { font-size: 12px; color: var(--muted); }
+/* лор сета — в своей рамке (временно — рамка мини-подсказки; своя рамка — ui/frame_lore_s.png, когда будет) */
+.lore { margin: 2px 0 0; padding: 0; border-style: solid; border-width: 12px; border-image: url("ui/frame_mini_s.png") 28 fill / 12px stretch;
+        font: italic 500 13px/1.45 var(--font-body); color: #d9c7a8; text-align: center; }
+.lore::before, .lore::after { content: "❖"; color: var(--gold-dim); font-style: normal; font-size: 10px; margin: 0 6px; vertical-align: 1px; }
 .sub .settag { color: var(--set); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
 
 /* мини-подсказка стата */
@@ -432,7 +436,8 @@ td.r { font-weight: 700; }
         return `<i class="${on ? "on" : ""}${k === idx ? " me" : ""}" title="${sl.type}" style="background-image:url(${PIPS[PIP[k] + (on ? "_on" : "_off")]})"></i>`; }).join("")}</div>
       <ul class="setb">${S.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
         `<span class="n">${b.n}</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
-      <div class="setnote"><i>${S.lore}</i><br>Действует при любой редкости вещей сета.</div></div>`;
+      <div class="lore">${S.lore}</div>
+      <div class="setnote">Действует при любой редкости вещей сета.</div></div>`;
   }
 
   function render(item, idx) {
