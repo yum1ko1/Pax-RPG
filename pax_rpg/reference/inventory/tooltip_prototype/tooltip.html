@@ -46,38 +46,37 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 
 /* подсказка */
 .tt { position: absolute; z-index: 5; width: 316px; max-width: calc(100% - 16px); pointer-events: none;
-      background: linear-gradient(180deg, var(--panel-2), var(--panel) 38%);
-      border: 1px solid var(--gold-dim); border-radius: 3px;
-      box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px rgba(201, 163, 92, .35), 0 18px 40px rgba(0, 0, 0, .65), 0 0 0 1px #000;
-      opacity: 0; transform: translateY(8px) scale(.965); filter: blur(3px); transform-origin: var(--ox, 100%) 20%;
-      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 120ms ease-in, border-color 200ms, box-shadow 300ms; }
-.tt.show { opacity: 1; transform: none; filter: none;
-           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 220ms ease-out, border-color 200ms, box-shadow 300ms; }
-.tt.pinned { pointer-events: auto; border-color: var(--gold); cursor: pointer;
-             box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px rgba(201, 163, 92, .6), 0 18px 40px rgba(0, 0, 0, .65), 0 0 18px rgba(201, 163, 92, .25), 0 0 0 1px #000; }
-.tt::before, .tt::after { content: ""; position: absolute; width: 9px; height: 9px; border: 1px solid var(--gold); transform: rotate(45deg);
-                          background: var(--panel); top: -5px; }
-.tt::before { left: 12px; } .tt::after { left: 50%; margin-left: -5px; }
-.tt .sweep { position: absolute; inset: 0; border-radius: 3px; pointer-events: none; overflow: hidden; }
+      border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
+      border-image: url("ui/frame_main_s.png") 70 70 48 75 fill / 52.8px 52.8px 36.2px 56.6px stretch;
+      filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7));
+      opacity: 0; transform: translateY(8px) scale(.965); transform-origin: var(--ox, 100%) 20%;
+      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 300ms; }
+.tt.show { opacity: 1; transform: none;
+           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 300ms; }
+.tt.pinned { pointer-events: auto; cursor: pointer;
+             filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 10px rgba(201, 163, 92, .35)); }
+.tt .inner { margin: -30px -36px -18px -40px; position: relative; }   /* содержимое заходит под широкие уголки рамки */
+.tt .sweep { position: absolute; inset: -40px -40px -24px -44px; pointer-events: none; overflow: hidden; }
 .tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
                      background: linear-gradient(105deg, transparent 42%, rgba(255, 230, 180, .16) 50%, transparent 58%); }
 .tt.show .sweep::before { animation: sweep 900ms 120ms cubic-bezier(.3, .6, .2, 1) both; }
 .tt.pinned .sweep::before { animation: sweep 700ms 0ms cubic-bezier(.3, .6, .2, 1) both; }
 @keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
 
-/* кольцо фиксации */
-.pin { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; }
-.pin svg { width: 24px; height: 24px; transform: rotate(-90deg); }
-.pin .track { fill: rgba(10, 6, 7, .7); stroke: rgba(201, 163, 92, .3); stroke-width: 2; }
-.pin .prog { fill: none; stroke: var(--gold); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 56.55; stroke-dashoffset: 56.55; }
-.tt.arming .pin .prog { animation: arm var(--pin) linear forwards; }
-@keyframes arm { to { stroke-dashoffset: 0; } }
-.pin .seal { position: absolute; inset: 6px; transform: rotate(45deg) scale(0); background: var(--gold); border-radius: 1px; transition: transform 220ms cubic-bezier(.3, 1.6, .5, 1); }
-.tt.pinned .pin .prog { stroke-dashoffset: 0; }
-.tt.pinned .pin .seal { transform: rotate(45deg) scale(1); }
-.tt.pinned .pin { filter: drop-shadow(0 0 5px rgba(201, 163, 92, .7)); }
+/* кольцо фиксации: гнездо нарисовано в рамке, поверх — заполняемое кольцо и печать */
+.pin { position: absolute; top: 3px; right: 5px; width: 23px; height: 23px; }   /* по центру гнезда рамки */
+.pin i { position: absolute; inset: -1px; background: center / contain no-repeat; }
+.pin .empty { background-image: url("ui/ring_empty_s.png"); }
+.pin .full { background-image: url("ui/ring_full_s.png"); --p: 0deg;
+             -webkit-mask: conic-gradient(#000 var(--p), transparent 0); mask: conic-gradient(#000 var(--p), transparent 0); }
+@property --p { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.tt.arming .pin .full { animation: arm var(--pin) linear forwards; }
+@keyframes arm { from { --p: 0deg; } to { --p: 360deg; } }
+.pin .seal { background-image: url("ui/ring_seal_s.png"); transform: scale(.4); opacity: 0; transition: transform 240ms cubic-bezier(.3, 1.6, .5, 1), opacity 120ms; }
+.tt.pinned .pin .full { --p: 360deg; }
+.tt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
 
-.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 40px 10px 14px; position: relative;
+.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 0 30px 10px 0; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
 .icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
         background-color: #120a0b; background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
@@ -86,40 +85,42 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
 .sub .rar { color: var(--rc); letter-spacing: .05em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
 .sub .ilvl { margin-left: auto; color: var(--gold); font-variant-numeric: tabular-nums; }
-.orn { height: 11px; margin: 0 14px; position: relative; }
-.orn::before { content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 1px;
-               background: linear-gradient(90deg, transparent, var(--gold-dim) 18%, var(--gold) 50%, var(--gold-dim) 82%, transparent); }
-.orn::after { content: ""; position: absolute; left: 50%; top: 1px; width: 7px; height: 7px; margin-left: -4px; transform: rotate(45deg);
-              background: var(--panel); border: 1px solid var(--gold); }
+.orn { height: 14px; margin: 0 -6px; background: url("ui/div_header_s.png") center / 100% 100% no-repeat; }
 
 /* статы: основные — узлы древа, дополнительные — ветки со сдвигом вправо */
-.stats { padding: 8px 14px 10px; display: grid; gap: 2px; }
-.cap { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-dim); margin: 2px 0 3px; }
+.stats { padding: 8px 0 10px; display: grid; gap: 2px; }
+.cap { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); margin: 2px 0 4px; padding-bottom: 6px;
+       background: url("ui/div_section_s.png") left bottom / 150px 8px no-repeat; }
 ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-li { display: grid; grid-template-columns: 16px auto 1fr auto; align-items: center; gap: 8px; position: relative;
+li { display: grid; grid-template-columns: 18px auto 1fr auto; align-items: center; gap: 8px; position: relative;
      padding: 2px 6px; border-radius: 2px; font-size: 14.5px; }
-li svg.si { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+li img.si { width: 18px; height: 18px; object-fit: contain; }
 li .v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 li .k { color: var(--muted); }
 li .mark { color: transparent; font-size: 11px; }
 ul.main { margin-left: 12px; }
 ul.main li { font-size: 16px; padding-left: 14px; }
-ul.main li::before { content: ""; position: absolute; left: -6px; top: 50%; width: 8px; height: 8px; margin-top: -5px;
-                     transform: rotate(45deg); border: 1px solid var(--gold); background: color-mix(in srgb, var(--rc) 55%, var(--panel)); }
+ul.main li::before { content: ""; position: absolute; left: -10px; top: 50%; width: 15px; height: 16px; margin-top: -8px;
+                     background: url("ui/node_main_s.png") center / contain no-repeat; filter: drop-shadow(0 0 4px var(--rc)); }
+ul.main li::after { content: ""; position: absolute; left: -10px; top: 50%; width: 15px; height: 16px; margin-top: -8px; opacity: .75;
+                    background: var(--rc); mix-blend-mode: color;
+                    -webkit-mask: url("ui/node_main_s.png") center / contain no-repeat; mask: url("ui/node_main_s.png") center / contain no-repeat; }
 ul.main li .v { color: #fff3dc; font-size: 17px; }
 ul.main li .k { color: var(--text); }
 .branch { margin-left: 13px; position: relative; padding-top: 6px; }
 .branch .cap { margin-left: 24px; }
 ul.tree { position: relative; }
 ul.tree li { margin-left: 24px; }
-ul.tree li::before { content: ""; position: absolute; left: -24px; top: 50%; width: 18px; height: 1px; background: var(--gold-dim); }
+ul.tree li::before { content: ""; position: absolute; left: -24px; top: 50%; width: 22px; height: 6px; margin-top: -3px;
+                     background: linear-gradient(var(--gold-dim), var(--gold-dim)) left center / 17px 1px no-repeat,
+                                 url("ui/node_bead_s.png") right center / 6px 6px no-repeat; }
 ul.tree li::after { content: ""; position: absolute; left: -24px; top: -3px; bottom: -3px; width: 1px; background: var(--gold-dim); }
 ul.tree li:first-child::after { top: -30px; }
 ul.tree li:last-child::after { bottom: 50%; }
 li.minor .v { color: var(--text); font-weight: 500; }
 li.boost { background: linear-gradient(90deg, color-mix(in srgb, var(--bc) 20%, transparent), transparent 85%); }
 li.boost .v, li.boost .k { color: var(--bc); text-shadow: 0 0 8px color-mix(in srgb, var(--bc) 60%, transparent); }
-li.boost svg.si { stroke: var(--bc); }
+li.boost img.si { filter: drop-shadow(0 0 4px var(--bc)); }
 li.boost .mark { color: var(--bc); text-shadow: 0 0 6px var(--bc); }
 .tt.pinned li:hover { background-color: rgba(201, 163, 92, .12); }
 .tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
@@ -128,19 +129,19 @@ li.boost .mark { color: var(--bc); text-shadow: 0 0 6px var(--bc); }
 .tt.show li.boost { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both, glow 3.6s ease-in-out infinite;
                     animation-delay: calc(var(--i) * 28ms + 90ms), calc(var(--i) * 28ms + 400ms); }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
+.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
 .tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
-.tt .state { padding: 0 14px 10px; font-size: 12px; color: var(--gold-dim); }
+.tt .state { padding: 0 0 4px; font-size: 12px; color: var(--gold-dim); }
 .tt.pinned .state { color: var(--gold); }
 
 /* мини-подсказка стата */
-.mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 10px 12px 11px;
-        background: var(--panel-2); border: 1px solid var(--gold); border-radius: 3px;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, .6), inset 0 0 0 2px var(--panel);
+.mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 0;
+        border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
+        filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .65));
         opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
 .mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
 .mini h3 { margin: 0 0 4px; display: flex; gap: 7px; align-items: center; font: 700 15px var(--font-body); color: var(--text); }
-.mini h3 svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mini h3 img { width: 22px; height: 22px; object-fit: contain; }
 .mini p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
 .mini .here { margin-top: 7px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
 .mini .tag { margin-top: 5px; font-size: 12px; color: var(--bc, var(--gold)); }
@@ -309,7 +310,7 @@ td.r { font-weight: 700; }
 
   const fmt = (key, v) => STATS[key].pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v;
   const RC = ["--r0", "--r1", "--r2", "--r3", "--r4", "--r5"];
-  const svg = (key, cls) => `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICON[key]}</svg>`;
+  const svg = (key, cls) => `<img class="${cls}" src="ui/st_${key}_s.png" alt="">`;
 
   function iconStyle(slotIdx, r) {
     const [x0, x1] = SHEET.cols[r], [y0, y1] = SHEET.rows[slotIdx];
@@ -321,8 +322,8 @@ td.r { font-weight: 700; }
 
   function render(item, idx) {
     let i = 0;
-    return `<div class="sweep"></div>
-      <div class="pin" title="Закрепление"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="track" cx="12" cy="12" r="9"/><circle class="prog" cx="12" cy="12" r="9"/></svg><div class="seal"></div></div>
+    return `<div class="sweep"></div><div class="inner">
+      <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon" style="${iconStyle(idx, item.r)}"></div>
         <div><p class="name">${item.name}</p>
           <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
@@ -334,7 +335,7 @@ td.r { font-weight: 700; }
           <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
       </div>
       <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>
-      <div class="state" id="ttState">Задержите курсор, чтобы закрепить</div>`;
+      <div class="state" id="ttState">Задержите курсор, чтобы закрепить</div></div>`;
   }
 
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
