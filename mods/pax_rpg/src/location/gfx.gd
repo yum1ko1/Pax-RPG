@@ -4,7 +4,9 @@ extends Node
 ##  • отражённый свет: SDFGI (каскады вокруг камеры) + SSIL — стены подсвечивают землю, под навесами не плоско;
 ##  • TAA вместо MSAA (листва, черепица, блики без ряби; SSAO/SSR/SSIL чище) или FSR2; debanding — небо без полос;
 ##  • солнце: мягкие тени с размытием по угловому размеру диска (PCSS), атлас крупнее — на время локации;
-##  • тени фонарей и костров: тени — у ближайших к камере lamp_shadows огней, набор меняется на ходу;
+##  • тени фонарей и костров: тени — у ближайших к камере lamp_shadows огней (не больше 20 — ёмкость атласа), набор
+##    меняется на ходу; жители и враги дают тень от char_shadows_n ближних огней (двойники «только тень», _twin_make) —
+##    у остальных тень из кэша;
 ##  • туман: анизотропия к солнцу (лучи видны против света), гуще у земли;
 ##  • камера: автоэкспозиция (из тени на солнце глаз привыкает), лёгкая размытость дальнего плана;
 ##  • проба отражений переснимается со сменой часа — ночью стёкла не отражают день;
@@ -38,7 +40,7 @@ var probe: ReflectionProbe
 var daynight: DayNight
 var _fplus := false
 var _shadow_t := 0.0
-var _dyn_t := 0.0
+var _dyn_t := 0.33
 var _probe_step := -1
 var _rim: DirectionalLight3D
 const RIM_LAYER := 1 << 19          # слой видимости 20 — только герой, на него светит контровой свет
@@ -49,6 +51,17 @@ const LOD_LAYER := 1 << 17          # слой 18 — LOD-копии постр�
 const SWAY_LAYER := 1 << 16         # слой 17 — полотнища на ветру (flag.gdshader, TIME): тень от солнца; от огня — только
                                     # рядом с героем (там тень огня и так перерисовывается — герой в её радиусе двигается)
 const LAMP_SKIP := LOD_LAYER | SWAY_LAYER
+## Но маска теней не спасает кэш от жителей и врагов: «грязной» тень огня делает любая сетка с тенью, что двигается
+## в его шаре и стоит с ним в паре, а пару держит light_cull_mask, не shadow_caster_mask (renderer_scene_cull.cpp:
+## _instance_pair, _update_instance → make_shadow_dirty; скелет двигается от клипа — и стоя на месте). Поэтому ночью
+## сетки жителей, врагов и фигур города сами тени не дают, а тень — у их двойника «только тень» на слое CHAR_LAYER
+## (тот же меш, скин, скелет и материалы; _twin_make). Его видят солнце (луна) и char_shadows_n ближних к камере огней
+## (_char_lamps), остальным огням слой не дан ни в свете, ни в тени — их тени из кэша.
+const CHAR_LAYER := 1 << 15         # слой 16 — двойники «только тень» жителей, врагов и фигур города
+## В атласе тень omni-огня — две ячейки (полусферы): четверти 0–1 по 4 ячейки 1024² — 4 огня, 2–3 по 16 ячеек 512² —
+## 16 огней. Больше 20 теней огней в атлас не входит: лишние огни с тенью оставались без неё (ячейку получал тот, кто
+## раньше попросил, а не ближний) — набор ограничен ёмкостью, и тени — у ближних.
+const LAMP_SHADOW_CAP := 20
 var _sh_fading: Array = []         # огни, у которых сила тени ещё в пути к цели (_fade_shadows — каждый кадр)
 var _time := 0.0                   # время ветра для шейдеров; иай замораживает этот узел — и трава замирает
 var _saved := {}
@@ -152,10 +165,34 @@ func apply_viewport(v: SubViewport) -> void:
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
-	# тени огней по уровням качества: 8 ближних (крупных на экране) — 1024², ещё 32 — 512²; дальше тень мягчеет
-	# и бледнеет (_lamp_shadows), но огонь не гаснет и тень не пропадает рывком
+	# тени огней по уровням качества: 4 крупных на экране — 1024², ещё 16 — 512² (LAMP_SHADOW_CAP); дальше тень
+	# мягчеет и бледнеет (_lamp_shadows), но огонь не гаснет и тень не пропадает рывком
 	for q: int in 4:
 		v.set_positional_shadow_atlas_quadrant_subdiv(q, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_4 if q < 2 else Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_16)
+	_apply_vrs(v)
+
+
+## Переменная частота затенения (VRS, текстурой): vrs — доля полуэкрана (эллипс от центра), где каждый пиксель
+## затеняется сам; за ним — один расчёт на 2×2 пикселя (края кадра чуть мягче). 0 — выкл. (по умолчанию: картинку
+## по краям меняет — решение автора). Карта статична: строится один раз, движок растягивает её на кадр.
+func _apply_vrs(v: SubViewport) -> void:
+	var r := _f("vrs", 0.0)
+	if r <= 0.0:
+		v.vrs_mode = Viewport.VRS_DISABLED
+		return
+	var w := 160
+	var h := 90
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var coarse := Color8(85, 85, 0)                      # 2×2 (1×1 — чёрный, Image.create уже залил)
+	for y: int in h:
+		var dy := (y + 0.5) / h * 2.0 - 1.0
+		for x: int in w:
+			var dx := (x + 0.5) / w * 2.0 - 1.0
+			if dx * dx + dy * dy > r * r:
+				img.set_pixel(x, y, coarse)
+	v.vrs_texture = ImageTexture.create_from_image(img)
+	v.vrs_update_mode = Viewport.VRS_UPDATE_ONCE
+	v.vrs_mode = Viewport.VRS_TEXTURE
 
 
 ## Апскейл FSR 2 режимами, как у DLSS (DLSS в Godot недоступен — закрытая библиотека NVIDIA, нужен C++-модуль движка):
@@ -463,6 +500,7 @@ func restore_globals() -> void:
 
 
 func _exit_tree() -> void:
+	_closing = true                                      # локация уходит целиком: двойники уйдут вместе с видом
 	_exit_tree_signals()
 	restore_globals()
 	leave_frame_limits()
@@ -475,19 +513,27 @@ func _process(delta: float) -> void:
 	_time += delta
 	now = _time
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_time", _time)
+	# редкие обходы — в разных кадрах (_dyn_t, _part_t стартуют со сдвигом): вместе они складывались в один длинный кадр
 	_shadow_t -= delta
 	if _shadow_t <= 0.0:
 		_shadow_t = 0.5
+		var tl := Time.get_ticks_usec()
 		_lamp_shadows()
+		Prof.peak("графика: тени огней", tl)
 	_fade_shadows(delta)
 	_dyn_t -= delta
 	if _dyn_t <= 0.0:
 		_dyn_t = 1.0
+		var td := Time.get_ticks_usec()
 		_mark_dynamic()
+		Prof.peak("графика: тела", td)
 	_part_t -= delta
 	if _part_t <= 0.0:
 		_part_t = 0.5
+		var tp := Time.get_ticks_usec()
 		_cull_particles()
+		Prof.peak("графика: частицы", tp)
+	_twin_tick()
 	_refresh_probe()
 	_rim_follow()
 	_camera_lens(delta)
@@ -516,7 +562,7 @@ static func _reaches_view(ol: OmniLight3D, frustum: Array[Plane]) -> bool:
 
 
 func _lamp_shadows() -> void:
-	var n := int(_f("lamp_shadows_n", 40))
+	var n := mini(int(_f("lamp_shadows_n", 40)), LAMP_SHADOW_CAP)
 	if lights.is_empty() or not is_instance_valid(cam):
 		return
 	if not _fogs_made:
@@ -524,15 +570,23 @@ func _lamp_shadows() -> void:
 	var hp := player.global_position if is_instance_valid(player) else cam.global_position
 	var frustum := cam.get_frustum()
 	var near: Array = []
+	var lit := false                                    # горит ли хоть один огонь (ночь) — нужны ли двойники
 	for l: Array in lights:
 		var ol := l[0] as OmniLight3D
 		if not is_instance_valid(ol):
+			continue
+		if not ol.visible:                               # погашен (днём — все): ни тени, ни проверок ниже
+			ol.set_meta("pax_rpg_sh_want", false)
+			ol.set_meta("pax_rpg_in_view", false)
 			continue
 		if not ol.has_meta("pax_rpg_lamp"):              # параметры — один раз: каждое присваивание пересчитывает свет
 			ol.set_meta("pax_rpg_lamp", true)
 			ol.light_size = 0.12                         # мягкий край тени фонаря
 			ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # подсвечивает воздух рядом, а не туманный шар
-			ol.shadow_caster_mask &= ~LAMP_SKIP          # без LOD-копий и полотнищ (своё исключение каменного фонаря — остаётся)
+			# без LOD-копий, полотнищ и двойников (двойники — у ближних, _char_lamps); своё исключение каменного
+			# фонаря — остаётся
+			ol.shadow_caster_mask &= ~(LAMP_SKIP | CHAR_LAYER)
+			ol.light_cull_mask &= ~CHAR_LAYER
 		# по расстоянию до героя, а не по кадру: тень огня за краем кадра всё равно лежит в кадре, а проверка «в кадре»
 		# от покачивания камеры включала и выключала тени — они прыгали. Яркость — базовая (без мерцания огня)
 		var dh := ol.global_position.distance_to(hp)
@@ -546,9 +600,10 @@ func _lamp_shadows() -> void:
 			ol.shadow_caster_mask ^= SWAY_LAYER
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
+		lit = lit or e > 0.12
 		var seen := _reaches_view(ol, frustum)
 		ol.set_meta("pax_rpg_in_view", seen)
-		if ol.visible and e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0 and seen:
+		if e > (0.05 if ol.shadow_enabled else 0.12) and d < 90.0 and seen:
 			near.append([d, ol])
 		else:
 			ol.set_meta("pax_rpg_sh_want", false)
@@ -568,10 +623,10 @@ func _lamp_shadows() -> void:
 			so.shadow_opacity = 0.0
 			so.shadow_enabled = true
 		if so.shadow_enabled and not w and not bool(so.get_meta("pax_rpg_in_view", true)):
-			so.shadow_enabled = false                      # свет ушёл из кадра — гасить тень плавно некому смотреть
+			_shadow_off(so)                              # свет ушёл из кадра — гасить тень плавно некому смотреть
 			continue
 		if so.shadow_enabled and not w and so.shadow_opacity <= 0.001:
-			so.shadow_enabled = false                      # уже погасла (или не успела разгореться)
+			_shadow_off(so)                              # уже погасла (или не успела разгореться)
 			continue
 		if so.shadow_enabled:
 			var dh := so.global_position.distance_to(hp)
@@ -579,21 +634,35 @@ func _lamp_shadows() -> void:
 			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
 			if not is_equal_approx(bl, so.shadow_blur):   # присваивание пересчитывает свет — только при смене ступени
 				so.shadow_blur = bl
-			var to := snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0
+			var full := snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0
+			so.set_meta("pax_rpg_sh_full", full)
+			var to := 0.0 if so.has_meta("pax_rpg_ch_dip") else full   # гаснет ради смены слоя двойников
 			so.set_meta("pax_rpg_sh_to", to)
 			if not is_equal_approx(to, so.shadow_opacity) and not _sh_fading.has(so):
 				_sh_fading.append(so)                      # к цели — плавно, каждый кадр (_fade_shadows)
 			# lamp_dp_far > 0: дальше стольких метров от героя тень огня — две полусферы (2 прохода вместо 6 у куба;
-			# мягкая и бледная вдали, но на крупных плоских гранях полусферы чуть кривят тень) — по умолчанию выкл.
+			# на крупных плоских гранях полусферы чуть кривят тень) — по умолчанию выкл.: тень из кэша перерисовывается
+			# редко (смена ячейки атласа, включение), и проходы куба почти ничего не стоят; читается тень одинаково —
+			# движок и куб переписывает в атлас полусферами (copy_cubemap_to_dp)
 			var dp := so.omni_shadow_mode == OmniLight3D.SHADOW_DUAL_PARABOLOID
 			var want_dp := dpf > 0.0 and dh > (dpf if dp else dpf + 5.0)
 			if want_dp != dp:
 				so.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID if want_dp else OmniLight3D.SHADOW_CUBE
+	_twins_set(lit and n > 0 and int(_f("char_shadows_n", 4)) >= 0)
+	_char_lamps(hp)
+
+
+static func _shadow_off(so: OmniLight3D) -> void:
+	so.shadow_enabled = false
+	for k: StringName in [&"pax_rpg_ch_dip", &"pax_rpg_ch_up", &"pax_rpg_ch_t"]:
+		if so.has_meta(k):
+			so.remove_meta(k)
 
 
 ## Сила тени огня — к цели на 0.8 в секунду (от нуля до полной ~1.25 с), каждый кадр и только у тех, что в пути.
 ## Раньше шаг считался от длины кадра (~0.013 с), а звался раз в 0.5 с: тень разгоралась и гасла около минуты,
 ## и выбывшие из ближних огни столько же держали включённую тень (лишние проходы). Сила тени её не перерисовывает.
+## Смена слоя двойников при живых в шаре огня (_char_lamps) — быстрее (2.5 в с): погасла, слой сменился, разгорелась.
 func _fade_shadows(delta: float) -> void:
 	if _sh_fading.is_empty():
 		return
@@ -605,12 +674,24 @@ func _fade_shadows(delta: float) -> void:
 		if not so.shadow_enabled:
 			continue
 		var to := float(so.get_meta("pax_rpg_sh_to", 0.0))
-		var o := move_toward(so.shadow_opacity, to, minf(delta, 0.1) * 0.8)
+		var dip := so.has_meta("pax_rpg_ch_dip")
+		var rate := 2.5 if dip or so.has_meta("pax_rpg_ch_up") else 0.8
+		var o := move_toward(so.shadow_opacity, to, minf(delta, 0.1) * rate)
 		so.shadow_opacity = o
+		if dip and o <= 0.001:
+			_char_bits(so, bool(so.get_meta("pax_rpg_ch_dip")))
+			so.remove_meta("pax_rpg_ch_dip")
+			so.set_meta("pax_rpg_ch_up", true)
+			so.set_meta("pax_rpg_sh_to", float(so.get_meta("pax_rpg_sh_full", 0.0)))
+			keep.append(so)
+			continue
 		if not is_equal_approx(o, to):
 			keep.append(so)
-		elif to <= 0.0 and not bool(so.get_meta("pax_rpg_sh_want", false)):
-			so.shadow_enabled = false
+			continue
+		if so.has_meta("pax_rpg_ch_up"):
+			so.remove_meta("pax_rpg_ch_up")
+		if to <= 0.0 and not bool(so.get_meta("pax_rpg_sh_want", false)):
+			_shadow_off(so)
 	_sh_fading = keep
 
 
@@ -619,7 +700,7 @@ func _fade_shadows(delta: float) -> void:
 ## дальше PART_FAR м от камеры прячутся (спрятанные не считаются), ближе — возвращаются. Прячем только свои
 ## (метка pax_rpg_culled), чужие скрытые не трогаем. Список узлов обновляется раз в 5 с.
 const PART_FAR := 45.0
-var _part_t := 0.0
+var _part_t := 0.17
 var _parts: Array = []
 var _parts_age := 99.0
 
@@ -665,6 +746,271 @@ func _mark_dynamic() -> void:
 						gi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 					if c == player and (gi.layers & RIM_LAYER) == 0:
 						gi.layers |= RIM_LAYER
+	if _twins_on:                                        # раз в 3 с — новые жители и враги, надетое на них
+		_twin_scan += 1
+		if _twin_scan >= 3:
+			_twin_scan = 0
+			_twin_enqueue()
+
+
+## Тени жителей, врагов и фигур города от огней: у char_shadows_n ближних к камере огней с тенью и у тех, в чьём
+## шаре стоит герой (их тень и так перерисовывается каждый кадр — герой в радиусе двигается), слой двойников есть и в
+## свете (пара «свет — сетка»), и в маске теней; у остальных — нет ни там, ни там: идущие мимо не сбивают кэш их тени.
+## Без щелчка: в шаре огня никого (или тени не видно) — слой меняется сразу; кто-то стоит — ждём char_shadow_wait с,
+## что отойдёт, потом тень огня гаснет (_fade_shadows), слой меняется в нуле и тень разгорается снова.
+func _char_lamps(hp: Vector3) -> void:
+	if not _twins_on:
+		return                                           # двойников нет — слой огням ничего не меняет
+	var cn := int(_f("char_shadows_n", 4))
+	var cp := cam.global_position
+	var cand: Array = []
+	for l: Array in lights:
+		var ol := l[0] as OmniLight3D
+		if is_instance_valid(ol) and ol.shadow_enabled:
+			var has := (ol.light_cull_mask & CHAR_LAYER) != 0
+			cand.append([ol.global_position.distance_to(cp) - (3.0 if has else 0.0), ol])   # запас 3 м — без дёрганья
+	cand.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	for i: int in cand.size():
+		var ol := cand[i][1] as OmniLight3D
+		var has := (ol.light_cull_mask & CHAR_LAYER) != 0
+		var want := i < cn or ol.global_position.distance_to(hp) < ol.omni_range + (2.5 if has else 1.5)
+		if ol.has_meta("pax_rpg_ch_dip"):
+			ol.set_meta("pax_rpg_ch_dip", want)          # уже гаснет ради смены — в нуле встанет то, что нужно сейчас
+			continue
+		if want == has:
+			if ol.has_meta("pax_rpg_ch_t"):
+				ol.remove_meta("pax_rpg_ch_t")
+			continue
+		if ol.shadow_opacity < 0.02 or not _chars_in(ol):
+			_char_bits(ol, want)                         # тени не видно или в шаре никого — смена незаметна
+			if ol.has_meta("pax_rpg_ch_t"):
+				ol.remove_meta("pax_rpg_ch_t")
+			continue
+		var t := float(ol.get_meta("pax_rpg_ch_t", 0.0)) + 0.5
+		ol.set_meta("pax_rpg_ch_t", t)
+		if t >= _f("char_shadow_wait", 3.0):
+			ol.remove_meta("pax_rpg_ch_t")
+			ol.set_meta("pax_rpg_ch_dip", want)
+			ol.set_meta("pax_rpg_sh_to", 0.0)
+			if not _sh_fading.has(ol):
+				_sh_fading.append(ol)
+
+
+## Слой двойников — в свет огня (пара: двойники в его шаре делают тень «грязной») и в маску теней (рисуются в ней).
+## Только вместе: в маске без пары тень двойника застыла бы с прошлой перерисовки.
+static func _char_bits(ol: OmniLight3D, on: bool) -> void:
+	if on:
+		ol.light_cull_mask |= CHAR_LAYER
+		ol.shadow_caster_mask |= CHAR_LAYER
+	else:
+		ol.light_cull_mask &= ~CHAR_LAYER
+		ol.shadow_caster_mask &= ~CHAR_LAYER
+
+
+## Стоит ли в шаре огня кто-то с двойником (его тень щёлкнула бы при смене слоя).
+func _chars_in(ol: OmniLight3D) -> bool:
+	var c := ol.global_position
+	var r := ol.omni_range + 0.8
+	for b: Variant in _twin_bodies:
+		if not is_instance_valid(b):
+			continue
+		var bn := b as Node3D
+		if bn.is_visible_in_tree() and (bn.global_position + Vector3(0.0, 0.9, 0.0)).distance_squared_to(c) < r * r:
+			return true
+	return false
+
+
+## Двойники «только тень» (см. CHAR_LAYER). Двойник — в своём узле вида (не внутри модели: обходы модели — растворение,
+## разрез, поиск сеток — его не видят), положение — от RemoteTransform3D на оригинале (движок, без скрипта в кадре),
+## видимость — по сигналу оригинала, меш и материалы (растворение павшего) сверяются по кусочку в кадр (_twin_tick).
+## Только ночью (горят огни с тенью): днём выигрыша нет, а скин двойника считается отдельно (вычислительный шейдер).
+var _twins_on := false
+var _twin_root: Node3D
+var _twins: Array = []              # [оригинал, двойник, RemoteTransform3D, Callable видимости, Callable ухода, тень, id]
+var _twin_of := {}                  # id оригинала → запись _twins
+var _twin_bodies: Array = []        # персонажи с двойниками — кто стоит в шаре огня (_chars_in)
+var _twin_queue: Array = []         # персонажи, которых ещё обойти: по одному в кадр, без рывка
+var _twin_i := 0                    # сверка с оригиналами — по 12 записей в кадр
+var _twin_scan := 0
+var _closing := false
+
+
+func _twins_set(on: bool) -> void:
+	if on == _twins_on:
+		return
+	_twins_on = on
+	if on:
+		_twin_enqueue()
+		return
+	_twin_queue.clear()
+	for e: Array in _twins:
+		_twin_undo(e)
+	_twins.clear()
+	_twin_of.clear()
+	_twin_bodies.clear()
+
+
+## Персонажи: тела в виде, кроме героя (он всегда у камеры — огни вокруг него перерисовываются и так), фигуры города с
+## анимацией (торговцы, буйволы — city.gd AnimLod) и зрители арены (подпрыгивают — arena.gd Crowd).
+func _twin_enqueue() -> void:
+	if not is_instance_valid(view):
+		return
+	_twin_bodies = _twin_bodies.filter(func(b: Variant) -> bool: return is_instance_valid(b))
+	for c: Node in view.get_children():
+		if c is CharacterBody3D and c != player:
+			_twin_push(c)
+	var al := view.get_node_or_null(^"City/AnimLod")
+	var items: Variant = al.get("items") if al != null else null
+	if items is Array:
+		for it: Variant in items:
+			if it is Array and (it as Array).size() > 1:
+				_twin_push((it as Array)[1])
+	var stage := view.get_node_or_null(^"ArenaStage")
+	if stage != null:
+		for c: Node in stage.get_children():
+			var fans: Variant = c.get("fans")
+			if fans is Array:
+				for f: Variant in fans:
+					if f is Array and not (f as Array).is_empty():
+						_twin_push((f as Array)[0])
+
+
+func _twin_push(b: Variant) -> void:
+	if is_instance_valid(b) and b is Node3D and not _twin_queue.has(b):
+		_twin_queue.append(b)
+
+
+func _twin_tick() -> void:
+	if not _twins_on:
+		return
+	if not _twin_queue.is_empty():
+		var b: Variant = _twin_queue.pop_back()
+		if is_instance_valid(b):
+			_twin_body(b as Node3D)
+	var cnt := _twins.size()
+	var k := 0
+	while k < 12 and cnt > 0:
+		k += 1
+		_twin_i = (_twin_i + 1) % cnt
+		var e: Array = _twins[_twin_i]
+		if not is_instance_valid(e[0]) or not is_instance_valid(e[1]):
+			_twin_undo(e)
+			_twins.remove_at(_twin_i)
+			cnt -= 1
+			continue
+		_twin_sync(e)
+
+
+func _twin_body(b: Node3D) -> void:
+	if not b.is_inside_tree():
+		return
+	if not _twin_bodies.has(b):
+		_twin_bodies.append(b)
+	for n: Node in b.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh != null and mi.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF and mi.is_inside_tree() \
+				and not _twin_of.has(mi.get_instance_id()):
+			_twin_make(mi)
+
+
+func _twin_make(mi: MeshInstance3D) -> void:
+	if not is_instance_valid(_twin_root):
+		_twin_root = Node3D.new()
+		_twin_root.name = "PaxRpgCharShadows"
+		view.add_child(_twin_root)
+	var tw := MeshInstance3D.new()
+	tw.skeleton = NodePath()                             # путь к скелету — уже в дереве (иначе «..» — корень двойников)
+	tw.mesh = mi.mesh
+	var sk: Skeleton3D = null
+	var sr := mi.get_skin_reference()
+	if sr != null:
+		sk = mi.get_node_or_null(mi.skeleton) as Skeleton3D
+		tw.skin = sr.get_skin()                          # тот же Skin — та же связка скелета (Skeleton3D.register_skin)
+	tw.material_override = mi.material_override
+	tw.material_overlay = mi.material_overlay
+	for s: int in mi.get_surface_override_material_count():
+		tw.set_surface_override_material(s, mi.get_surface_override_material(s))
+	tw.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	tw.layers = CHAR_LAYER
+	tw.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	tw.lod_bias = mi.lod_bias
+	tw.extra_cull_margin = mi.extra_cull_margin
+	tw.custom_aabb = mi.custom_aabb
+	tw.visibility_range_begin = mi.visibility_range_begin
+	tw.visibility_range_begin_margin = mi.visibility_range_begin_margin
+	tw.visibility_range_end = mi.visibility_range_end
+	tw.visibility_range_end_margin = mi.visibility_range_end_margin
+	tw.visibility_range_fade_mode = mi.visibility_range_fade_mode
+	tw.visible = mi.is_visible_in_tree()
+	_twin_root.add_child(tw)
+	if sk != null:
+		tw.skeleton = tw.get_path_to(sk)
+	tw.global_transform = mi.global_transform
+	var rt := RemoteTransform3D.new()
+	rt.name = "PaxRpgShadowTwin"
+	mi.add_child(rt)
+	rt.remote_path = rt.get_path_to(tw)
+	var id := mi.get_instance_id()
+	var cv := _twin_vis.bind(mi, tw)
+	var cg := _twin_gone.bind(id)
+	mi.visibility_changed.connect(cv)
+	mi.tree_exiting.connect(cg)
+	var e: Array = [mi, tw, rt, cv, cg, mi.cast_shadow, id]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_twins.append(e)
+	_twin_of[id] = e
+
+
+func _twin_vis(mi: Variant, tw: Variant) -> void:
+	if is_instance_valid(mi) and is_instance_valid(tw) and (mi as Node3D).is_inside_tree():
+		(tw as Node3D).visible = (mi as Node3D).is_visible_in_tree()
+
+
+## Оригинал уходит из дерева (освобождён или переносится): тень — снова его, двойник — вон; перенесённый найдёт обход.
+func _twin_gone(id: int) -> void:
+	if _closing:
+		return
+	var e: Variant = _twin_of.get(id)
+	if e is Array:
+		_twin_undo(e as Array)
+
+
+func _twin_undo(e: Array) -> void:
+	_twin_of.erase(int(e[6]))
+	var mv: Variant = e[0]
+	if is_instance_valid(mv):
+		var mi := mv as MeshInstance3D
+		if mi.visibility_changed.is_connected(e[3]):
+			mi.visibility_changed.disconnect(e[3])
+		if mi.tree_exiting.is_connected(e[4]):
+			mi.tree_exiting.disconnect(e[4])
+		if mi.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			mi.cast_shadow = int(e[5]) as GeometryInstance3D.ShadowCastingSetting
+	for i: int in [1, 2]:
+		var nv: Variant = e[i]
+		if is_instance_valid(nv) and not (nv as Node).is_queued_for_deletion():
+			(nv as Node).queue_free()
+	e[0] = null
+	e[1] = null
+
+
+## Меш, материалы (растворение павшего, разрез) и видимость двойника — как у оригинала.
+static func _twin_sync(e: Array) -> void:
+	var mi := e[0] as MeshInstance3D
+	var tw := e[1] as MeshInstance3D
+	if tw.mesh != mi.mesh:
+		tw.mesh = mi.mesh
+	if tw.material_override != mi.material_override:
+		tw.material_override = mi.material_override
+	if tw.material_overlay != mi.material_overlay:
+		tw.material_overlay = mi.material_overlay
+	for s: int in mini(mi.get_surface_override_material_count(), tw.get_surface_override_material_count()):
+		var m := mi.get_surface_override_material(s)
+		if tw.get_surface_override_material(s) != m:
+			tw.set_surface_override_material(s, m)
+	var v := mi.is_visible_in_tree()
+	if tw.visible != v:
+		tw.visible = v
 
 
 ## Каждые полчаса мира проба отражений переснимается (сдвиг на миллиметр — Godot снимает её заново).

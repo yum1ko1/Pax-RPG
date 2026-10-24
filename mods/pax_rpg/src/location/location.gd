@@ -668,7 +668,7 @@ func _game_3d(on: bool) -> void:
 ## Пока герой в городе, они спрятаны; новые, что игра откроет под нами, прячутся раз в 0.5 с (_under_t); на выходе
 ## возвращаются только те, что спрятали мы. Слои выше нашего (консоль, экран загрузки) не трогаем — их видно.
 var _hidden_2d: Array = []
-var _under_t := 0.0
+var _under_t := 0.25                 # со сдвигом от стриминга текстур (_stream_t, тоже раз в 0.5 с) — не в одном кадре
 
 
 func _game_2d(on: bool) -> void:
@@ -683,12 +683,28 @@ func _game_2d(on: bool) -> void:
 
 func _hide_under() -> void:
 	var root := get_tree().root
-	for n: Node in root.find_children("*", "CanvasLayer", true, false):
+	var found: Array = []
+	_layers_outside(root, found)
+	for n: Variant in found:
 		var cl := n as CanvasLayer
-		if cl == self or not cl.visible or cl.layer >= layer or cl.get_viewport() != root or is_ancestor_of(cl):
+		if not cl.visible or cl.layer >= layer or cl.get_viewport() != root:
 			continue
 		cl.visible = false
 		_hidden_2d.append(cl)
+
+
+## Слои CanvasLayer всего дерева, кроме ветки самой локации: в ней ~8 тыс. узлов 3D-вида, а её слои и так не трогаем.
+## Обход root.find_children шёл и по ним — раз в 0.5 с ~2–3 мс в одном кадре (замер на 10 тыс. узлов: 2.75 → 0.16 мс).
+func _layers_outside(n: Node, out: Array) -> void:
+	for c: Node in n.get_children():
+		if c == self:
+			continue
+		if c is CanvasLayer:
+			out.append(c)
+		if c.is_ancestor_of(self):
+			_layers_outside(c, out)                      # ветка с локацией — по шагу вниз, мимо неё самой
+		else:
+			out.append_array(c.find_children("*", "CanvasLayer", true, false))
 
 
 ## Всё построено и трава встала — локацию можно показывать.
@@ -721,6 +737,48 @@ func _warmup() -> void:
 	Rift.warm(mod, _view, at - Vector3(0.0, 1.0, 0.0))   # «Разлом»: трещины, шипы, их шейдеры — сейчас, а не рывком в бою
 	if is_instance_valid(_iai):
 		_iai.warmup(at)
+	# растворение павшего врага (body_fx.gdshader — с первым павшим; и в тени: тело с ним её отбрасывает), сияние
+	# маны финала серии (_mana_burst) и алый блик по краям экрана (_flash_tick) — тоже раньше компилировались рывком
+	# в первом бою
+	var warm: Array = []
+	var dis: Shader = mod.shader(Goblin.BodyFx.SHADER)
+	if dis != null:
+		var dm := ShaderMaterial.new()
+		dm.shader = dis
+		warm.append([dm, true])
+	if bool(hero_cfg.get("mana_fx", false)):
+		if _vfx == null:
+			_vfx = Vfx.new(mod)
+		var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+		warm.append([_vfx._glow_mat(Color(float(col[0]), float(col[1]), float(col[2])), 1.8), false])
+	_flash_warm = true
+	_combo_flash_node().visible = true                 # прозрачный (tint.a = 0): виден только компилятору
+	_warm_quads(at, warm)
+
+
+## Крохотные квадраты с материалами mats ([материал, с тенью]) перед камерой на два кадра — шейдеры и конвейеры
+## (и тени, где она есть) компилируются под экраном загрузки; затем убираются (и блик боя прячется).
+func _warm_quads(at: Vector3, mats: Array) -> void:
+	var made: Array = []
+	for it: Array in mats:
+		var mi := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(0.05, 0.05)
+		mi.mesh = q
+		mi.material_override = it[0] as Material
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if bool(it[1]) else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_view.add_child(mi)
+		mi.global_position = at
+		made.append(mi)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	for mi: Variant in made:
+		if is_instance_valid(mi):
+			(mi as Node).queue_free()
+	_flash_warm = false
+	if is_instance_valid(_cflash) and _flash_t <= 0.0:
+		_cflash.visible = false
+
 
 func clear() -> void:
 	_build_gen += 1                                  # недостроенный город бросает стройку
@@ -2598,6 +2656,7 @@ func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
 ## на миг уже кадр и крен. Ничего не забирает управление: только смещение вокруг камеры игрока, гаснет само.
 var _cflash: ColorRect
 var _flash_t := 0.0
+var _flash_warm := false
 var _fov_punch := 0.0
 var _combo_cam := 0.0
 
@@ -2645,8 +2704,19 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.
 func _flash_tick(delta: float) -> void:
-	if _flash_t <= 0.0 and not is_instance_valid(_cflash):
+	# погас — без записи в материал каждый такт; на прогреве (_warmup) его не прячем, пока не нарисован
+	if _flash_t <= 0.0 and (not is_instance_valid(_cflash) or not _cflash.visible or _flash_warm):
 		return
+	_combo_flash_node()
+	_flash_t = maxf(0.0, _flash_t - delta)
+	var a := _flash_t / maxf(_hf("fx_flash_time", 0.22), 0.01)
+	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+	(_cflash.material as ShaderMaterial).set_shader_parameter("tint", Color(float(col[0]), float(col[1]), float(col[2]), a * a))
+	_cflash.visible = a > 0.001
+
+
+## Слой алого блика (один на локацию; прогрев — _warmup).
+func _combo_flash_node() -> ColorRect:
 	if not is_instance_valid(_cflash):
 		_cflash = ColorRect.new()
 		_cflash.name = "PaxRpgComboFlash"
@@ -2659,11 +2729,7 @@ func _flash_tick(delta: float) -> void:
 		_cflash.material = m
 		add_child(_cflash)
 		move_child(_cflash, _box.get_index() + 1 if is_instance_valid(_box) else 0)
-	_flash_t = maxf(0.0, _flash_t - delta)
-	var a := _flash_t / maxf(_hf("fx_flash_time", 0.22), 0.01)
-	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
-	(_cflash.material as ShaderMaterial).set_shader_parameter("tint", Color(float(col[0]), float(col[1]), float(col[2]), a * a))
-	_cflash.visible = a > 0.001
+	return _cflash
 
 
 const FLASH := """shader_type canvas_item;
@@ -3477,6 +3543,7 @@ func _process(delta: float) -> void:
 		var t0 := Time.get_ticks_usec()
 		Assets.stream_tick(mod, _cam.global_position)        # полные текстуры — только вблизи камеры
 		Prof.add("стриминг", t0)
+		Prof.peak("стриминг", t0)                            # обход всех точек моделей — разом, раз в 0.5 с
 	if active and not paused():
 		_talk_scan(delta)
 	if active and is_instance_valid(_hud):
@@ -3488,7 +3555,9 @@ func _process(delta: float) -> void:
 		_under_t -= delta
 		if _under_t <= 0.0:
 			_under_t = 0.5
+			var tu := Time.get_ticks_usec()
 			_hide_under()
+			Prof.peak("слои игры под локацией", tu)
 
 
 var _inv_hides_view := false
