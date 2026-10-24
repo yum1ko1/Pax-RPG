@@ -166,10 +166,13 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 
 /* сет: плашка с эмблемой, значки слотов, печати порогов */
 .setbox { margin-top: 10px; display: grid; gap: 6px; }
-.plaque { position: relative; height: 46px; margin: 0 -4px; border-style: solid; border-width: 10px 27px 10px 62px;
-          border-image: url("ui/set_plaque_s.png") 25 65 25 150 fill / 10px 27px 10px 62px stretch;
-          display: flex; align-items: center; gap: 8px; }
-.plaque .emb { position: absolute; left: -45px; top: -5px; width: 36px; height: 36px; background: center / contain no-repeat;
+/* плашка из трёх частей: края с гнездом и орнаментом — без растяжения, тянется только середина */
+.plaque { position: relative; height: 46px; margin: 0 -4px; padding: 0 36px 0 66px; display: flex; align-items: center; gap: 8px;
+          background-image: url("ui/plaque_L_s.png"), url("ui/plaque_R_s.png"), url("ui/plaque_M_s.png");
+          background-repeat: no-repeat; background-size: auto 100%, auto 100%, 100% 100%;
+          background-position: left top, right top, 0 0;
+          background-origin: border-box, border-box, content-box; background-clip: border-box, border-box, content-box; }
+.plaque .emb { position: absolute; left: 23px; top: 7px; width: 32px; height: 32px; background: center / contain no-repeat; border-radius: 50%;
                filter: drop-shadow(0 0 4px color-mix(in srgb, var(--set) 60%, transparent)); }
 .plaque b { font-family: var(--font-display); font-size: 16.5px; line-height: 1; color: var(--set); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); padding-left: 4px; }
