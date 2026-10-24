@@ -423,7 +423,7 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .reps .bar b { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--tc); }
 .reps .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--tc); font-weight: 600; }
 .reps .tn { grid-column: 1 / -1; margin: -4px 0 0 14px; font-size: 11.5px; color: var(--tc); }
-.repsum { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(201, 163, 92, .2); font-size: 12.5px; color: var(--muted); }
+
 .mini.sk2 { width: 310px; z-index: 9; }
 .skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
 .skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
@@ -1104,8 +1104,7 @@ td.r { font-weight: 700; }
       `<div class="sks">${sgn(tot)} · среднее отношение пяти империй</div></div></div>` +
       `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
         return `<span class="en" style="--ec:${e.c}"><i></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
-          `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>` +
-      `<div class="repsum">Жители и стража империи относятся к Тянь Лун по её отношению с этой империей; другие игроки видят общую репутацию.</div>`,
+          `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
       REP_RECT);
   }
   repEl.addEventListener("mouseenter", showRep); repEl.addEventListener("mouseleave", () => sktLeaveSocket());
