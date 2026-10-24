@@ -55,24 +55,28 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
       border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
       border-image: url("ui/frame_main_s.png") 70 70 48 75 fill / 52.8px 52.8px 36.2px 56.6px stretch;
       filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7));
-      opacity: 0; transform: translateY(8px) scale(.965); transform-origin: var(--ox, 100%) 20%;
-      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 300ms; }
-.tt.show { opacity: 1; transform: none; pointer-events: auto;
-           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 300ms; }
-.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .5s ease-out, pinGlow 2.6s ease-in-out .5s infinite; }
-/* закреплённое: яркая золотая кайма вокруг всей рамки, мягко дышит; при закреплении — короткая вспышка */
-@keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 14px rgba(230, 180, 90, .6)); }
-                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 230, 170, 1)) drop-shadow(0 0 22px rgba(240, 190, 100, .85)); } }
+      opacity: 0; transform: translateY(6px) scale(.975); transform-origin: var(--ox, 100%) 20%;
+      transition: opacity 140ms ease-in, transform 160ms ease-in, filter 300ms; }
+.tt.show.live { pointer-events: auto; }   /* окно ловит курсор, только если его открыли наведением, — показанное при загрузке не мешает слотам */
+.tt.show { opacity: 1; transform: none;
+           transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1), filter 300ms; }
+.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .35s ease-out, pinGlow 2.6s ease-in-out .35s infinite; }
+/* закреплённое: яркая кайма цвета редкости (--pg) вокруг всей рамки, мягко дышит; у вещи с маной — розовая */
+.tt { --pg: var(--rc); }
+.tt.mana { --pg: var(--mana); }
+@keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); }
+                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px color-mix(in srgb, var(--pg) 70%, #fff)) drop-shadow(0 0 22px color-mix(in srgb, var(--pg) 90%, transparent)); } }
 /* закрепление — подсветка сразу и плавно разгорается до дыхания, без вспышки */
-@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 0 rgba(255, 222, 150, 0)) drop-shadow(0 0 0 rgba(230, 180, 90, 0)); }
-                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 14px rgba(230, 180, 90, .6)); } }
+@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); }
+                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); } }
 @keyframes manaPinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
-                       to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 16px rgba(255, 95, 208, .7)); } }
+                       to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); } }
 .tt .inner { margin: -30px -36px -18px -40px; position: relative; }   /* содержимое заходит под широкие уголки рамки */
 .tt .sweep { position: absolute; inset: -40px -40px -24px -44px; pointer-events: none; overflow: hidden; }
 .tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
-                     background: linear-gradient(105deg, transparent 42%, rgba(255, 230, 180, .16) 50%, transparent 58%); }
-.tt.show .sweep::before { animation: sweep 900ms 120ms cubic-bezier(.3, .6, .2, 1) both; }
+                     background: linear-gradient(105deg, transparent 40%, color-mix(in srgb, var(--pg) 26%, transparent) 47%,
+                                 color-mix(in srgb, var(--pg) 30%, rgba(255, 255, 255, .22)) 50%, color-mix(in srgb, var(--pg) 26%, transparent) 53%, transparent 60%); }
+.tt.show .sweep::before { animation: sweep 900ms 40ms cubic-bezier(.3, .6, .2, 1) both; }
 .tt.pinned .sweep::before { animation: sweep 900ms 0ms ease-out both; opacity: .6; }
 @keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
 
@@ -188,9 +192,10 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 .tt.pinned li:hover { background-color: rgba(201, 163, 92, .12); }
 .tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
 @keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--bc) 30%, transparent); } }
-.tt.show li { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 28ms + 90ms); }
-.tt.show li.boost { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both, glow 3.6s ease-in-out infinite;
-                    animation-delay: calc(var(--i) * 28ms + 90ms), calc(var(--i) * 28ms + 400ms); }
+/* строки проявляются вместе с окном почти сразу, лёгкой волной сверху вниз (≤ 0,25 с на всё окно) */
+.tt.show li { animation: lineIn 300ms cubic-bezier(.22, 1, .36, 1) both; animation-delay: calc(min(var(--i), 16) * 12ms + 20ms); }
+.tt.show li.boost { animation: lineIn 300ms cubic-bezier(.22, 1, .36, 1) both, glow 3.6s ease-in-out infinite;
+                    animation-delay: calc(min(var(--i), 16) * 12ms + 20ms), calc(min(var(--i), 16) * 12ms + 320ms); }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 .tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
 .tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -199,8 +204,11 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
         border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
         filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .7)); pointer-events: none;
         opacity: 0; transform: translateY(8px) scale(.97); transform-origin: var(--ox, 100%) 10%;
-        transition: opacity 110ms ease-in, transform 130ms ease-in; }
-.menu.show { opacity: 1; transform: none; pointer-events: auto; transition: opacity 180ms ease-out, transform 240ms cubic-bezier(.16, 1, .3, 1); }
+        transition: opacity 140ms ease-in, transform 160ms ease-in; }
+.menu.show { opacity: 1; transform: none; pointer-events: auto; transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1); }
+/* плитки проявляются лёгкой волной вслед за окном */
+.menu.show .mi { animation: tileIn 280ms cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(var(--n, 0) * 10ms + 40ms); }
+@keyframes tileIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .mhead { display: flex; align-items: baseline; gap: 8px; font: 700 19px var(--font-display); color: var(--gold); padding: 0 2px 4px; }
 .mhead span { margin-left: auto; font: 400 12px var(--font-body); color: var(--muted); }
 .mset { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--set); padding: 6px 2px 4px; }
@@ -303,11 +311,9 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 @keyframes manaFrame { 0%, 100% { filter: hue-rotate(-80deg) saturate(1.9) brightness(1.1); }
                        50% { filter: hue-rotate(-95deg) saturate(1.7) brightness(1.35); } }
 .tt.mana { animation: manaGlow 3s ease-in-out infinite; }
-.tt.mana.pinned { animation: manaPinIn .5s ease-out, manaPin 2.6s ease-in-out .5s infinite; }
+.tt.mana.pinned { animation: manaPinIn .35s ease-out, pinGlow 2.6s ease-in-out .35s infinite; }
 @keyframes manaGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
                       50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 180, 240, .95)) drop-shadow(0 0 22px rgba(220, 110, 255, .65)); } }
-@keyframes manaPin { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 16px rgba(255, 95, 208, .7)); }
-                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 210, 240, 1)) drop-shadow(0 0 26px rgba(255, 95, 208, .9)); } }
 /* плашка «Пропитано маной» (37): края с ромбом не тянутся, тянется только середина */
 .manatag { margin: 3px 0 0 -8px; display: inline-flex; align-items: center; height: 30px; padding: 0 2px 1px 0; font-family: var(--font-caps);
            font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; white-space: nowrap;
@@ -367,7 +373,7 @@ td.r { font-weight: 700; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tt, .tt.show, .mini, .mini.show { transform: none !important; filter: none !important; transition: opacity 120ms linear; }
-  .tt.show li, .tt.show li.boost, .tt.show .sweep::before, .tt.pinned .sweep::before { animation: none !important; }
+  .tt.show li, .tt.show li.boost, .tt.show .sweep::before, .tt.pinned .sweep::before, .menu.show .mi { animation: none !important; }
 }
 </style>
 
@@ -716,13 +722,13 @@ td.r { font-weight: 700; }
   function open(idx, instant) {
     if (pinned || menuSlot >= 0) return;
     clearTimeout(hideT); clearTimeout(showT); leaving = false;
-    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); arm(); };
-    instant ? go() : (showT = setTimeout(go, tt.classList.contains("show") ? 40 : 110));
+    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); arm(); };
+    instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
   }
   function hide() {
     clearTimeout(showT); clearTimeout(pinT); hideMini();
     pinned = false;
-    tt.classList.remove("show", "pinned", "arming"); tt.setAttribute("aria-hidden", "true"); current = -1;
+    tt.classList.remove("show", "pinned", "arming", "live"); tt.setAttribute("aria-hidden", "true"); current = -1;
   }
   function leave() {
     if (pinned) return;
@@ -791,7 +797,7 @@ td.r { font-weight: 700; }
         `${mana ? '<div class="msub">Пропитано маной</div>' : ""}<div class="mgrid">` +
         bag[k].filter(it => it.setKey === key && it.mana === mana).map(it => { const eq = it.id === equipped[k];
           return `<button type="button" class="mi${eq ? " eq" : ""}${it.mana ? " mana" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${it.mana ? ", пропитано маной" : ""}${eq ? ", надето" : ""}" ` +
-            `style="--rc:var(${RC[it.r]});${spriteCover(k, it.r, SETS[key].sheet)}">${it.mana ? '<i class="mr"></i>' : ""}</button>`; }).join("") +
+            `style="--rc:var(${RC[it.r]});--n:${it.r};${spriteCover(k, it.r, SETS[key].sheet)}">${it.mana ? '<i class="mr"></i>' : ""}</button>`; }).join("") +
         `</div>`).join("")).join("") +
       `<div class="mcap" id="mcap" style="--rc:var(${RC[cur.r]})"><b>${cur.name}</b><span>${RAR[cur.r].name} · надето</span></div>`;
     menu.classList.remove("show"); void menu.offsetWidth;
@@ -822,7 +828,7 @@ td.r { font-weight: 700; }
   menu.addEventListener("click", e => {
     const b = e.target.closest(".mi"); if (!b) return;
     const k = menuSlot; equipped[k] = b.dataset.id;
-    closeMenu(); slotArt(); fill(k, false); leaving = false; arm();   // кольцо закрепления идёт сразу, как только окно показалось
+    closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false; arm();   // кольцо закрепления идёт сразу, как только окно показалось
   });
 
   // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой; открытый список — кликом вне него;
@@ -832,7 +838,8 @@ td.r { font-weight: 700; }
     if (!pinned) return;
     const li = e.target.closest && e.target.closest("#tt li");
     if (li && e.pointerType !== "mouse") { showMini(li); return; }
-    hide(); suppressUntil = Date.now() + 350;
+    hide();
+    if (!(e.target.closest && e.target.closest(".slot"))) suppressUntil = Date.now() + 350;   // по слоту — тот же клик сразу открывает список
   }, true);
   document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenu(); if (current >= 0) hide(); } });
 
