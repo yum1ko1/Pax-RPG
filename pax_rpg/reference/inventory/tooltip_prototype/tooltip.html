@@ -419,7 +419,7 @@ td.r { font-weight: 700; }
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если перевести курсор на само окно и подержать, кольцо в углу заполнится и подсказка закрепится, тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости. Оружие: верхнее окно — основное, среднее — второе; клик по окну — выбрать оружие, медальон между окнами — поменять их местами. Одно оружие не может стоять сразу в обоих слотах, герой в центре держит основное.</p>
+    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если держать курсор на вещи, кольцо в углу заполнится и подсказка закрепится (увели раньше — не закрепится), тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости. Оружие: верхнее окно — основное, среднее — второе; клик по окну — выбрать оружие, медальон между окнами — поменять их местами. Одно оружие не может стоять сразу в обоих слотах, герой в центре держит основное.</p>
   </div>
 
   <div class="bar">
@@ -766,7 +766,7 @@ td.r { font-weight: 700; }
       clearTimeout(ttLeaveT); hide();
     }
     clearTimeout(hideT); clearTimeout(showT); leaving = false;
-    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); };   // кольцо — только когда курсор в самом окне
+    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); arm(); };   // кольцо копится, пока курсор на вещи
     instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
   }
   function hide() {
@@ -776,7 +776,7 @@ td.r { font-weight: 700; }
   }
   function leave() {
     if (pinned) return;
-    clearTimeout(showT);   // таймер закрепления не трогаем: если курсор успеет в окно, кольцо дойдёт до конца; hide() его снимет
+    clearTimeout(showT); clearTimeout(pinT); tt.classList.remove("arming");   // ушёл с вещи раньше — окно не закрепляется, кольцо сброшено
     leaving = true; hideT = setTimeout(hide, 30);   // окно вплотную к слоту: 0,03 с хватает, чтобы курсор перешёл в него
   }
 
@@ -819,18 +819,17 @@ td.r { font-weight: 700; }
   function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
 
   // закреплённая: курсор зашёл в подсказку и вышел за её рамку — подсказка закрывается (0,15 с на возврат)
-  // незакреплённая: кольцо закрепления заполняется, только пока курсор в самом окне; вышел раньше — кольцо сбрасывается,
-  // окно остаётся, если курсор вернулся на слот, иначе закрывается
+  // незакреплённая: кольцо копится, только пока курсор на вещи; в самом окне оно не идёт; из окна на слот — кольцо заново,
+  // из окна в сторону — окно закрывается
   document.addEventListener("pointermove", e => { lastXY = [e.clientX, e.clientY]; }, { passive: true });
   tt.addEventListener("mouseenter", () => {
     inTT = true;
     if (pinned) { ttEntered = true; clearTimeout(ttLeaveT); return; }
-    if (tt.classList.contains("show") && tt.classList.contains("live")) { clearTimeout(hideT); clearTimeout(showT); leaving = false; arm(); }
+    if (tt.classList.contains("show") && tt.classList.contains("live")) { clearTimeout(hideT); clearTimeout(showT); leaving = false; }   // окно остаётся, но не закрепляется
   });
   tt.addEventListener("mouseleave", e => {
     inTT = false;
     if (pinned) { if (ttEntered) ttLeaveT = setTimeout(() => { if (pinned) hide(); }, 150); return; }
-    clearTimeout(pinT); tt.classList.remove("arming");
     if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".slot"))) leave();
   });
   tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
@@ -880,9 +879,9 @@ td.r { font-weight: 700; }
     if (b.dataset.w) { const w = menuSlot - 100; closeMenu(); chooseWeapon(w, b.dataset.w); return; }
     const k = menuSlot; equipped[k] = b.dataset.id;
     closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false;
-    requestAnimationFrame(() => {   // окно встало под курсор — кольцо пошло
+    requestAnimationFrame(() => {   // окно встало под курсор — окно остаётся; кольцо пойдёт, когда курсор вернётся на вещь
       const el = document.elementFromPoint(lastXY[0], lastXY[1]);
-      if (el && tt.contains(el)) { inTT = true; arm(); }
+      if (el && tt.contains(el)) inTT = true;
     });
   });
 
