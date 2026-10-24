@@ -415,6 +415,22 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .wrep svg, .ski.rep svg { width: 86%; height: 86%; }
 .wrep:hover { filter: brightness(1.2) drop-shadow(0 0 6px rgba(240, 207, 138, .45)); }
 .skh .ski.rep { border-radius: 50%; background: radial-gradient(circle at 50% 45%, #2a2024, #0d0a0b 72%); }
+/* общая шкала: −100…+100 пятью равными отрезками ступеней, над ней значки ступеней, текущая — подсвечена */
+.repscale { margin: 6px 4px 12px; }
+.repicons { position: relative; height: 44px; }
+.repicons i { position: absolute; bottom: 9px; width: 26px; height: 26px; transform: translateX(-50%); border-radius: 50%;
+              background: radial-gradient(circle at 50% 45%, #2a2024, #0d0a0b 72%); opacity: .38; filter: grayscale(.7);
+              transition: opacity 200ms, filter 200ms, transform 200ms; display: grid; place-items: center; }
+.repicons i svg { width: 86%; height: 86%; }
+.repicons i.on { opacity: 1; filter: drop-shadow(0 0 6px var(--tc)) drop-shadow(0 0 2px var(--tc)); transform: translateX(-50%) scale(1.25);
+                 box-shadow: 0 0 0 1.5px var(--tc); }
+.repbar { position: relative; height: 8px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(240, 207, 138, .25);
+          background: linear-gradient(90deg, rgba(224, 112, 106, .45) 0 20%, rgba(216, 154, 90, .4) 20% 40%, rgba(207, 198, 180, .32) 40% 60%,
+                      rgba(127, 214, 168, .4) 60% 80%, rgba(240, 207, 138, .5) 80%); }
+.repbar s { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(10, 6, 7, .9); }
+.repbar u { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg); background: var(--tc);
+            box-shadow: 0 0 0 2px #120a0b, 0 0 8px var(--tc); }
+.repends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .reps { display: grid; grid-template-columns: 1fr 64px 34px; gap: 5px 8px; align-items: center; margin-top: 8px; font-size: 13px; }
 .reps .en { color: var(--text); display: flex; align-items: center; gap: 6px; }
 .reps .en i { width: 8px; height: 8px; transform: rotate(45deg); background: var(--ec); box-shadow: 0 0 5px var(--ec); flex: none; }
@@ -1102,6 +1118,11 @@ td.r { font-weight: 700; }
     const bar = v => `<span class="bar"><b style="${v >= 0 ? `left:50%;width:${v / 2}%` : `left:${50 + v / 2}%;width:${-v / 2}%`}"></b></span>`;
     sktOpen(`<div class="skh"><i class="ski rep">${repIcon(t)}</i><div><h3>Репутация: ${T.name}</h3>` +
       `<div class="sks">${sgn(tot)} · среднее отношение пяти империй</div></div></div>` +
+      // значки ступеней — над серединами их отрезков (−80, −40, 0, +40, +80)
+      `<div class="repscale" style="--tc:${T.c}"><div class="repicons">${REP_TIERS.map((x, i) =>
+        `<i class="${i === t ? "on" : ""}" style="left:${10 + i * 20}%;--tc:${x.c}" title="${x.name}">${repIcon(i)}</i>`).join("")}</div>` +
+      `<div class="repbar">${[20, 40, 60, 80].map(x => `<s style="left:${x}%"></s>`).join("")}<u style="left:${(tot + 100) / 2}%"></u></div>` +
+      `<div class="repends"><span>−100</span><span>0</span><span>+100</span></div></div>` +
       `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
         return `<span class="en" style="--ec:${e.c}"><i></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
           `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
