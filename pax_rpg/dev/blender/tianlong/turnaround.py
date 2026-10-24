@@ -36,9 +36,10 @@ def pose(clip: str, at: float = 0.3):
 
 
 def bounds() -> tuple:
+    """Рамка кадра — по телу (прочие меши glb, напр. копьё в покое, могут лежать далеко от героя)."""
     dg = bpy.context.evaluated_depsgraph_get()
     lo, hi = Vector((1e9,) * 3), Vector((-1e9,) * 3)
-    for o in meshes:
+    for o in [m for m in meshes if "body" in m.name.lower()] or meshes:
         e = o.evaluated_get(dg)
         for v in e.to_mesh().vertices:
             p = e.matrix_world @ v.co
@@ -71,7 +72,7 @@ sc.render.film_transparent = False
 sc.view_settings.view_transform = "Standard"
 w = bpy.data.worlds.new("w")
 w.use_nodes = True
-w.node_tree.nodes["Background"].inputs[0].default_value = (0.09, 0.09, 0.1, 1)
+w.node_tree.nodes["Background"].inputs[0].default_value = (0.045, 0.045, 0.05, 1)
 w.node_tree.nodes["Background"].inputs[1].default_value = 1.0
 sc.world = w
 cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
