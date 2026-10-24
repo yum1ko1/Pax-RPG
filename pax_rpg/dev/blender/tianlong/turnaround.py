@@ -3,11 +3,14 @@
     blender -b -P turnaround.py -- <tian_long/model.glb> <папка вывода>
 Кадры: idle_front, idle_34, idle_side, idle_back (клип Idle) и hero_34 (клип CombatIdle).
 """
+import json
 import math
 import os
+import struct
 import sys
 
 import bpy
+import numpy as np
 from mathutils import Vector
 
 A = sys.argv[sys.argv.index("--") + 1:]
@@ -24,28 +27,44 @@ for o in meshes:
         poly.use_smooth = True
 if not arm.animation_data:
     arm.animation_data_create()
-import numpy as np                                    # Blender 5.2 на ПК автора читает вшитые JPEG как BGR: у Тянь Лун текстуры
-for img in bpy.data.images:                           # цвета красные, так что синий перевес = каналы перепутаны
-    if img.size[0] == 0 or img.colorspace_settings.name != "sRGB":
-        continue
-    px = np.empty(img.size[0] * img.size[1] * img.channels, np.float32)
-    img.pixels.foreach_get(px)
-    px = px.reshape(-1, img.channels)
-    r, b = px[:, 0].mean(), px[:, 2].mean()
-    print("img", img.name, img.file_format, round(float(r), 3), round(float(b), 3), flush=True)
-    if b > r * 1.15:
-        px[:, [0, 2]] = px[:, [2, 0]]
-        img.pixels.foreach_set(px.ravel())
-        img.pack()
-        print("img", img.name, "R<->B", flush=True)
-for mat in bpy.data.materials:                        # цвет — строго из BaseColor (импортёр Blender 5.2 путает карты), без sheen
+with open(SRC, "rb") as f:
+    f.read(12)
+    n, _ = struct.unpack("<II", f.read(8))
+    gl = json.loads(f.read(n))
+    n, _ = struct.unpack("<II", f.read(8))
+    blob = f.read(n)
+TEX = os.path.join(OUT, "tex")                        # Blender 5.2 на ПК автора не декодирует вшитые в glb картинки
+                                                      # (вместо текстуры — сплошной цвет): кладём их файлами рядом и грузим с диска
+os.makedirs(TEX, exist_ok=True)
+by_name = {}
+for i, im in enumerate(gl.get("images", [])):
+    v = gl["bufferViews"][im["bufferView"]]
+    ext = ".png" if im.get("mimeType") == "image/png" else ".jpg"
+    path = os.path.join(TEX, f"{i}_{im.get('name', 'img')}{ext}")
+    with open(path, "wb") as f:
+        f.write(blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]])
+    by_name.setdefault(im.get("name", ""), []).append(path)
+for img in list(bpy.data.images):
+    base, _, dup = img.name.partition(".")
+    paths = by_name.get(base) or []
+    k = int(dup) if dup.isdigit() else 0
+    if k < len(paths):
+        cs = img.colorspace_settings.name
+        img.unpack(method="REMOVE") if img.packed_file else None
+        img.filepath = paths[k]
+        img.source = "FILE"
+        img.reload()
+        img.colorspace_settings.name = cs
+        px = np.empty(img.size[0] * img.size[1] * img.channels, np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(-1, img.channels)
+        print("img", img.name, os.path.basename(paths[k]), img.size[:], [round(float(px[:, c].mean()), 3) for c in range(3)], flush=True)
+for mat in bpy.data.materials:                        # цвет — из BaseColor, без sheen (он высветляет ткань)
     if not mat.use_nodes:
         continue
     nt = mat.node_tree
     bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
     imgs = [n for n in nt.nodes if n.type == "TEX_IMAGE" and n.image]
-    print("mat", mat.name, [(n.image.name, n.image.colorspace_settings.name,
-                             [l.to_socket.name for o in n.outputs for l in o.links]) for n in imgs], flush=True)
     base = next((n for n in imgs if "basecolor" in n.image.name.lower()), imgs[0] if len(imgs) == 1 else None)
     if not bsdf or not base:
         continue
