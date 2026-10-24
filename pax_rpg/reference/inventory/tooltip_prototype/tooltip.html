@@ -77,7 +77,7 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .tt.pinned .pin .full { --p: 360deg; }
 .tt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
 
-.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 0 30px 10px 0; position: relative;
+.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 30px 10px 4px; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
 .slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b no-repeat; border-radius: 2px;
            box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 12px color-mix(in srgb, var(--rc) 55%, transparent); }
@@ -86,6 +86,18 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
         text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
 /* шапка: тип со значком слота и уровень, ниже — плашка редкости */
+/* тип вещи — своя полоса под шапкой: значок слота в рамке, название и категория, справа уровень */
+.kind { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px;
+        border: 1px solid rgba(201, 163, 92, .28); border-radius: 2px;
+        background: linear-gradient(90deg, rgba(201, 163, 92, .1), rgba(201, 163, 92, .02) 70%); }
+.kind .kt { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--gold-dim); border-radius: 2px;
+            background: radial-gradient(circle, rgba(201, 163, 92, .18), transparent 70%), #120a0b; transform: rotate(45deg) scale(.78); }
+.kind .kt i { width: 30px; height: 30px; background: center / contain no-repeat; transform: rotate(-45deg) scale(1.15); }
+.kind .kn { display: grid; line-height: 1.15; }
+.kind .kn b { font: 700 15px var(--font-body); color: var(--text); letter-spacing: .02em; }
+.kind .kn small { font-size: 12px; color: var(--muted); }
+.kind .ilvl { display: grid; justify-items: end; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); line-height: 1.1; }
+.kind .ilvl b { font: 700 17px var(--font-body); color: var(--gold); letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .meta { margin-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text); }
 .meta .type { display: inline-flex; align-items: center; gap: 6px; }
 .meta .type i { width: 16px; height: 16px; background: center / contain no-repeat; }
@@ -363,8 +375,15 @@ td.r { font-weight: 700; }
         info: "Заряды сгорают. Оглушённые ближе к Кровожадному удару. Раз в 30 с." },
     ] };
   const MINOR = 0.45, MINOR_W = 0.6;
+  const PRICE = [20, 90, 450, 2600, 11000, 32000];        // обычное … мифическое, 1-й уровень
+  const PRICE_MIN = [5, 40, 200, 1500, 8000, 30000];
+  const PRICE_STEP = [1, 5, 10, 50, 100, 500];
+  const money = v => v.toLocaleString("ru-RU").replace(/\u00a0|,/g, "\u2009");
 
   // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
+  const EQUIP_X = [948, 1234];                           // края колонки экипировки на макете
+  const KIND = { helmet: "Доспех · голова", chest: "Доспех · тело", gloves: "Доспех · руки", shoulders: "Доспех · плечи",
+                 boots: "Доспех · ноги", cloak: "Накидка · спина", ring: "Украшение · палец", amulet: "Украшение · шея" };
   const SLOTS = [
     { key: "helmet", type: "Шлем", main: ["atk", "arm", "hp"], w: { rele: 1.5 }, rect: [961, 210, 1086, 361], demo: 4,
       names: ["Ржавая дзингаса", "Кабуто ополченца", "Кабуто Синего прилива", "Рогатый шлем Они", "Шлем Золотого дракона", "Корона Кровавой луны"] },
@@ -408,7 +427,9 @@ td.r { font-weight: 700; }
     boosted.forEach(i => { const e = extra[i], s = STATS[e.key]; e.boost = true;
       e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
     extra.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
-    const price = Math.round(12 * R.mult * R.mult * (1 + 0.15 * (lvl - 1)) * (1 + 0.25 * boosted.length));
+    // цена: база редкости × уровень × усиленные статы × разброс 0,9–1,15; мифическое — не дешевле 30 000
+    const raw = PRICE[r] * (1 + 0.05 * (lvl - 1)) * (1 + 0.12 * boosted.length) * rnd(0.9, 1.15);
+    const price = Math.max(PRICE_MIN[r], Math.round(raw / PRICE_STEP[r]) * PRICE_STEP[r]);
     return { slot, r, lvl, name: slot.names[r], main, extra, price, set: false };
   }
 
@@ -449,7 +470,7 @@ td.r { font-weight: 700; }
       <ul class="setb">${S.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
         `<span class="n">${b.n}</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
       <div class="lore">${S.lore}</div>
-      <div class="setnote">Действует при любой редкости вещей сета.</div></div>`;
+</div>`;
   }
 
   function render(item, idx) {
@@ -458,8 +479,9 @@ td.r { font-weight: 700; }
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
-          <div class="meta"><span class="type"><i style="background-image:url(${PIPS[PIP[idx] + "_off"]})"></i>${item.slot.type}</span><span class="ilvl">Ур. <b>${item.lvl}</b></span></div>
           <div class="rarity"><i></i>${RAR[item.r].name}</div></div></header>
+      <div class="kind"><span class="kt"><i style="background-image:url(${PIPS[PIP[idx] + "_off"]})"></i></span>
+        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span><span class="ilvl">Уровень<b>${item.lvl}</b></span></div>
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
@@ -468,7 +490,7 @@ td.r { font-weight: 700; }
           <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
         ${setBox(item, idx, () => i++)}
       </div>
-      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer></div>`;
+      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${money(item.price)}</b> зол.</span></footer></div>`;
   }
 
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
@@ -489,9 +511,10 @@ td.r { font-weight: 700; }
   }
 
   function sideOf(idx, w, h) {
-    const [x0, y0, x1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 12;
-    let left = x0 * k - w - gap, origin = "100%";
-    if (left < 8) { left = x1 * k + gap; origin = "0%"; }
+    // слева от всей колонки экипировки, чтобы окно не закрывало соседние слоты
+    const [, y0] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 12;
+    let left = EQUIP_X[0] * k - w - gap, origin = "100%";
+    if (left < 8) { left = EQUIP_X[1] * k + gap; origin = "0%"; }
     const top = Math.max(8, Math.min(Math.max(8, y0 * k - 8), H - h - 8));
     return { left, top, origin };
   }
