@@ -88,7 +88,8 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
       filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7));
       opacity: 0; transform: translateY(6px) scale(.975); transform-origin: var(--ox, 100%) 20%;
       transition: opacity 110ms ease-in, transform 130ms ease-in, filter 300ms; }
-.tt.show.live { pointer-events: auto; }   /* окно ловит курсор, только если его открыли наведением, — показанное при загрузке не мешает слотам */
+/* незакреплённое окно курсор не ловит: увёл мышь с вещи (в том числе на само окно) — окно пропадает;
+   курсор ловит только закреплённое (.tt.pinned) */
 .tt.show { opacity: 1; transform: none;
            transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1), filter 300ms; }
 .tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
@@ -878,6 +879,7 @@ td.r { font-weight: 700; }
     const b = e.target.closest(".mi"); if (!b) return;
     if (b.dataset.w) { const w = menuSlot - 100; closeMenu(); chooseWeapon(w, b.dataset.w); return; }
     const k = menuSlot; equipped[k] = b.dataset.id;
+    clearTimeout(hideT);   // не дать отложенному скрытию (курсор только что ушёл со слота в список) погасить новое окно
     closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false;
     requestAnimationFrame(() => {   // окно встало под курсор — окно остаётся; кольцо пойдёт, когда курсор вернётся на вещь
       const el = document.elementFromPoint(lastXY[0], lastXY[1]);
