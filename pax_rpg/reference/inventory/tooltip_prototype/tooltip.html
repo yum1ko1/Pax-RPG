@@ -1085,9 +1085,9 @@ td.r { font-weight: 700; }
   const REP_TIERS = [{ min: -100, name: "Враг", c: "#e0706a" }, { min: -59, name: "Недоверие", c: "#d89a5a" },
                      { min: -19, name: "Нейтрально", c: "#cfc6b4" }, { min: 20, name: "Уважение", c: "#7fd6a8" },
                      { min: 60, name: "Почитание", c: "#f0cf8a" }];
-  const EMPIRES = [{ name: "Лазурный Престол", v: 10, c: "#5aa8ff" }, { name: "Пиковый Доминион Хаддур", v: -5, c: "#9fb4c8" },
-                   { name: "Орда Гхарн", v: 45, c: "#d9a14a" }, { name: "Империум Саэрит", v: -35, c: "#4fc49a" },
-                   { name: "Двор Вечного Цветения", v: 25, c: "#ff8fc8" }];      // для примера: Орда воюет с Саэритом
+  const EMPIRES = [{ name: "Лазурный Престол", v: 0, c: "#5aa8ff" }, { name: "Пиковый Доминион Хаддур", v: 0, c: "#9fb4c8" },
+                   { name: "Орда Гхарн", v: 0, c: "#d9a14a" }, { name: "Империум Саэрит", v: 0, c: "#4fc49a" },
+                   { name: "Двор Вечного Цветения", v: 0, c: "#ff8fc8" }];      // на старте игрок ни к кому не примкнул — везде 0
   const tierOf = v => REP_TIERS.reduce((t, x, i) => v >= x.min ? i : t, 0);
   const repTotal = () => Math.round(EMPIRES.reduce((t, e) => t + e.v, 0) / EMPIRES.length);
   const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v);
