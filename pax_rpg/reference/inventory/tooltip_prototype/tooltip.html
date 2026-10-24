@@ -4,8 +4,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
 <style>
-/* Макет: инвентарь игры во всю ширину, подсказка всплывает рядом со слотом; ниже — короткая справка по системе.
-   Один тёмный мир игры (лак, багрянец, старое золото), без светлой темы — как в самой игре. */
+/* Макет: инвентарь игры во всю ширину, подсказка всплывает рядом со слотом и закрепляется при долгом наведении;
+   ниже — короткая справка по системе. Один тёмный мир игры (лак, багрянец, старое золото), без светлой темы. */
 :root {
   color-scheme: dark;
   --bg: #0b0708;
@@ -16,8 +16,8 @@
   --gold-dim: #7c6036;
   --text: #ecdfcb;
   --muted: #a39280;
-  --crimson: #b3242b;
   --r0: #a4a4a4; --r1: #57c46b; --r2: #4f8dff; --r3: #b46fff; --r4: #f2b84b; --r5: #ff4436;
+  --pin: 1200ms;
   --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
   --font-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
 }
@@ -25,7 +25,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-body);
 .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
         padding-block: 18px 40px; max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
 h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; margin: 0; letter-spacing: .02em; text-wrap: balance; }
-.lead { margin: 4px 0 0; color: var(--muted); max-width: 70ch; line-height: 1.45; }
+.lead { margin: 4px 0 0; color: var(--muted); max-width: 72ch; line-height: 1.45; }
 .bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
 .bar label { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
 button, select { font: 500 14px var(--font-body); color: var(--text); background: var(--panel-2); border: 1px solid var(--gold-dim);
@@ -36,35 +36,51 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .lvl { font-variant-numeric: tabular-nums; color: var(--gold); min-width: 2ch; display: inline-block; }
 
 /* инвентарь */
+.ttHolder { position: relative; }
 .stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1536 / 1024; border: 1px solid var(--line);
-         background: url("inventory.jpg") center / 100% 100% no-repeat; }
+         background: #120a0b url("inventory.jpg") center / 100% 100% no-repeat; }
 .slot { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: default; }
 .slot:hover { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); }
 .hint { position: absolute; left: 1.2%; bottom: 1.6%; font-size: 12px; color: var(--text); background: rgba(10, 6, 7, .72);
         border: 1px solid var(--gold-dim); padding: 4px 9px; border-radius: 2px; pointer-events: none; }
 
 /* подсказка */
-.tt { position: absolute; z-index: 5; width: 312px; max-width: calc(100% - 16px); pointer-events: none;
+.tt { position: absolute; z-index: 5; width: 316px; max-width: calc(100% - 16px); pointer-events: none;
       background: linear-gradient(180deg, var(--panel-2), var(--panel) 38%);
       border: 1px solid var(--gold-dim); border-radius: 3px;
       box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px rgba(201, 163, 92, .35), 0 18px 40px rgba(0, 0, 0, .65), 0 0 0 1px #000;
       opacity: 0; transform: translateY(8px) scale(.965); filter: blur(3px); transform-origin: var(--ox, 100%) 20%;
-      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 120ms ease-in; }
+      transition: opacity 120ms ease-in, transform 140ms ease-in, filter 120ms ease-in, border-color 200ms, box-shadow 300ms; }
 .tt.show { opacity: 1; transform: none; filter: none;
-           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 220ms ease-out; }
+           transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 220ms ease-out, border-color 200ms, box-shadow 300ms; }
+.tt.pinned { pointer-events: auto; border-color: var(--gold); cursor: pointer;
+             box-shadow: inset 0 0 0 3px var(--panel), inset 0 0 0 4px rgba(201, 163, 92, .6), 0 18px 40px rgba(0, 0, 0, .65), 0 0 18px rgba(201, 163, 92, .25), 0 0 0 1px #000; }
 .tt::before, .tt::after { content: ""; position: absolute; width: 9px; height: 9px; border: 1px solid var(--gold); transform: rotate(45deg);
                           background: var(--panel); top: -5px; }
-.tt::before { left: 12px; } .tt::after { right: 12px; }
+.tt::before { left: 12px; } .tt::after { left: 50%; margin-left: -5px; }
 .tt .sweep { position: absolute; inset: 0; border-radius: 3px; pointer-events: none; overflow: hidden; }
 .tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
                      background: linear-gradient(105deg, transparent 42%, rgba(255, 230, 180, .16) 50%, transparent 58%); }
 .tt.show .sweep::before { animation: sweep 900ms 120ms cubic-bezier(.3, .6, .2, 1) both; }
+.tt.pinned .sweep::before { animation: sweep 700ms 0ms cubic-bezier(.3, .6, .2, 1) both; }
 @keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
 
-.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 14px 10px; position: relative;
+/* кольцо фиксации */
+.pin { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; }
+.pin svg { width: 24px; height: 24px; transform: rotate(-90deg); }
+.pin .track { fill: rgba(10, 6, 7, .7); stroke: rgba(201, 163, 92, .3); stroke-width: 2; }
+.pin .prog { fill: none; stroke: var(--gold); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 56.55; stroke-dashoffset: 56.55; }
+.tt.arming .pin .prog { animation: arm var(--pin) linear forwards; }
+@keyframes arm { to { stroke-dashoffset: 0; } }
+.pin .seal { position: absolute; inset: 6px; transform: rotate(45deg) scale(0); background: var(--gold); border-radius: 1px; transition: transform 220ms cubic-bezier(.3, 1.6, .5, 1); }
+.tt.pinned .pin .prog { stroke-dashoffset: 0; }
+.tt.pinned .pin .seal { transform: rotate(45deg) scale(1); }
+.tt.pinned .pin { filter: drop-shadow(0 0 5px rgba(201, 163, 92, .7)); }
+
+.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 40px 10px 14px; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
 .icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
-        background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
+        background-color: #120a0b; background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
         text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
 .sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
@@ -75,28 +91,59 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
                background: linear-gradient(90deg, transparent, var(--gold-dim) 18%, var(--gold) 50%, var(--gold-dim) 82%, transparent); }
 .orn::after { content: ""; position: absolute; left: 50%; top: 1px; width: 7px; height: 7px; margin-left: -4px; transform: rotate(45deg);
               background: var(--panel); border: 1px solid var(--gold); }
-.orn.thin::after { display: none; }
-ul { list-style: none; margin: 0; padding: 8px 14px; display: grid; gap: 4px; }
-li { display: grid; grid-template-columns: 18px auto 1fr; align-items: center; gap: 8px; font-size: 14.5px; position: relative; padding: 2px 6px; margin: 0 -6px; border-radius: 2px; }
-li svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* статы: основные — узлы древа, дополнительные — ветки со сдвигом вправо */
+.stats { padding: 8px 14px 10px; display: grid; gap: 2px; }
+.cap { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-dim); margin: 2px 0 3px; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+li { display: grid; grid-template-columns: 16px auto 1fr auto; align-items: center; gap: 8px; position: relative;
+     padding: 2px 6px; border-radius: 2px; font-size: 14.5px; }
+li svg.si { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 li .v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 li .k { color: var(--muted); }
-ul.main li { font-size: 16px; }
+li .mark { color: transparent; font-size: 11px; }
+ul.main { margin-left: 12px; }
+ul.main li { font-size: 16px; padding-left: 14px; }
+ul.main li::before { content: ""; position: absolute; left: -6px; top: 50%; width: 8px; height: 8px; margin-top: -5px;
+                     transform: rotate(45deg); border: 1px solid var(--gold); background: color-mix(in srgb, var(--rc) 55%, var(--panel)); }
 ul.main li .v { color: #fff3dc; font-size: 17px; }
 ul.main li .k { color: var(--text); }
+.branch { margin-left: 13px; position: relative; padding-top: 6px; }
+.branch .cap { margin-left: 24px; }
+ul.tree { position: relative; }
+ul.tree li { margin-left: 24px; }
+ul.tree li::before { content: ""; position: absolute; left: -24px; top: 50%; width: 18px; height: 1px; background: var(--gold-dim); }
+ul.tree li::after { content: ""; position: absolute; left: -24px; top: -3px; bottom: -3px; width: 1px; background: var(--gold-dim); }
+ul.tree li:first-child::after { top: -30px; }
+ul.tree li:last-child::after { bottom: 50%; }
 li.minor .v { color: var(--text); font-weight: 500; }
 li.boost { background: linear-gradient(90deg, color-mix(in srgb, var(--bc) 20%, transparent), transparent 85%); }
 li.boost .v, li.boost .k { color: var(--bc); text-shadow: 0 0 8px color-mix(in srgb, var(--bc) 60%, transparent); }
-li.boost svg { stroke: var(--bc); }
-li.boost::after { content: "✦"; position: absolute; right: 4px; color: var(--bc); font-size: 11px; text-shadow: 0 0 6px var(--bc); }
+li.boost svg.si { stroke: var(--bc); }
+li.boost .mark { color: var(--bc); text-shadow: 0 0 6px var(--bc); }
+.tt.pinned li:hover { background-color: rgba(201, 163, 92, .12); }
 .tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
 @keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--bc) 30%, transparent); } }
 .tt.show li { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 28ms + 90ms); }
 .tt.show li.boost { animation: lineIn 260ms cubic-bezier(.2, .8, .2, 1) both, glow 3.6s ease-in-out infinite;
                     animation-delay: calc(var(--i) * 28ms + 90ms), calc(var(--i) * 28ms + 400ms); }
 @keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 12px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
+.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
 .tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
+.tt .state { padding: 0 14px 10px; font-size: 12px; color: var(--gold-dim); }
+.tt.pinned .state { color: var(--gold); }
+
+/* мини-подсказка стата */
+.mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 10px 12px 11px;
+        background: var(--panel-2); border: 1px solid var(--gold); border-radius: 3px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, .6), inset 0 0 0 2px var(--panel);
+        opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
+.mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
+.mini h3 { margin: 0 0 4px; display: flex; gap: 7px; align-items: center; font: 700 15px var(--font-body); color: var(--text); }
+.mini h3 svg { width: 16px; height: 16px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mini p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.mini .here { margin-top: 7px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.mini .tag { margin-top: 5px; font-size: 12px; color: var(--bc, var(--gold)); }
 
 /* справка */
 .ref { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
@@ -109,20 +156,20 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: .05
 td.r { font-weight: 700; }
 .note { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 8px 0 0; }
 
-.ttHolder { position: relative; }
 @media (max-width: 760px) {
   .tt { position: relative; left: auto !important; top: auto !important; width: auto; max-width: none; margin-top: 12px; }
+  .mini { left: 16px !important; right: 16px; width: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tt, .tt.show { transform: none !important; filter: none !important; transition: opacity 120ms linear; }
-  .tt.show li, .tt.show li.boost, .tt.show .sweep::before { animation: none !important; }
+  .tt, .tt.show, .mini, .mini.show { transform: none !important; filter: none !important; transition: opacity 120ms linear; }
+  .tt.show li, .tt.show li.boost, .tt.show .sweep::before, .tt.pinned .sweep::before { animation: none !important; }
 }
 </style>
 
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на предмет в правой колонке экипировки или выберите слот клавишей Tab. Статы собираются генератором по примерной системе: количество и сила статов зависят от редкости, у эпических и выше часть статов усилена свечением.</p>
+    <p class="lead">Наведите курсор на предмет в колонке экипировки. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
   </div>
 
   <div class="bar">
@@ -137,11 +184,12 @@ td.r { font-weight: 700; }
     </label>
   </div>
 
-  <div class="ttHolder">
+  <div class="ttHolder" id="holder">
     <div class="stage" id="stage">
-      <div class="hint">Наведите на предмет экипировки</div>
+      <div class="hint">Наведите на предмет экипировки и задержите курсор</div>
     </div>
     <div class="tt" id="tt" role="tooltip" aria-hidden="true"></div>
+    <div class="mini" id="mini" role="tooltip" aria-hidden="true"></div>
   </div>
 
   <div class="ref">
@@ -164,6 +212,7 @@ td.r { font-weight: 700; }
     cols: [[16,172],[182,341],[350,508],[517,676],[684,844],[852,1010]],
     rows: [[16,177],[185,348],[357,519],[528,691],[701,870],[878,1065],[1073,1258],[1267,1462]] };
   const STAGE = { w: 1536, h: 1024 };
+  const PIN_MS = 1200;
 
   const RAR = [
     { name: "Обычное",     mult: 1.00, main: 1, extra: 2, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 52  },
@@ -186,17 +235,26 @@ td.r { font-weight: 700; }
     aspd: '<path d="M2 5h7M4 8h8M2 11h7"/><path d="M11 3.5 14 8l-3 4.5"/>',
   };
 
-  // база — обычный предмет 1-го уровня; pct — проценты
+  // база — обычный предмет 1-го уровня; pct — проценты; info — текст мини-подсказки
   const STATS = {
-    atk:  { name: "Атака",            lo: 2, hi: 4,  pct: false, main: true },
-    arm:  { name: "Броня",            lo: 3, hi: 6,  pct: false, main: true },
-    hp:   { name: "ОЗ",               lo: 8, hi: 15, pct: false, main: true },
-    ha:   { name: "ХА",               lo: 3, hi: 6,  pct: false, main: true },
-    crit: { name: "Шанс крита",       lo: 1, hi: 3,  pct: true },
-    cdmg: { name: "Крит. урон",       lo: 5, hi: 10, pct: true },
-    rphy: { name: "СПР физ. урону",   lo: 2, hi: 5,  pct: false },
-    rele: { name: "СПР стих. урону",  lo: 2, hi: 5,  pct: false },
-    aspd: { name: "Скорость атаки",   lo: 1, hi: 3,  pct: true },
+    atk:  { name: "Атака", lo: 2, hi: 4, pct: false, main: true,
+            info: "Прибавляется к урону каждого удара, приёма и добивания." },
+    arm:  { name: "Броня", lo: 3, hi: 6, pct: false, main: true,
+            info: "Снижает урон, который вы получаете от ударов. Чем больше брони, тем меньше выгода от каждого нового очка." },
+    hp:   { name: "ОЗ", lo: 8, hi: 15, pct: false, main: true,
+            info: "Очки здоровья: увеличивают максимум здоровья героя." },
+    ha:   { name: "ХА", lo: 3, hi: 6, pct: false, main: true,
+            info: "Увеличивает запас концентрации: дольше держите блок и серию ударов, позже ломается стойка." },
+    crit: { name: "Шанс крита", lo: 1, hi: 3, pct: true,
+            info: "Вероятность, что удар станет критическим." },
+    cdmg: { name: "Крит. урон", lo: 5, hi: 10, pct: true,
+            info: "На сколько процентов критический удар сильнее обычного." },
+    rphy: { name: "СПР физ. урону", lo: 2, hi: 5, pct: false,
+            info: "Сопротивление физическому урону: снижает урон от оружия, когтей и снарядов." },
+    rele: { name: "СПР стих. урону", lo: 2, hi: 5, pct: false,
+            info: "Сопротивление стихиям: снижает урон от огня, льда, молний и маны разлома." },
+    aspd: { name: "Скорость атаки", lo: 1, hi: 3, pct: true,
+            info: "Ускоряет удары и серии ударов." },
   };
   const ORDER = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"];
   const MINOR = 0.45, MINOR_W = 0.6;
@@ -240,7 +298,7 @@ td.r { font-weight: 700; }
     for (let i = 0; i < R.extra && pool.length; i++) { const it = pickW(pool); pool = pool.filter(p => p !== it); extra.push({ key: it.key, minor: !!STATS[it.key].main }); }
     extra.forEach(e => { e.v = roll(e.key, r, lvl, e.minor); });
     const order = shuffle(extra.map((_, i) => i));
-    let boosted = order.slice(0, R.guar);
+    const boosted = order.slice(0, R.guar);
     order.slice(R.guar, R.guar + R.rnd).forEach(i => { if (Math.random() < R.chance) boosted.push(i); });
     boosted.forEach(i => { const e = extra[i], s = STATS[e.key]; e.boost = true;
       e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
@@ -249,71 +307,133 @@ td.r { font-weight: 700; }
     return { slot, r, lvl, name: slot.names[r], main, extra, price };
   }
 
-  const fmt = (key, v) => { const s = STATS[key];
-    return s.pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v; };
+  const fmt = (key, v) => STATS[key].pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v;
   const RC = ["--r0", "--r1", "--r2", "--r3", "--r4", "--r5"];
+  const svg = (key, cls) => `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICON[key]}</svg>`;
 
   function iconStyle(slotIdx, r) {
     const [x0, x1] = SHEET.cols[r], [y0, y1] = SHEET.rows[slotIdx];
     const s = 64 / (x1 - x0);
     return `background-size:${SHEET.w * s}px ${SHEET.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
   }
-  const line = (e, i, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}"><svg viewBox="0 0 16 16" aria-hidden="true">${ICON[e.key]}</svg>` +
-    `<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span></li>`;
+  const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
+    `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><span class="mark">✦</span></li>`;
 
   function render(item, idx) {
-    const rc = `var(${RC[item.r]})`;
     let i = 0;
     return `<div class="sweep"></div>
+      <div class="pin" title="Закрепление"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="track" cx="12" cy="12" r="9"/><circle class="prog" cx="12" cy="12" r="9"/></svg><div class="seal"></div></div>
       <header><div class="icon" style="${iconStyle(idx, item.r)}"></div>
         <div><p class="name">${item.name}</p>
           <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
       <div class="orn"></div>
-      <ul class="main">${item.main.map(e => line(e, i++, "")).join("")}</ul>
-      <div class="orn thin"></div>
-      <ul>${item.extra.map(e => line(e, i++, e.minor ? "minor" : "")).join("")}</ul>
-      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>`;
+      <div class="stats">
+        <div class="cap">Основные</div>
+        <ul class="main">${item.main.map((e, j) => line(e, i++, j, "main", "")).join("")}</ul>
+        <div class="branch"><div class="cap">Дополнительные</div>
+          <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
+      </div>
+      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>
+      <div class="state" id="ttState">Задержите курсор, чтобы закрепить</div>`;
   }
 
-  const stage = document.getElementById("stage"), tt = document.getElementById("tt");
+  const holder = document.getElementById("holder"), stage = document.getElementById("stage");
+  const tt = document.getElementById("tt"), mini = document.getElementById("mini");
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut"), rarSel = document.getElementById("rar");
-  let items = [], current = -1, showT = 0, hideT = 0;
+  const narrow = () => window.matchMedia("(max-width: 760px)").matches;
+  let items = [], current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0;
 
   function generate() {
     const lvl = +lvlIn.value, forced = rarSel.value;
     items = SLOTS.map(s => makeItem(s, forced === "demo" ? s.demo : +forced, lvl));
-    if (current >= 0) open(current, true);
+    if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
   }
 
   function place(idx) {
-    const [x0, y0, x1, y1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight;
-    const k = W / STAGE.w, gap = 12;
-    if (window.matchMedia("(max-width: 760px)").matches) return;
-    const tw = tt.offsetWidth, th = tt.offsetHeight;
+    if (narrow()) return;
+    const [x0, y0, x1] = SLOTS[idx].rect, W = stage.clientWidth, H = stage.clientHeight;
+    const k = W / STAGE.w, gap = 12, tw = tt.offsetWidth, th = tt.offsetHeight;
     let left = x0 * k - tw - gap, origin = "100%";
     if (left < 8) { left = x1 * k + gap; origin = "0%"; }
-    let top = Math.min(Math.max(8, y0 * k - 8), H - th - 8);
+    const top = Math.min(Math.max(8, y0 * k - 8), H - th - 8);
     tt.style.left = left + "px"; tt.style.top = Math.max(8, top) + "px"; tt.style.setProperty("--ox", origin);
   }
 
+  function fill(idx, keepShown) {
+    current = idx;
+    const it = items[idx];
+    tt.style.setProperty("--rc", `var(${RC[it.r]})`);
+    tt.innerHTML = render(it, idx);
+    tt.querySelectorAll("li.boost").forEach(li => li.style.setProperty("--bc", `var(${RC[it.r]})`));
+    if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
+    place(idx);
+    tt.classList.add("show"); tt.setAttribute("aria-hidden", "false");
+  }
+
+  function arm() {
+    clearTimeout(pinT);
+    tt.classList.remove("arming"); void tt.offsetWidth; tt.classList.add("arming");
+    pinT = setTimeout(pin, PIN_MS);
+  }
+  function pin() {
+    clearTimeout(pinT);
+    pinned = true;
+    tt.classList.remove("arming"); tt.classList.add("pinned");
+    const st = document.getElementById("ttState");
+    if (st) st.textContent = "Закреплено · наведите на стат, чтобы узнать, что он даёт · клик — закрыть";
+  }
+
   function open(idx, instant) {
+    if (pinned) return;
     clearTimeout(hideT); clearTimeout(showT);
-    const go = () => {
-      const same = current === idx && tt.classList.contains("show");
-      current = idx;
-      tt.style.setProperty("--rc", `var(${RC[items[idx].r]})`);
-      tt.innerHTML = render(items[idx], idx);
-      tt.querySelectorAll("li.boost").forEach(li => li.style.setProperty("--bc", `var(${RC[items[idx].r]})`));
-      if (!same) { tt.classList.remove("show"); void tt.offsetWidth; }
-      place(idx);
-      tt.classList.add("show"); tt.setAttribute("aria-hidden", "false");
-    };
+    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); arm(); };
     instant ? go() : (showT = setTimeout(go, tt.classList.contains("show") ? 40 : 110));
   }
-  function close() {
-    clearTimeout(showT);
-    hideT = setTimeout(() => { tt.classList.remove("show"); tt.setAttribute("aria-hidden", "true"); current = -1; }, 90);
+  function hide() {
+    clearTimeout(showT); clearTimeout(pinT); hideMini();
+    pinned = false;
+    tt.classList.remove("show", "pinned", "arming"); tt.setAttribute("aria-hidden", "true"); current = -1;
   }
+  function leave() {
+    if (pinned) return;
+    clearTimeout(showT); clearTimeout(pinT);
+    hideT = setTimeout(hide, 90);
+  }
+
+  // мини-подсказка стата (только у закреплённой)
+  function showMini(li) {
+    const it = items[current], e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
+    let tag = "";
+    if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
+    else if (e.minor) tag = "Основной стат в роли дополнительного · 45 % силы";
+    else if (li.dataset.part === "main") tag = "Основной стат предмета";
+    mini.style.setProperty("--bc", e.boost ? `var(${RC[it.r]})` : "var(--gold)");
+    mini.innerHTML = `<h3>${svg(e.key, "")}${s.name}</h3><p>${s.info}</p>` +
+      `<div class="here">На этом предмете: <b>${fmt(e.key, e.v)}</b></div>` + (tag ? `<div class="tag">${tag}</div>` : "");
+    const hb = holder.getBoundingClientRect(), lb = li.getBoundingClientRect(), tb = tt.getBoundingClientRect();
+    const mw = mini.offsetWidth || 236, gap = 10;
+    let left = tb.left - hb.left - mw - gap, dir = "6px";
+    if (left < 4) { left = tb.right - hb.left + gap; dir = "-6px"; }
+    let top = lb.top - hb.top - 8;
+    if (!narrow()) { mini.style.left = left + "px"; }
+    else { top = lb.bottom - hb.top + 6; }
+    mini.style.top = Math.max(4, top) + "px"; mini.style.setProperty("--mx", dir);
+    mini.classList.remove("show"); void mini.offsetWidth; mini.classList.add("show"); mini.setAttribute("aria-hidden", "false");
+  }
+  function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
+
+  tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
+  tt.addEventListener("mouseout", e => { const li = e.target.closest("li"); if (li && !li.contains(e.relatedTarget)) hideMini(); });
+
+  // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой;
+  // касание стата на телефоне показывает его мини-подсказку
+  document.addEventListener("pointerdown", e => {
+    if (!pinned) return;
+    const li = e.target.closest && e.target.closest("#tt li");
+    if (li && e.pointerType !== "mouse") { showMini(li); return; }
+    hide(); suppressUntil = Date.now() + 350;
+  }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && current >= 0) hide(); });
 
   SLOTS.forEach((s, idx) => {
     const b = document.createElement("button");
@@ -323,25 +443,29 @@ td.r { font-weight: 700; }
     Object.assign(b.style, { left: x0 / STAGE.w * 100 + "%", top: y0 / STAGE.h * 100 + "%",
       width: (x1 - x0) / STAGE.w * 100 + "%", height: (y1 - y0) / STAGE.h * 100 + "%" });
     b.addEventListener("mouseenter", () => open(idx));
-    b.addEventListener("mouseleave", close);
+    b.addEventListener("mouseleave", leave);
     b.addEventListener("focus", () => open(idx));
-    b.addEventListener("blur", close);
-    b.addEventListener("click", () => open(idx, true));
+    b.addEventListener("blur", leave);
+    b.addEventListener("click", e => {
+      if (Date.now() < suppressUntil) return;
+      if (e.pointerType && e.pointerType !== "mouse") { open(idx, true); pin(); }   // касание — сразу закрепить
+      else if (!pinned) open(idx, true);
+    });
     stage.appendChild(b);
   });
-  window.addEventListener("resize", () => { if (current >= 0) place(current); });
+  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); });
 
   document.getElementById("reroll").addEventListener("click", generate);
   lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
   rarSel.addEventListener("change", generate);
 
   // справочные таблицы
-  const pct = v => v.toString().replace(".", ",");
+  const dec = v => v.toString().replace(".", ",");
   document.getElementById("rarTable").innerHTML =
     "<tr><th>Редкость</th><th>Осн.</th><th>Доп.</th><th>Усилено</th><th>Множ.</th><th>Свечение</th><th>Выпадение</th></tr>" +
     RAR.map((R, i) => `<tr><td class="r" style="color:var(${RC[i]})">${R.name}</td><td>${R.main}</td><td>${R.extra}</td>` +
       `<td>${R.guar ? R.guar + " гарант." : ""}${R.guar && R.rnd ? " + " : ""}${R.rnd ? R.rnd + " × " + Math.round(R.chance * 100) + " %" : ""}${!R.guar && !R.rnd ? "—" : ""}</td>` +
-      `<td>×${pct(R.mult.toFixed(2))}</td><td>${R.boost > 1 ? "×" + pct(R.boost.toFixed(2)) : "—"}</td><td>${pct(R.drop)} %</td></tr>`).join("");
+      `<td>×${dec(R.mult.toFixed(2))}</td><td>${R.boost > 1 ? "×" + dec(R.boost.toFixed(2)) : "—"}</td><td>${dec(R.drop)} %</td></tr>`).join("");
   document.getElementById("statTable").innerHTML =
     "<tr><th>Стат</th><th>Диапазон</th><th>Основной у слотов</th></tr>" +
     ORDER.map(k => { const s = STATS[k];
@@ -349,6 +473,6 @@ td.r { font-weight: 700; }
       return `<tr><td>${s.name}</td><td>${s.lo}–${s.hi}${s.pct ? " %" : ""}</td><td>${slots}</td></tr>`; }).join("");
 
   generate();
-  open(0, true);
+  fill(6, false);   // при загрузке — открытая подсказка кольца, чтобы страница не была пустой
 })();
 </script>
