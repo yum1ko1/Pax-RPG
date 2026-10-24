@@ -1,16 +1,14 @@
 """Тянь Лун в полный рост с разных сторон — референс для арта (центр инвентаря, концепты в GPT).
 Родные текстуры модели, свет в палитре HUD (тёплый ключ, багровый контровой), тёмно-серый фон. Eevee, 1024×1536.
     blender -b -P turnaround.py -- <tian_long/model.glb> <папка вывода>
+glb — из репозитория (mods/pax_rpg/models/heroes/tian_long): в копии игры на ПК текстуры — заглушки 1×1.
 Кадры: idle_front, idle_34, idle_side, idle_back (клип Idle) и hero_34 (клип CombatIdle).
 """
-import json
 import math
 import os
-import struct
 import sys
 
 import bpy
-import numpy as np
 from mathutils import Vector
 
 A = sys.argv[sys.argv.index("--") + 1:]
@@ -27,38 +25,6 @@ for o in meshes:
         poly.use_smooth = True
 if not arm.animation_data:
     arm.animation_data_create()
-with open(SRC, "rb") as f:
-    f.read(12)
-    n, _ = struct.unpack("<II", f.read(8))
-    gl = json.loads(f.read(n))
-    n, _ = struct.unpack("<II", f.read(8))
-    blob = f.read(n)
-TEX = os.path.join(OUT, "tex")                        # Blender 5.2 на ПК автора не декодирует вшитые в glb картинки
-                                                      # (вместо текстуры — сплошной цвет): кладём их файлами рядом и грузим с диска
-os.makedirs(TEX, exist_ok=True)
-by_name = {}
-for i, im in enumerate(gl.get("images", [])):
-    v = gl["bufferViews"][im["bufferView"]]
-    ext = ".png" if im.get("mimeType") == "image/png" else ".jpg"
-    path = os.path.join(TEX, f"{i}_{im.get('name', 'img')}{ext}")
-    with open(path, "wb") as f:
-        f.write(blob[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]])
-    by_name.setdefault(im.get("name", ""), []).append(path)
-for img in list(bpy.data.images):
-    base, _, dup = img.name.partition(".")
-    paths = by_name.get(base) or []
-    k = int(dup) if dup.isdigit() else 0
-    if k < len(paths):
-        cs = img.colorspace_settings.name
-        img.unpack(method="REMOVE") if img.packed_file else None
-        img.filepath = paths[k]
-        img.source = "FILE"
-        img.reload()
-        img.colorspace_settings.name = cs
-        px = np.empty(img.size[0] * img.size[1] * img.channels, np.float32)
-        img.pixels.foreach_get(px)
-        px = px.reshape(-1, img.channels)
-        print("img", img.name, os.path.basename(paths[k]), img.size[:], [round(float(px[:, c].mean()), 3) for c in range(3)], flush=True)
 for mat in bpy.data.materials:                        # цвет — из BaseColor, без sheen (он высветляет ткань)
     if not mat.use_nodes:
         continue
