@@ -79,6 +79,9 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 
 .tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 0 30px 10px 0; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
+.tt.gharn .icon { background-image: url("items_gharn.jpg"); }
+.slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b url("items_gharn.jpg") no-repeat; border-radius: 2px;
+           box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 12px color-mix(in srgb, var(--rc) 55%, transparent); }
 .icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
         background-color: #120a0b; background-image: url("items.jpg"); background-repeat: no-repeat; border-radius: 2px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
@@ -195,12 +198,15 @@ td.r { font-weight: 700; }
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на предмет в колонке экипировки. Вещи сета «Самурай Восхода Юрумы» показывают бонусы сета внизу подсказки; сколько вещей сета надето, задаёт переключатель. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
+    <p class="lead">Наведите курсор на предмет в колонке экипировки. Вещи сета показывают бонусы сета внизу подсказки. Переключатели задают, какой сет надет (Самурай Восхода Юрумы или Воитель песков Гхарна) и сколько его вещей. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
   </div>
 
   <div class="bar">
     <button id="reroll" type="button">Перебросить статы</button>
     <label for="lvl">Уровень предмета <input id="lvl" type="range" min="1" max="50" value="10"> <span class="lvl" id="lvlOut">10</span></label>
+    <label for="setK">Сет
+      <select id="setK"><option value="samurai">Самурай Восхода Юрумы</option><option value="gharn">Воитель песков Гхарна</option></select>
+    </label>
     <label for="setN">Вещей сета надето
       <select id="setN"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option></select>
     </label>
@@ -288,7 +294,11 @@ td.r { font-weight: 700; }
   const ORDER = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"];
 
   // сет: вещи сета — в первых N слотах (переключатель «Вещей сета надето»); бонусы действуют при любой редкости вещей
-  const SET = { name: "Самурай Восхода Юрумы",
+  const SHEET_GHARN = { w: 1024, h: 1536,
+    cols: [[12,165],[180,335],[345,509],[515,679],[685,850],[856,1016]],
+    rows: [[8,179],[185,360],[366,528],[535,708],[714,887],[894,1118],[1124,1292],[1298,1530]] };
+  const SETS = {};
+  SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "",
     names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
     lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
     bonuses: [
@@ -301,6 +311,20 @@ td.r { font-weight: 700; }
       { n: 8, title: "Восход Хоэна", text: "при ОЗ ниже <b>30 %</b>: 6 с стойка не ломается, <b>+25 %</b> скорость атаки, Кровожадный удар лечит <b>15 %</b> ОЗ",
         info: "Срабатывает само, раз в 90 с. Кто пережил ночь Раскола, встречает рассвет." },
     ] };
+  SETS.gharn = { name: "Воитель песков Гхарна", sheet: SHEET_GHARN, cls: "gharn",
+    names: ["Шлем Песков", "Куяк Песков", "Наручи Песков", "Оплечья Песков", "Гутулы Песков", "Бурка Песков", "Перстень Клыка", "Оберег Клыка"],
+    lore: "Доспехи туменов, что идут сквозь пыльные бури плато. Хаан правит, пока побеждает — и воин тоже.",
+    bonuses: [
+      { n: 2, title: "Закалка бурей", text: "<b>+15</b> ОЗ, <b>+8</b> СПР физ. урону, <b>+8</b> СПР стих. урону",
+        info: "Кто вырос в песчаных бурях плато, держит и удар, и ману шаманов." },
+      { n: 4, title: "Право сильного", text: "каждое убийство: <b>+4 %</b> атаки на 10 с, до <b>5</b> раз",
+        info: "Хаан правит, пока побеждает. Новое убийство обновляет время и добавляет заряд." },
+      { n: 6, title: "Песчаный вихрь", text: "уворот поднимает песок: враги в <b>3 м</b> на 1 с слепнут, их концентрация не спадает <b>3 с</b>",
+        info: "Багбиры ходят там, где не пройдёт никто. Ослеплённый враг не атакует и не уходит в блок." },
+      { n: 8, title: "Бунчук Хаана", text: "при <b>5</b> зарядах Права сильного удар — рёв орды: враги в 4 м оглушены <b>1,5 с</b>, <b>+40</b> к их концентрации",
+        info: "Заряды сгорают. Оглушённые ближе к Кровожадному удару. Раз в 30 с." },
+    ] };
+  let SET = SETS.samurai;
   const MINOR = 0.45, MINOR_W = 0.6;
 
   // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
@@ -355,10 +379,11 @@ td.r { font-weight: 700; }
   const RC = ["--r0", "--r1", "--r2", "--r3", "--r4", "--r5"];
   const svg = (key, cls) => `<img class="${cls}" src="ui/st_${key}_s.png" alt="">`;
 
-  function iconStyle(slotIdx, r) {
-    const [x0, x1] = SHEET.cols[r], [y0, y1] = SHEET.rows[slotIdx];
+  function iconStyle(slotIdx, r, sheet) {
+    sheet = sheet || SHEET;
+    const [x0, x1] = sheet.cols[r], [y0, y1] = sheet.rows[slotIdx];
     const s = 64 / (x1 - x0);
-    return `background-size:${SHEET.w * s}px ${SHEET.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
+    return `background-size:${sheet.w * s}px ${sheet.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
   }
   const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
     `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
@@ -377,7 +402,7 @@ td.r { font-weight: 700; }
     let i = 0;
     return `<div class="sweep"></div><div class="inner">
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
-      <header><div class="icon" style="${iconStyle(idx, item.r)}"></div>
+      <header><div class="icon" style="${iconStyle(idx, item.r, item.set ? SET.sheet : SHEET)}"></div>
         <div><p class="name">${item.name}</p>
           <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span>${item.set ? '<span class="settag">Сет</span>' : ""}<span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
       <div class="orn"></div>
@@ -395,7 +420,7 @@ td.r { font-weight: 700; }
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
   const tt = document.getElementById("tt"), mini = document.getElementById("mini");
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut"), rarSel = document.getElementById("rar");
-  const setSel = document.getElementById("setN");
+  const setSel = document.getElementById("setN"), setKind = document.getElementById("setK");
   const setCount = () => +setSel.value;
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
   let items = [], current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0;
@@ -407,6 +432,7 @@ td.r { font-weight: 700; }
       if (k < setCount()) { it.set = true; it.name = SET.names[k]; }
       return it;
     });
+    slotArt();
     if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
   }
 
@@ -424,6 +450,7 @@ td.r { font-weight: 700; }
     current = idx;
     const it = items[idx];
     tt.style.setProperty("--rc", `var(${RC[it.r]})`);
+    tt.classList.toggle("gharn", it.set && SET.cls === "gharn");
     tt.innerHTML = render(it, idx);
     tt.querySelectorAll("li.boost").forEach(li => { li.style.setProperty("--bc", `var(${RC[it.r]})`); li.classList.add("b" + it.r); });
     if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
@@ -526,12 +553,28 @@ td.r { font-weight: 700; }
     });
     stage.appendChild(b);
   });
-  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); });
+  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); slotArt(); });
 
   document.getElementById("reroll").addEventListener("click", generate);
   lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
   rarSel.addEventListener("change", generate);
   setSel.addEventListener("change", generate);
+  setKind.addEventListener("change", () => { SET = SETS[setKind.value]; generate(); });
+
+  // иконки сета Гхарна поверх слотов макета (на макете нарисованы вещи Самурая)
+  function slotArt() {
+    SLOTS.forEach((s, k) => {
+      const b = document.getElementById("slot-" + s.key); let art = b.querySelector(".slotArt");
+      const show = SET.cls === "gharn" && items[k] && items[k].set;
+      if (!show) { if (art) art.remove(); return; }
+      if (!art) { art = document.createElement("span"); art.className = "slotArt"; b.appendChild(art); }
+      const sh = SET.sheet, [x0, x1] = sh.cols[items[k].r], [y0, y1] = sh.rows[k];
+      const w = b.clientWidth, h = b.clientHeight, sc = Math.max(w / (x1 - x0), h / (y1 - y0));
+      art.style.backgroundSize = `${sh.w * sc}px ${sh.h * sc}px`;
+      art.style.backgroundPosition = `${-(x0 * sc - (w - (x1 - x0) * sc) / 2)}px ${-(y0 * sc - (h - (y1 - y0) * sc) / 2)}px`;
+      art.style.setProperty("--rc", `var(${RC[items[k].r]})`);
+    });
+  }
 
   // справочные таблицы
   const dec = v => v.toString().replace(".", ",");
