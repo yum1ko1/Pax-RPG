@@ -270,15 +270,24 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 .mini h3 { font-size: 14px; text-transform: uppercase; }
 
 /* пропитано маной: центр — цвет редкости, рамка переливается розовым */
-@property --ma { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-@keyframes manaSpin { to { --ma: 360deg; } }
 @keyframes manaText { to { background-position: 300% 0; } }
-.mrim { position: relative; }
-.mrim::after { content: ""; position: absolute; inset: -2px; border-radius: 3px; padding: 2px; pointer-events: none;
-  background: conic-gradient(from var(--ma), #ff5fd0, #ffd3f3, #c870ff, #ff5fd0, #ff9be6, #ffd3f3, #c870ff, #ff5fd0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-  filter: drop-shadow(0 0 4px rgba(255, 95, 208, .9)); animation: manaSpin 3.2s linear infinite; }
+/* рамка слота с кристаллами (35): линия рамки — в 10,5 % от края картинки, поэтому картинка шире слота на 13,3 % с каждой стороны */
+.icon.mrim { position: relative; }
+.mrim::after, .mi .mr { content: ""; position: absolute; inset: -13.3%; pointer-events: none; z-index: 1;
+  background: url("ui/mana_rim_s.png") 0 0 / 100% 100% no-repeat; animation: manaRim 4s ease-in-out infinite; }
+.slotArt.mrim::after { inset: -9%; }   /* в колонке экипировки кристаллы не залезают на соседние слоты */
+@keyframes manaRim { 0%, 100% { opacity: .82; filter: brightness(1); } 50% { opacity: 1; filter: brightness(1.22) drop-shadow(0 0 4px rgba(255, 95, 208, .55)); } }
+/* уголки окна с кристаллами (36) и плавающие частицы маны (38) */
+.mcorners { position: absolute; inset: -52.8px -52.8px -36.2px -56.6px; pointer-events: none; z-index: 2; }
+.mcorners .c { position: absolute; width: 96px; background: center / contain no-repeat; animation: manaRim 4s ease-in-out infinite; }
+.mcorners .tl { left: -14px; top: -12px; aspect-ratio: 200 / 185; background-image: url("ui/mana_c_tl_s.png"); }
+.mcorners .tr { right: -14px; top: -12px; aspect-ratio: 200 / 185; background-image: url("ui/mana_c_tr_s.png"); animation-delay: -1s; }
+.mcorners .bl { left: -14px; bottom: -12px; aspect-ratio: 200 / 161; background-image: url("ui/mana_c_bl_s.png"); animation-delay: -2s; }
+.mcorners .br { right: -14px; bottom: -12px; aspect-ratio: 200 / 161; background-image: url("ui/mana_c_br_s.png"); animation-delay: -3s; }
+.mcorners .p { position: absolute; width: var(--s); aspect-ratio: 1; background: center / contain no-repeat; opacity: 0;
+               animation: manaDrift var(--d) ease-in-out var(--w) infinite; }
+@keyframes manaDrift { 0% { opacity: 0; transform: translate(0, 6px) scale(.8); } 30%, 60% { opacity: .75; }
+                       100% { opacity: 0; transform: translate(var(--dx), -26px) scale(1); } }
 /* рамка окна — та же золотая, поверх её розовая копия, которая переливается */
 .tt.mana::after { content: ""; position: absolute; pointer-events: none; inset: -52.8px -52.8px -36.2px -56.6px;
   border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
@@ -292,25 +301,34 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
                       50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 180, 240, .95)) drop-shadow(0 0 22px rgba(220, 110, 255, .65)); } }
 @keyframes manaPin { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 16px rgba(255, 95, 208, .7)); }
                      50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 210, 240, 1)) drop-shadow(0 0 26px rgba(255, 95, 208, .9)); } }
-.manatag { margin-top: 5px; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-caps); font-size: 11.5px; letter-spacing: .12em;
-           text-transform: uppercase; font-weight: 600;
-           background: linear-gradient(90deg, #ff7ad9, #ffe0f7, #c77dff, #ff7ad9); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+/* плашка «Пропитано маной» (37): края с ромбом не тянутся, тянется только середина */
+.manatag { margin: 3px 0 0 -8px; display: inline-flex; align-items: center; height: 30px; padding: 0 2px 1px 0; font-family: var(--font-caps);
+           font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; white-space: nowrap;
+           border-style: solid; border-width: 0 21.25px 0 26.25px; border-image: url("ui/mana_badge_s.png") 0 51 0 63 fill / 0 21.25px 0 26.25px stretch; }
+/* переливающийся текст — во вложенном span: заливка плашки рисуется поверх фона самой плашки */
+.manatag span { background: linear-gradient(90deg, #ff9ae3, #fff0fb, #e0a8ff, #ff9ae3); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
            color: transparent; animation: manaText 3s linear infinite; }
-.manatag i { width: 8px; height: 8px; transform: rotate(45deg); background: var(--mana); box-shadow: 0 0 6px var(--mana); }
 li.mana .v, li.mana .k { background: linear-gradient(90deg, #ff7ad9, #ffe3f8, #c77dff, #ff7ad9); background-size: 300% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; animation: manaText 2.6s linear infinite; }
-li.mana { --tint: linear-gradient(90deg, rgba(255, 95, 208, .24), rgba(200, 112, 255, .08) 70%, transparent);
-          background-repeat: no-repeat; background-image: var(--tint); box-shadow: inset 2px 0 0 var(--mana); }
-li.mana.boost { box-shadow: inset 2px 0 0 var(--mana); }
+/* строка с маной: полоса маны (37) подчёркиванием, при наложении на свечение — обе полосы */
+li.mana { --tint: linear-gradient(90deg, rgba(255, 95, 208, .2), rgba(200, 112, 255, .06) 70%, transparent);
+          background-repeat: no-repeat; background-image: url("ui/mana_strip_s.png"), var(--tint);
+          background-size: 100% 30px, 100% 100%; background-position: left -6px bottom -19px, 0 0; }
+li.mana.boost.b3 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_epic_s.png"), var(--tint); }
+li.mana.boost.b4 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_leg_s.png"), var(--tint); }
+li.mana.boost.b5 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_myth_s.png"), var(--tint); }
+li.mana.boost { background-size: 100% 30px, 100% 14px, 100% 100%; background-position: left -6px bottom -19px, left 0 bottom -6px, 0 0; }
 li.mana img.si { filter: drop-shadow(0 0 4px var(--mana)); }
-li.mana .mark { background-image: none !important; width: 9px; height: 9px; transform: rotate(45deg); background: var(--mana) !important;
-                box-shadow: 0 0 8px var(--mana); animation: twinkle 2.2s ease-in-out infinite; }
-li.mana.boost .mark { box-shadow: 0 0 8px var(--mana), 0 0 0 2px var(--bc); }
+li.mana .mark { width: 12px; height: 16px; background-image: url("ui/mana_gem_s.png") !important; animation: twinkle 3.6s ease-in-out infinite; }
+/* мана поверх свечения: ромб маны и звезда редкости рядом */
+li.mana.boost .mark { width: 26px; background-size: 11px 14px, 13px 13px; background-position: left center, right center; }
+li.mana.boost.b3 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_epic_s.png") !important; }
+li.mana.boost.b4 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_leg_s.png") !important; }
+li.mana.boost.b5 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_myth_s.png") !important; }
 ul.main li.manaMain::after { background: var(--mana); opacity: .9; }
-ul.main li.manaMain .k::after { content: " ◆"; color: var(--mana); font-size: 11px; vertical-align: 2px; }
-.mi.mana { animation: manaTile 2.4s ease-in-out infinite; }
-@keyframes manaTile { 0%, 100% { box-shadow: 0 0 0 1px #ff5fd0, 0 0 6px rgba(255, 95, 208, .6), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); }
-                      50% { box-shadow: 0 0 0 1px #ffc6f0, 0 0 12px rgba(220, 110, 255, .8), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); } }
+ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; height: 12px; margin-left: 6px; vertical-align: -1px;
+                                background: url("ui/mana_gem_s.png") center / contain no-repeat; }
+
 .msub { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--mana); padding: 6px 2px 4px; font-family: var(--font-caps); }
 
 /* мини-подсказка стата */
@@ -587,14 +605,24 @@ td.r { font-weight: 700; }
 </div>`;
   }
 
+  // 4 уголка с кристаллами и несколько частиц маны вдоль рамки, у каждой — своё место, скорость и задержка
+  const MPART = ["ui/mana_p0_s.png", "ui/mana_p1_s.png", "ui/mana_p3_s.png", "ui/mana_p5_s.png", "ui/mana_p6_s.png", "ui/mana_p7_s.png",
+                 "ui/mana_p11_s.png", "ui/mana_p12_s.png", "ui/mana_p14_s.png"];
+  const MSPOT = [[6, 10], [94, 8], [3, 48], [97, 40], [8, 90], [92, 92], [50, 2], [30, 97], [70, 97]];
+  function manaDeco() {
+    return `<div class="mcorners"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>` +
+      MSPOT.map(([x, y], n) => `<i class="p" style="left:${x}%;top:${y}%;--s:${12 + (n * 5) % 9}px;--d:${5 + (n * 7) % 4}s;--w:-${(n * 1.3).toFixed(1)}s;` +
+        `--dx:${(n % 2 ? 1 : -1) * (4 + n % 3 * 3)}px;background-image:url(${MPART[n]})"></i>`).join("") + `</div>`;
+  }
+
   function render(item, idx) {
     let i = 0;
-    return `<div class="sweep"></div><div class="inner">
+    return `<div class="sweep"></div>${item.mana ? manaDeco() : ""}<div class="inner">
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon${item.mana ? " mrim" : ""}" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
           <div class="rarity"><i></i>${RAR[item.r].name}</div>
-          ${item.mana ? '<div class="manatag"><i></i>Пропитано маной</div>' : ""}
+          ${item.mana ? '<div class="manatag"><span>Пропитано маной</span></div>' : ""}
           <div class="ilv">Уровень предмета <b>${item.lvl}</b></div></div>
         <div class="price" title="Цена">${COIN}<b>${money(item.price)}</b></div></header>
       <div class="kind"><span class="kt" style="background-image:url(${TYPES[PIP[idx]]})"></span>
@@ -748,7 +776,7 @@ td.r { font-weight: 700; }
         `${mana ? '<div class="msub">Пропитано маной</div>' : ""}<div class="mgrid">` +
         bag[k].filter(it => it.setKey === key && it.mana === mana).map(it => { const eq = it.id === equipped[k];
           return `<button type="button" class="mi${eq ? " eq" : ""}${it.mana ? " mana" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${it.mana ? ", пропитано маной" : ""}${eq ? ", надето" : ""}" ` +
-            `style="--rc:var(${RC[it.r]});${spriteCover(k, it.r, SETS[key].sheet)}"></button>`; }).join("") +
+            `style="--rc:var(${RC[it.r]});${spriteCover(k, it.r, SETS[key].sheet)}">${it.mana ? '<i class="mr"></i>' : ""}</button>`; }).join("") +
         `</div>`).join("")).join("") +
       `<div class="mcap" id="mcap" style="--rc:var(${RC[cur.r]})"><b>${cur.name}</b><span>${RAR[cur.r].name} · надето</span></div>`;
     menu.classList.remove("show"); void menu.offsetWidth;
