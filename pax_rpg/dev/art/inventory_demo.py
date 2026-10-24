@@ -47,10 +47,15 @@ def slot_art(tile, w, h):
     return bg
 
 
-def border(w, h, col, amp):
+def border(px, col, amp):
+    """Тонкая постоянная рамка цветом редкости + мягкое свечение внутрь, яркость свечения — amp."""
+    h, w, _ = px.shape
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     edge = np.minimum(np.minimum(xx, w - 1 - xx), np.minimum(yy, h - 1 - yy))
-    return np.exp(-edge / 4.0)[..., None] * np.array(col, np.float32) * amp
+    col = np.array(col, np.float32)
+    line = np.clip(1.6 - edge, 0, 1)[..., None] * 0.85
+    px = px * (1 - line) + line * col * 0.9
+    return px + np.exp(-edge / 7.0)[..., None] * col * amp
 
 
 def main(ref: str, out: str):
@@ -80,8 +85,8 @@ def main(ref: str, out: str):
             sx0, sy0, sx1, sy1 = rs.cell(LAYOUT, item, r)
             art = slot_art(fr.crop((sx0 + INSET, sy0 + INSET, sx1 - INSET, sy1 - INSET)), w, h)
             col, a_border = rs.RARITY[r][0], rs.RARITY[r][1]
-            amp = a_border * rs.pulse_at(r, item * 0.11 + r * 0.07, t) if a_border else 0.25
-            px = np.asarray(art, np.float32) / 255 + border(w, h, col, amp)
+            amp = a_border * 0.75 * rs.pulse_at(r, item * 0.11 + r * 0.07, t) if a_border else 0.0
+            px = border(np.asarray(art, np.float32) / 255, col if a_border else (0.55, 0.55, 0.55), amp)
             img.paste(Image.fromarray((np.clip(px, 0, 1) * 255).astype(np.uint8)), (ax0, ay0))
         out_frames.append(img)
     W, H = out_frames[0].size

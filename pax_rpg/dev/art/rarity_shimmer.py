@@ -3,7 +3,8 @@
 → <выход>.webp (полный размер) и <выход>.gif (длинная сторона 1024 px). Редкость: обычное (без анимации), необычное и
 редкое (пульс рамки), эпическое (пульс + блик), легендарное (пульс + блик + искры), мифическое (мерцание, блик, угли).
 Сетки листов — в LAYOUTS (края ячеек в пикселях, найдены по перепадам яркости): v2 — 6 рядов редкости × 8 предметов,
-самоцветы слева; v3 — 8 рядов предметов × 6 столбцов редкости, без рамок (под слоты инвентаря).
+самоцветы слева; v3 — 8 рядов предметов × 6 столбцов редкости, без рамок (под слоты инвентаря) — на анимации ячейкам
+рисуется тонкая постоянная рамка цветом редкости, свечение «дышит» вокруг неё.
 """
 import math
 import sys
@@ -19,7 +20,7 @@ LAYOUTS = {
                by="col", gems=False),
 }
 GEM_X = 50                                             # центр самоцветов слева (v2)
-FRAMES, MS = 24, 85
+FRAMES, MS = 48, 85                                    # ~4 с на цикл
 #           цвет            рамка  блик  искры угли
 RARITY = [((0.7, 0.7, 0.7), 0.0, 0.0, 0, 0),
           ((0.3, 1.0, 0.4), 0.35, 0.0, 0, 0),
@@ -30,10 +31,10 @@ RARITY = [((0.7, 0.7, 0.7), 0.0, 0.0, 0, 0),
 
 
 def pulse_at(r: int, ph: float, t: float) -> float:
-    """Яркость рамки ряда r в миг t (0..1) со сдвигом фазы ph."""
-    if r == 5:                                         # мифическое — неровное мерцание, два удара за цикл
-        return 0.6 + 0.25 * math.sin(2 * math.pi * (2 * t + ph)) + 0.15 * math.sin(2 * math.pi * (5 * t + 3 * ph))
-    return 0.55 + 0.45 * math.sin(2 * math.pi * (t + ph))
+    """Яркость свечения рамки редкости r в миг t (0..1) со сдвигом фазы ph: мягкое дыхание раз за цикл, без мигания."""
+    if r == 5:                                         # мифическое — то же дыхание с лёгкой неровностью
+        return 0.72 + 0.2 * math.sin(2 * math.pi * (t + ph)) + 0.08 * math.sin(2 * math.pi * (2 * t + 3 * ph))
+    return 0.72 + 0.28 * math.sin(2 * math.pi * (t + ph))
 
 
 def cell(layout: str, item: int, rarity: int) -> tuple:
@@ -62,6 +63,7 @@ def render(src: str, layout: str = "v2") -> list:
             edge = np.minimum(np.minimum(x, w - x), np.minimum(y, h - y))
             cells.append(dict(r=rar, sl=sl, w=w, h=h, x=x, y=y, ph=c * 0.11 + r * 0.07,
                               border=np.exp(-edge / 7.0)[..., None],
+                              line=np.clip(1.6 - edge, 0, 1)[..., None],
                               diag=(x + y) / (w + h),
                               item=np.clip((lum[sl] - 0.12) * 1.6, 0, 1)[..., None],
                               sparks=rng.uniform([0.15, 0.15, 0], [0.85, 0.85, 1], (RARITY[rar][3], 3)),
@@ -74,9 +76,11 @@ def render(src: str, layout: str = "v2") -> list:
         for k in cells:
             col, a_border, a_sweep, _, _ = RARITY[k["r"]]
             col = np.array(col, np.float32)
+            sl, ph = k["sl"], k["ph"]
+            if not L["gems"]:                            # лист без рамок — тонкая постоянная рамка цветом редкости
+                img[sl] = img[sl] * (1 - k["line"] * 0.85) + k["line"] * 0.85 * col * (0.55 if a_border == 0 else 0.9)
             if a_border == 0:
                 continue
-            sl, ph = k["sl"], k["ph"]
             pulse = pulse_at(k["r"], ph, t)
             add = k["border"] * col * (a_border * pulse)
             if a_sweep:
