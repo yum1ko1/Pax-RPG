@@ -457,7 +457,7 @@ td.r { font-weight: 700; }
   const tt = document.getElementById("tt"), mini = document.getElementById("mini"), menu = document.getElementById("menu");
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut");
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
-  let current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
+  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
 
   function generate() {
     const lvl = +lvlIn.value;
@@ -501,7 +501,7 @@ td.r { font-weight: 700; }
   }
   function pin() {
     clearTimeout(pinT);
-    pinned = true;
+    pinned = true; ttEntered = false;
     tt.classList.remove("arming"); tt.classList.add("pinned");
   }
 
@@ -556,6 +556,9 @@ td.r { font-weight: 700; }
   }
   function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
 
+  // закреплённая: курсор зашёл в подсказку и вышел за её рамку — подсказка закрывается (0,15 с на возврат)
+  tt.addEventListener("mouseenter", () => { if (pinned) { ttEntered = true; clearTimeout(ttLeaveT); } });
+  tt.addEventListener("mouseleave", () => { if (pinned && ttEntered) ttLeaveT = setTimeout(() => { if (pinned) hide(); }, 150); });
   tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
   tt.addEventListener("mouseout", e => { const li = e.target.closest("li"); if (li && !li.contains(e.relatedTarget)) hideMini(); });
 
