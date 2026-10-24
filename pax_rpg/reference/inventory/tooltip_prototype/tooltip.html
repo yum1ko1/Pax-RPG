@@ -319,11 +319,15 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 
 /* пропитано маной: центр — цвет редкости, рамка переливается розовым */
 @keyframes manaText { to { background-position: 300% 0; } }
-/* рамка слота с кристаллами (35): у иконки в окне чуть выходит за край, в слотах и плитках — целиком внутри, чтобы рамки не наслаивались */
+/* рамка слота с кристаллами (35) — 9 частей: углы с кристаллами не тянутся, тянутся только края. Линия рамки в картинке
+   (320 px) — в 32 px от края, угол — 76 px; при ширине угла --mw линия ложится ровно на край слота за счёт выноса
+   --mw·32/76 наружу. Узкая --mw — тонкая рамка, кристаллы выходят за край всего на пару пикселей и не налезают на соседей */
 .icon.mrim { position: relative; }
-.mrim::after, .mi .mr { content: ""; position: absolute; inset: -3%; pointer-events: none; z-index: 1;
-  background: url("ui/mana_rim_s.png") 0 0 / 100% 100% no-repeat; animation: manaRim 4s ease-in-out infinite; }
-.slotArt.mrim::after, .mi .mr { inset: 0; }   /* рамка целиком внутри плитки — тонкая, соседние рамки не наслаиваются */
+.mrim::after, .mi .mr { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; --mw: 14px;
+  border-style: solid; border-width: var(--mw);
+  border-image: url("ui/mana_rim_s.png") 76 / var(--mw) / calc(var(--mw) * 32 / 76) stretch;
+  animation: manaRim 4s ease-in-out infinite; }
+.mi .mr { --mw: 11px; }
 @keyframes manaRim { 0%, 100% { opacity: .7; filter: brightness(.95); } 50% { opacity: .92; filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 95, 208, .45)); } }
 /* уголки окна с кристаллами (36) и плавающие частицы маны (38) */
 .mcorners { position: absolute; inset: -52.8px -52.8px -36.2px -56.6px; pointer-events: none; z-index: 2; }
