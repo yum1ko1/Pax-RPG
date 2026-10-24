@@ -403,6 +403,7 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
         opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
 .mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
 /* описание приёма / пассива: та же рамка, что у мини-подсказки, шире; иконка слева от названия */
+.mini.skt.wide { width: 340px; }
 .mini.skt { width: 300px; z-index: 8; --pgc: 201 163 92; --pgl: 212 181 125; }
 .mini.skt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
 .skt .pin { top: -10px; right: -10px; }
@@ -433,12 +434,18 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .repends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .reps { display: grid; grid-template-columns: 1fr 64px 34px; gap: 5px 8px; align-items: center; margin-top: 8px; font-size: 13px; }
 .reps .en { color: var(--text); display: flex; align-items: center; gap: 6px; }
-.reps .en i { width: 8px; height: 8px; transform: rotate(45deg); background: var(--ec); box-shadow: 0 0 5px var(--ec); flex: none; }
+/* герб империи рядом с названием */
+.reps .en i { width: 24px; height: 24px; flex: none; background-position: center; background-size: contain; background-repeat: no-repeat; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)); }
+.emp-throne { background-image: url("ui/emp_throne_s.png"); }
+.emp-haddur { background-image: url("ui/emp_haddur_s.png"); }
+.emp-gharn { background-image: url("ui/emp_gharn_s.png"); }
+.emp-saerith { background-image: url("ui/emp_saerith_s.png"); }
+.emp-blossom { background-image: url("ui/emp_blossom_s.png"); }
 .reps .bar { position: relative; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); }
 .reps .bar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(240, 207, 138, .5); }
 .reps .bar b { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--tc); }
 .reps .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--tc); font-weight: 600; }
-.reps .tn { grid-column: 1 / -1; margin: -4px 0 0 14px; font-size: 11.5px; color: var(--tc); }
+.reps .tn { grid-column: 1 / -1; margin: -6px 0 0 30px; font-size: 11.5px; color: var(--tc); }
 
 .mini.sk2 { width: 310px; z-index: 9; }
 .skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
@@ -1107,9 +1114,9 @@ td.r { font-weight: 700; }
   const REP_TIERS = [{ min: -100, name: "Враг", c: "#e0706a" }, { min: -59, name: "Недоверие", c: "#d89a5a" },
                      { min: -19, name: "Нейтрально", c: "#cfc6b4" }, { min: 20, name: "Уважение", c: "#7fd6a8" },
                      { min: 60, name: "Почитание", c: "#f0cf8a" }];
-  const EMPIRES = [{ name: "Лазурный Престол", v: 0, c: "#5aa8ff" }, { name: "Пиковый Доминион Хаддур", v: 0, c: "#9fb4c8" },
-                   { name: "Орда Гхарн", v: 0, c: "#d9a14a" }, { name: "Империум Саэрит", v: 0, c: "#4fc49a" },
-                   { name: "Двор Вечного Цветения", v: 0, c: "#ff8fc8" }];      // на старте игрок ни к кому не примкнул — везде 0
+  const EMPIRES = [{ key: "throne", name: "Лазурный Престол", v: 0, c: "#5aa8ff" }, { key: "haddur", name: "Пиковый Доминион Хаддур", v: 0, c: "#9fb4c8" },
+                   { key: "gharn", name: "Орда Гхарн", v: 0, c: "#d9a14a" }, { key: "saerith", name: "Империум Саэрит", v: 0, c: "#4fc49a" },
+                   { key: "blossom", name: "Двор Вечного Цветения", v: 0, c: "#ff8fc8" }];      // на старте игрок ни к кому не примкнул — везде 0
   const tierOf = v => REP_TIERS.reduce((t, x, i) => v >= x.min ? i : t, 0);
   const repTotal = () => Math.round(EMPIRES.reduce((t, e) => t + e.v, 0) / EMPIRES.length);
   const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v);
@@ -1130,7 +1137,7 @@ td.r { font-weight: 700; }
       `<div class="repbar">${[20, 40, 60, 80].map(x => `<s style="left:${x}%"></s>`).join("")}<u style="left:${(tot + 100) / 2}%"></u></div>` +
       `<div class="repends"><span>−100</span><span>0</span><span>+100</span></div></div>` +
       `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
-        return `<span class="en" style="--ec:${e.c}"><i></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
+        return `<span class="en"><i class="emp-${e.key}"></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
           `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
       REP_RECT, "rep");
   }
@@ -1155,7 +1162,7 @@ td.r { font-weight: 700; }
   function sktDropSoon() { clearTimeout(sktT); sktT = setTimeout(() => { if (sktPinned && !inSkt && !onSock) hideSkt(); }, 60); }
   function sktOpen(html, rect, key) {
     if (sktPinned) { if (key === sktKey) { onSock = true; clearTimeout(sktT); return; } if (inSkt) return; hideSkt(); }
-    sktKey = key; onSock = true;
+    sktKey = key; onSock = true; skt.classList.toggle("wide", key === "rep");
     clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
     skt.innerHTML = PIN_HTML + html;
     skt.classList.remove("arming", "pinned");
