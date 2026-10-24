@@ -24,6 +24,20 @@ for o in meshes:
         poly.use_smooth = True
 if not arm.animation_data:
     arm.animation_data_create()
+import numpy as np                                    # Blender 5.2 на ПК автора читает вшитые JPEG как BGR: у Тянь Лун текстуры
+for img in bpy.data.images:                           # цвета красные, так что синий перевес = каналы перепутаны
+    if img.size[0] == 0 or img.colorspace_settings.name != "sRGB":
+        continue
+    px = np.empty(img.size[0] * img.size[1] * img.channels, np.float32)
+    img.pixels.foreach_get(px)
+    px = px.reshape(-1, img.channels)
+    r, b = px[:, 0].mean(), px[:, 2].mean()
+    print("img", img.name, img.file_format, round(float(r), 3), round(float(b), 3), flush=True)
+    if b > r * 1.15:
+        px[:, [0, 2]] = px[:, [2, 0]]
+        img.pixels.foreach_set(px.ravel())
+        img.pack()
+        print("img", img.name, "R<->B", flush=True)
 for mat in bpy.data.materials:                        # цвет — строго из BaseColor (импортёр Blender 5.2 путает карты), без sheen
     if not mat.use_nodes:
         continue
