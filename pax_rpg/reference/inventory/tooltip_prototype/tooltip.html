@@ -87,7 +87,7 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
       border-image: url("ui/frame_main_s.png") 70 70 48 75 fill / 52.8px 52.8px 36.2px 56.6px stretch;
       filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7));
       opacity: 0; transform: translateY(6px) scale(.975); transform-origin: var(--ox, 100%) 20%;
-      transition: opacity 140ms ease-in, transform 160ms ease-in, filter 300ms; }
+      transition: opacity 110ms ease-in, transform 130ms ease-in, filter 300ms; }
 .tt.show.live { pointer-events: auto; }   /* окно ловит курсор, только если его открыли наведением, — показанное при загрузке не мешает слотам */
 .tt.show { opacity: 1; transform: none;
            transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1), filter 300ms; }
@@ -765,7 +765,7 @@ td.r { font-weight: 700; }
   function leave() {
     if (pinned) return;
     clearTimeout(showT);   // таймер закрепления не трогаем: если курсор успеет в окно, кольцо дойдёт до конца; hide() его снимет
-    leaving = true; hideT = setTimeout(hide, 260);   // время перевести курсор со слота в само окно — кольцо при этом не сбрасывается
+    leaving = true; hideT = setTimeout(hide, 80);   // окно вплотную к слоту: 0,08 с хватает, чтобы курсор перешёл в него
   }
 
   // мини-подсказка стата (только у закреплённой)
