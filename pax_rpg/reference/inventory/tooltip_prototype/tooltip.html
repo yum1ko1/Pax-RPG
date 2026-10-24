@@ -91,13 +91,13 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .stats { padding: 8px 0 10px; display: grid; gap: 2px; }
 .cap { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); margin: 2px 0 4px; padding-bottom: 6px;
        background: url("ui/div_section_s.png") left bottom / 150px 8px no-repeat; }
-ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
 li { display: grid; grid-template-columns: 18px auto 1fr auto; align-items: center; gap: 8px; position: relative;
      padding: 2px 6px; border-radius: 2px; font-size: 14.5px; }
 li img.si { width: 18px; height: 18px; object-fit: contain; }
 li .v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 li .k { color: var(--muted); }
-li .mark { color: transparent; font-size: 11px; }
+li .mark { width: 14px; height: 14px; background: center / contain no-repeat; }
 ul.main { margin-left: 12px; }
 ul.main li { font-size: 16px; padding-left: 14px; }
 ul.main li::before { content: ""; position: absolute; left: -10px; top: 50%; width: 15px; height: 16px; margin-top: -8px;
@@ -118,10 +118,16 @@ ul.tree li::after { content: ""; position: absolute; left: -24px; top: -3px; bot
 ul.tree li:first-child::after { top: -30px; }
 ul.tree li:last-child::after { bottom: 50%; }
 li.minor .v { color: var(--text); font-weight: 500; }
-li.boost { background: linear-gradient(90deg, color-mix(in srgb, var(--bc) 20%, transparent), transparent 85%); }
+/* усиленная строка: лёгкий цветной фон + полоса свечения подчёркиванием под текстом, звезда справа */
+li.boost { --tint: linear-gradient(90deg, color-mix(in srgb, var(--bc) 16%, transparent), transparent 85%);
+           background-repeat: no-repeat; background-size: 100% 14px, 100% 100%; background-position: left 0 bottom -6px, 0 0; }
+li.boost.b3 { background-image: url("ui/glow_epic_s.png"), var(--tint); }  li.boost.b3 .mark { background-image: url("ui/star_epic_s.png"); }
+li.boost.b4 { background-image: url("ui/glow_leg_s.png"), var(--tint); }   li.boost.b4 .mark { background-image: url("ui/star_leg_s.png"); }
+li.boost.b5 { background-image: url("ui/glow_myth_s.png"), var(--tint); }  li.boost.b5 .mark { background-image: url("ui/star_myth_s.png"); }
 li.boost .v, li.boost .k { color: var(--bc); text-shadow: 0 0 8px color-mix(in srgb, var(--bc) 60%, transparent); }
 li.boost img.si { filter: drop-shadow(0 0 4px var(--bc)); }
-li.boost .mark { color: var(--bc); text-shadow: 0 0 6px var(--bc); }
+li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { transform: scale(.85); opacity: .8; } 50% { transform: scale(1.1); opacity: 1; } }
 .tt.pinned li:hover { background-color: rgba(201, 163, 92, .12); }
 .tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
 @keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--bc) 30%, transparent); } }
@@ -318,7 +324,7 @@ td.r { font-weight: 700; }
     return `background-size:${SHEET.w * s}px ${SHEET.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
   }
   const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
-    `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><span class="mark">✦</span></li>`;
+    `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
 
   function render(item, idx) {
     let i = 0;
@@ -365,7 +371,7 @@ td.r { font-weight: 700; }
     const it = items[idx];
     tt.style.setProperty("--rc", `var(${RC[it.r]})`);
     tt.innerHTML = render(it, idx);
-    tt.querySelectorAll("li.boost").forEach(li => li.style.setProperty("--bc", `var(${RC[it.r]})`));
+    tt.querySelectorAll("li.boost").forEach(li => { li.style.setProperty("--bc", `var(${RC[it.r]})`); li.classList.add("b" + it.r); });
     if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
     place(idx);
     tt.classList.add("show"); tt.setAttribute("aria-hidden", "false");
