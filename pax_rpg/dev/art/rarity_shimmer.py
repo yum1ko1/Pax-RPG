@@ -23,7 +23,8 @@ RARITY = [((0.7, 0.7, 0.7), 0.0, 0.0, 0, 0),
           ((1.0, 0.22, 0.12), 0.85, 0.5, 0, 16)]
 
 
-def main(src: str, out: str):
+def render(src: str) -> list:
+    """Кадры анимации листа (PIL RGB, размер листа)."""
     base = np.asarray(Image.open(src).convert("RGB"), np.float32) / 255
     H, W, _ = base.shape
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -85,6 +86,12 @@ def main(src: str, out: str):
                 d2 = (xx[sl] - gx) ** 2 + (yy[sl] - gy) ** 2
                 img[sl] += np.exp(-d2 / 500)[..., None] * col * a_border * 0.6 * (0.5 + 0.5 * math.sin(2 * math.pi * (t + r * 0.1)))
         frames.append(Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)))
+    return frames
+
+
+def main(src: str, out: str):
+    frames = render(src)
+    W, H = frames[0].size
     frames[0].save(out + ".webp", save_all=True, append_images=frames[1:], duration=MS, loop=0, quality=88, method=4)
     small = [fr.resize((1024, round(H * 1024 / W)), Image.LANCZOS) for fr in frames]
     pal = [fr.quantize(colors=255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG) for fr in small]
