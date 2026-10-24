@@ -413,6 +413,14 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .pas-ic { background-image: url("ui/pas_dance_s.jpg"); }
 /* репутация — в правом круге под героем; ступень — общее отношение пяти империй */
 .wrep { position: absolute; z-index: 4; border-radius: 50%; cursor: help; display: grid; place-items: center; }
+/* ранг — в левом круге под героем; пока нет иконок — печать с числом ступеней-ромбов */
+.wrank { position: absolute; z-index: 4; border-radius: 50%; cursor: help; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .75)); }
+.wrank:hover { filter: brightness(1.15) drop-shadow(0 4px 8px rgba(0, 0, 0, .75)) drop-shadow(0 0 8px rgba(240, 207, 138, .5)); }
+.rki { display: block; width: 100%; height: 100%; }
+.rkreq { display: grid; grid-template-columns: 18px 1fr auto; gap: 4px 6px; margin-top: 6px; font-size: 13px; align-items: center; }
+.rkreq .ok { color: #8fe09e; } .rkreq .no { color: #e0706a; }
+.rkreq .rv { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.rkhead { margin-top: 8px; font: 600 12.5px var(--font-caps); letter-spacing: .06em; color: #f0cf8a; }
 .rpi { display: block; width: 100%; height: 100%; background: center / contain no-repeat; }
 .rep-0 { background-image: url("ui/rep_0_s.png"); } .rep-1 { background-image: url("ui/rep_1_s.png"); }
 .rep-2 { background-image: url("ui/rep_2_s.png"); } .rep-3 { background-image: url("ui/rep_3_s.png"); }
@@ -430,6 +438,7 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .repbar { position: relative; height: 8px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(240, 207, 138, .25);
           background: linear-gradient(90deg, rgba(224, 112, 106, .45) 0 20%, rgba(216, 154, 90, .4) 20% 40%, rgba(207, 198, 180, .32) 40% 60%,
                       rgba(127, 214, 168, .4) 60% 80%, rgba(240, 207, 138, .5) 80%); }
+.repbar.rkbar { background: linear-gradient(90deg, #9a8f8655, #b9b2a655, #c98a4b66, #c9d2dc55, #f0cf8a66, #ff6a5a66, #ff8fd866); }
 .repbar s { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(10, 6, 7, .9); }
 .repbar u { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg); background: var(--tc);
             box-shadow: 0 0 0 2px #120a0b, 0 0 8px var(--tc); }
@@ -453,6 +462,8 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
 .skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
 .skt .cost { color: var(--text); font-size: 12.5px; }
+.skt .skv { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 9px; border: 1px solid var(--gold-dim); border-radius: 2px;
+            background: #0d0809; box-shadow: 0 0 10px rgba(0, 0, 0, .6) inset; }
 .skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
 .sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
 .sk2 .bd span { color: var(--muted); } .sk2 .bd b { color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1054,6 +1065,8 @@ td.r { font-weight: 700; }
   }
   const num = v => String(+(+v).toFixed(2)).replace(".", ",");
   const N = (kind, sk, text) => `<span class="num" data-k="${kind}" data-s="${sk}" tabindex="0">${text}</span>`;
+  // ролики приёмов, что уже есть в игре: записаны в Godot (сцена pax_rpg/dev/skill_clips) с моделью и клипами Тянь Лун
+  const CLIPS = { sunset: "ui/clip_sunset.webm", iai: "ui/clip_iai.webm" };
   function skillText(sk) {
     const d = dmgCalc(sk), S = d.S;
     const dmg = N("dmg", sk, d.total);   // в описании — только итог; разбор — при наведении
@@ -1069,7 +1082,8 @@ td.r { font-weight: 700; }
       iai: [`Бьёт всех врагов в досягаемости. Урон: ${dmg} каждому.`,
             `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % ХА")}.`,
             "Удар по Тянь Лун в первые 0,6 с срывает приём."] }[sk];
-    return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "");
+    const clip = CLIPS[sk] ? `<video class="skv" src="${CLIPS[sk]}" autoplay loop muted playsinline aria-label="Как выглядит приём"></video>` : "";
+    return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "") + clip;
   }
   const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], sk: [460, 333.5, 515.5, 393], dy: "14px" },
                   { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], sk: [460, 574, 515.5, 633.5], dy: "-14px" }];
@@ -1144,6 +1158,50 @@ td.r { font-weight: 700; }
   repEl.addEventListener("mouseenter", showRep); repEl.addEventListener("mouseleave", () => sktLeaveSocket());
   repEl.addEventListener("focus", showRep); repEl.addEventListener("blur", () => sktLeaveSocket());
 
+  // ранг: 7 ступеней по экипировке, уровню, лучшему комбо и данжам; текущий — высший, все условия которого выполнены
+  const RANK_RECT = [598, 793, 706, 901];                        // круг ранга прямо на арте героя (окно под ним убрано)
+  const RANKS = [
+    { name: "Без ранга" },
+    { name: "Асигару", rar: 1, lvl: 20 },
+    { name: "Самурай", rar: 2, lvl: 40 },
+    { name: "Хатамото", rar: 3, lvl: 60, combo: 10 },
+    { name: "Даймё", rar: 4, lvl: 80, combo: 15, leg: 1 },
+    { name: "Сёгун", rar: 5, lvl: 100, combo: 20, leg: 20, night: 1 },
+    { name: "Избранница Богини", rar: 5, mana: 1, lvl: 150, combo: 20, leg: 50, night: 10 }];
+  const RANK_C = ["#9a8f86", "#b9b2a6", "#c98a4b", "#c9d2dc", "#f0cf8a", "#ff6a5a", "#ff8fd8"];
+  const PROGRESS = { combo: 0, leg: 0, night: 0 };                // игрок только начал
+  function rankState() {
+    const items = SLOTS.map((_, k) => itemAt(k));
+    return { rar: Math.min(...items.map(it => it.r)), mana: items.filter(it => it.r === 5 && it.mana).length,
+             lvl: +heroIn.value, ...PROGRESS };
+  }
+  const RQ = [["rar", (v, st) => `Все вещи — ${RAR[v].name.toLowerCase()}${v < 5 ? " или выше" : ""}`, st => st.rar >= 0 ? RAR[st.rar].name : ""],
+              ["mana", () => "Мифическая вещь, пропитанная маной", st => st.mana],
+              ["lvl", v => `Уровень ${v}+`, st => st.lvl], ["combo", v => `Лучшее комбо — ${v}+ ударов`, st => st.combo],
+              ["leg", v => `Легендарные данжи: ${v}+`, st => st.leg], ["night", v => `Кошмарные данжи: ${v}+`, st => st.night]];
+  const meets = (R, st) => RQ.every(([k]) => R[k] === undefined || st[k] >= R[k]);
+  const rankOf = st => RANKS.reduce((t, R, i) => meets(R, st) && i === t + 1 ? i : t, 0);
+  const rankIcon = r => `<svg class="rki" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#140c0d" stroke="${RANK_C[r]}" stroke-width="2"/>` +
+    `<circle cx="20" cy="20" r="13.5" fill="none" stroke="${RANK_C[r]}" stroke-width=".6" opacity=".6"/>` +
+    Array.from({ length: r }, (_, i) => { const a = -Math.PI / 2 + (i - (r - 1) / 2) * 0.62; const x = 20 + Math.cos(a) * 8.5, y = 21 + Math.sin(a) * 8.5;
+      return `<path d="M${x} ${y - 2.6}L${x + 2} ${y}L${x} ${y + 2.6}L${x - 2} ${y}Z" fill="${RANK_C[r]}"/>`; }).join("") +
+    `<text x="20" y="${r ? 28.5 : 24.5}" text-anchor="middle" font-size="${r ? 9 : 11}" font-family="Cinzel, serif" fill="${RANK_C[r]}">${r}</text></svg>`;
+  const rankEl = document.createElement("div"); rankEl.className = "wrank"; rankEl.tabIndex = 0; pct(RANK_RECT, rankEl);
+  function rankArt() { const r = rankOf(rankState()); rankEl.innerHTML = rankIcon(r); rankEl.setAttribute("aria-label", `Ранг ${r}: ${RANKS[r].name}`); }
+  stage.appendChild(rankEl);
+  function showRank() {
+    const st = rankState(), r = rankOf(st), next = RANKS[r + 1];
+    const reqs = next ? RQ.filter(([k]) => next[k] !== undefined).map(([k, label, cur]) => { const ok = st[k] >= next[k];
+      return `<span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✕"}</span><span>${label(next[k], st)}</span><span class="rv">${k === "mana" ? (ok ? "есть" : "нет") : cur(st)}</span>`; }).join("") : "";
+    sktOpen(`<div class="skh"><i class="ski rep">${rankIcon(r)}</i><div><h3>Ранг ${r}: ${RANKS[r].name}</h3>` +
+      `<div class="sks">${next ? `Следующий — ранг ${r + 1}: ${next.name}` : "Высший ранг"}</div></div></div>` +
+      `<div class="repscale"><div class="repicons">${RANKS.map((x, i) => `<i class="${i === r ? "on" : ""}" style="left:${100 / 14 + i * 100 / 7}%;--tc:${RANK_C[i]}" title="Ранг ${i}: ${x.name}">${rankIcon(i)}</i>`).join("")}</div>` +
+      `<div class="repbar rkbar">${[1, 2, 3, 4, 5, 6].map(x => `<s style="left:${x * 100 / 7}%"></s>`).join("")}<u style="left:${(r + 0.5) * 100 / 7}%;--tc:${RANK_C[r]}"></u></div></div>` +
+      (next ? `<div class="rkhead">До ранга ${r + 1}</div><div class="rkreq">${reqs}</div>` : ""), RANK_RECT, "rank");
+  }
+  rankEl.addEventListener("mouseenter", showRank); rankEl.addEventListener("mouseleave", () => sktLeaveSocket());
+  rankEl.addEventListener("focus", showRank); rankEl.addEventListener("blur", () => sktLeaveSocket());
+
   const skt = document.getElementById("skt");
   function placeSkt(rect) {
     const hb = holder.getBoundingClientRect(), sb = stage.getBoundingClientRect(), k = sb.width / STAGE.w;
@@ -1162,7 +1220,7 @@ td.r { font-weight: 700; }
   function sktDropSoon() { clearTimeout(sktT); sktT = setTimeout(() => { if (sktPinned && !inSkt && !onSock) hideSkt(); }, 60); }
   function sktOpen(html, rect, key) {
     if (sktPinned) { if (key === sktKey) { onSock = true; clearTimeout(sktT); return; } if (inSkt) return; hideSkt(); }
-    sktKey = key; onSock = true; skt.classList.toggle("wide", key === "rep");
+    sktKey = key; onSock = true; skt.classList.toggle("wide", key === "rep" || key === "rank");
     clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
     skt.innerHTML = PIN_HTML + html;
     skt.classList.remove("arming", "pinned");
@@ -1285,7 +1343,7 @@ td.r { font-weight: 700; }
 
   document.getElementById("reroll").addEventListener("click", generate);
   lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
-  heroIn.addEventListener("input", () => { heroOut.textContent = heroIn.value; if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); } });
+  heroIn.addEventListener("input", () => { heroOut.textContent = heroIn.value; rankArt(); if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); } });
 
   // иконки надетых вещей поверх слотов макета
   function slotArt() {
@@ -1301,6 +1359,7 @@ td.r { font-weight: 700; }
       art.style.setProperty("--rc", `var(${RC[it.r]})`);
       art.classList.toggle("mrim", !!it.mana);
     });
+    if (typeof rankArt === "function") rankArt();
   }
 
   // справочные таблицы
