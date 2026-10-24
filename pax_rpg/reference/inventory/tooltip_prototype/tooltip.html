@@ -18,6 +18,7 @@
   --muted: #a39280;
   --r0: #a4a4a4; --r1: #57c46b; --r2: #4f8dff; --r3: #b46fff; --r4: #f2b84b; --r5: #ff4436;
   --pin: 1200ms;
+  --set: #4fd1b8;
   --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
   --font-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
 }
@@ -140,6 +141,24 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 .tt .state { padding: 0 0 4px; font-size: 12px; color: var(--gold-dim); }
 .tt.pinned .state { color: var(--gold); }
 
+/* сет */
+.setbox { margin-top: 10px; display: grid; gap: 4px; }
+.sethead { display: flex; align-items: baseline; gap: 8px; }
+.sethead b { font-family: var(--font-display); font-size: 17px; color: var(--set); text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); }
+.sethead span { margin-left: auto; color: var(--set); font-variant-numeric: tabular-nums; font-size: 13px; }
+.dots { display: flex; gap: 6px; margin: 1px 0 3px; }
+.dots i { width: 8px; height: 8px; transform: rotate(45deg); border: 1px solid color-mix(in srgb, var(--set) 55%, transparent); }
+.dots i.on { background: var(--set); box-shadow: 0 0 6px var(--set); border-color: var(--set); }
+.dots i.me { outline: 1px solid #fff3dc; outline-offset: 2px; }
+ul.setb li { grid-template-columns: 30px 1fr; align-items: start; font-size: 13.5px; line-height: 1.3; }
+ul.setb li .n { font-variant-numeric: tabular-nums; color: var(--muted); }
+ul.setb li .t { color: var(--muted); }
+ul.setb li.act .n, ul.setb li.act .t { color: var(--set); }
+ul.setb li.act .t b { color: #dffbf5; font-weight: 700; }
+ul.setb li:not(.act) { opacity: .62; }
+.setnote { font-size: 12px; color: var(--muted); }
+.sub .settag { color: var(--set); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+
 /* мини-подсказка стата */
 .mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 0;
         border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
@@ -176,12 +195,15 @@ td.r { font-weight: 700; }
 <div class="wrap">
   <div>
     <h1>Подсказка предмета</h1>
-    <p class="lead">Наведите курсор на предмет в колонке экипировки. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
+    <p class="lead">Наведите курсор на предмет в колонке экипировки. Вещи сета «Самурай Восхода Юрумы» показывают бонусы сета внизу подсказки; сколько вещей сета надето, задаёт переключатель. Если держать курсор, кольцо в углу подсказки заполнится и подсказка закрепится. Закреплённую подсказку можно читать, наводя курсор на статы. Клик в любом месте или на саму подсказку её закрывает. На телефоне подсказка закрепляется сразу по касанию.</p>
   </div>
 
   <div class="bar">
     <button id="reroll" type="button">Перебросить статы</button>
     <label for="lvl">Уровень предмета <input id="lvl" type="range" min="1" max="50" value="10"> <span class="lvl" id="lvlOut">10</span></label>
+    <label for="setN">Вещей сета надето
+      <select id="setN"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option></select>
+    </label>
     <label for="rar">Редкость
       <select id="rar">
         <option value="demo">как на макете</option>
@@ -264,6 +286,21 @@ td.r { font-weight: 700; }
             info: "Ускоряет удары и серии ударов." },
   };
   const ORDER = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"];
+
+  // сет: вещи сета — в первых N слотах (переключатель «Вещей сета надето»); бонусы действуют при любой редкости вещей
+  const SET = { name: "Самурай Восхода Юрумы",
+    names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
+    lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
+    bonuses: [
+      { n: 2, title: "Первый луч Хоэна", text: "<b>+10</b> ХА, концентрация восстанавливается на <b>15 %</b> быстрее",
+        info: "Как утренний свет после ночи боя: стойка держится дольше и быстрее приходит в себя." },
+      { n: 4, title: "Взгляд на Око", text: "первый удар по новой цели — <b>критический</b>, <b>+6 %</b> шанс крита",
+        info: "Они смотрят на Око Раскола перед боем. Первый удар после захвата новой цели всегда критический." },
+      { n: 6, title: "Клинок рассвета", text: "после парирования следующий удар — <b>крит</b> и <b>+30 %</b> урона по концентрации",
+        info: "Удар в течение 1,5 с после успешного парирования. Враг быстрее открывается для Кровожадного удара." },
+      { n: 8, title: "Восход Хоэна", text: "при ОЗ ниже <b>30 %</b>: 6 с стойка не ломается, <b>+25 %</b> скорость атаки, Кровожадный удар лечит <b>15 %</b> ОЗ",
+        info: "Срабатывает само, раз в 90 с. Кто пережил ночь Раскола, встречает рассвет." },
+    ] };
   const MINOR = 0.45, MINOR_W = 0.6;
 
   // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
@@ -311,7 +348,7 @@ td.r { font-weight: 700; }
       e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
     extra.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
     const price = Math.round(12 * R.mult * R.mult * (1 + 0.15 * (lvl - 1)) * (1 + 0.25 * boosted.length));
-    return { slot, r, lvl, name: slot.names[r], main, extra, price };
+    return { slot, r, lvl, name: slot.names[r], main, extra, price, set: false };
   }
 
   const fmt = (key, v) => STATS[key].pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v;
@@ -326,19 +363,30 @@ td.r { font-weight: 700; }
   const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
     `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
 
+  function setBox(idx, next) {
+    const n = setCount();
+    return `<div class="setbox"><div class="orn"></div>
+      <div class="sethead"><b>${SET.name}</b><span>${n} / ${SET.names.length}</span></div>
+      <div class="dots" aria-hidden="true">${SET.names.map((_, k) => `<i class="${k < n ? "on" : ""}${k === idx ? " me" : ""}"></i>`).join("")}</div>
+      <ul class="setb">${SET.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
+        `<span class="n">(${b.n})</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
+      <div class="setnote"><i>${SET.lore}</i><br>Действует при любой редкости вещей сета.</div></div>`;
+  }
+
   function render(item, idx) {
     let i = 0;
     return `<div class="sweep"></div><div class="inner">
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon" style="${iconStyle(idx, item.r)}"></div>
         <div><p class="name">${item.name}</p>
-          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
+          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span>${item.set ? '<span class="settag">Сет</span>' : ""}<span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
         <ul class="main">${item.main.map((e, j) => line(e, i++, j, "main", "")).join("")}</ul>
         <div class="branch"><div class="cap">Дополнительные</div>
           <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
+        ${item.set ? setBox(idx, () => i++) : ""}
       </div>
       <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${item.price}</b> зол.</span></footer>
       <div class="state" id="ttState">Задержите курсор, чтобы закрепить</div></div>`;
@@ -347,12 +395,18 @@ td.r { font-weight: 700; }
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
   const tt = document.getElementById("tt"), mini = document.getElementById("mini");
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut"), rarSel = document.getElementById("rar");
+  const setSel = document.getElementById("setN");
+  const setCount = () => +setSel.value;
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
   let items = [], current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, suppressUntil = 0;
 
   function generate() {
     const lvl = +lvlIn.value, forced = rarSel.value;
-    items = SLOTS.map(s => makeItem(s, forced === "demo" ? s.demo : +forced, lvl));
+    items = SLOTS.map((s, k) => {
+      const it = makeItem(s, forced === "demo" ? s.demo : +forced, lvl);
+      if (k < setCount()) { it.set = true; it.name = SET.names[k]; }
+      return it;
+    });
     if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
   }
 
@@ -409,6 +463,7 @@ td.r { font-weight: 700; }
 
   // мини-подсказка стата (только у закреплённой)
   function showMini(li) {
+    if (li.dataset.part === "set") return showSetMini(li);
     const it = items[current], e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
     let tag = "";
     if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
@@ -417,6 +472,17 @@ td.r { font-weight: 700; }
     mini.style.setProperty("--bc", e.boost ? `var(${RC[it.r]})` : "var(--gold)");
     mini.innerHTML = `<h3>${svg(e.key, "")}${s.name}</h3><p>${s.info}</p>` +
       `<div class="here">На этом предмете: <b>${fmt(e.key, e.v)}</b></div>` + (tag ? `<div class="tag">${tag}</div>` : "");
+    positionMini(li);
+  }
+  function showSetMini(li) {
+    const b = SET.bonuses[+li.dataset.j], n = setCount();
+    mini.style.setProperty("--bc", "var(--set)");
+    mini.innerHTML = `<h3>(${b.n}) ${b.title}</h3><p>${b.text}. ${b.info}</p>` +
+      `<div class="here">Нужно вещей сета: <b>${b.n}</b> · надето: <b>${n}</b></div>` +
+      `<div class="tag">${n >= b.n ? "Бонус действует" : "Не хватает: " + (b.n - n)}</div>`;
+    positionMini(li);
+  }
+  function positionMini(li) {
     const hb = holder.getBoundingClientRect(), lb = li.getBoundingClientRect(), tb = tt.getBoundingClientRect();
     const mw = mini.offsetWidth || 236, gap = 10;
     let left = tb.left - hb.left - mw - gap, dir = "6px";
@@ -465,6 +531,7 @@ td.r { font-weight: 700; }
   document.getElementById("reroll").addEventListener("click", generate);
   lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
   rarSel.addEventListener("change", generate);
+  setSel.addEventListener("change", generate);
 
   // справочные таблицы
   const dec = v => v.toString().replace(".", ",");
@@ -480,6 +547,6 @@ td.r { font-weight: 700; }
       return `<tr><td>${s.name}</td><td>${s.lo}–${s.hi}${s.pct ? " %" : ""}</td><td>${slots}</td></tr>`; }).join("");
 
   generate();
-  fill(6, false);   // при загрузке — открытая подсказка кольца, чтобы страница не была пустой
+  fill(1, false);   // при загрузке — открытая подсказка нагрудника из сета, чтобы страница не была пустой
 })();
 </script>
