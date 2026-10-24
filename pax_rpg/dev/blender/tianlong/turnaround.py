@@ -24,6 +24,24 @@ for o in meshes:
         poly.use_smooth = True
 if not arm.animation_data:
     arm.animation_data_create()
+for mat in bpy.data.materials:                        # цвет — строго из BaseColor (импортёр Blender 5.2 путает карты), без sheen
+    if not mat.use_nodes:
+        continue
+    nt = mat.node_tree
+    bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+    imgs = [n for n in nt.nodes if n.type == "TEX_IMAGE" and n.image]
+    print("mat", mat.name, [(n.image.name, n.image.colorspace_settings.name,
+                             [l.to_socket.name for o in n.outputs for l in o.links]) for n in imgs], flush=True)
+    base = next((n for n in imgs if "basecolor" in n.image.name.lower()), imgs[0] if len(imgs) == 1 else None)
+    if not bsdf or not base:
+        continue
+    base.image.colorspace_settings.name = "sRGB"
+    nt.links.new(base.outputs["Color"], bsdf.inputs["Base Color"])
+    for name in ("Sheen Weight", "Sheen"):
+        if name in bsdf.inputs:
+            for l in list(bsdf.inputs[name].links):
+                nt.links.remove(l)
+            bsdf.inputs[name].default_value = 0.0
 
 
 def pose(clip: str, at: float = 0.3):
