@@ -85,6 +85,18 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
         background-color: #120a0b; background-repeat: no-repeat; border-radius: 2px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
         text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
+/* шапка: тип со значком слота и уровень, ниже — плашка редкости */
+.meta { margin-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text); }
+.meta .type { display: inline-flex; align-items: center; gap: 6px; }
+.meta .type i { width: 16px; height: 16px; background: center / contain no-repeat; }
+.meta .ilvl { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.meta .ilvl b { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rarity { margin-top: 6px; display: inline-flex; align-items: center; gap: 7px; padding: 2px 12px 2px 7px; border-radius: 2px;
+          font: 700 11.5px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--rc);
+          border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent);
+          background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 26%, transparent), transparent 90%);
+          text-shadow: 0 0 8px color-mix(in srgb, var(--rc) 45%, transparent); }
+.rarity i { width: 7px; height: 7px; transform: rotate(45deg); background: var(--rc); box-shadow: 0 0 6px var(--rc); }
 .sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
 .sub .rar { color: var(--rc); letter-spacing: .05em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
 .sub .ilvl { margin-left: auto; color: var(--gold); font-variant-numeric: tabular-nums; }
@@ -195,7 +207,7 @@ ul.setb li:not(.act) { opacity: .7; }
 .lore { margin: 2px 0 0; padding: 0; border-style: solid; border-width: 12px; border-image: url("ui/frame_mini_s.png") 28 fill / 12px stretch;
         font: italic 500 13px/1.45 var(--font-body); color: #d9c7a8; text-align: center; }
 .lore::before, .lore::after { content: "❖"; color: var(--gold-dim); font-style: normal; font-size: 10px; margin: 0 6px; vertical-align: 1px; }
-.sub .settag { color: var(--set); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+
 
 /* мини-подсказка стата */
 .mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 0;
@@ -446,7 +458,8 @@ td.r { font-weight: 700; }
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
-          <div class="sub"><span>${item.slot.type}</span><span class="rar">${RAR[item.r].name}</span><span class="settag">Сет</span><span class="ilvl">Ур. ${item.lvl}</span></div></div></header>
+          <div class="meta"><span class="type"><i style="background-image:url(${PIPS[PIP[idx] + "_off"]})"></i>${item.slot.type}</span><span class="ilvl">Ур. <b>${item.lvl}</b></span></div>
+          <div class="rarity"><i></i>${RAR[item.r].name}</div></div></header>
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
