@@ -406,17 +406,28 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .mini.skt.wide { width: 340px; }
 .mini.skt { width: 300px; z-index: 8; --pgc: 201 163 92; --pgl: 212 181 125; }
 .mini.skt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
-.skt .pin { top: -10px; right: -10px; }
+/* окно описаний — рамка из листа 23 (wf_frame_s.png, 9-slice, срезы 83 65 65 68 px): углы с сакурой, гнездо кольца
+   закрепления в правом верхнем углу, ромб по центру верха; фон — лак с сэйгайха из той же рамки */
+.mini.skt { border-width: 16px 9px 9px 9px; padding: 6px 10px 14px;
+            border-image: url("ui/wf_frame_s.png") 83 65 65 68 fill / 41px 33px 33px 34px stretch; }
+.mini.skt::before { content: ""; position: absolute; left: 50%; top: -16px; width: 36px; height: 19px; transform: translateX(-50%);
+                    background: url("ui/wf_gem_s.png") center / contain no-repeat; pointer-events: none; }
+.skt .pin { top: -13px; right: -2px; width: 18px; height: 18px; }   /* в гнезде кольца рамки */
+/* гнездо иконки приёма и пассива: золотое кольцо с ромбами, иконка — кругом внутри */
+.skh .ski.sock { width: 52px; height: 52px; border: 0; box-shadow: none; border-radius: 50%; position: relative;
+                 background: none; }
+.skh .ski.sock::after { content: ""; position: absolute; inset: 0; background: url("ui/wf_socket_s.png") center / contain no-repeat; }
+.skh .ski.sock i { position: absolute; z-index: 1; inset: 19%; border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, .8) inset; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.skh { grid-template-columns: 52px 1fr; }
 .skt.arming .pin .full { animation: arm var(--pin) linear forwards; }
 .skt.pinned .pin .full { --p: 360deg; }
 .skt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
 .pas-ic { background-image: url("ui/pas_dance_s.jpg"); }
 /* репутация — в правом круге под героем; ступень — общее отношение пяти империй */
 .wrep { position: absolute; z-index: 4; border-radius: 50%; cursor: help; display: grid; place-items: center; }
-/* ранг — в левом круге под героем; пока нет иконок — печать с числом ступеней-ромбов */
+/* ранг — в левом круге под героем */
 .wrank { position: absolute; z-index: 4; border-radius: 50%; cursor: help; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .75)); }
 .wrank:hover { filter: brightness(1.15) drop-shadow(0 4px 8px rgba(0, 0, 0, .75)) drop-shadow(0 0 8px rgba(240, 207, 138, .5)); }
-.rki { display: block; width: 100%; height: 100%; }
 .rkreq { display: grid; grid-template-columns: 18px 1fr auto; gap: 4px 6px; margin-top: 6px; font-size: 13px; align-items: center; }
 .rkreq .ok { color: #8fe09e; } .rkreq .no { color: #e0706a; }
 .rkreq .rv { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -425,6 +436,10 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .rep-0 { background-image: url("ui/rep_0_s.png"); } .rep-1 { background-image: url("ui/rep_1_s.png"); }
 .rep-2 { background-image: url("ui/rep_2_s.png"); } .rep-3 { background-image: url("ui/rep_3_s.png"); }
 .rep-4 { background-image: url("ui/rep_4_s.png"); }
+.rank-0 { background-image: url("ui/rank_0_s.png"); } .rank-1 { background-image: url("ui/rank_1_s.png"); }
+.rank-2 { background-image: url("ui/rank_2_s.png"); } .rank-3 { background-image: url("ui/rank_3_s.png"); }
+.rank-4 { background-image: url("ui/rank_4_s.png"); } .rank-5 { background-image: url("ui/rank_5_s.png"); }
+.rank-6 { background-image: url("ui/rank_6_s.png"); }
 .wrep { filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .75)); }
 .wrep:hover { filter: brightness(1.15) drop-shadow(0 4px 8px rgba(0, 0, 0, .75)) drop-shadow(0 0 8px rgba(240, 207, 138, .5)); }
 .skh .ski.rep { border: 0; box-shadow: none; background: none; }
@@ -440,8 +455,9 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
                       rgba(127, 214, 168, .4) 60% 80%, rgba(240, 207, 138, .5) 80%); }
 .repbar.rkbar { background: linear-gradient(90deg, #9a8f8655, #b9b2a655, #c98a4b66, #c9d2dc55, #f0cf8a66, #ff6a5a66, #ff8fd866); }
 .repbar s { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(10, 6, 7, .9); }
-.repbar u { position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg); background: var(--tc);
-            box-shadow: 0 0 0 2px #120a0b, 0 0 8px var(--tc); }
+.repbar::after { content: ""; position: absolute; inset: -5px -7px; background: url("ui/wf_track_s.png") center / 100% 100% no-repeat; pointer-events: none; }
+.repbar u { position: absolute; z-index: 1; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); background: url("ui/wf_marker_s.png") center / contain no-repeat;
+            filter: drop-shadow(0 0 5px var(--tc)); }
 .repends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .reps { display: grid; grid-template-columns: 1fr 64px 34px; gap: 5px 8px; align-items: center; margin-top: 8px; font-size: 13px; }
 .reps .en { color: var(--text); display: flex; align-items: center; gap: 6px; }
@@ -462,7 +478,9 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
 .skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
 .skt .cost { color: var(--text); font-size: 12.5px; }
-.skt .skv { display: block; width: 100%; aspect-ratio: 16 / 9; margin-top: 9px; border: 1px solid var(--gold-dim); border-radius: 2px;
+.skvw { position: relative; margin-top: 9px; aspect-ratio: 480 / 246; background: url("ui/wf_video_s.png") center / 100% 100% no-repeat; }
+.skvw .skv { position: absolute; inset: 4.5% 3.4%; width: 93.2%; height: 91%; object-fit: cover; }
+.skt .skv { display: block; border-radius: 1px;
             background: #0d0809; box-shadow: 0 0 10px rgba(0, 0, 0, .6) inset; }
 .skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
 .sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
@@ -476,7 +494,7 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skh h3 { margin: 0; }
 .skh .sks { font-size: 11.5px; letter-spacing: .06em; color: var(--gold); margin-top: 2px; }
 .skt p + p { margin-top: 6px; }
-.skt .pb { margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(201, 163, 92, .2); }
+.skt .pb { margin-top: 6px; padding-top: 19px; background: url("ui/wf_div_s.png") center top / 52% auto no-repeat; }
 .skt .pb b { display: block; font: 600 12.5px var(--font-caps); letter-spacing: .06em; color: #f0cf8a; margin-bottom: 2px; }
 .skt .tiers { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin-top: 4px; font-size: 13px; color: var(--text); }
 .skt .tiers span:nth-child(odd) { color: var(--muted); }
@@ -1082,7 +1100,7 @@ td.r { font-weight: 700; }
       iai: [`Бьёт всех врагов в досягаемости. Урон: ${dmg} каждому.`,
             `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % ХА")}.`,
             "Удар по Тянь Лун в первые 0,6 с срывает приём."] }[sk];
-    const clip = CLIPS[sk] ? `<video class="skv" src="${CLIPS[sk]}" autoplay loop muted playsinline aria-label="Как выглядит приём"></video>` : "";
+    const clip = CLIPS[sk] ? `<div class="skvw"><video class="skv" src="${CLIPS[sk]}" autoplay loop muted playsinline aria-label="Как выглядит приём"></video></div>` : "";
     return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "") + clip;
   }
   const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], sk: [460, 333.5, 515.5, 393], dy: "14px" },
@@ -1181,11 +1199,7 @@ td.r { font-weight: 700; }
               ["leg", v => `Легендарные данжи: ${v}+`, st => st.leg], ["night", v => `Кошмарные данжи: ${v}+`, st => st.night]];
   const meets = (R, st) => RQ.every(([k]) => R[k] === undefined || st[k] >= R[k]);
   const rankOf = st => RANKS.reduce((t, R, i) => meets(R, st) && i === t + 1 ? i : t, 0);
-  const rankIcon = r => `<svg class="rki" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="#140c0d" stroke="${RANK_C[r]}" stroke-width="2"/>` +
-    `<circle cx="20" cy="20" r="13.5" fill="none" stroke="${RANK_C[r]}" stroke-width=".6" opacity=".6"/>` +
-    Array.from({ length: r }, (_, i) => { const a = -Math.PI / 2 + (i - (r - 1) / 2) * 0.62; const x = 20 + Math.cos(a) * 8.5, y = 21 + Math.sin(a) * 8.5;
-      return `<path d="M${x} ${y - 2.6}L${x + 2} ${y}L${x} ${y + 2.6}L${x - 2} ${y}Z" fill="${RANK_C[r]}"/>`; }).join("") +
-    `<text x="20" y="${r ? 28.5 : 24.5}" text-anchor="middle" font-size="${r ? 9 : 11}" font-family="Cinzel, serif" fill="${RANK_C[r]}">${r}</text></svg>`;
+  const rankIcon = r => `<b class="rpi rank-${r}" aria-hidden="true"></b>`;   // иконки рангов (лист 22)
   const rankEl = document.createElement("div"); rankEl.className = "wrank"; rankEl.tabIndex = 0; pct(RANK_RECT, rankEl);
   function rankArt() { const r = rankOf(rankState()); rankEl.innerHTML = rankIcon(r); rankEl.setAttribute("aria-label", `Ранг ${r}: ${RANKS[r].name}`); }
   stage.appendChild(rankEl);
@@ -1248,7 +1262,7 @@ td.r { font-weight: 700; }
 
   function showSkill(w) {
     const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
-    sktOpen(`<div class="skh"><i class="ski sk-${sk}"></i><div><h3>${name}</h3>` +
+    sktOpen(`<div class="skh"><i class="ski sock"><i class="sk-${sk}"></i></i><div><h3>${name}</h3>` +
       `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk), WSLOTS[w].sk, "w" + w);
   }
   // разбор числа: откуда урон / сколько ХА
@@ -1282,7 +1296,7 @@ td.r { font-weight: 700; }
   function hideSk2() { sk2.classList.remove("show"); sk2.setAttribute("aria-hidden", "true"); }
   function showPassive() {
     const syn = PASSIVE.synergy, num = v => String(v).replace(".", ",");
-    sktOpen(`<div class="skh"><i class="ski pas-ic"></i>` +
+    sktOpen(`<div class="skh"><i class="ski sock"><i class="pas-ic"></i></i>` +
       `<div><h3>${PASSIVE.name}</h3><div class="sks">Пассивный навык · Тянь Лун</div></div></div>` +
       `<div class="pb"><b>Плащ по плечу</b><p>Плащи на Тянь Лун: все статы плаща ×${num(PASSIVE.cloak)}.</p></div>` +
       `<div class="pb"><b>Танец без ран</b><p>Удары подряд, пока Тянь Лун не получает урон, усиливают каждый следующий удар:</p>` +
