@@ -19,6 +19,7 @@
   --r0: #a4a4a4; --r1: #57c46b; --r2: #4f8dff; --r3: #b46fff; --r4: #f2b84b; --r5: #ff4436;
   --pin: 1200ms;
   --set: #4fd1b8;
+  --mana: #ff5fd0;
   --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
   /* как пункты главного меню игры: Cinzel (латиница), кириллица — Cormorant SC; заглавные с разрядкой */
   --font-caps: "Cinzel", "Cormorant SC", "Cormorant Garamond", Georgia, serif;
@@ -58,17 +59,21 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
       transition: opacity 120ms ease-in, transform 140ms ease-in, filter 300ms; }
 .tt.show { opacity: 1; transform: none;
            transition: opacity 200ms ease-out, transform 280ms cubic-bezier(.16, 1, .3, 1), filter 300ms; }
-.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinGlow 2.6s ease-in-out .35s infinite, pinFlash .45s ease-out; }
+.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .5s ease-out, pinGlow 2.6s ease-in-out .5s infinite; }
 /* закреплённое: яркая золотая кайма вокруг всей рамки, мягко дышит; при закреплении — короткая вспышка */
 @keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 14px rgba(230, 180, 90, .6)); }
                      50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 230, 170, 1)) drop-shadow(0 0 22px rgba(240, 190, 100, .85)); } }
-@keyframes pinFlash { from { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 30px rgba(255, 230, 170, 1)); } }
+/* закрепление — подсветка сразу и плавно разгорается до дыхания, без вспышки */
+@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 0 rgba(255, 222, 150, 0)) drop-shadow(0 0 0 rgba(230, 180, 90, 0)); }
+                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 14px rgba(230, 180, 90, .6)); } }
+@keyframes manaPinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
+                       to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 16px rgba(255, 95, 208, .7)); } }
 .tt .inner { margin: -30px -36px -18px -40px; position: relative; }   /* содержимое заходит под широкие уголки рамки */
 .tt .sweep { position: absolute; inset: -40px -40px -24px -44px; pointer-events: none; overflow: hidden; }
 .tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
                      background: linear-gradient(105deg, transparent 42%, rgba(255, 230, 180, .16) 50%, transparent 58%); }
 .tt.show .sweep::before { animation: sweep 900ms 120ms cubic-bezier(.3, .6, .2, 1) both; }
-.tt.pinned .sweep::before { animation: sweep 700ms 0ms cubic-bezier(.3, .6, .2, 1) both; }
+.tt.pinned .sweep::before { animation: sweep 900ms 0ms ease-out both; opacity: .6; }
 @keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
 
 /* кольцо фиксации: гнездо нарисовано в рамке, поверх — заполняемое кольцо и печать */
@@ -263,6 +268,50 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 .plaque span { white-space: nowrap; }
 .mhead { text-transform: uppercase; font-size: 16px; letter-spacing: .12em; }
 .mini h3 { font-size: 14px; text-transform: uppercase; }
+
+/* пропитано маной: центр — цвет редкости, рамка переливается розовым */
+@property --ma { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes manaSpin { to { --ma: 360deg; } }
+@keyframes manaText { to { background-position: 300% 0; } }
+.mrim { position: relative; }
+.mrim::after { content: ""; position: absolute; inset: -2px; border-radius: 3px; padding: 2px; pointer-events: none;
+  background: conic-gradient(from var(--ma), #ff5fd0, #ffd3f3, #c870ff, #ff5fd0, #ff9be6, #ffd3f3, #c870ff, #ff5fd0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  filter: drop-shadow(0 0 4px rgba(255, 95, 208, .9)); animation: manaSpin 3.2s linear infinite; }
+/* рамка окна — та же золотая, поверх её розовая копия, которая переливается */
+.tt.mana::after { content: ""; position: absolute; pointer-events: none; inset: -52.8px -52.8px -36.2px -56.6px;
+  border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
+  border-image: url("ui/frame_main_s.png") 70 70 48 75 / 52.8px 52.8px 36.2px 56.6px stretch;
+  filter: sepia(1) saturate(5) hue-rotate(275deg) brightness(1.25); mix-blend-mode: screen; animation: manaFrame 3s ease-in-out infinite; }
+@keyframes manaFrame { 0%, 100% { opacity: .45; filter: sepia(1) saturate(5) hue-rotate(275deg) brightness(1.2); }
+                       50% { opacity: .9; filter: sepia(1) saturate(4) hue-rotate(250deg) brightness(1.45); } }
+.tt.mana { animation: manaGlow 3s ease-in-out infinite; }
+.tt.mana.pinned { animation: manaPinIn .5s ease-out, manaPin 2.6s ease-in-out .5s infinite; }
+@keyframes manaGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
+                      50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 180, 240, .95)) drop-shadow(0 0 22px rgba(220, 110, 255, .65)); } }
+@keyframes manaPin { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 222, 150, .95)) drop-shadow(0 0 16px rgba(255, 95, 208, .7)); }
+                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 210, 240, 1)) drop-shadow(0 0 26px rgba(255, 95, 208, .9)); } }
+.manatag { margin-top: 5px; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-caps); font-size: 11.5px; letter-spacing: .12em;
+           text-transform: uppercase; font-weight: 600;
+           background: linear-gradient(90deg, #ff7ad9, #ffe0f7, #c77dff, #ff7ad9); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+           color: transparent; animation: manaText 3s linear infinite; }
+.manatag i { width: 8px; height: 8px; transform: rotate(45deg); background: var(--mana); box-shadow: 0 0 6px var(--mana); }
+li.mana .v, li.mana .k { background: linear-gradient(90deg, #ff7ad9, #ffe3f8, #c77dff, #ff7ad9); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; animation: manaText 2.6s linear infinite; }
+li.mana { --tint: linear-gradient(90deg, rgba(255, 95, 208, .24), rgba(200, 112, 255, .08) 70%, transparent);
+          background-repeat: no-repeat; background-image: var(--tint); box-shadow: inset 2px 0 0 var(--mana); }
+li.mana.boost { box-shadow: inset 2px 0 0 var(--mana); }
+li.mana img.si { filter: drop-shadow(0 0 4px var(--mana)); }
+li.mana .mark { background-image: none !important; width: 9px; height: 9px; transform: rotate(45deg); background: var(--mana) !important;
+                box-shadow: 0 0 8px var(--mana); animation: twinkle 2.2s ease-in-out infinite; }
+li.mana.boost .mark { box-shadow: 0 0 8px var(--mana), 0 0 0 2px var(--bc); }
+ul.main li.manaMain::after { background: var(--mana); opacity: .9; }
+ul.main li.manaMain .k::after { content: " ◆"; color: var(--mana); font-size: 11px; vertical-align: 2px; }
+.mi.mana { animation: manaTile 2.4s ease-in-out infinite; }
+@keyframes manaTile { 0%, 100% { box-shadow: 0 0 0 1px #ff5fd0, 0 0 6px rgba(255, 95, 208, .6), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); }
+                      50% { box-shadow: 0 0 0 1px #ffc6f0, 0 0 12px rgba(220, 110, 255, .8), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); } }
+.msub { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--mana); padding: 6px 2px 4px; font-family: var(--font-caps); }
 
 /* мини-подсказка стата */
 .mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 0;
@@ -467,7 +516,9 @@ td.r { font-weight: 700; }
     return s.pct ? Math.round(v * 10) / 10 : Math.max(1, Math.round(v));
   };
 
-  function makeItem(slot, r, lvl) {
+  // пропитанная маной вещь: +1 основной стат и 1 доп. стат ×5 (розовый); изредка мана ложится на стат со свечением — множители перемножаются
+  const MANA = { chance: 0.01, mult: 5, stack: 0.08 };
+  function makeItem(slot, r, lvl, mana, forceStack) {
     const R = RAR[r];
     const mains = shuffle(slot.main.slice()).slice(0, R.main);
     const main = mains.map(k => ({ key: k, v: roll(k, r, lvl, false) }));
@@ -480,11 +531,21 @@ td.r { font-weight: 700; }
     order.slice(R.guar, R.guar + R.rnd).forEach(i => { if (Math.random() < R.chance) boosted.push(i); });
     boosted.forEach(i => { const e = extra[i], s = STATS[e.key]; e.boost = true;
       e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
+    if (mana) {
+      const more = (slot.main.filter(k => !mains.includes(k)).length ? slot.main : ["atk", "arm", "hp", "ha"]).filter(k => !mains.includes(k));
+      if (more.length) { const k = more[Math.floor(Math.random() * more.length)]; main.push({ key: k, v: roll(k, r, lvl, false), manaMain: true }); }
+      const pool2 = extra.filter(e => !main.some(m => m.key === e.key));
+      const glow = pool2.filter(e => e.boost), plain = pool2.filter(e => !e.boost);
+      const pickFrom = (forceStack || Math.random() < MANA.stack) && glow.length ? glow : (plain.length ? plain : glow);
+      const e = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+      if (e) { const st = STATS[e.key]; e.mana = true; e.v = st.pct ? Math.round(e.v * MANA.mult * 10) / 10 : Math.round(e.v * MANA.mult); }
+      extra.splice(0, extra.length, ...extra.filter(x => !main.some(m => m.key === x.key)));
+    }
     extra.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
     // цена: база редкости × уровень × усиленные статы × разброс 0,9–1,15; мифическое — не дешевле 30 000
-    const raw = PRICE[r] * (1 + 0.05 * (lvl - 1)) * (1 + 0.12 * boosted.length) * rnd(0.9, 1.15);
+    const raw = PRICE[r] * (1 + 0.05 * (lvl - 1)) * (1 + 0.12 * boosted.length) * (mana ? 4 : 1) * rnd(0.9, 1.15);
     const price = Math.max(PRICE_MIN[r], Math.round(raw / PRICE_STEP[r]) * PRICE_STEP[r]);
-    return { slot, r, lvl, name: slot.names[r], main, extra, price, set: false };
+    return { slot, r, lvl, name: slot.names[r], main, extra, price, set: false, mana: !!mana };
   }
 
   const fmt = (key, v) => STATS[key].pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v;
@@ -497,7 +558,7 @@ td.r { font-weight: 700; }
     const s = 64 / (x1 - x0);
     return `background-size:${sheet.w * s}px ${sheet.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
   }
-  const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
+  const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}${e.mana ? " mana" : ""}${e.manaMain ? " manaMain" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
     `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
 
   // вещи игрока: в тестовой версии — все вещи обоих сетов во всех редкостях; сет считается по надетым вещам
@@ -530,9 +591,10 @@ td.r { font-weight: 700; }
     let i = 0;
     return `<div class="sweep"></div><div class="inner">
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
-      <header><div class="icon" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
+      <header><div class="icon${item.mana ? " mrim" : ""}" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
           <div class="rarity"><i></i>${RAR[item.r].name}</div>
+          ${item.mana ? '<div class="manatag"><i></i>Пропитано маной</div>' : ""}
           <div class="ilv">Уровень предмета <b>${item.lvl}</b></div></div>
         <div class="price" title="Цена">${COIN}<b>${money(item.price)}</b></div></header>
       <div class="kind"><span class="kt" style="background-image:url(${TYPES[PIP[idx]]})"></span>
@@ -559,10 +621,11 @@ td.r { font-weight: 700; }
 
   function generate() {
     const lvl = +lvlIn.value;
-    bag = SLOTS.map((s, k) => SET_KEYS.flatMap(key => RAR.map((_, r) => {
-      const it = makeItem(s, r, lvl + r);                 // чем реже вещь, тем выше её уровень (для примера)
-      return Object.assign(it, { set: true, setKey: key, name: SETS[key].names[k], id: `${key}-${r}` });
-    })));
+    // в тестовой сумке у каждой вещи есть и версия, пропитанная маной; у легендарной и мифической мана для примера ложится на стат со свечением
+    bag = SLOTS.map((s, k) => SET_KEYS.flatMap(key => [false, true].flatMap(mana => RAR.map((_, r) => {
+      const it = makeItem(s, r, lvl + r, mana, mana && r >= 4);   // чем реже вещь, тем выше её уровень (для примера)
+      return Object.assign(it, { set: true, setKey: key, name: SETS[key].names[k], id: `${key}-${r}${mana ? "-m" : ""}` });
+    }))));
     slotArt();
     if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
     if (menuSlot >= 0) openMenu(menuSlot);
@@ -586,6 +649,7 @@ td.r { font-weight: 700; }
     current = idx;
     const it = itemAt(idx);
     tt.style.setProperty("--rc", `var(${RC[it.r]})`);
+    tt.classList.toggle("mana", !!it.mana);
     tt.innerHTML = render(it, idx);
     tt.querySelectorAll("li.boost").forEach(li => { li.style.setProperty("--bc", `var(${RC[it.r]})`); li.classList.add("b" + it.r); });
     if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
@@ -635,10 +699,14 @@ td.r { font-weight: 700; }
     if (li.dataset.part === "set") return showSetMini(li);
     const it = itemAt(current), e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
     let tag = "";
-    if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
+    const kx = v => "×" + (+v.toFixed(2)).toString().replace(".", ",");
+    if (e.mana && e.boost) tag = `◆ Мана ${kx(MANA.mult)} поверх свечения ${kx(RAR[it.r].boost)} — всего ${kx(MANA.mult * RAR[it.r].boost)}`;
+    else if (e.mana) tag = `◆ Усилено маной · ${kx(MANA.mult)}`;
+    else if (e.manaMain) tag = "◆ Лишний основной стат от маны";
+    else if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
     else if (e.minor) tag = "Основной стат в роли дополнительного · 45 % силы";
     else if (li.dataset.part === "main") tag = "Основной стат предмета";
-    mini.style.setProperty("--bc", e.boost ? `var(${RC[it.r]})` : "var(--gold)");
+    mini.style.setProperty("--bc", e.mana || e.manaMain ? "var(--mana)" : e.boost ? `var(${RC[it.r]})` : "var(--gold)");
     mini.innerHTML = `<h3>${svg(e.key, "")}${s.name}</h3><p>${s.info}</p>` +
       `<div class="here">На этом предмете: <b>${fmt(e.key, e.v)}</b></div>` + (tag ? `<div class="tag">${tag}</div>` : "");
     positionMini(li);
@@ -676,11 +744,12 @@ td.r { font-weight: 700; }
     menuSlot = k;
     const s = SLOTS[k], cur = itemAt(k);
     menu.innerHTML = `<div class="mhead">${s.type}<span>${bag[k].length} в сумке</span></div>` +
-      SET_KEYS.map(key => `<div class="mset"><i style="background-image:url(${SETS[key].emblem})"></i>${SETS[key].name}</div><div class="mgrid">` +
-        bag[k].filter(it => it.setKey === key).map(it => { const eq = it.id === equipped[k];
-          return `<button type="button" class="mi${eq ? " eq" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${eq ? ", надето" : ""}" ` +
+      SET_KEYS.map(key => `<div class="mset"><i style="background-image:url(${SETS[key].emblem})"></i>${SETS[key].name}</div>` + [false, true].map(mana =>
+        `${mana ? '<div class="msub">Пропитано маной</div>' : ""}<div class="mgrid">` +
+        bag[k].filter(it => it.setKey === key && it.mana === mana).map(it => { const eq = it.id === equipped[k];
+          return `<button type="button" class="mi${eq ? " eq" : ""}${it.mana ? " mana" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${it.mana ? ", пропитано маной" : ""}${eq ? ", надето" : ""}" ` +
             `style="--rc:var(${RC[it.r]});${spriteCover(k, it.r, SETS[key].sheet)}"></button>`; }).join("") +
-        `</div>`).join("") +
+        `</div>`).join("")).join("") +
       `<div class="mcap" id="mcap" style="--rc:var(${RC[cur.r]})"><b>${cur.name}</b><span>${RAR[cur.r].name} · надето</span></div>`;
     menu.classList.remove("show"); void menu.offsetWidth;
     if (!narrow()) { const p = sideOf(k, menu.offsetWidth || 336, menu.offsetHeight || 320);
@@ -698,7 +767,7 @@ td.r { font-weight: 700; }
     const k = menuSlot, it = bag[k].find(x => x.id === btn.dataset.id), cap = document.getElementById("mcap");
     if (!it || !cap) return;
     cap.style.setProperty("--rc", `var(${RC[it.r]})`);
-    cap.innerHTML = `<b>${it.name}</b><span>${SETS[it.setKey].name} · ${RAR[it.r].name}${it.id === equipped[k] ? " · надето" : ""}</span>`;
+    cap.innerHTML = `<b>${it.name}</b><span>${SETS[it.setKey].name} · ${RAR[it.r].name}${it.mana ? " · пропитано маной" : ""}${it.id === equipped[k] ? " · надето" : ""}</span>`;
   }
   menu.addEventListener("mouseover", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
   menu.addEventListener("focusin", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
@@ -760,6 +829,7 @@ td.r { font-weight: 700; }
       art.style.backgroundSize = `${sh.w * sc}px ${sh.h * sc}px`;
       art.style.backgroundPosition = `${-(x0 * sc - (w - (x1 - x0) * sc) / 2)}px ${-(y0 * sc - (h - (y1 - y0) * sc) / 2)}px`;
       art.style.setProperty("--rc", `var(${RC[it.r]})`);
+      art.classList.toggle("mrim", !!it.mana);
     });
   }
 
