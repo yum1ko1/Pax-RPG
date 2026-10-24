@@ -77,7 +77,7 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .tt.pinned .pin .full { --p: 360deg; }
 .tt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
 
-.tt header { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 14px 30px 10px 4px; position: relative;
+.tt header { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; padding: 14px 0 10px 4px; position: relative;
              background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
 .slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b no-repeat; border-radius: 2px;
            box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 12px color-mix(in srgb, var(--rc) 55%, transparent); }
@@ -86,13 +86,19 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
         text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
 /* шапка: тип со значком слота и уровень, ниже — плашка редкости */
+/* цена — рамка с монетой игры в правом верхнем углу, под кольцом фиксации */
+.price { align-self: start; margin-top: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 4px; white-space: nowrap;
+         border: 1px solid var(--gold-dim); border-radius: 2px; background: linear-gradient(180deg, #24170f, #140c0a);
+         box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 8px rgba(201, 163, 92, .15); }
+.price .coin { width: 22px; height: 22px; flex: none; }
+.price b { font: 700 14px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(243, 213, 140, .3); }
 /* тип вещи — своя полоса под шапкой: значок слота в рамке, название и категория, справа уровень */
 .kind { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px;
         border: 1px solid rgba(201, 163, 92, .28); border-radius: 2px;
         background: linear-gradient(90deg, rgba(201, 163, 92, .1), rgba(201, 163, 92, .02) 70%); }
 .kind .kt { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--gold-dim); border-radius: 2px;
             background: radial-gradient(circle, rgba(201, 163, 92, .18), transparent 70%), #120a0b; transform: rotate(45deg) scale(.78); }
-.kind .kt i { width: 30px; height: 30px; background: center / contain no-repeat; transform: rotate(-45deg) scale(1.15); }
+.kind .kt i { width: 30px; height: 30px; background: center / contain no-repeat; transform: rotate(-45deg) scale(1.3); }
 .kind .kn { display: grid; line-height: 1.15; }
 .kind .kn b { font: 700 15px var(--font-body); color: var(--text); letter-spacing: .02em; }
 .kind .kn small { font-size: 12px; color: var(--muted); }
@@ -382,6 +388,7 @@ td.r { font-weight: 700; }
 
   // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
   const EQUIP_X = [948, 1234];                           // края колонки экипировки на макете
+  const COIN = `<svg class="coin" viewBox="0 0 80 80" aria-hidden="true"><defs><radialGradient id="cg" cx=".44" cy=".44" r=".6"><stop offset="0" stop-color="#ffd161"/><stop offset=".75" stop-color="#9e6b1a"/><stop offset="1" stop-color="#734710"/></radialGradient></defs><circle cx="40" cy="40" r="36" fill="#ff9ad0" opacity=".18"/><circle cx="40" cy="40" r="30" fill="url(#cg)"/><circle cx="40" cy="40" r="27.6" fill="none" stroke="#7f5214" stroke-width="4" stroke-dasharray="1.2 3.6" opacity=".7"/><circle cx="40" cy="40" r="24" fill="none" stroke="#8c5c14" stroke-width="1.4"/><circle cx="40" cy="40" r="29.7" fill="none" stroke="#ffe699" stroke-width="1.2" opacity=".8"/><g fill="#7a4d0f" stroke="#7a4d0f" stroke-linejoin="round"><path d="M30.4 42.4a9.6 9.6 0 0 1 19.2 0" fill="none" stroke-width="4.2"/><path d="M25 43h30l2.4 5.4H22.6z" stroke-width=".6"/><path d="M27.4 49h25.2l2.4 4.2H25z" stroke-width=".6"/><path d="M43 33.4l4.8-6 4.2-6.6M37 33.4l-4.8-6-4.2-6.6" fill="none" stroke-width="2.1" stroke-linecap="round"/><circle cx="40" cy="33.4" r="1.8"/><path d="M35.2 43.9h9.6L43 48.4h-6z" fill="#5c3810" stroke="none"/></g></svg>`;
   const KIND = { helmet: "Доспех · голова", chest: "Доспех · тело", gloves: "Доспех · руки", shoulders: "Доспех · плечи",
                  boots: "Доспех · ноги", cloak: "Накидка · спина", ring: "Украшение · палец", amulet: "Украшение · шея" };
   const SLOTS = [
@@ -479,9 +486,10 @@ td.r { font-weight: 700; }
       <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
       <header><div class="icon" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
         <div><p class="name">${item.name}</p>
-          <div class="rarity"><i></i>${RAR[item.r].name}</div></div></header>
+          <div class="rarity"><i></i>${RAR[item.r].name}</div></div>
+        <div class="price" title="Цена">${COIN}<b>${money(item.price)}</b></div></header>
       <div class="kind"><span class="kt"><i style="background-image:url(${PIPS[PIP[idx] + "_off"]})"></i></span>
-        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span><span class="ilvl">Уровень<b>${item.lvl}</b></span></div>
+        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span><span class="ilvl">Требуется ур.<b>${item.lvl}</b></span></div>
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
@@ -490,7 +498,7 @@ td.r { font-weight: 700; }
           <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
         ${setBox(item, idx, () => i++)}
       </div>
-      <footer><span>Требуется ур. <b>${item.lvl}</b></span><span>Цена <b>${money(item.price)}</b> зол.</span></footer></div>`;
+</div>`;
   }
 
   const holder = document.getElementById("holder"), stage = document.getElementById("stage");
