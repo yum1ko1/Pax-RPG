@@ -41,6 +41,10 @@ hi = Vector(map(max, *pts))
 mid = sum((spear.matrix_world @ v.co for v in spear.data.vertices), Vector()) / len(spear.data.vertices)
 if mid.z < (lo.z + hi.z) / 2:                         # наконечник (где гуще вершины) — вверх
     spear.matrix_world = Matrix.Rotation(math.pi, 4, "X") @ spear.matrix_world
+    bpy.context.view_layer.update()
+    pts = [spear.matrix_world @ Vector(c) for c in spear.bound_box]
+    lo = Vector(map(min, *pts))
+    hi = Vector(map(max, *pts))
 c = (lo + hi) / 2
 h = hi.z - lo.z
 
