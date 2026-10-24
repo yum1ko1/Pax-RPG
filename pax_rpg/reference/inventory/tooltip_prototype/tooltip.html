@@ -91,17 +91,25 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
 .tt.show.live { pointer-events: auto; }   /* окно ловит курсор, только если его открыли наведением, — показанное при загрузке не мешает слотам */
 .tt.show { opacity: 1; transform: none;
            transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1), filter 300ms; }
-.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .35s ease-out, pinGlow 2.6s ease-in-out .35s infinite; }
+.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
 /* закреплённое: яркая кайма цвета редкости (--pg) вокруг всей рамки, мягко дышит; у вещи с маной — розовая */
 .tt { --pg: var(--rc); }
 .tt.mana { --pg: var(--mana); }
-@keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); }
-                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px color-mix(in srgb, var(--pg) 70%, #fff)) drop-shadow(0 0 22px color-mix(in srgb, var(--pg) 90%, transparent)); } }
-/* закрепление — подсветка сразу и плавно разгорается до дыхания, без вспышки */
-@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 0 transparent) drop-shadow(0 0 0 transparent); }
-                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); } }
-@keyframes manaPinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
-                       to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px color-mix(in srgb, var(--pg) 80%, #fff)) drop-shadow(0 0 14px color-mix(in srgb, var(--pg) 65%, transparent)); } }
+/* цвет каймы — RGB-тройками (обычный sRGB плавно анимируется; цвет из color-mix в filter переключается рывком):
+   --pgc — цвет редкости, --pgl — он же, светлее на 20 % */
+.tt { --pgc: 201 163 92; --pgl: 212 181 125; }
+.tt[data-r="0"] { --pgc: 164 164 164; --pgl: 182 182 182; }
+.tt[data-r="1"] { --pgc: 87 196 107; --pgl: 121 208 137; }
+.tt[data-r="2"] { --pgc: 79 141 255; --pgl: 114 164 255; }
+.tt[data-r="3"] { --pgc: 180 111 255; --pgl: 195 140 255; }
+.tt[data-r="4"] { --pgc: 242 184 75; --pgl: 245 198 111; }
+.tt[data-r="5"] { --pgc: 255 68 54; --pgl: 255 105 94; }
+.tt.mana { --pgc: 255 95 208; --pgl: 255 127 217; }
+@keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgb(var(--pgl) / .95)) drop-shadow(0 0 14px rgb(var(--pgc) / .65)); }
+                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgb(var(--pgl) / 1)) drop-shadow(0 0 22px rgb(var(--pgc) / .9)); } }
+/* закрепление — кайма видна в тот же кадр (с половины силы) и за 0,15 с доходит до дыхания, без вспышки */
+@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 2px rgb(var(--pgl) / .9)) drop-shadow(0 0 8px rgb(var(--pgc) / .45)); }
+                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgb(var(--pgl) / .95)) drop-shadow(0 0 14px rgb(var(--pgc) / .65)); } }
 .tt .inner { margin: -30px -36px -18px -40px; position: relative; }   /* содержимое заходит под широкие уголки рамки */
 .tt .sweep { position: absolute; inset: -40px -40px -24px -44px; pointer-events: none; overflow: hidden; }
 .tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
@@ -342,7 +350,7 @@ button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font
 @keyframes manaFrame { 0%, 100% { filter: hue-rotate(-80deg) saturate(1.9) brightness(1.1); }
                        50% { filter: hue-rotate(-95deg) saturate(1.7) brightness(1.35); } }
 .tt.mana { animation: manaGlow 3s ease-in-out infinite; }
-.tt.mana.pinned { animation: manaPinIn .35s ease-out, pinGlow 2.6s ease-in-out .35s infinite; }
+.tt.mana.pinned { animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
 @keyframes manaGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
                       50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 180, 240, .95)) drop-shadow(0 0 22px rgba(220, 110, 255, .65)); } }
 /* плашка «Пропитано маной» (37): края с ромбом не тянутся, тянется только середина */
@@ -765,7 +773,7 @@ td.r { font-weight: 700; }
   function leave() {
     if (pinned) return;
     clearTimeout(showT);   // таймер закрепления не трогаем: если курсор успеет в окно, кольцо дойдёт до конца; hide() его снимет
-    leaving = true; hideT = setTimeout(hide, 80);   // окно вплотную к слоту: 0,08 с хватает, чтобы курсор перешёл в него
+    leaving = true; hideT = setTimeout(hide, 30);   // окно вплотную к слоту: 0,03 с хватает, чтобы курсор перешёл в него
   }
 
   // мини-подсказка стата (только у закреплённой)
