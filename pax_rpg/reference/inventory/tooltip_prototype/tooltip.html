@@ -786,7 +786,7 @@ td.r { font-weight: 700; }
   const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut");
   const heroIn = document.getElementById("hero"), heroOut = document.getElementById("heroOut");
   const narrow = () => window.matchMedia("(max-width: 760px)").matches;
-  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, leaving = false, inTT = false, lastXY = [-1, -1], suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
+  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, leaving = false, inTT = false, onSlot = false, lastXY = [-1, -1], suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
 
   function generate() {
     const lvl = +lvlIn.value;
@@ -851,10 +851,12 @@ td.r { font-weight: 700; }
 
   function open(idx, instant) {
     if (menuSlot >= 0) return;
-    if (pinned) {   // закреплённое: курсор ещё в нём или не заходил — другие слоты не открывают; уже вышел — закрываем и открываем новое
-      if (inTT || !ttEntered) return;
+    if (pinned) {   // закреплённое: вернулись на его вещь — остаётся; навели на другую вещь не из окна — закрываем и открываем новое
+      if (idx === current) { onSlot = true; clearTimeout(ttLeaveT); return; }
+      if (inTT) return;
       clearTimeout(ttLeaveT); hide();
     }
+    onSlot = true;
     clearTimeout(hideT); clearTimeout(showT); leaving = false;
     const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); arm(); };   // кольцо копится, пока курсор на вещи
     instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
@@ -864,8 +866,12 @@ td.r { font-weight: 700; }
     pinned = false;
     tt.classList.remove("show", "pinned", "arming", "live"); tt.setAttribute("aria-hidden", "true"); current = -1; inTT = false;
   }
+  // закреплённое живёт, пока курсор на его вещи или в самом окне; ушёл и оттуда, и оттуда — пропадает
+  // (0,06 с — перейти через зазор между вещью и окном)
+  function dropPinnedSoon() { clearTimeout(ttLeaveT); ttLeaveT = setTimeout(() => { if (pinned && !inTT && !onSlot) hide(); }, 60); }
   function leave() {
-    if (pinned) return;
+    onSlot = false;
+    if (pinned) { dropPinnedSoon(); return; }
     clearTimeout(showT); clearTimeout(pinT); tt.classList.remove("arming");   // ушёл с вещи раньше — окно не закрепляется, кольцо сброшено
     leaving = true; hideT = setTimeout(hide, 30);   // окно вплотную к слоту: 0,03 с хватает, чтобы курсор перешёл в него
   }
@@ -909,7 +915,7 @@ td.r { font-weight: 700; }
   }
   function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
 
-  // закреплённая: курсор зашёл в подсказку и вышел за её рамку — подсказка закрывается (0,15 с на возврат)
+  // закреплённая: курсор вышел и за рамку окна, и с вещи — подсказка закрывается (dropPinnedSoon)
   // незакреплённая: кольцо копится, только пока курсор на вещи; в самом окне оно не идёт; из окна на слот — кольцо заново,
   // из окна в сторону — окно закрывается
   document.addEventListener("pointermove", e => { lastXY = [e.clientX, e.clientY]; }, { passive: true });
@@ -920,7 +926,7 @@ td.r { font-weight: 700; }
   });
   tt.addEventListener("mouseleave", e => {
     inTT = false;
-    if (pinned) { if (ttEntered) ttLeaveT = setTimeout(() => { if (pinned) hide(); }, 150); return; }
+    if (pinned) { dropPinnedSoon(); return; }
     if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".slot"))) leave();
   });
   tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
@@ -1126,7 +1132,7 @@ td.r { font-weight: 700; }
       `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
         return `<span class="en" style="--ec:${e.c}"><i></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
           `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
-      REP_RECT);
+      REP_RECT, "rep");
   }
   repEl.addEventListener("mouseenter", showRep); repEl.addEventListener("mouseleave", () => sktLeaveSocket());
   repEl.addEventListener("focus", showRep); repEl.addEventListener("blur", () => sktLeaveSocket());
@@ -1143,11 +1149,13 @@ td.r { font-weight: 700; }
   }
   // описания приёмов и пассива закрепляются как подсказка экипировки: кольцо копится, пока курсор на гнезде (1,2 с);
   // увёл раньше — описание пропадает. Закреплённое ловит курсор (цифры раскрывают разбор), закрывается кликом в любом
-  // месте, Esc или когда курсор, зайдя в него, выйдет за рамку
+  // месте, Esc или когда курсор уйдёт и с гнезда, и из окна описания
   const PIN_HTML = '<div class="pin"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>';
-  let sktT = 0, sktPinT = 0, sktPinned = false, sktEntered = false, inSkt = false;
-  function sktOpen(html, rect) {
-    if (sktPinned) { if (inSkt || !sktEntered) return; hideSkt(); }
+  let sktT = 0, sktPinT = 0, sktPinned = false, sktEntered = false, inSkt = false, onSock = false, sktKey = "";
+  function sktDropSoon() { clearTimeout(sktT); sktT = setTimeout(() => { if (sktPinned && !inSkt && !onSock) hideSkt(); }, 60); }
+  function sktOpen(html, rect, key) {
+    if (sktPinned) { if (key === sktKey) { onSock = true; clearTimeout(sktT); return; } if (inSkt) return; hideSkt(); }
+    sktKey = key; onSock = true;
     clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
     skt.innerHTML = PIN_HTML + html;
     skt.classList.remove("arming", "pinned");
@@ -1157,16 +1165,17 @@ td.r { font-weight: 700; }
   }
   function pinSkt() { sktPinned = true; sktEntered = inSkt; skt.classList.remove("arming"); skt.classList.add("pinned"); }
   function sktLeaveSocket() {
-    if (sktPinned) return;
+    onSock = false;
+    if (sktPinned) { sktDropSoon(); return; }
     clearTimeout(sktPinT); clearTimeout(sktT); sktT = setTimeout(hideSkt, 30);
   }
   function hideSkt() {
     clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
-    sktPinned = sktEntered = inSkt = false;
+    sktPinned = sktEntered = inSkt = onSock = false; sktKey = "";
     skt.classList.remove("show", "arming", "pinned"); skt.setAttribute("aria-hidden", "true");
   }
   skt.addEventListener("mouseenter", () => { inSkt = true; if (sktPinned) { sktEntered = true; clearTimeout(sktT); } });
-  skt.addEventListener("mouseleave", () => { inSkt = false; if (sktPinned && sktEntered) sktT = setTimeout(hideSkt, 150); });
+  skt.addEventListener("mouseleave", () => { inSkt = false; if (sktPinned) sktDropSoon(); });
   skt.addEventListener("mouseover", e => { const n = e.target.closest(".num"); if (n && sktPinned) showSk2(n); });
   skt.addEventListener("mouseout", e => { const n = e.target.closest(".num"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
   document.addEventListener("pointerdown", () => { if (sktPinned) hideSkt(); }, true);
@@ -1175,7 +1184,7 @@ td.r { font-weight: 700; }
   function showSkill(w) {
     const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
     sktOpen(`<div class="skh"><i class="ski sk-${sk}"></i><div><h3>${name}</h3>` +
-      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk), WSLOTS[w].sk);
+      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk), WSLOTS[w].sk, "w" + w);
   }
   // разбор числа: откуда урон / сколько ХА
   const sk2 = document.getElementById("sk2");
@@ -1215,7 +1224,7 @@ td.r { font-weight: 700; }
       `<div class="tiers">${PASSIVE.streak.map(([n, d]) => `<span>больше ${n} ударов</span><span>+${d} % урона</span>`).join("")}</div>` +
       `<p style="margin-top:4px">Пропущенный удар обнуляет серию.</p></div>` +
       `<div class="pb"><b>Синергия: ${WEAPONS[syn.weapon].name}</b><p>Когда копьё в руках (основное оружие): Ловкость ×${num(syn.agi)}, ХА восстанавливается в ${num(syn.ha)} раза быстрее.</p></div>`,
-      PAS_RECT);
+      PAS_RECT, "pas");
   }
 
   function weaponArt() {
