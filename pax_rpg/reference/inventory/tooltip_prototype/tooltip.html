@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
 <style>
 /* Макет: инвентарь игры во всю ширину, подсказка всплывает рядом со слотом и закрепляется при долгом наведении;
    ниже — короткая справка по системе. Один тёмный мир игры (лак, багрянец, старое золото), без светлой темы. */
@@ -20,9 +20,11 @@
   --pin: 1200ms;
   --set: #4fd1b8;
   --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
-  --font-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Cormorant Garamond", "Times New Roman", Georgia, serif;   /* шрифт меню игры (mods/pax_rpg/fonts/cormorant_garamond.ttf) */
 }
-body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 16px; font-weight: 600;
+       font-size-adjust: ex-height .44; font-feature-settings: "lnum" 1; }
+.tt, .tt *, .menu, .menu *, .mini, .mini * { font-feature-settings: "lnum" 1, "tnum" 1 !important; }   /* сокращение font сбрасывает это свойство */   /* у Cormorant мелкие строчные — подравниваем к прежней читаемости */
 .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
         padding-block: 18px 40px; max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
 h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; margin: 0; letter-spacing: .02em; text-wrap: balance; }
@@ -91,27 +93,26 @@ input[type=range] { accent-color: var(--gold); width: 140px; }
          border: 1px solid var(--gold-dim); border-radius: 2px; background: linear-gradient(180deg, #24170f, #140c0a);
          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 8px rgba(201, 163, 92, .15); }
 .price .coin { width: 22px; height: 22px; flex: none; }
-.price b { font: 700 14px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(243, 213, 140, .3); }
+.price b { font: 600 15px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(243, 213, 140, .3); }
 /* тип вещи — своя полоса под шапкой: значок слота в рамке, название и категория, справа уровень */
-.kind { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px;
+.kind { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px;
         border: 1px solid rgba(201, 163, 92, .28); border-radius: 2px;
         background: linear-gradient(90deg, rgba(201, 163, 92, .1), rgba(201, 163, 92, .02) 70%); }
-.kind .kt { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--gold-dim); border-radius: 2px;
-            background: radial-gradient(circle, rgba(201, 163, 92, .18), transparent 70%), #120a0b; transform: rotate(45deg) scale(.78); }
-.kind .kt i { width: 30px; height: 30px; background: center / contain no-repeat; transform: rotate(-45deg) scale(1.3); }
+.kind .kt { width: 40px; height: 40px; background: center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6)); }
 .kind .kn { display: grid; line-height: 1.15; }
 .kind .kn b { font: 700 15px var(--font-body); color: var(--text); letter-spacing: .02em; }
 .kind .kn small { font-size: 12px; color: var(--muted); }
-.lvlp { display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 8px; white-space: nowrap; padding: 6px 12px; border-radius: 2px; line-height: 1.05;
-        border: 1px solid var(--gold-dim); background: linear-gradient(180deg, #24170f, #140c0a); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6); }
-.lvlp small { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.lvlp em { grid-column: 1 / -1; text-align: center; margin-top: 2px; }
-.lvlp b { font: 700 18px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; }
-.lvlp em { font: normal 10px var(--font-body); color: #ffb3a8; }
-.lvlp.bad { border-color: #b3242b; background: linear-gradient(180deg, #3a0f10, #1c0809);
-            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 10px rgba(255, 60, 50, .35); animation: lvlbad 2.4s ease-in-out infinite; }
-.lvlp.bad small { color: #ff8f84; } .lvlp.bad b { color: #ff5a4c; text-shadow: 0 0 8px rgba(255, 70, 60, .6); }
-@keyframes lvlbad { 50% { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 16px rgba(255, 60, 50, .55); } }
+/* плашка уровня: края и ромб по центру — без растяжения, тянется только середина */
+.lvlp { display: flex; align-items: center; justify-content: space-between; white-space: nowrap; height: 34px; margin: 0 0 8px; padding: 0 30px; line-height: 1;
+        background-repeat: no-repeat; background-size: auto 100%, auto 100%, auto 100%, calc(100% - 40px) 100%;
+        background-position: left center, right center, center center, center center;
+        background-image: url("ui/lvl_ok_L.png"), url("ui/lvl_ok_R.png"), url("ui/lvl_ok_C.png"), url("ui/lvl_ok_M.png"); }
+.lvlp small { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lvlp b { font: 600 19px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; }
+.lvlp.bad { background-image: url("ui/lvl_bad_L.png"), url("ui/lvl_bad_R.png"), url("ui/lvl_bad_C.png"), url("ui/lvl_bad_M.png");
+            animation: lvlbad 2.4s ease-in-out infinite; }
+.lvlp.bad small { color: #ff9a8f; } .lvlp.bad b { color: #ff5a4c; text-shadow: 0 0 8px rgba(255, 70, 60, .6); }
+@keyframes lvlbad { 0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 60, 50, .3)); } 50% { filter: drop-shadow(0 0 7px rgba(255, 60, 50, .75)); } }
 .tt .lore { margin: 10px 0 2px; }
 .kind .ilvl { display: grid; justify-items: end; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); line-height: 1.1; }
 .kind .ilvl b { font: 700 17px var(--font-body); color: var(--gold); letter-spacing: 0; font-variant-numeric: tabular-nums; }
@@ -139,7 +140,7 @@ ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
 li { display: grid; grid-template-columns: 18px auto 1fr auto; align-items: center; gap: 8px; position: relative;
      padding: 2px 6px; border-radius: 2px; font-size: 14.5px; }
 li img.si { width: 18px; height: 18px; object-fit: contain; }
-li .v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+li .v { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
 li .k { color: var(--muted); }
 li .mark { width: 14px; height: 14px; background: center / contain no-repeat; }
 ul.main { margin-left: 12px; }
@@ -217,7 +218,7 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
                filter: drop-shadow(0 0 4px color-mix(in srgb, var(--set) 60%, transparent)); }
 .plaque b { font-family: var(--font-display); font-size: 16.5px; line-height: 1; color: var(--set); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); padding-left: 4px; }
-.plaque span { margin-left: auto; color: #dffbf5; font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 700; }
+.plaque span { margin-left: auto; color: #dffbf5; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
 .pips { display: flex; justify-content: space-between; padding: 0 6px; }
 .pips i { width: 24px; height: 24px; background: center / contain no-repeat; opacity: .7; }
 .pips i.on { opacity: 1; }
@@ -225,17 +226,21 @@ li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
 ul.setb { gap: 4px; }
 ul.setb li { grid-template-columns: 26px 1fr; align-items: center; font-size: 13.5px; line-height: 1.3; padding: 2px 4px; }
 ul.setb li .n { width: 26px; height: 26px; display: grid; place-items: center; background: url("ui/seal_off_s.png") center / contain no-repeat;
-                font: 700 12px var(--font-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+                font: 600 13px var(--font-body); color: var(--muted); font-variant-numeric: tabular-nums; }
 ul.setb li.act .n { background-image: url("ui/seal_on_s.png"); color: #eafff9; text-shadow: 0 0 4px #000; }
 ul.setb li .t { color: var(--muted); }
 ul.setb li.act .t { color: var(--set); }
 ul.setb li.act .t b { color: #dffbf5; font-weight: 700; }
 ul.setb li:not(.act) { opacity: .7; }
 .setnote { font-size: 12px; color: var(--muted); }
-/* лор сета — в своей рамке (временно — рамка мини-подсказки; своя рамка — ui/frame_lore_s.png, когда будет) */
-.lore { margin: 2px 0 0; padding: 0; border-style: solid; border-width: 12px; border-image: url("ui/frame_mini_s.png") 28 fill / 12px stretch;
-        font: italic 500 13px/1.45 var(--font-body); color: #d9c7a8; text-align: center; }
-.lore::before, .lore::after { content: "❖"; color: var(--gold-dim); font-style: normal; font-size: 10px; margin: 0 6px; vertical-align: 1px; }
+/* лор вещи — свиток: стержни с уголками по краям без растяжения, верх и низ с сакурой тянутся по ширине, бумага — по месту */
+.lore { height: 124px; padding: 24px 66px; display: grid; place-items: center; text-align: center;
+        font: italic 500 14px/1.28 var(--font-body); color: #e2d0b0; text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+        background-repeat: no-repeat;
+        background-image: url("ui/lore_L.png"), url("ui/lore_R.png"), url("ui/lore_T.png"), url("ui/lore_B.png"), url("ui/lore_M.png");
+        background-size: auto 100%, auto 100%, calc(100% - 122px) 31px, calc(100% - 122px) 31px, calc(100% - 122px) 63px;
+        background-position: left top, right top, 61px top, 61px bottom, 61px center; }
+
 
 
 /* мини-подсказка стата */
@@ -364,8 +369,8 @@ td.r { font-weight: 700; }
     rows: [[8,179],[185,360],[366,528],[535,708],[714,887],[894,1118],[1124,1292],[1298,1530]] };
   const SETS = {};
   SHEET.img = "items.jpg"; SHEET_GHARN.img = "items_gharn.jpg";
-  const PIPS = {}; ["helmet", "chest", "gloves", "shoulders", "boots", "cloak", "ring", "amulet"].forEach(k => {
-    PIPS[k + "_on"] = "ui/pip_" + k + "_on_s.png"; PIPS[k + "_off"] = "ui/pip_" + k + "_off_s.png"; });
+  const PIPS = {helmet_on: "ui/pip_helmet_on_s.png", helmet_off: "ui/pip_helmet_off_s.png", chest_on: "ui/pip_chest_on_s.png", chest_off: "ui/pip_chest_off_s.png", gloves_on: "ui/pip_gloves_on_s.png", gloves_off: "ui/pip_gloves_off_s.png", shoulders_on: "ui/pip_shoulders_on_s.png", shoulders_off: "ui/pip_shoulders_off_s.png", boots_on: "ui/pip_boots_on_s.png", boots_off: "ui/pip_boots_off_s.png", cloak_on: "ui/pip_cloak_on_s.png", cloak_off: "ui/pip_cloak_off_s.png", ring_on: "ui/pip_ring_on_s.png", ring_off: "ui/pip_ring_off_s.png", amulet_on: "ui/pip_amulet_on_s.png", amulet_off: "ui/pip_amulet_off_s.png"};
+  const TYPES = {helmet: "ui/type_helmet_s.png", chest: "ui/type_chest_s.png", gloves: "ui/type_gloves_s.png", shoulders: "ui/type_shoulders_s.png", boots: "ui/type_boots_s.png", cloak: "ui/type_cloak_s.png", ring: "ui/type_ring_s.png", amulet: "ui/type_amulet_s.png"};
   SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "", emblem: "ui/emb_samurai_s.png",
     names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
     lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
@@ -505,8 +510,9 @@ td.r { font-weight: 700; }
         <div><p class="name">${item.name}</p>
           <div class="rarity"><i></i>${RAR[item.r].name}</div></div>
         <div class="price" title="Цена">${COIN}<b>${money(item.price)}</b></div></header>
-      <div class="kind"><span class="kt"><i style="background-image:url(${PIPS[PIP[idx] + "_off"]})"></i></span>
-        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span>${lvlPlaque(item)}</div>
+      <div class="kind"><span class="kt" style="background-image:url(${TYPES[PIP[idx]]})"></span>
+        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span></div>
+      ${lvlPlaque(item)}
       <div class="orn"></div>
       <div class="stats">
         <div class="cap">Основные</div>
