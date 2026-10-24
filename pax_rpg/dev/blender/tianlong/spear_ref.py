@@ -17,7 +17,7 @@ for o in list(bpy.data.objects):
     bpy.data.objects.remove(o, do_unlink=True)
 bpy.ops.import_scene.gltf(filepath=SRC)
 sc = bpy.context.scene
-spear = next(o for o in sc.objects if o.type == "MESH" and "spear" in o.name.lower())
+spear = next(o for o in sc.objects if o.type == "MESH" and "spear" in (o.name + o.data.name).lower())
 for o in sc.objects:
     o.hide_render = o is not spear
 for poly in spear.data.polygons:
