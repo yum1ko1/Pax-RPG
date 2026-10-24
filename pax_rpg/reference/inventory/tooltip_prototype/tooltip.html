@@ -485,6 +485,12 @@ ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; 
 .skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
 .sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
 .sk2 .bd span { color: var(--muted); } .sk2 .bd b { color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.hv { cursor: help; }
+.reps .en.hv:hover { color: #fff3dc; }
+.repicons i.hv:hover { opacity: .95; filter: none; }
+.sk2 .hvh { display: flex; align-items: center; gap: 8px; }
+.sk2 .hvh i, .sk2 .hvh .rpi { width: 26px; height: 26px; flex: none; background-position: center; background-size: contain; background-repeat: no-repeat; }
+.sk2 .hvp { margin-top: 6px; font-size: 12.5px; }
 .sk2 .bd .sum { color: #f0cf8a; padding-top: 4px; border-top: 1px solid rgba(201, 163, 92, .25); }
 
 .skh { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-bottom: 7px; }
@@ -1165,11 +1171,11 @@ td.r { font-weight: 700; }
       `<div class="sks">${sgn(tot)} · среднее отношение пяти империй</div></div></div>` +
       // значки ступеней — над серединами их отрезков (−80, −40, 0, +40, +80)
       `<div class="repscale" style="--tc:${T.c}"><div class="repicons">${REP_TIERS.map((x, i) =>
-        `<i class="${i === t ? "on" : ""}" style="left:${10 + i * 20}%;--tc:${x.c}" title="${x.name}">${repIcon(i)}</i>`).join("")}</div>` +
+        `<i class="hv${i === t ? " on" : ""}" style="left:${10 + i * 20}%;--tc:${x.c}" data-h="tier" data-i="${i}">${repIcon(i)}</i>`).join("")}</div>` +
       `<div class="repbar">${[20, 40, 60, 80].map(x => `<s style="left:${x}%"></s>`).join("")}<u style="left:${(tot + 100) / 2}%"></u></div>` +
       `<div class="repends"><span>−100</span><span>0</span><span>+100</span></div></div>` +
       `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
-        return `<span class="en"><i class="emp-${e.key}"></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
+        return `<span class="en hv" data-h="emp" data-i="${EMPIRES.indexOf(e)}"><i class="emp-${e.key}"></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
           `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
       REP_RECT, "rep");
   }
@@ -1209,7 +1215,7 @@ td.r { font-weight: 700; }
       return `<span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✕"}</span><span>${label(next[k], st)}</span><span class="rv">${k === "mana" ? (ok ? "есть" : "нет") : cur(st)}</span>`; }).join("") : "";
     sktOpen(`<div class="skh"><i class="ski rep">${rankIcon(r)}</i><div><h3>Ранг ${r}: ${RANKS[r].name}</h3>` +
       `<div class="sks">${next ? `Следующий — ранг ${r + 1}: ${next.name}` : "Высший ранг"}</div></div></div>` +
-      `<div class="repscale"><div class="repicons">${RANKS.map((x, i) => `<i class="${i === r ? "on" : ""}" style="left:${100 / 14 + i * 100 / 7}%;--tc:${RANK_C[i]}" title="Ранг ${i}: ${x.name}">${rankIcon(i)}</i>`).join("")}</div>` +
+      `<div class="repscale"><div class="repicons">${RANKS.map((x, i) => `<i class="hv${i === r ? " on" : ""}" style="left:${100 / 14 + i * 100 / 7}%;--tc:${RANK_C[i]}" data-h="rank" data-i="${i}">${rankIcon(i)}</i>`).join("")}</div>` +
       `<div class="repbar rkbar">${[1, 2, 3, 4, 5, 6].map(x => `<s style="left:${x * 100 / 7}%"></s>`).join("")}<u style="left:${(r + 0.5) * 100 / 7}%;--tc:${RANK_C[r]}"></u></div></div>` +
       (next ? `<div class="rkhead">До ранга ${r + 1}</div><div class="rkreq">${reqs}</div>` : ""), RANK_RECT, "rank");
   }
@@ -1255,8 +1261,8 @@ td.r { font-weight: 700; }
   }
   skt.addEventListener("mouseenter", () => { inSkt = true; if (sktPinned) { sktEntered = true; clearTimeout(sktT); } });
   skt.addEventListener("mouseleave", () => { inSkt = false; if (sktPinned) sktDropSoon(); });
-  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num"); if (n && sktPinned) showSk2(n); });
-  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
+  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num, .hv"); if (n && sktPinned) showSk2(n); });
+  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num, .hv"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
   document.addEventListener("pointerdown", () => { if (sktPinned) hideSkt(); }, true);
   document.addEventListener("keydown", e => { if (e.key === "Escape") hideSkt(); });
 
@@ -1284,8 +1290,41 @@ td.r { font-weight: 700; }
     return `<h3>ХА врага</h3><p>Выдержка врага: в начале боя у всех 100, на 0 — слом и окно Кровожадной атаки.</p>` +
       `<div class="bd">${S.concBoss ? row("У босса", `−${S.concBoss} % полоски`) : row("Обычный враг, из 100", `−${S.conc}${S.hits && S.hits.length > 1 ? " за удар" : ""}`)}</div>`;
   }
+  // империи (лор — 02 Лор/Империи): столица, кто правит, народы, чего не выносят; ступени — что значат для жителей
+  const EMP_INFO = {
+    throne: { cap: "Азур-Тэлль", rule: "Небесная Владычица и Совет Девяти Зеркал", folk: "люди и эльфы северо-запада Велламира", hate: "магии без разрешения академий" },
+    haddur: { cap: "Хаддур", rule: "Тан Горы и Каменный Совет кланов", folk: "голиафы и дварфы горного хребта", hate: "нарушенного слова" },
+    gharn: { cap: "Гхарн", rule: "Хаан — пока побеждает", folk: "орки, гоблины, хобгоблины и багбиры экватора Шерракса", hate: "трусости и долгих разговоров" },
+    saerith: { cap: "Саэрит", rule: "Жрец-Император — голос спящего дракона Ваэт-Сарра", folk: "драконорождённые и кобольды юга Шерракса", hate: "неуважения к дракону" },
+    blossom: { cap: "Двор Цветения", rule: "Королева — по договорам с двором фей", folk: "эльфы, гномы, полурослики и феи Лунниэля", hate: "грубости и нарушенных клятв" } };
+  const TIER_INFO = [
+    "Стража нападает, торговцы и мастера не говорят с вами, задания империи закрыты.",
+    "Стража следит, цены выше, часть заданий и мест закрыта.",
+    "Обычные цены и обычные задания — так к вам относятся со старта.",
+    "Цены ниже, открываются особые задания, жители помогают в пути.",
+    "Лучшие цены, доступ к знати и редким наградам, вас знают по имени." ];
+  function hoverInfo(kind, i) {
+    const row = (a, b, cls) => `<span${cls ? ` class="${cls}"` : ""}>${a}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b>`;
+    if (kind === "emp") {
+      const e = EMPIRES[i], d = EMP_INFO[e.key], T = REP_TIERS[tierOf(e.v)];
+      return `<h3 class="hvh"><i class="emp-${e.key}"></i>${e.name}</h3>` +
+        `<div class="bd">${row("Столица", d.cap)}${row("Правит", d.rule)}${row("Народы", d.folk)}${row("Не выносят", d.hate)}` +
+        `${row("Отношение к вам", `${sgn(e.v)} · ${T.name}`, "sum")}</div>`;
+    }
+    if (kind === "tier") {
+      const T = REP_TIERS[i], hi = i < REP_TIERS.length - 1 ? REP_TIERS[i + 1].min - 1 : 100;
+      return `<h3 class="hvh"><b class="rpi rep-${i}"></b>${T.name}</h3>` +
+        `<div class="bd">${row("Отношение", `${sgn(T.min)} … ${sgn(hi)}`)}</div><p class="hvp">${TIER_INFO[i]}</p>`;
+    }
+    const R = RANKS[i], st = rankState(), cur = rankOf(st);
+    const reqs = RQ.filter(([k]) => R[k] !== undefined).map(([k, label]) => { const ok = st[k] >= R[k];
+      return `<span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✕"}</span><span>${label(R[k], st)}</span><span></span>`; }).join("");
+    return `<h3 class="hvh"><b class="rpi rank-${i}"></b>Ранг ${i}: ${R.name}</h3>` +
+      (reqs ? `<div class="rkreq">${reqs}</div>` : `<p class="hvp">Со старта, без условий.</p>`) +
+      `<p class="hvp">${i < cur ? "Пройден" : i === cur ? "Ваш ранг" : i === cur + 1 ? "Следующий ранг" : "Впереди"}${i > 0 ? " · условия всех младших рангов тоже нужны" : ""}</p>`;
+  }
   function showSk2(el) {
-    sk2.innerHTML = breakdown(el.dataset.k, el.dataset.s);
+    sk2.innerHTML = el.dataset.h ? hoverInfo(el.dataset.h, +el.dataset.i) : breakdown(el.dataset.k, el.dataset.s);
     const hb = holder.getBoundingClientRect(), eb = el.getBoundingClientRect(), tb = skt.getBoundingClientRect();
     const w = sk2.offsetWidth || 260;
     let left = tb.right - hb.left + 8, dir = "-6px";
