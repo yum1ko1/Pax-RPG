@@ -13,6 +13,8 @@ func _initialize() -> void:
 	for a: String in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out_dir = a.trim_prefix("--out=")
+		elif a.begins_with("--kat="):
+			kat_dir = a.trim_prefix("--kat=")
 		elif a.begins_with("--r="):
 			r = int(a.trim_prefix("--r="))
 	root.size = Vector2i(1920, 1080)
@@ -40,10 +42,24 @@ func _initialize() -> void:
 
 
 var _orb_shots := false
+var kat_dir := ""                    # --kat=<папка>: кадры катаны (её SubViewport) от появления до ухода — для HTML-версии
+var _kat_n := 0
 
 
 func _tick() -> void:
 	frame += 1
+	if kat_dir != "":
+		var t := float(roll.get("_t"))
+		var k0 := float(roll.call("_kat_t"))
+		if t >= k0 and t <= k0 + 0.55 + 0.21 + 0.13 + 0.45:
+			await RenderingServer.frame_post_draw
+			var vp: SubViewport = roll.get("_vp")
+			vp.get_texture().get_image().save_png(kat_dir.path_join("k_%03d.png" % _kat_n))
+			_kat_n += 1
+		elif t > k0 + 1.4:
+			print("katana frames: ", _kat_n)
+			quit(0)
+		return
 	if not _orb_shots and float(roll.get("_tip_at")) > 0.0:   # кадры сферы — от времени, когда закрылось окно
 		_orb_shots = true
 		var t := float(roll.get("_t"))

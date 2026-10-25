@@ -15,6 +15,8 @@ const Ui := preload("res://mods/pax_rpg/src/location/inv/ui.gd")
 const ItemTip := preload("res://mods/pax_rpg/src/location/inv/item_tip.gd")
 const DIR := "textures/loot/"
 const STRIP_W := 700.0
+const GLOW_PAD := 60.0               # поля ink_glow.png вокруг полосы, px картинки полосы
+const GLOW := Color(0.96, 0.88, 0.72, 0.32)   # тёплый «рисовая бумага» свет под тушью: читается и ночью
 const CELL := 118.0
 const BLOT := 140.0
 const ICON := 80.0
@@ -403,7 +405,10 @@ func _draw_strip(piece: int, a: float) -> void:
 		var grow := _ease(_t / 0.5)
 		var w := STRIP_W * lerpf(0.25, 1.0, grow)
 		var hh := h * lerpf(0.7, 1.0, grow)
-		draw_texture_rect(tex, Rect2(-w * 0.5, -hh * 0.5, w, hh), false, Color(1, 1, 1, a * clampf(_t / 0.25, 0.0, 1.0)))
+		var fa := a * clampf(_t / 0.25, 0.0, 1.0)
+		var gp := GLOW_PAD * k * Vector2(w / STRIP_W, hh / h)
+		draw_texture_rect(_tex("ink_glow.png"), Rect2(-w * 0.5 - gp.x, -hh * 0.5 - gp.y, w + gp.x * 2.0, hh + gp.y * 2.0), false, Color(GLOW, GLOW.a * fa))
+		draw_texture_rect(tex, Rect2(-w * 0.5, -hh * 0.5, w, hh), false, Color(1, 1, 1, fa))
 		return
 	var x0 := -STRIP_W * 0.5
 	var x1 := STRIP_W * 0.5
@@ -417,6 +422,12 @@ func _draw_strip(piece: int, a: float) -> void:
 		x0 = CELL * 0.5
 	if a <= 0.01:
 		return
+	var gp := GLOW_PAD * k                                     # подсветка куска: у внешнего края — с запасом
+	var gx0 := x0 - (gp if piece == -1 else 0.0)
+	var gx1 := x1 + (gp if piece == 1 else 0.0)
+	var gt := _tex("ink_glow.png")
+	draw_texture_rect_region(gt, Rect2(gx0, -h * 0.5 - gp, gx1 - gx0, h + gp * 2.0),
+		Rect2(GLOW_PAD + (gx0 + STRIP_W * 0.5) / k, 0.0, (gx1 - gx0) / k, gt.get_height()), Color(GLOW, GLOW.a * a))
 	var src := Rect2((x0 + STRIP_W * 0.5) / k, 0.0, (x1 - x0) / k, tex.get_height())
 	draw_texture_rect_region(tex, Rect2(x0, -h * 0.5, x1 - x0, h), src, Color(1, 1, 1, a))
 
