@@ -40,7 +40,7 @@ patch("src/location/location.gd", [
      "\t\t_orbs.append({\"p0\": at, \"t\": 0.0, \"delay\": 0.0, \"v\": v, \"bend\": randf_range(-1.0, 1.0)}))\n"
      "\t_inv = Inventory.new()\n",
      "_loot = Loot.new()"),
-    ("_iai, _inv, _wrist, _talk, _journal]:", "_iai, _inv, _loot, _wrist, _talk, _journal]:", "_inv, _loot,"),
+    ("_iai, _inv, _wrist,", "_iai, _inv, _loot, _wrist,", "_inv, _loot,"),
     # сферы вместо мгновенной награды: опыт и золото — по подбору
     ("""			var n := 10
 			for k: int in n:
