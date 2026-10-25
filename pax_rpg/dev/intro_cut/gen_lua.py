@@ -94,7 +94,10 @@ local function imp(path, bin)
   if r and r[1] then items[path] = r[1] else log("IMPORT FAILED", path) end
   return items[path]
 end
-for _, c in ipairs(V) do imp(c[2], c[1] == 1 and bins.p or bins.o) end
+for _, c in ipairs(V) do
+  local it = imp(c[2], c[1] == 1 and bins.p or bins.o)
+  if it and c[1] > 1 then log("alpha", c[6], tostring(it:SetClipProperty("Alpha mode", "Straight"))) end
+end
 for _, a in ipairs(A) do imp(a[2], bins.a) end
 log("imported")
 mp:SetCurrentFolder(root)
@@ -153,9 +156,10 @@ for desc, key in pairs(codecs) do
   if not codec and (tostring(key):find("264") or tostring(desc):find("264")) then codec = key end
 end
 log("codec", tostring(codec), tostring(proj:SetCurrentRenderFormatAndCodec(fmt, codec or "H264")))
-proj:SetRenderSettings({SelectAllFrames = true, TargetDir = RENDER_DIR, CustomName = "Pax_RPG_Intro_Resolve",
-  ExportVideo = true, ExportAudio = true, FormatWidth = 1920, FormatHeight = 1080, FrameRate = 24, VideoQuality = 0,
-  AudioCodec = "aac", AudioBitDepth = 24, AudioSampleRate = 48000})
+local RS = {{"SelectAllFrames", true}, {"TargetDir", RENDER_DIR}, {"CustomName", "Pax_RPG_Intro_Resolve"},
+  {"ExportVideo", true}, {"ExportAudio", true}, {"FormatWidth", 1920}, {"FormatHeight", 1080}, {"FrameRate", 24},
+  {"VideoQuality", 0}, {"AudioCodec", "aac"}, {"AudioBitDepth", 24}, {"AudioSampleRate", 48000}}
+for _, kv in ipairs(RS) do log("render set", kv[1], tostring(proj:SetRenderSettings({[kv[1]] = kv[2]}))) end
 local job = proj:AddRenderJob()
 log("job", tostring(job))
 proj:StartRendering({job})
