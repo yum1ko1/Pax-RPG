@@ -63,7 +63,6 @@ var _xf := Transform2D.IDENTITY     # преобразование текуще�
 var _vp: SubViewport
 var _kat: Node3D                    # опора катаны (центр клинка с рукоятью)
 var _key: DirectionalLight3D        # блик бежит по клинку, пока ряд крутится
-var _bag_art := -1                   # есть ли арт сумки (−1 — ещё не смотрели)
 
 
 func setup(m: PaxMod, equip: Equip, fonts: Ui, c: Dictionary) -> void:
@@ -151,7 +150,7 @@ func start(force_r := -1) -> void:
 	if is_instance_valid(_tip):
 		_tip.queue_free()
 	_tip = null
-	_play("loot_ink.ogg", -4.0)
+	_play("loot_ink.ogg", -13.0)                              # прокрутки частые — обычные звуки тихие; громко — только редкая вещь
 	queue_redraw()
 
 
@@ -206,21 +205,21 @@ func _process(delta: float) -> void:
 		var i := floori((_offset() + CELL * 0.5) / CELL)
 		if i != _tick_i:
 			if _tick_i != -999:
-				_play("loot_tick.ogg", -8.0, _rng.randf_range(0.95, 1.08))
+				_play("loot_tick.ogg", -17.0, _rng.randf_range(0.95, 1.08))
 			else:
-				_play("loot_spin.ogg", -6.0)
+				_play("loot_spin.ogg", -15.0)
 			_tick_i = i
 	if _t >= _c1() - 0.04 and not _cut_played:
 		_cut_played = true
-		_play("loot_slash.ogg", -2.0)
+		_play("loot_slash.ogg", -11.0)
 	if _t >= _c2() - 0.04 and not _cut2_played:
 		_cut2_played = true
-		_play("loot_slash.ogg", -5.0, 1.08)
+		_play("loot_slash.ogg", -14.0, 1.08)
 	var reveal := _reveal_t()
 	if _t >= reveal and not _revealed:
 		_revealed = true
 		var it := winner()
-		_play("loot_reveal_epic.ogg" if _big else "loot_reveal.ogg", -3.0)
+		_play("loot_reveal_epic.ogg" if _big else "loot_reveal.ogg", -3.0 if _big else -12.0)
 		var loot: Variant = mod.get_setting("inv_loot", [])
 		var list: Array = (loot as Array).duplicate() if loot is Array else []
 		list.append(str(it["id"]))
@@ -235,7 +234,7 @@ func _process(delta: float) -> void:
 		_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		_pose_katana()
 	var arrive := _orb_at + 0.3 + FLY                       # сфера в сумку: свист, крышка открывается к прилёту и закрывается
-	for ev: Array in [[_orb_at, "loot_to_bag.ogg", -6.0, 1.0], [arrive - 0.12, "loot_bag_lid.ogg", -6.0, 1.0], [arrive + 0.4, "loot_bag_lid.ogg", -9.0, 0.88]]:
+	for ev: Array in [[_orb_at, "loot_to_bag.ogg", -14.0, 1.0], [arrive - 0.12, "loot_bag_lid.ogg", -15.0, 1.0], [arrive + 0.4, "loot_bag_lid.ogg", -18.0, 0.88]]:
 		if _t >= float(ev[0]) and _t - delta < float(ev[0]):
 			_play(str(ev[1]), float(ev[2]), float(ev[3]))
 	if _t >= _orb_at + 0.3 + FLY + 0.9:
@@ -283,35 +282,31 @@ static func _back(u: float) -> float:
 
 # ---------- катана (3D) ----------
 
-## Поза катаны во времени (в своей 3D-сцене она всегда по центру; по полосе её ведёт _kat_x): появляется рукоятью
-## к игроку (клинок уходит вглубь) и встаёт клинком вниз; замах и взмах сверху вниз по промежутку перед вещью — на ходу;
-## снова встаёт и ждёт остановки; второй взмах у правого края вещи; после — рукоятью к игроку и уходит вглубь.
+## Катана приходит дважды и на вещи не стоит никогда. Каждый раз: появляется рукоятью к игроку (клинок уходит вглубь),
+## встаёт клинком вниз, замах и взмах сверху вниз, уходит — снова рукоятью к игроку, вглубь. Первый раз — на ходу,
+## по промежутку перед вещью; второй — после остановки, у её правого края. В своей 3D-сцене катана всегда по центру,
+## по полосе её ведёт _kat_x.
 func _pose_katana() -> void:
 	var stand := deg_to_rad(-65.0)
 	var down := deg_to_rad(-88.0)
-	var u := clampf((_t - _kat_t()) / 0.35, 0.0, 1.0)
+	var t0 := _kat_cut()
+	var u := clampf((_t - t0 + KAT_LEAD) / 0.35, 0.0, 1.0)
 	var pitch := lerpf(0.0, stand, _back(u))
 	var y := lerpf(0.12, 0.0, _ease(u))
 	var z := 0.0
 	var roll := sin(_t * 2.0) * deg_to_rad(2.0)
 	var sc := lerpf(0.55, 1.0, _ease(u))
-	if _t >= _c1() + STROKE:                                 # после первого взмаха — снова встаёт
-		var b := _ease((_t - _c1() - STROKE) / 0.3)
-		y = lerpf(-0.2, 0.0, b)
-		pitch = lerpf(down, stand, b)
-		roll = lerpf(deg_to_rad(-6.0), sin(_t * 2.0) * deg_to_rad(2.0), b)
-	for t0: float in [_c1(), _c2()]:
-		if _t >= t0 - 0.1 and _t < t0:                       # замах вверх
-			var p := _ease((_t - t0 + 0.1) / 0.1)
-			y = lerpf(0.0, 0.22, p)
-			pitch = lerpf(stand, down, p)
-			roll = lerpf(0.0, deg_to_rad(10.0), p)
-		elif _t >= t0 and _t < t0 + STROKE:                   # взмах вниз
-			var p := (_t - t0) / STROKE
-			y = lerpf(0.22, -0.2, p * p)
-			pitch = down
-			roll = lerpf(deg_to_rad(10.0), deg_to_rad(-6.0), p)
-	var e := clampf((_t - _c2() - STROKE) / 0.35, 0.0, 1.0)
+	if _t >= t0 - 0.1 and _t < t0:                           # замах вверх
+		var p := _ease((_t - t0 + 0.1) / 0.1)
+		y = lerpf(0.0, 0.22, p)
+		pitch = lerpf(stand, down, p)
+		roll = lerpf(0.0, deg_to_rad(10.0), p)
+	elif _t >= t0 and _t < t0 + STROKE:                       # взмах вниз
+		var p := (_t - t0) / STROKE
+		y = lerpf(0.22, -0.2, p * p)
+		pitch = down
+		roll = lerpf(deg_to_rad(10.0), deg_to_rad(-6.0), p)
+	var e := clampf((_t - t0 - STROKE) / 0.35, 0.0, 1.0)
 	if e > 0.0:                                              # ушла: рукоятью к игроку, вглубь
 		y = lerpf(-0.2, 0.05, _ease(e))
 		z = lerpf(0.0, -0.6, e)
@@ -328,14 +323,19 @@ func _kat_t() -> float:
 	return _c1() - KAT_LEAD
 
 
-## Где катана на полосе (px от центра): у промежутка перед вещью; к второму взмаху — у её правого края.
+## Взмах текущего прихода катаны: первый, пока он не кончился (и уход тоже), потом — второй.
+func _kat_cut() -> float:
+	return _c1() if _t < _c1() + STROKE + 0.45 else _c2()
+
+
+## Где катана на полосе (px от центра): у промежутка перед вещью; во второй раз — у её правого края.
 func _kat_x() -> float:
-	return lerpf(_gap1(), CELL * 0.5, _ease((_t - _c2() + 0.1) / 0.1))
+	return _gap1() if _kat_cut() == _c1() else CELL * 0.5
 
 
 func _katana_alpha() -> float:
-	var a := clampf((_t - _kat_t()) / 0.15, 0.0, 1.0)
-	return a * (1.0 - clampf((_t - _c2() - STROKE - 0.15) / 0.25, 0.0, 1.0))
+	var t0 := _kat_cut()
+	return clampf((_t - t0 + KAT_LEAD) / 0.15, 0.0, 1.0) * (1.0 - clampf((_t - t0 - STROKE - 0.15) / 0.25, 0.0, 1.0))
 
 
 # ---------- окно характеристик ----------
@@ -449,7 +449,7 @@ func _draw() -> void:
 	if _t >= _reveal_t() - 0.05:
 		_set_xf(c + g, 0.0, s)
 		_draw_reveal(_reveal_t(), 1.0 - orb)
-	_draw_bag_and_orb(s)
+	_draw_orb(s)
 
 
 ## Полоса туши до разреза: растекается из центра — растёт вширь и проявляется; под ней — тёплый свет.
@@ -594,34 +594,29 @@ func _draw_reveal(reveal: float, fade: float) -> void:
 	draw_string(ui.body, Vector2(-300, y + fs + fs2 + 2), t2, HORIZONTAL_ALIGNMENT_CENTER, 600, fs2, Color(0.93, 0.87, 0.80, ta))
 
 
-## Сумка (правый нижний угол) и сфера вещи, летящая в неё. Сумка проявляется перед полётом, открывается
-## к прилёту, закрывается и гаснет (bag_closed / bag_open; без них — клякса с золотым кругом).
-func _draw_bag_and_orb(s: float) -> void:
+## Сумка для этой вещи: (видимость, открыта ли, «подпрыгивание» к прилёту) — рисует её loot.gd, одну на все прокрутки.
+func bag_state() -> Vector3:
+	if _items.is_empty():
+		return Vector3.ZERO
+	var arrive := _orb_at + 0.3 + FLY
+	var ba := clampf((_t - _orb_at + 0.2) / 0.3, 0.0, 1.0) * (1.0 - clampf((_t - arrive - 0.5) / 0.4, 0.0, 1.0))
+	var open := 1.0 if _t >= arrive - 0.12 and _t < arrive + 0.4 else 0.0
+	return Vector3(ba, open, 1.0 + 0.12 * maxf(0.0, 1.0 - absf(_t - arrive) / 0.25))
+
+
+## Где сумка, px макета: своя колонка у правого края — под всеми прокрутками.
+func bag_pos() -> Vector2:
+	return Vector2(size.x / maxf(size.y / 1080.0, 0.001) - 70.0, 1080.0 - 120.0)
+
+
+## Сфера вещи, летящая в сумку (сумка рисуется поверх — сфера в неё «входит»).
+func _draw_orb(s: float) -> void:
 	var t0 := _orb_at
 	var arrive := t0 + 0.3 + FLY
-	var ba := clampf((_t - t0 + 0.2) / 0.3, 0.0, 1.0) * (1.0 - clampf((_t - arrive - 0.5) / 0.4, 0.0, 1.0))
-	if ba <= 0.0:
-		return
-	var bag := Vector2(size.x / s - 70.0, 1080.0 - 120.0)    # своя колонка у правого края — под всеми прокрутками
-	var open := _t >= arrive - 0.12 and _t < arrive + 0.4
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
-	var name := "bag_open.png" if open else "bag_closed.png"
-	var bump := 1.0 + 0.12 * maxf(0.0, 1.0 - absf(_t - arrive) / 0.25)
-	if _bag_art < 0:
-		_bag_art = 0 if mod.read_bytes(DIR + "bag_closed.png").is_empty() else 1
-	if _bag_art == 1:
-		var bt := _tex(name)
-		var bh := 140.0 * bump
-		var bw := bt.get_width() * bh / bt.get_height()
-		draw_texture_rect(bt, Rect2(bag - Vector2(bw * 0.5, bh * 0.5), Vector2(bw, bh)), false, Color(1, 1, 1, ba))
-	else:
-		var bt := _tex("blot_2.png")
-		var bs := 120.0 * bump
-		draw_texture_rect(bt, Rect2(bag - Vector2(bs, bs) * 0.5, Vector2(bs, bs)), false, Color(1, 1, 1, ba))
-		draw_arc(bag, 34.0 * bump, 0.0, TAU, 48, Color(0.79, 0.64, 0.36, ba), 2.0, true)
-		draw_arc(bag, (26.0 if open else 18.0) * bump, PI * 1.1, PI * 1.9, 24, Color(0.79, 0.64, 0.36, ba), 2.0, true)
 	if _t < t0 or _t > arrive:
 		return
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
+	var bag := bag_pos()
 	var it := winner()
 	var col := eq.rc(int(it["r"]))
 	var from := anchor + _group_off()

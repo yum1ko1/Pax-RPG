@@ -87,7 +87,7 @@
       slot.st = { slot, t: 0, items, off0: 2 * CELL, off1: WIN * CELL, tick: -999, cut1: false, cut2: false, revealed: false,
         big: w.r >= 4 || w.mana, tipAt: -1, tipLen: 0, rolls: [], anchor: corner(slot.i) };
       st = slot.st; st.orbAt = revealT() + 1.5;
-      play("ink", -4);
+      play("ink", -13);                                       // прокрутки частые — обычные звуки тихие; громко — только редкая вещь
     }
     const stopT = () => T_SPIN + SPIN, c1T = () => T_SPIN + SPIN * CUT1_U, c2T = () => stopT() + CUT2_AFTER;
     const katT = () => c1T() - KAT_LEAD, revealT = () => c2T() + REVEAL_AFTER;
@@ -110,7 +110,7 @@
         const e = w.item[li.dataset.part][+li.dataset.j], m = (e.boost ? RAR[w.r].boost : 1) * (e.mana ? MANA.mult : 1);
         const cls = ["boost", "mana", "b" + w.r].filter(c => li.classList.contains(c));
         li.classList.remove(...cls);
-        const v = li.querySelector(".v"); v.textContent = fmt(e.key, e.v / m);
+        const v = li.querySelector(".v"); v.textContent = fmtR(e.key, e.v / m);
         return { li, v, e, base: e.v / m, cls, step: -1, landed: false };
       });
       play("tipOpen", -6);
@@ -118,6 +118,7 @@
       st.tipLen = 0.35 + (st.rolls.length ? 0.5 + st.rolls.length * 0.6 + 0.45 : 0) + 1.4;
       st.orbAt = st.tipAt + st.tipLen + 0.3;
     }
+    const fmtR = (key, v) => fmt(key, STATS[key].pct ? Math.round(v * 10) / 10 : Math.max(1, Math.round(v)));   // как eq.fmt в игре
     function tickRolls() {
       const rt = st.t - st.tipAt - 0.35;
       st.rolls.forEach((ro, i) => {
@@ -125,7 +126,7 @@
         if (rt < t0 || ro.landed) return;
         if (rt < t0 + 0.45) {
           const step = Math.floor((rt - t0) / 0.05);
-          if (step !== ro.step) { if (step === 0) play("statSpin", -8, 0.96 + Math.random() * 0.1); ro.step = step; ro.v.textContent = fmt(ro.e.key, ro.base + Math.random() * (ro.e.v * 1.15 - ro.base)); }
+          if (step !== ro.step) { if (step === 0) play("statSpin", -8, 0.96 + Math.random() * 0.1); ro.step = step; ro.v.textContent = fmtR(ro.e.key, ro.base + Math.random() * (ro.e.v * 1.15 - ro.base)); }
           return;
         }
         ro.landed = true; ro.v.textContent = fmt(ro.e.key, ro.e.v); ro.li.classList.add(...ro.cls, "landed");
@@ -161,6 +162,7 @@
         st = sl.st; step(dt);
         if (sl.st) draw();
       }
+      drawBagOnce();
       requestAnimationFrame(frame);
     }
     function drawFlight(f) {
@@ -173,20 +175,20 @@
     function step(dt) {
       st.t += dt;
       if (st.t >= T_SPIN && st.t < c1T()) { const i = Math.floor((offset() + CELL * 0.5) / CELL);
-        if (i !== st.tick) { if (st.tick !== -999) play("tick", -8, 0.95 + Math.random() * 0.13); else play("spin", -6); st.tick = i; } }
-      if (st.t >= c1T() - 0.04 && !st.cut1) { st.cut1 = true; play("slash", -2); }
-      if (st.t >= c2T() - 0.04 && !st.cut2) { st.cut2 = true; play("slash", -5, 1.08); }
+        if (i !== st.tick) { if (st.tick !== -999) play("tick", -17, 0.95 + Math.random() * 0.13); else play("spin", -15); st.tick = i; } }
+      if (st.t >= c1T() - 0.04 && !st.cut1) { st.cut1 = true; play("slash", -11); }
+      if (st.t >= c2T() - 0.04 && !st.cut2) { st.cut2 = true; play("slash", -14, 1.08); }
       if (st.t >= revealT() && !st.revealed) {
         st.revealed = true;
         const w = st.items[WIN];
-        play(st.big ? "epic" : "reveal", -3);
+        play(st.big ? "epic" : "reveal", st.big ? -3 : -12);
         lootBag[w.k].push(w.item); bag[w.k].push(w.item);     // вещь — в выбор своего слота (клик по слоту в инвентаре ниже)
         const sl = document.getElementById("slot-" + SLOTS[w.k].key); if (sl) { sl.classList.remove("lootNew"); void sl.offsetWidth; sl.classList.add("lootNew"); }
       }
       if (st.big && st.tipAt < 0 && st.t >= revealT() + 1.2) openTip();
       if (st.tipAt >= 0) { tickRolls(); placeTip(); }
       const arrive = st.orbAt + 0.3 + FLY;                    // сфера в сумку: свист, крышка открывается к прилёту и закрывается
-      [[st.orbAt, "toBag", -6, 1], [arrive - 0.12, "lid", -6, 1], [arrive + 0.4, "lid", -9, 0.88]].forEach(([t0, n, db, pt]) => { if (st.t >= t0 && st.t - dt < t0) play(n, db, pt); });
+      [[st.orbAt, "toBag", -14, 1], [arrive - 0.12, "lid", -15, 1], [arrive + 0.4, "lid", -18, 0.88]].forEach(([t0, n, db, pt]) => { if (st.t >= t0 && st.t - dt < t0) play(n, db, pt); });
       if (st.t >= st.orbAt + 0.3 + FLY + 0.9) { st.slot.wrap.style.opacity = 0; st.slot.st = null; }
     }
     const circle = (p, r, col) => { cx.beginPath(); cx.arc(p[0], p[1], Math.max(0.1, r), 0, Math.PI * 2); cx.fillStyle = col; cx.fill(); };
@@ -209,7 +211,7 @@
       }
       group(c, 0, () => { drawMarker(); drawKatana(); if (st.t >= c1) drawCut(); });
       if (st.t >= revealT() - 0.05) group([c[0] + g[0], c[1] + g[1]], 0, () => drawReveal(revealT(), 1 - orb));
-      drawBag();
+      drawOrb();
     }
     function drawStripFull() {
       const im = IMG.ink_strip; if (!im.complete) return;
@@ -253,9 +255,11 @@
         cx.beginPath(); cx.moveTo(-9, y + sd * 12); cx.lineTo(9, y + sd * 12); cx.lineTo(0, y - sd * 4); cx.closePath(); cx.fillStyle = `rgba(224,179,102,${a})`; cx.fill();
       }
     }
-    // катана — кадры той же 3D-сцены из Godot (в сцене она по центру; по полосе её ведёт katX): появляется заранее рукоятью
-    // к игроку, на ходу рубит путь перед вещью, на остановке — второй взмах; во взмахе — шлейф прошлых кадров и блик удара
-    const katX = () => gap1() + (CELL / 2 - gap1()) * ease((st.t - c2T() + 0.1) / 0.1);
+    // катана — кадры той же 3D-сцены из Godot (в сцене она по центру; по полосе её ведёт katX). Приходит дважды и на вещи
+    // не стоит: на ходу рубит путь перед вещью и уходит, после остановки приходит к её правому краю — второй взмах.
+    // Во взмахе — шлейф прошлых кадров и блик удара
+    const katCut = () => st.t < c1T() + STROKE + 0.45 ? c1T() : c2T();
+    const katX = () => katCut() === c1T() ? gap1() : CELL / 2;
     function katFrame(f, x, a, op) {
       f = Math.min(KAT_FRAMES - 1, Math.max(0, f));
       cx.globalAlpha = a; cx.globalCompositeOperation = op;
@@ -263,20 +267,19 @@
       cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
     }
     function drawKatana() {
-      const c2 = c2T(), a = clamp((st.t - katT()) / 0.15) * (1 - clamp((st.t - c2 - STROKE - 0.15) / 0.25));
+      const t0 = katCut(), a = clamp((st.t - t0 + KAT_LEAD) / 0.15) * (1 - clamp((st.t - t0 - STROKE - 0.15) / 0.25));
       if (a <= 0 || !IMG.katana.complete) return;
       const f = Math.floor((st.t - katT()) * 60), x = katX();
-      const swing = [c1T(), c2].some(t0 => st.t >= t0 - 0.02 && st.t < t0 + STROKE + 0.04);
-      if (swing) [[2, 0.32], [4, 0.2], [6, 0.11]].forEach(([b, ga]) => katFrame(f - b, x, a * ga, "lighter"));
+      if (st.t >= t0 - 0.02 && st.t < t0 + STROKE + 0.04) [[2, 0.32], [4, 0.2], [6, 0.11]].forEach(([b, ga]) => katFrame(f - b, x, a * ga, "lighter"));
       katFrame(f, x, a, "source-over");
-      [c1T(), c2].forEach((t0, n) => {                                            // блик удара — в миг, когда клинок проходит ряд
-        const u = (st.t - t0 - STROKE * 0.45) / 0.14; if (u < 0 || u > 1) return;
-        const px = n === 0 ? gap1() : CELL / 2, r = 26 + 40 * u, gr = cx.createRadialGradient(px, 0, 0, px, 0, r);
+      const u = (st.t - t0 - STROKE * 0.45) / 0.14;                              // блик удара — в миг, когда клинок проходит ряд
+      if (u >= 0 && u <= 1) {
+        const r = 26 + 40 * u, gr = cx.createRadialGradient(x, 0, 0, x, 0, r);
         gr.addColorStop(0, `rgba(255,255,255,${0.9 * (1 - u)})`); gr.addColorStop(0.35, `rgba(255,236,210,${0.4 * (1 - u)})`); gr.addColorStop(1, "rgba(255,236,210,0)");
-        cx.globalCompositeOperation = "lighter"; cx.fillStyle = gr; cx.fillRect(px - r, -r, r * 2, r * 2);
-        cx.fillStyle = `rgba(255,255,255,${0.85 * (1 - u)})`; cx.fillRect(px - 60 * (1 - u * 0.5), -1, 120 * (1 - u * 0.5), 2);
+        cx.globalCompositeOperation = "lighter"; cx.fillStyle = gr; cx.fillRect(x - r, -r, r * 2, r * 2);
+        cx.fillStyle = `rgba(255,255,255,${0.85 * (1 - u)})`; cx.fillRect(x - 60 * (1 - u * 0.5), -1, 120 * (1 - u * 0.5), 2);
         cx.globalCompositeOperation = "source-over";
-      });
+      }
     }
     function drawCut() {
       const sl = IMG.slash; if (!sl.complete) return;
@@ -306,14 +309,18 @@
       cx.font = "600 16.5px 'Cormorant Garamond', serif"; cx.lineWidth = 5; cx.strokeStyle = `rgba(0,0,0,${0.7 * ta})`; cx.fillStyle = `rgba(237,222,204,${ta})`;
       cx.strokeText(t2, 0, y + 44); cx.fillText(t2, 0, y + 44);
     }
-    // сумка (правый нижний угол, своя колонка; открывается к прилёту) и сфера вещи, летящая в неё
-    function drawBag() {
-      const t0 = st.orbAt, arrive = t0 + 0.3 + FLY, ba = clamp((st.t - t0 + 0.2) / 0.3) * (1 - clamp((st.t - arrive - 0.5) / 0.4)); if (ba <= 0) return;
-      const bag = [W - 70, 1080 - 120], open = st.t >= arrive - 0.12 && st.t < arrive + 0.4, bump = 1 + 0.12 * Math.max(0, 1 - Math.abs(st.t - arrive) / 0.25);
-      const bi = IMG[open ? "bag_open" : "bag_closed"], bh = 140 * bump, bw = bi.width * bh / (bi.height || 1);
-      cx.globalAlpha = ba; if (bi.complete) cx.drawImage(bi, bag[0] - bw / 2, bag[1] - bh / 2, bw, bh); cx.globalAlpha = 1;
+    // сумка этой вещи: [видимость, открыта, «подпрыгивание»] — рисуется одна на все прокрутки (drawBagOnce)
+    function bagState() {
+      const t0 = st.orbAt, arrive = t0 + 0.3 + FLY;
+      return [clamp((st.t - t0 + 0.2) / 0.3) * (1 - clamp((st.t - arrive - 0.5) / 0.4)), st.t >= arrive - 0.12 && st.t < arrive + 0.4,
+        1 + 0.12 * Math.max(0, 1 - Math.abs(st.t - arrive) / 0.25)];
+    }
+    const bagPos = () => [W - 70, 1080 - 120];
+    // сфера вещи, летящая в сумку (сумка поверх — сфера в неё «входит»)
+    function drawOrb() {
+      const t0 = st.orbAt, arrive = t0 + 0.3 + FLY;
       if (st.t < t0 || st.t > arrive) return;
-      const w = st.items[WIN], col = rcol(w.r), g = groupOff(), from = [st.anchor[0] + g[0], st.anchor[1] + g[1]];
+      const bag = bagPos(), w = st.items[WIN], col = rcol(w.r), g = groupOff(), from = [st.anchor[0] + g[0], st.anchor[1] + g[1]];
       const k = clamp((st.t - t0 - 0.3) / FLY), shrink = clamp((st.t - t0) / 0.3);
       const ctrl = [(from[0] + bag[0]) / 2 + 40, (from[1] + bag[1]) / 2 - 180], p = bez(from, ctrl, bag, k), r = (40 - 26 * shrink) * (1 - 0.3 * k);
       if (k > 0) for (let j = 6; j > 0; j--) circle(bez(from, ctrl, bag, Math.max(0, k - j * 0.035)), r * (1 - j * 0.12), rgba(col, 0.06 * (7 - j)));
@@ -321,13 +328,21 @@
       circle(p, r, rgba(col, 1)); circle(p, r * 0.55, "rgba(255,255,255,.95)");
       if (shrink < 1) { const ic = icon(w.setKey, w.k, w.r), isz = ICON * (1 - shrink); cx.globalAlpha = 1 - shrink; if (ic) cx.drawImage(ic, p[0] - isz / 2, p[1] - isz / 2, isz, isz); cx.globalAlpha = 1; }
     }
+    // сумка в правом нижнем углу — одна: видна, пока в неё летит хоть одна вещь; открывается к каждому прилёту
+    function drawBagOnce() {
+      let a = 0, open = false, bump = 1;
+      for (const sl of slots) if (sl.st) { st = sl.st; const b = bagState(); a = Math.max(a, b[0]); open = open || b[1]; bump = Math.max(bump, b[2]); }
+      if (a <= 0) return;
+      const bag = bagPos(), bi = IMG[open ? "bag_open" : "bag_closed"], bh = 140 * bump, bw = bi.width * bh / (bi.height || 1);
+      cx.globalAlpha = a; if (bi.complete) cx.drawImage(bi, bag[0] - bw / 2, bag[1] - bh / 2, bw, bh); cx.globalAlpha = 1;
+    }
     requestAnimationFrame(frame);
     // радужная сфера летит к свободному месту → прокрутка; мест нет — ждёт в очереди
     return {
       roll(forceR, forceMana) {
         const it = randItem(forceR < 0 ? -1 : forceR, forceMana);
         flights.push({ t: 0, args: [it.r, it.mana], slot: pending.length ? -1 : freeSlot() });
-        play("ink", -12, 1.3);
+        play("ink", -19, 1.3);
       },
       sound(on) { soundOn = on; },
     };

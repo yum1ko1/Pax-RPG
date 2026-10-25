@@ -29,6 +29,8 @@ var _flights: Array = []            # радужные в полёте к про
 var _pending: Array = []             # редкости прокруток в очереди (−1 — по шансам)
 var _rolls: Array = []               # Roll по местам снизу вверх
 var _lvl := 1
+var _bag: Control
+var _bag_art := -1                   # есть ли арт сумки (−1 — ещё не смотрели)
 var _rb: Control                    # слой радужных сфер — со своим шейдером перелива
 var _snd: Dictionary = {}
 
@@ -57,6 +59,11 @@ func setup(m: PaxMod) -> void:
 		roll.set_katana(Assets.model(mod, "models/weapons/katana.glb"))
 		add_child(roll)
 		_rolls.append(roll)
+	_bag = Control.new()                                      # одна сумка на все прокрутки — поверх них
+	_bag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bag.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_bag.draw.connect(_draw_bag)
+	add_child(_bag)
 
 
 ## Враг повергнут: сферы из точки at (ноги врага). xp и gold делятся между сферами своего цвета; lvl — уровень героя
@@ -141,6 +148,7 @@ func _process(delta: float) -> void:
 			_start(i, int(_pending.pop_front()))
 	queue_redraw()
 	_rb.queue_redraw()
+	_bag.queue_redraw()
 
 
 func _pick(o: Dictionary) -> void:
@@ -148,13 +156,13 @@ func _pick(o: Dictionary) -> void:
 	match str(o.kind):
 		"gold":
 			gold_picked.emit(int(o.amount))
-			_play("loot_tick.ogg", -16.0, randf_range(1.5, 1.7))
+			_play("loot_tick.ogg", -23.0, randf_range(1.5, 1.7))
 		"xp":
 			xp_picked.emit(float(o.amount), at)
-			_play("loot_tick.ogg", -18.0, randf_range(1.15, 1.3))
+			_play("loot_tick.ogg", -25.0, randf_range(1.15, 1.3))
 		"rainbow":
 			_flights.append({"from": at, "t": 0.0, "slot": _free_slot() if _pending.is_empty() else -1, "r": int(o.amount)})
-			_play("loot_ink.ogg", -12.0, 1.3)
+			_play("loot_ink.ogg", -19.0, 1.3)
 
 
 func _start(i: int, r: int) -> void:
@@ -230,6 +238,31 @@ func _draw_rainbow() -> void:
 			var tp := _bez(p0, ctrl, to, maxf(0.0, k - j * 0.03))
 			_rb.draw_circle(tp, (14.0 - j * 1.6) * s, Color(1.0, 0.9, 0.6, 0.06 * (7 - j)))
 		_orb_at(tex, _bez(p0, ctrl, to, k), lerpf(46.0, 30.0, k) * s, now)
+
+
+## Сумка в правом нижнем углу — одна: видна, пока в неё летит хоть одна вещь; открывается к каждому прилёту.
+## Арт — bag_closed / bag_open; без него — клякса с золотым кругом.
+func _draw_bag() -> void:
+	var st := Vector3.ZERO
+	for r: Roll in _rolls:
+		var b := r.bag_state()
+		st = Vector3(maxf(st.x, b.x), maxf(st.y, b.y), maxf(st.z, b.z))
+	if st.x <= 0.0:
+		return
+	var s := size.y / 1080.0
+	var pos := (_rolls[0] as Roll).bag_pos()
+	_bag.draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
+	if _bag_art < 0:
+		_bag_art = 0 if mod.read_bytes("textures/loot/bag_closed.png").is_empty() else 1
+	if _bag_art == 1:
+		var bt := ui.tex("textures/loot/bag_open.png" if st.y > 0.5 else "textures/loot/bag_closed.png")
+		var bh := 140.0 * st.z
+		var bw := bt.get_width() * bh / bt.get_height()
+		_bag.draw_texture_rect(bt, Rect2(pos - Vector2(bw * 0.5, bh * 0.5), Vector2(bw, bh)), false, Color(1, 1, 1, st.x))
+	else:
+		var bs := 120.0 * st.z
+		_bag.draw_texture_rect(ui.tex("textures/loot/blot_2.png"), Rect2(pos - Vector2(bs, bs) * 0.5, Vector2(bs, bs)), false, Color(1, 1, 1, st.x))
+		_bag.draw_arc(pos, 34.0 * st.z, 0.0, TAU, 48, Color(0.79, 0.64, 0.36, st.x), 2.0, true)
 
 
 func _orb_at(tex: Texture2D, c: Vector2, r: float, now: float) -> void:
