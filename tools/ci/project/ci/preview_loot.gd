@@ -8,7 +8,7 @@ var multi_big := false              # --multi-big: все три — леген�
 var multi := false                   # --multi: три прокрутки друг над другом (старт с разницей 0,7 с)
 var out_dir := "/tmp"
 var frame := 0
-var SHOTS := {120: "loot_d_spin", 199: "loot_h_cut1", 216: "loot_i_after1", 252: "loot_j_slide", 264: "loot_k_stop", 276: "loot_k2_kat2", 296: "loot_l_cut2", 312: "loot_m_after2", 342: "loot_n_reveal"}
+var SHOTS := {120: "loot_d_spin", 215: "loot_g_prep1", 220: "loot_h_cut1", 231: "loot_i_after1", 246: "loot_j_after1b", 264: "loot_k_stop", 300: "loot_l_cut2", 318: "loot_m_after2", 354: "loot_n_reveal"}
 
 
 func _initialize() -> void:

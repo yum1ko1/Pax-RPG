@@ -28,7 +28,7 @@ const MOVE_OFF := Vector2(-250, -300)   # куда уходит крупная �
 const TIP_K := 0.82                  # масштаб окна характеристик
 # время от начала, с
 const T_SPIN := 0.75
-const CUT1_U := 0.7                  # первый взмах — на ходу, когда пройдено 70 % пути (вещь ещё подъезжает)
+const CUT1_U := 0.8                  # первый взмах — на ходу, когда пройдено 80 % пути (вещь ещё подъезжает)
 const STROKE := 0.13                 # один взмах
 const CUT2_AFTER := 0.55             # второй взмах — когда вещь встала: катана приходит заново уже после остановки
 const KAT_LEAD := 0.45               # катана появляется раньше первого взмаха
@@ -436,7 +436,7 @@ func _draw() -> void:
 			_set_xf(c + Vector2(-_v1() * (_t - c1) * (1.0 - 0.4 * ce1), 90.0 * ce1 * ce1), -0.1 * ce1, s)
 			_draw_strip_part(-STRIP_W * 0.5, _gap1(), 0.0, 1.0 - ce1, true, false)
 			_draw_items(0, _win, off1, 1.0 - ce1)
-		var d := off1 - _offset()                            # остаток полосы едет вместе с вещью
+		var d := 0.0                                         # остаток полосы стоит: край разреза — там, где рубанула катана
 		if _t < c2:
 			_set_xf(c, 0.0, s)
 			_draw_strip_part(_gap1(), STRIP_W * 0.5, d, 1.0, false, true)
@@ -557,8 +557,8 @@ func _draw_cut() -> void:
 	for n: int in 2:
 		var t0 := _c1() if n == 0 else _c2()
 		var u := clampf((_t - t0) / STROKE, 0.0, 1.0)
-		var a := 1.0 - clampf((_t - t0 - 0.4) / 0.35, 0.0, 1.0)
-		if u <= 0.0 or a <= 0.0:
+		var a := 1.0 - clampf((_t - t0) / 0.8, 0.0, 1.0) if n == 0 else 1.0 - clampf((_t - t0 - 0.4) / 0.35, 0.0, 1.0)
+		if u <= 0.0 or a <= 0.0:                             # первый разрез стоит на месте и гаснет вместе с отрезанным
 			continue
 		var x := _gap1() if n == 0 else CELL * 0.5
 		var src := Rect2(0, 0, sl.get_width(), sl.get_height() * u)

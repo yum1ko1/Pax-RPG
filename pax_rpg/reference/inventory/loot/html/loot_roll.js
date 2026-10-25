@@ -16,7 +16,7 @@
       a.play().catch(() => {});
     };
     const STRIP_W = 700, CELL = 118, BLOT = 140, ICON = 80, RING = 200, KAT_H = 400, GLOW_PAD = 60;
-    const MOVE_OFF = [-250, -300], T_SPIN = 0.75, CUT1_U = 0.7, STROKE = 0.13, CUT2_AFTER = 0.55, KAT_LEAD = 0.45, REVEAL_AFTER = 0.45, FLY = 0.75;
+    const MOVE_OFF = [-250, -300], T_SPIN = 0.75, CUT1_U = 0.8, STROKE = 0.13, CUT2_AFTER = 0.55, KAT_LEAD = 0.45, REVEAL_AFTER = 0.45, FLY = 0.75;
     const KAT_FRAMES = 159, KAT_COLS = 12, KAT_FW = 288, KAT_FH = 480;   // кадры 3D-катаны из Godot (preview_loot.gd --kat), 60 к/с от появления
     const W_RAR = [46, 28, 14, 8, 3.2, 0.8], N = 36, WIN = 30, SPIN = 3.6, ROLLS = 3, ROLL_STEP = 250;
     const cv = document.getElementById("lootCv"), cx = cv.getContext("2d");
@@ -206,7 +206,7 @@
         const off1 = offAt(c1), ce1 = clamp((st.t - c1) / 0.8);
         if (ce1 < 1) group([c[0] - v1() * (st.t - c1) * (1 - 0.4 * ce1), c[1] + 90 * ce1 * ce1], -0.1 * ce1, () => {   // путь перед вещью: срезан на ходу — летит дальше
           drawStripPart(-STRIP_W / 2, gap1(), 0, 1 - ce1, true, false); drawItems(0, WIN, off1, 1 - ce1); });
-        const d = off1 - offset();                                                             // остаток полосы едет вместе с вещью
+        const d = 0;                                                                           // остаток полосы стоит: край разреза — там, где рубанула катана
         if (st.t < c2) group(c, 0, () => { drawStripPart(gap1(), STRIP_W / 2, d, 1, false, true); drawItems(WIN, N, offset(), 1); });
         else {
           const split = CELL / 2 - d, ce2 = clamp((st.t - c2) / 0.7);
@@ -291,7 +291,7 @@
       const sl = IMG.slash; if (!sl.complete) return;
       const h = 300, w = sl.width * h / sl.height;
       for (let n = 0; n < 2; n++) {
-        const t0 = n === 0 ? c1T() : c2T(), u = clamp((st.t - t0) / STROKE), a = 1 - clamp((st.t - t0 - 0.4) / 0.35);
+        const t0 = n === 0 ? c1T() : c2T(), u = clamp((st.t - t0) / STROKE), a = n === 0 ? 1 - clamp((st.t - t0) / 0.8) : 1 - clamp((st.t - t0 - 0.4) / 0.35);   // первый гаснет вместе с отрезанным
         if (u <= 0 || a <= 0) continue;
         const x = n === 0 ? gap1() : CELL / 2;
         cx.globalAlpha = a; cx.drawImage(sl, 0, 0, sl.width, sl.height * u, x - w / 2, -h / 2, w, h * u);
