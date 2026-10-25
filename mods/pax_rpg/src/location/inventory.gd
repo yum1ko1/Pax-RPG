@@ -77,7 +77,7 @@ func setup(m: PaxMod) -> void:
 	ui.setup(m)
 	eq.load_data(m)
 	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.01, 0.015, 0.97)
+	dim.color = Color(0.02, 0.01, 0.015, 1.0)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
@@ -137,6 +137,11 @@ func _fit() -> void:
 	var s := minf(size.x / W, size.y / H)
 	_frame.scale = Vector2(s, s)
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
+
+
+## Экран закрыт целиком (непрозрачный фон под макетом) — location.gd тогда не рисует 3D-мир под инвентарём.
+func covers_screen() -> bool:
+	return visible
 
 
 ## Открыть: st — те же числа, что у HUD (level, attributes, stat_points, gold, main_stat…).
