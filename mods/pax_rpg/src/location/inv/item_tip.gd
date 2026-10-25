@@ -20,7 +20,8 @@ var _frame: Control
 var _mana_fx: Array = []
 var _t := 0.0
 ## Показ роллов (лут, src/location/loot/roll.gd): усиленные и пропитанные маной статы сначала с базовым числом,
-## затем по очереди «прокручиваются» и встают на итог — со свечением и звездой. on_roll(i, landed) — для звука.
+## затем по очереди «прокручиваются» и встают на итог — со свечением и звездой. on_roll(i, landed, mana) — для звука:
+## в начале прокрутки стата и когда он встал.
 const ROLL_GAP := 0.6
 const ROLL_SPIN := 0.45
 var on_roll: Callable
@@ -301,7 +302,7 @@ func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 	if boost or mana:                                       # база — до усиления (×boost редкости, ×мана)
 		var m := (float((eq.rar[r] as Dictionary)["boost"]) if boost else 1.0) \
 			* (float((eq.d.get("mana", {}) as Dictionary).get("mult", 5)) if mana else 1.0)
-		_rolls.append({"label": vl, "fx": fx, "key": key, "base": float(e["v"]) / maxf(m, 0.01), "final": float(e["v"])})
+		_rolls.append({"label": vl, "fx": fx, "key": key, "base": float(e["v"]) / maxf(m, 0.01), "final": float(e["v"]), "mana": mana})
 	lines.append({"rect": Rect2(pos, Vector2(w, h)), "part": part, "j": j})
 	return pos.y + h + 5
 
@@ -446,8 +447,8 @@ func _tick_rolls(delta: float) -> void:
 				ro["step"] = step
 				var v := lerpf(float(ro["base"]), float(ro["final"]) * 1.15, randf())
 				l.text = eq.fmt(str(ro["key"]), v)
-				if on_roll.is_valid():
-					on_roll.call(i, false)
+				if step == 0 and on_roll.is_valid():
+					on_roll.call(i, false, bool(ro["mana"]))
 			continue
 		ro["landed"] = true
 		l.text = eq.fmt(str(ro["key"]), float(ro["final"]))
@@ -456,7 +457,7 @@ func _tick_rolls(delta: float) -> void:
 		l.modulate = Color(2.2, 2.2, 2.2)
 		create_tween().tween_property(l, "modulate", Color.WHITE, 0.45).set_ease(Tween.EASE_OUT)
 		if on_roll.is_valid():
-			on_roll.call(i, true)
+			on_roll.call(i, true, bool(ro["mana"]))
 	if _roll_t > 0.5 + _rolls.size() * ROLL_GAP + ROLL_SPIN:
 		_roll_t = -1.0
 

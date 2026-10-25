@@ -48,3 +48,9 @@ for i in range(6):
 save(fit(trim(Image.open(f"{src}/54.webp").convert("RGBA")), w=160), "orb_gold.png")
 save(fit(trim(Image.open(f"{src}/55.webp").convert("RGBA")), w=160), "orb_pink.png")
 save(fit(trim(Image.open(f"{src}/56.webp").convert("RGBA")), w=200), "orb_rainbow.png")
+# сумка (57 — закрытая, 58 — открытая): общая рамка обеих, чтобы смена не сдвигала картинку
+bags = [Image.open(f"{src}/{n}.webp").convert("RGBA") for n in (57, 58)]
+boxes = [b.getchannel("A").point(lambda v: 255 if v > 10 else 0).getbbox() for b in bags]
+box = (min(b[0] for b in boxes) - 4, min(b[1] for b in boxes) - 4, max(b[2] for b in boxes) + 4, max(b[3] for b in boxes) + 4)
+for b, name in zip(bags, ("bag_closed.png", "bag_open.png")):
+    save(fit(b.crop(box), h=300), name)

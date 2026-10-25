@@ -3,9 +3,11 @@ extends SceneTree
 ## Запуск: xvfb-run … --fixed-fps 60 -s res://ci/preview_loot.gd -- --out=…
 
 var roll: Control
+var loot_node: Control
+var multi := false                   # --multi: три прокрутки друг над другом (старт с разницей 0,7 с)
 var out_dir := "/tmp"
 var frame := 0
-var SHOTS := {12: "loot_a_ink", 57: "loot_c_items", 120: "loot_d_spin", 267: "loot_e_stop", 282: "loot_f_appear", 291: "loot_f2_stand", 302: "loot_f3_prep", 311: "loot_g_cut1", 324: "loot_h_cut2", 337: "loot_i_after", 365: "loot_j_reveal", 412: "loot_k_move", 520: "loot_m_rolls"}
+var SHOTS := {120: "loot_d_spin", 177: "loot_e_katin", 189: "loot_f_stand", 193: "loot_g_prep1", 199: "loot_h_cut1", 216: "loot_i_after1", 252: "loot_j_slide", 265: "loot_k_prep2", 271: "loot_l_cut2", 288: "loot_m_after2", 312: "loot_n_reveal", 372: "loot_o_move", 480: "loot_p_rolls"}
 
 
 func _initialize() -> void:
@@ -15,6 +17,8 @@ func _initialize() -> void:
 			out_dir = a.trim_prefix("--out=")
 		elif a.begins_with("--kat="):
 			kat_dir = a.trim_prefix("--kat=")
+		elif a == "--multi":
+			multi = true
 		elif a.begins_with("--r="):
 			r = int(a.trim_prefix("--r="))
 	root.size = Vector2i(1920, 1080)
@@ -28,8 +32,9 @@ func _initialize() -> void:
 	var loot: Control = (load("res://mods/pax_rpg/src/location/loot/loot.gd") as GDScript).new()
 	loot.call("setup", mod)
 	root.add_child(loot)
-	roll = loot.get("_roll")
-	roll.set("anchor", Vector2(1920 - 390, 1080 - 175))
+	roll = (loot.get("_rolls") as Array)[0]
+	loot_node = loot
+	roll.set("anchor", Vector2(1920 - 480, 1080 - 175))
 	var doc := GLTFDocument.new()                        # катана: в CI заглушка mod.model() пустая — грузим .glb сами
 	var st := GLTFState.new()
 	if doc.append_from_file(ProjectSettings.globalize_path("res://mods/pax_rpg/models/weapons/katana.glb"), st) == OK:
@@ -48,15 +53,24 @@ var _kat_n := 0
 
 func _tick() -> void:
 	frame += 1
+	if multi:
+		if frame == 40 or frame == 82:
+			loot_node.call("_start", 1 if frame == 40 else 2, 2)
+		if frame in [150, 330, 420]:
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png(out_dir.path_join("multi_%d.png" % frame))
+		if frame > 430:
+			quit(0)
+		return
 	if kat_dir != "":
 		var t := float(roll.get("_t"))
 		var k0 := float(roll.call("_kat_t"))
-		if t >= k0 and t <= k0 + 0.55 + 0.21 + 0.13 + 0.45:
+		if t >= k0 and t < k0 + 2.2:
 			await RenderingServer.frame_post_draw
 			var vp: SubViewport = roll.get("_vp")
 			vp.get_texture().get_image().save_png(kat_dir.path_join("k_%03d.png" % _kat_n))
 			_kat_n += 1
-		elif t > k0 + 1.4:
+		elif t >= k0 + 2.2:
 			print("katana frames: ", _kat_n)
 			quit(0)
 		return

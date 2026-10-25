@@ -2,6 +2,7 @@ extends Control
 ## Лут с повергнутых врагов: сферы разлетаются из тела, падают, затем сами притягиваются к герою и подбираются.
 ## Золотая — золото (gold_picked), розовая — опыт (xp_picked: дальше мана летит в шкалу опыта, как раньше), радужная
 ## (переливается, config/loot.json → rainbow_chance) улетает в правый нижний угол и запускает прокрутку (roll.gd).
+## Несколько радужных сразу — прокрутки встают друг над другом (до ROLLS), остальные ждут, пока какая-то освободится.
 ## Сферы живут в мире (Vector3), рисуются поверх экрана по проекции камеры; размер — по расстоянию.
 
 signal gold_picked(n: int)
@@ -13,6 +14,8 @@ const Roll := preload("res://mods/pax_rpg/src/location/loot/roll.gd")
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const GRAV := 14.0
 const FLY := 0.8                     # полёт радужной сферы в угол, с
+const ROLLS := 3                     # прокруток на экране одновременно
+const ROLL_STEP := 250.0             # шаг прокруток вверх, px макета
 const SIZE := {"gold": 0.34, "xp": 0.3, "rainbow": 0.6}   # поперечник в мире, м
 
 var mod: PaxMod
@@ -22,10 +25,10 @@ var ui := Ui.new()
 var _cam: Camera3D
 var _hero: Node3D
 var _orbs: Array = []               # {kind, p: Vector3, v: Vector3, t, hold, ground, amount}
-var _flights: Array = []            # радужные в полёте к прокрутке: {from: Vector2, t}
-var _pending := 0                    # прокруток в очереди
-var _force_r := -1
-var _roll: Roll
+var _flights: Array = []            # радужные в полёте к прокрутке: {from: Vector2, t, slot, r}
+var _pending: Array = []             # редкости прокруток в очереди (−1 — по шансам)
+var _rolls: Array = []               # Roll по местам снизу вверх
+var _lvl := 1
 var _rb: Control                    # слой радужных сфер — со своим шейдером перелива
 var _snd: Dictionary = {}
 
@@ -48,10 +51,12 @@ func setup(m: PaxMod) -> void:
 		_rb.material = mat
 	_rb.draw.connect(_draw_rainbow)
 	add_child(_rb)
-	_roll = Roll.new()
-	_roll.setup(mod, eq, ui, cfg)
-	_roll.set_katana(Assets.model(mod, "models/weapons/katana.glb"))
-	add_child(_roll)
+	for i: int in ROLLS:
+		var roll := Roll.new()
+		roll.setup(mod, eq, ui, cfg)
+		roll.set_katana(Assets.model(mod, "models/weapons/katana.glb"))
+		add_child(roll)
+		_rolls.append(roll)
 
 
 ## Враг повергнут: сферы из точки at (ноги врага). xp и gold делятся между сферами своего цвета; lvl — уровень героя
@@ -59,7 +64,7 @@ func setup(m: PaxMod) -> void:
 func drop(at: Vector3, cam: Camera3D, hero: Node3D, xp: float, gold: int, lvl: int) -> void:
 	_cam = cam
 	_hero = hero
-	_roll.hero_lvl = lvl
+	_lvl = lvl
 	var go: Array = cfg.get("gold_orbs", [2, 4])
 	var xo: Array = cfg.get("xp_orbs", [3, 5])
 	var ng := mini(randi_range(int(go[0]), int(go[1])), maxi(gold, 1))
@@ -69,20 +74,19 @@ func drop(at: Vector3, cam: Camera3D, hero: Node3D, xp: float, gold: int, lvl: i
 	for i: int in nx:
 		_spawn("xp", at, xp / nx)
 	if randf() < float(cfg.get("rainbow_chance", 0.3)):
-		_spawn("rainbow", at, 0.0)
+		_spawn("rainbow", at, -1.0)
 
 
 ## Проверка (команда rpg_roll): радужная сфера сразу перед героем; r ≥ 0 — редкость выигрыша.
 func test(cam: Camera3D, hero: Node3D, lvl: int, r := -1) -> void:
 	_cam = cam
 	_hero = hero
-	_roll.hero_lvl = lvl
-	_force_r = r
+	_lvl = lvl
 	var fwd := -hero.global_transform.basis.z if is_instance_valid(hero) else Vector3.FORWARD
 	if is_instance_valid(cam):
 		fwd = -cam.global_transform.basis.z
 	fwd.y = 0.0
-	_spawn("rainbow", hero.global_position + fwd.normalized() * 3.0, 0.0)
+	_spawn("rainbow", hero.global_position + fwd.normalized() * 3.0, float(r))   # у радужной amount — редкость выигрыша
 
 
 func _spawn(kind: String, at: Vector3, amount: float) -> void:
@@ -124,16 +128,17 @@ func _process(delta: float) -> void:
 	var fl: Array = []
 	for f: Dictionary in _flights:
 		f.t = float(f.t) + delta
-		if float(f.t) >= FLY:
-			_pending += 1
-		else:
+		if float(f.t) < FLY:
 			fl.append(f)
+		elif int(f.slot) >= 0:
+			_start(int(f.slot), int(f.r))
+		else:
+			_pending.append(int(f.r))
 	_flights = fl
-	if _pending > 0 and not _roll.busy():
-		_pending -= 1
-		_roll.anchor = _corner()
-		_roll.start(_force_r)
-		_force_r = -1
+	if not _pending.is_empty():
+		var i := _free_slot()
+		if i >= 0:
+			_start(i, int(_pending.pop_front()))
 	queue_redraw()
 	_rb.queue_redraw()
 
@@ -148,14 +153,35 @@ func _pick(o: Dictionary) -> void:
 			xp_picked.emit(float(o.amount), at)
 			_play("loot_tick.ogg", -18.0, randf_range(1.15, 1.3))
 		"rainbow":
-			_flights.append({"from": at, "t": 0.0})
+			_flights.append({"from": at, "t": 0.0, "slot": _free_slot() if _pending.is_empty() else -1, "r": int(o.amount)})
 			_play("loot_ink.ogg", -12.0, 1.3)
 
 
-## Центр прокрутки в px макета (высота 1080): правый нижний угол.
-func _corner() -> Vector2:
+func _start(i: int, r: int) -> void:
+	var roll: Roll = _rolls[i]
+	roll.anchor = _corner(i)
+	roll.hero_lvl = _lvl
+	roll.start(r)
+
+
+## Свободное место: прокрутка не идёт и к нему не летит сфера; −1 — все заняты.
+func _free_slot() -> int:
+	for i: int in _rolls.size():
+		if (_rolls[i] as Roll).busy():
+			continue
+		var taken := false
+		for f: Dictionary in _flights:
+			if int(f.slot) == i:
+				taken = true
+		if not taken:
+			return i
+	return -1
+
+
+## Центр прокрутки i в px макета (высота 1080): правый нижний угол, следующие — выше; справа — колонка сумки.
+func _corner(i := 0) -> Vector2:
 	var w := size.x / maxf(size.y / 1080.0, 0.001)
-	return Vector2(w - 40.0 - 350.0, 1080.0 - 175.0)
+	return Vector2(w - 480.0, 1080.0 - 175.0 - i * ROLL_STEP)
 
 
 func _screen_r(o: Dictionary) -> float:
@@ -195,8 +221,8 @@ func _draw_rainbow() -> void:
 		var r := _screen_r(o) * (1.0 + 0.08 * sin(now * 4.0))
 		_orb_at(tex, c, r, now)
 	var s := size.y / 1080.0
-	var to := _corner() * s
 	for f: Dictionary in _flights:
+		var to := _corner(maxi(0, int(f.slot))) * s
 		var k := clampf(float(f.t) / FLY, 0.0, 1.0)
 		var p0: Vector2 = f.from
 		var ctrl := p0.lerp(to, 0.5) + Vector2(0.0, -260.0 * s)
