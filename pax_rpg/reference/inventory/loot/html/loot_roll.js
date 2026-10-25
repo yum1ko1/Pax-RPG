@@ -16,8 +16,8 @@
       a.play().catch(() => {});
     };
     const STRIP_W = 700, CELL = 118, BLOT = 140, ICON = 80, RING = 200, KAT_H = 400, GLOW_PAD = 60;
-    const MOVE_OFF = [-250, -300], T_SPIN = 0.75, CUT1_U = 0.7, STROKE = 0.13, CUT2_AFTER = 0.12, KAT_LEAD = 0.45, REVEAL_AFTER = 0.45, FLY = 0.75;
-    const KAT_FRAMES = 132, KAT_COLS = 12, KAT_FW = 288, KAT_FH = 480;   // кадры 3D-катаны из Godot (preview_loot.gd --kat), 60 к/с от появления
+    const MOVE_OFF = [-250, -300], T_SPIN = 0.75, CUT1_U = 0.7, STROKE = 0.13, CUT2_AFTER = 0.55, KAT_LEAD = 0.45, REVEAL_AFTER = 0.45, FLY = 0.75;
+    const KAT_FRAMES = 159, KAT_COLS = 12, KAT_FW = 288, KAT_FH = 480;   // кадры 3D-катаны из Godot (preview_loot.gd --kat), 60 к/с от появления
     const W_RAR = [46, 28, 14, 8, 3.2, 0.8], N = 36, WIN = 30, SPIN = 3.6, ROLLS = 3, ROLL_STEP = 250;
     const cv = document.getElementById("lootCv"), cx = cv.getContext("2d");
     const ease = u => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);

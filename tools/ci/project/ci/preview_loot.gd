@@ -7,7 +7,7 @@ var loot_node: Control
 var multi := false                   # --multi: три прокрутки друг над другом (старт с разницей 0,7 с)
 var out_dir := "/tmp"
 var frame := 0
-var SHOTS := {120: "loot_d_spin", 177: "loot_e_katin", 189: "loot_f_stand", 193: "loot_g_prep1", 199: "loot_h_cut1", 216: "loot_i_after1", 252: "loot_j_slide", 265: "loot_k_prep2", 271: "loot_l_cut2", 288: "loot_m_after2", 312: "loot_n_reveal", 372: "loot_o_move", 480: "loot_p_rolls"}
+var SHOTS := {120: "loot_d_spin", 199: "loot_h_cut1", 216: "loot_i_after1", 252: "loot_j_slide", 264: "loot_k_stop", 276: "loot_k2_kat2", 296: "loot_l_cut2", 312: "loot_m_after2", 342: "loot_n_reveal"}
 
 
 func _initialize() -> void:
@@ -65,12 +65,12 @@ func _tick() -> void:
 	if kat_dir != "":
 		var t := float(roll.get("_t"))
 		var k0 := float(roll.call("_kat_t"))
-		if t >= k0 and t < k0 + 2.2:
+		if t >= k0 and t < k0 + 2.65:
 			await RenderingServer.frame_post_draw
 			var vp: SubViewport = roll.get("_vp")
 			vp.get_texture().get_image().save_png(kat_dir.path_join("k_%03d.png" % _kat_n))
 			_kat_n += 1
-		elif t >= k0 + 2.2:
+		elif t >= k0 + 2.65:
 			print("katana frames: ", _kat_n)
 			quit(0)
 		return
