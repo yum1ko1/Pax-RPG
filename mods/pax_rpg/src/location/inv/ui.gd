@@ -67,10 +67,27 @@ func spaced(base: FontVariation, fs: int, em: float) -> Font:
 	return _caps[key]
 
 
+## Картинка экрана: пиксели файла как есть (без сжатия видеопамяти) и с mip-уровнями — чётко и при увеличении,
+## и при уменьшении (рамки, иконки); не распозналась — как обычно, mod.texture.
 func tex(name: String) -> Texture2D:
 	var p := name if name.begins_with("textures/") else DIR + name
 	if not _tex.has(p):
-		_tex[p] = mod.texture(p)
+		var img := Image.new()
+		var b := mod.read_bytes(p)
+		var ext := p.get_extension().to_lower()
+		var err := ERR_FILE_UNRECOGNIZED
+		if not b.is_empty():
+			if ext == "jpg" or ext == "jpeg":
+				err = img.load_jpg_from_buffer(b)
+			elif ext == "png":
+				err = img.load_png_from_buffer(b)
+			elif ext == "webp":
+				err = img.load_webp_from_buffer(b)
+		if err == OK:
+			img.generate_mipmaps()
+			_tex[p] = ImageTexture.create_from_image(img)
+		else:
+			_tex[p] = mod.texture(p)
 	return _tex[p]
 
 

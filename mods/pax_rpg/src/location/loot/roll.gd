@@ -25,7 +25,7 @@ const RING := 200.0
 const KAT_H := 400.0                 # высота кадра катаны, px макета
 const KAT_M := 1.18 / 400.0          # метров сцены катаны на px макета
 const MOVE_OFF := Vector2(-250, -300)   # куда уходит крупная вещь (от центра полосы); не выше 180 px от верха
-const TIP_K := 0.82                  # масштаб окна характеристик
+const TIP_K := 0.75                  # масштаб окна характеристик
 # время от начала, с
 const T_SPIN := 0.75
 const CUT1_U := 0.8                  # первый взмах — на ходу, когда пройдено 80 % пути (вещь ещё подъезжает)
@@ -41,6 +41,7 @@ var ui: Ui                          # шрифты и кэш картинок
 var cfg: Dictionary = {}
 var anchor := Vector2(1560, 910)     # центр полосы, px макета
 var hero_lvl := 1
+var K := 0.7                         # масштаб прокрутки (config/loot.json → roll_scale): полоса, вещи, катана, кольцо
 var _items: Array = []              # {id, set, k, r, mana, blot, rot}
 var _win := 0
 var _spin := 3.6
@@ -73,11 +74,12 @@ func setup(m: PaxMod, equip: Equip, fonts: Ui, c: Dictionary) -> void:
 	eq = equip
 	ui = fonts
 	cfg = c
+	K = float(cfg.get("roll_scale", 0.7))
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_rng.randomize()
 	_vp = SubViewport.new()
-	_vp.size = Vector2i(384, 640)
+	_vp.size = Vector2i(512, 640)                             # шире кадра — клинок наискось не обрезается
 	_vp.transparent_bg = true
 	_vp.own_world_3d = true
 	_vp.msaa_3d = Viewport.MSAA_4X
@@ -294,40 +296,42 @@ static func _back(u: float) -> float:
 
 # ---------- катана (3D) ----------
 
-## Катана приходит дважды и на вещи не стоит никогда. Каждый раз: появляется рукоятью к игроку (клинок уходит вглубь),
-## встаёт клинком вниз, замах и взмах сверху вниз, уходит — снова рукоятью к игроку, вглубь. Первый раз — на ходу,
-## по промежутку перед вещью; второй — после остановки, у её правого края. В своей 3D-сцене катана всегда по центру,
-## по полосе её ведёт _kat_x.
+## Катана приходит дважды и на вещи не стоит никогда. Лезвие смотрит на то, что режет: клинок уходит от рукояти
+## вглубь и наискось, режущая кромка — вниз, к полосе; остриё — к отрезаемому (первый раз — влево, к пути перед вещью,
+## второй — вправо, к хвосту). Каждый раз: появляется рукоятью к игроку (клинок вглубь), разворачивается наискось,
+## замах вверх и рубящий удар вниз сквозь полосу, уходит — снова рукоятью к игроку, вглубь. Первый раз — на ходу,
+## по промежутку перед вещью; второй — после остановки, у её правого края. По полосе катану ведёт _kat_x.
 func _pose_katana() -> void:
-	var stand := deg_to_rad(-65.0)
-	var down := deg_to_rad(-88.0)
 	var t0 := _kat_cut()
+	var yaw_to := deg_to_rad(35.0) * (1.0 if t0 == _c1() else -1.0)
+	var ready := deg_to_rad(-20.0)
+	var lift := deg_to_rad(-5.0)
+	var chop := deg_to_rad(-50.0)
 	var u := clampf((_t - t0 + KAT_LEAD) / 0.35, 0.0, 1.0)
-	var pitch := lerpf(0.0, stand, _back(u))
-	var y := lerpf(0.12, 0.0, _ease(u))
-	var z := 0.0
-	var roll := sin(_t * 2.0) * deg_to_rad(2.0)
+	var yaw := lerpf(0.0, yaw_to, _ease(u))
+	var pitch := lerpf(0.0, ready, _back(u))
+	var y := lerpf(0.05, 0.15, _ease(u)) + sin(_t * 2.0) * 0.008
+	var z := lerpf(-0.3, 0.0, _ease(u))
 	var sc := lerpf(0.55, 1.0, _ease(u))
 	if _t >= t0 - 0.1 and _t < t0:                           # замах вверх
 		var p := _ease((_t - t0 + 0.1) / 0.1)
-		y = lerpf(0.0, 0.22, p)
-		pitch = lerpf(stand, down, p)
-		roll = lerpf(0.0, deg_to_rad(10.0), p)
-	elif _t >= t0 and _t < t0 + STROKE:                       # взмах вниз
+		y = lerpf(0.15, 0.3, p)
+		pitch = lerpf(ready, lift, p)
+	elif _t >= t0 and _t < t0 + STROKE:                       # рубящий удар вниз — кромкой сквозь полосу
 		var p := (_t - t0) / STROKE
-		y = lerpf(0.22, -0.2, p * p)
-		pitch = down
-		roll = lerpf(deg_to_rad(10.0), deg_to_rad(-6.0), p)
+		y = lerpf(0.3, -0.22, p * p)
+		pitch = lerpf(lift, chop, p)
 	var e := clampf((_t - t0 - STROKE) / 0.35, 0.0, 1.0)
 	if e > 0.0:                                              # ушла: рукоятью к игроку, вглубь
-		y = lerpf(-0.2, 0.05, _ease(e))
+		y = lerpf(-0.22, 0.05, _ease(e))
 		z = lerpf(0.0, -0.6, e)
-		pitch = lerpf(down, 0.0, _ease(e))
-		roll = 0.0
+		pitch = lerpf(chop, 0.0, _ease(e))
+		yaw = lerpf(yaw_to, 0.0, _ease(e))
 		sc = lerpf(1.0, 0.6, e)
 	_kat.position = Vector3(0.0, y, z)
 	_key.rotation = Vector3(deg_to_rad(-35.0), deg_to_rad(35.0 + 50.0 * sin(_t * 1.7)), 0.0)
-	_kat.basis = Basis(Vector3.FORWARD, roll) * Basis(Vector3.RIGHT, pitch) * Basis.from_scale(Vector3(sc, sc, sc))
+	_kat.basis = Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, deg_to_rad(-90.0)) \
+		* Basis.from_scale(Vector3(sc, sc, sc))                 # кромка (у модели — к +X) — вниз
 
 
 ## Катана появляется заранее — до первого взмаха.
@@ -390,7 +394,7 @@ func _place_tip() -> void:
 	var s := size.y / 1080.0
 	var item := anchor + _move_off()
 	var h := _tip.size.y * TIP_K
-	var x := item.x - RING * 0.5 - 14.0 - _tip.size.x * TIP_K
+	var x := item.x - RING * 0.5 * K - 14.0 - _tip.size.x * TIP_K
 	var y := clampf(item.y - h * 0.45, 20.0, 1060.0 - h)
 	var a := clampf((_t - _tip_at) / 0.3, 0.0, 1.0) * (1.0 - clampf((_t - _tip_at - _tip_len) / 0.3, 0.0, 1.0))
 	_tip.scale = Vector2(TIP_K, TIP_K) * s
@@ -407,11 +411,12 @@ func _group_off() -> Vector2:
 
 
 func _move_off() -> Vector2:
-	return Vector2(MOVE_OFF.x, maxf(MOVE_OFF.y, 180.0 - anchor.y))
+	return Vector2(MOVE_OFF.x * K, maxf(MOVE_OFF.y * K, 180.0 - anchor.y))
 
 
-func _set_xf(pos: Vector2, rot: float, s: float) -> void:
-	_xf = Transform2D(rot, Vector2(s, s), 0.0, pos * s)
+## Преобразование куска: local — от центра полосы в её единицах (до масштаба K), rot — поворот.
+func _set_xf(local: Vector2, rot: float, s: float) -> void:
+	_xf = Transform2D(rot, Vector2(s * K, s * K), 0.0, (anchor + local * K) * s)
 	draw_set_transform_matrix(_xf)
 
 
@@ -419,47 +424,46 @@ func _draw() -> void:
 	if _items.is_empty():
 		return
 	var s := size.y / 1080.0
-	var c := anchor
 	var c1 := _c1()
 	var c2 := _c2()
 	var g := _group_off()
 	var orb := clampf((_t - _orb_at) / 0.3, 0.0, 1.0)       # вещь сжимается в сферу
 	var n := _items.size()
 	if _t < c1:
-		_set_xf(c, 0.0, s)
+		_set_xf(Vector2.ZERO, 0.0, s)
 		_draw_strip_full()
 		_draw_items(0, n, _offset(), 1.0)
 	else:
 		var off1 := _off_at(c1)
 		var ce1 := clampf((_t - c1) / 0.8, 0.0, 1.0)
 		if ce1 < 1.0:                                        # путь перед вещью срезан на ходу: летит дальше и падает
-			_set_xf(c + Vector2(-_v1() * (_t - c1) * (1.0 - 0.4 * ce1), 90.0 * ce1 * ce1), -0.1 * ce1, s)
+			_set_xf(Vector2(-_v1() * (_t - c1) * (1.0 - 0.4 * ce1), 90.0 * ce1 * ce1), -0.1 * ce1, s)
 			_draw_strip_part(-STRIP_W * 0.5, _gap1(), 0.0, 1.0 - ce1, true, false)
 			_draw_items(0, _win, off1, 1.0 - ce1)
 		var d := 0.0                                         # остаток полосы стоит: край разреза — там, где рубанула катана
 		if _t < c2:
-			_set_xf(c, 0.0, s)
+			_set_xf(Vector2.ZERO, 0.0, s)
 			_draw_strip_part(_gap1(), STRIP_W * 0.5, d, 1.0, false, true)
 			_draw_items(_win, n, _offset(), 1.0)
 		else:
 			var split := CELL * 0.5 - d                        # второй взмах — у правого края вещи (в координатах полосы)
 			var ce2 := clampf((_t - c2) / 0.7, 0.0, 1.0)
 			if ce2 < 1.0:                                    # хвост — вправо и вниз
-				_set_xf(c + Vector2(90.0 * ce2, 80.0 * ce2 * ce2), 0.1 * ce2, s)
+				_set_xf(Vector2(90.0 * ce2, 80.0 * ce2 * ce2), 0.1 * ce2, s)
 				_draw_strip_part(split, STRIP_W * 0.5, d, 1.0 - ce2, false, true)
 				_draw_items(_win + 1, n, _offset(), 1.0 - ce2)
-			_set_xf(c + g, 0.0, s)                           # кусок под вещью тает — остаётся её клякса
+			_set_xf(g / K, 0.0, s)                           # кусок под вещью тает — остаётся её клякса
 			_draw_strip_part(_gap1(), split, d, (1.0 - orb) * (1.0 - clampf((_t - c2 - 0.3) / 0.4, 0.0, 1.0)), false, false)
 			_draw_items(_win, _win + 1, _offset(), 1.0 - orb)
-	_set_xf(c, 0.0, s)
+	_set_xf(Vector2.ZERO, 0.0, s)
 	_draw_marker()
 	var ka := _katana_alpha()
 	if ka > 0.0:
-		draw_texture_rect(_vp.get_texture(), Rect2(_kat_x() - KAT_H * 0.3, -KAT_H * 0.5 - 30.0, KAT_H * 0.6, KAT_H), false, Color(1, 1, 1, ka))
+		draw_texture_rect(_vp.get_texture(), Rect2(_kat_x() - KAT_H * 0.4, -KAT_H * 0.5 - 30.0, KAT_H * 0.8, KAT_H), false, Color(1, 1, 1, ka))
 	if _t >= c1:
 		_draw_cut()
 	if _t >= _reveal_t() - 0.05:
-		_set_xf(c + g, 0.0, s)
+		_set_xf(g / K, 0.0, s)
 		_draw_reveal(_reveal_t(), 1.0 - orb)
 	_draw_orb(s)
 
@@ -636,7 +640,7 @@ func _draw_orb(s: float) -> void:
 	var shrink := clampf((_t - t0) / 0.3, 0.0, 1.0)
 	var ctrl := from.lerp(bag, 0.5) + Vector2(40.0, -180.0)
 	var p := _bez(from, ctrl, bag, k)
-	var r := lerpf(40.0, 14.0, shrink) * lerpf(1.0, 0.7, k)
+	var r := lerpf(40.0, 14.0, shrink) * lerpf(1.0, 0.7, k) * K
 	for j: int in range(6, 0, -1):                          # шлейф
 		if k <= 0.0:
 			break
@@ -647,7 +651,7 @@ func _draw_orb(s: float) -> void:
 	draw_circle(p, r, col.lerp(Color.WHITE, 0.35))
 	draw_circle(p, r * 0.55, Color(1, 1, 1, 0.95))
 	if shrink < 1.0:
-		var isz := ICON * (1.0 - shrink)
+		var isz := ICON * K * (1.0 - shrink)
 		draw_texture_rect(_icon(str(it["set"]), int(it["k"]), int(it["r"])), Rect2(p - Vector2(isz, isz) * 0.5, Vector2(isz, isz)), false,
 			Color(1, 1, 1, 1.0 - shrink))
 

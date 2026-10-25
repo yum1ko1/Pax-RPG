@@ -44,6 +44,7 @@ func setup(m: PaxMod) -> void:
 	ui.setup(mod)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_rb = Control.new()
 	_rb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rb.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -191,7 +192,8 @@ func _free_slot() -> int:
 ## Центр прокрутки i в px макета (высота 1080): правый нижний угол, следующие — выше; справа — колонка сумки.
 func _corner(i := 0) -> Vector2:
 	var w := size.x / maxf(size.y / 1080.0, 0.001)
-	return Vector2(w - 480.0, 1080.0 - 175.0 - i * ROLL_STEP)
+	var k := float(cfg.get("roll_scale", 0.7))
+	return Vector2(w - 130.0 - 350.0 * k, 1080.0 - 175.0 * k - i * ROLL_STEP * k)
 
 
 func _screen_r(o: Dictionary) -> float:

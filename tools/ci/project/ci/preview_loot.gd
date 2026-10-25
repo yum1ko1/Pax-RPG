@@ -38,7 +38,7 @@ func _initialize() -> void:
 	root.add_child(loot)
 	roll = (loot.get("_rolls") as Array)[0]
 	loot_node = loot
-	roll.set("anchor", Vector2(1920 - 480, 1080 - 175))
+	roll.set("anchor", Vector2(1920 - 130 - 350 * 0.7, 1080 - 175 * 0.7))
 	var doc := GLTFDocument.new()                        # катана: в CI заглушка mod.model() пустая — грузим .glb сами
 	var st := GLTFState.new()
 	if doc.append_from_file(ProjectSettings.globalize_path("res://mods/pax_rpg/models/weapons/katana.glb"), st) == OK:

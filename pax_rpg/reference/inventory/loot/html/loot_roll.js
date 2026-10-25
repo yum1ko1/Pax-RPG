@@ -17,8 +17,9 @@
     };
     const STRIP_W = 700, CELL = 118, BLOT = 140, ICON = 80, RING = 200, KAT_H = 400, GLOW_PAD = 60;
     const MOVE_OFF = [-250, -300], T_SPIN = 0.75, CUT1_U = 0.8, STROKE = 0.13, CUT2_AFTER = 0.55, KAT_LEAD = 0.45, REVEAL_AFTER = 0.45, FLY = 0.75;
-    const KAT_FRAMES = 159, KAT_COLS = 12, KAT_FW = 288, KAT_FH = 480;   // кадры 3D-катаны из Godot (preview_loot.gd --kat), 60 к/с от появления
-    const W_RAR = [46, 28, 14, 8, 3.2, 0.8], N = 36, WIN = 30, SPIN = 3.6, ROLLS = 3, ROLL_STEP = 250;
+    const KAT_FRAMES = 159, KAT_COLS = 12, KAT_FW = 384, KAT_FH = 480;   // кадры 3D-катаны из Godot (preview_loot.gd --kat), 60 к/с от появления
+    const K = 0.7, W_RAR = [46, 28, 14, 8, 3.2, 0.8],   // K — масштаб прокрутки (config/loot.json → roll_scale)
+           N = 36, WIN = 30, SPIN = 3.6, ROLLS = 3, ROLL_STEP = 250;
     const cv = document.getElementById("lootCv"), cx = cv.getContext("2d");
     const ease = u => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
     const back = u => { const x = Math.min(1, Math.max(0, u)) - 1; return 1 + 2.2 * x * x * x + 1.2 * x * x; };
@@ -65,7 +66,7 @@
     });
     const gate = [];                                     // очередь окон характеристик крупных вещей
     let st = null, flights = [], pending = [], last = 0, s = 1, W = 1920, lootN = 0;
-    const corner = i => [W - 480, 1080 - 175 - i * ROLL_STEP];
+    const corner = i => [W - 130 - 350 * K, 1080 - 175 * K - i * ROLL_STEP * K];
     const freeSlot = () => { const sl = slots.find(x => !x.st && !flights.some(f => f.slot === x.i)); return sl ? sl.i : -1; };
 
     function randItem(forceR, forceMana) {
@@ -96,7 +97,7 @@
     const offset = () => offAt(st.t);
     const gap1 = () => st.off1 - offAt(c1T()) - CELL / 2;                           // промежуток перед вещью в миг первого взмаха
     const v1 = () => (st.off1 - st.off0) * 3 * Math.pow(1 - CUT1_U, 2) / SPIN;      // скорость ряда в этот миг, px/с
-    const moveOff = () => [MOVE_OFF[0], Math.max(MOVE_OFF[1], 180 - st.anchor[1])];
+    const moveOff = () => [MOVE_OFF[0] * K, Math.max(MOVE_OFF[1] * K, 180 - st.anchor[1])];
     const groupOff = () => { if (!st.big || st.moveAt < 0) return [0, 0]; const e = ease((st.t - st.moveAt) / 0.5), m = moveOff(); return [m[0] * e, m[1] * e]; };
 
     // окно характеристик: та же подсказка, что в инвентаре (render); усиленные и маны статы прокручиваются по очереди
@@ -138,7 +139,7 @@
       const m = moveOff(), item = [st.anchor[0] + m[0], st.anchor[1] + m[1]], k = 0.82 * s, ltt = st.slot.tip;
       const w = ltt.offsetWidth * k, h = ltt.offsetHeight * k;
       const a = clamp((st.t - st.tipAt) / 0.3) * (1 - clamp((st.t - st.tipAt - st.tipLen) / 0.3));
-      const x = (item[0] - RING * 0.5 - 14) * s - w + (1 - a) * 16 * s, y = clamp(item[1] * s - h * 0.45, 20 * s, 1060 * s - h);
+      const x = (item[0] - RING * 0.5 * K - 14) * s - w + (1 - a) * 16 * s, y = clamp(item[1] * s - h * 0.45, 20 * s, 1060 * s - h);
       st.slot.wrap.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
       st.slot.wrap.style.opacity = a;
     }
@@ -200,7 +201,8 @@
     const circle = (p, r, col) => { cx.beginPath(); cx.arc(p[0], p[1], Math.max(0.1, r), 0, Math.PI * 2); cx.fillStyle = col; cx.fill(); };
     function group(pos, rot, fn) { cx.save(); cx.translate(pos[0], pos[1]); cx.rotate(rot); fn(); cx.restore(); }
     function draw() {
-      const c = st.anchor, c1 = c1T(), c2 = c2T(), g = groupOff(), orb = clamp((st.t - st.orbAt) / 0.3);
+      const c = [0, 0], c1 = c1T(), c2 = c2T(), gA = groupOff(), g = [gA[0] / K, gA[1] / K], orb = clamp((st.t - st.orbAt) / 0.3);
+      cx.save(); cx.translate(st.anchor[0], st.anchor[1]); cx.scale(K, K);                      // прокрутка — в своих единицах, масштаб K
       if (st.t < c1) group(c, 0, () => { drawStripFull(); drawItems(0, N, offset(), 1); });
       else {
         const off1 = offAt(c1), ce1 = clamp((st.t - c1) / 0.8);
@@ -217,6 +219,7 @@
       }
       group(c, 0, () => { drawMarker(); drawKatana(); if (st.t >= c1) drawCut(); });
       if (st.t >= revealT() - 0.05) group([c[0] + g[0], c[1] + g[1]], 0, () => drawReveal(revealT(), 1 - orb));
+      cx.restore();
       drawOrb();
     }
     function drawStripFull() {
@@ -269,7 +272,7 @@
     function katFrame(f, x, a, op) {
       f = Math.min(KAT_FRAMES - 1, Math.max(0, f));
       cx.globalAlpha = a; cx.globalCompositeOperation = op;
-      cx.drawImage(IMG.katana, (f % KAT_COLS) * KAT_FW, Math.floor(f / KAT_COLS) * KAT_FH, KAT_FW, KAT_FH, x - KAT_H * 0.3, -KAT_H * 0.5 - 30, KAT_H * 0.6, KAT_H);
+      cx.drawImage(IMG.katana, (f % KAT_COLS) * KAT_FW, Math.floor(f / KAT_COLS) * KAT_FH, KAT_FW, KAT_FH, x - KAT_H * 0.4, -KAT_H * 0.5 - 30, KAT_H * 0.8, KAT_H);
       cx.globalAlpha = 1; cx.globalCompositeOperation = "source-over";
     }
     function drawKatana() {
@@ -328,11 +331,11 @@
       if (st.t < t0 || st.t > arrive) return;
       const bag = bagPos(), w = st.items[WIN], col = rcol(w.r), g = groupOff(), from = [st.anchor[0] + g[0], st.anchor[1] + g[1]];
       const k = clamp((st.t - t0 - 0.3) / FLY), shrink = clamp((st.t - t0) / 0.3);
-      const ctrl = [(from[0] + bag[0]) / 2 + 40, (from[1] + bag[1]) / 2 - 180], p = bez(from, ctrl, bag, k), r = (40 - 26 * shrink) * (1 - 0.3 * k);
+      const ctrl = [(from[0] + bag[0]) / 2 + 40, (from[1] + bag[1]) / 2 - 180], p = bez(from, ctrl, bag, k), r = (40 - 26 * shrink) * (1 - 0.3 * k) * K;
       if (k > 0) for (let j = 6; j > 0; j--) circle(bez(from, ctrl, bag, Math.max(0, k - j * 0.035)), r * (1 - j * 0.12), rgba(col, 0.06 * (7 - j)));
       for (let q = 0; q < 4; q++) circle(p, r * (1.3 + q * 0.35), rgba(col, 0.12));
       circle(p, r, rgba(col, 1)); circle(p, r * 0.55, "rgba(255,255,255,.95)");
-      if (shrink < 1) { const ic = icon(w.setKey, w.k, w.r), isz = ICON * (1 - shrink); cx.globalAlpha = 1 - shrink; if (ic) cx.drawImage(ic, p[0] - isz / 2, p[1] - isz / 2, isz, isz); cx.globalAlpha = 1; }
+      if (shrink < 1) { const ic = icon(w.setKey, w.k, w.r), isz = ICON * K * (1 - shrink); cx.globalAlpha = 1 - shrink; if (ic) cx.drawImage(ic, p[0] - isz / 2, p[1] - isz / 2, isz, isz); cx.globalAlpha = 1; }
     }
     // сумка в правом нижнем углу — одна: видна, пока в неё летит хоть одна вещь; открывается к каждому прилёту
     function drawBagOnce() {

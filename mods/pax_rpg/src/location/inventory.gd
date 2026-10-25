@@ -73,6 +73,7 @@ func setup(m: PaxMod) -> void:
 	name = "PaxRpgInventory"
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # картинки ui.tex — с mip-уровнями: чётко при любом масштабе
 	visible = false
 	ui.setup(m)
 	eq.load_data(m)
