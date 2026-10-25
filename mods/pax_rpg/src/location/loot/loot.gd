@@ -29,6 +29,7 @@ var _flights: Array = []            # радужные в полёте к про
 var _pending: Array = []             # редкости прокруток в очереди (−1 — по шансам)
 var _rolls: Array = []               # Roll по местам снизу вверх
 var _lvl := 1
+var _gate: Array = []                # очередь окон характеристик крупных вещей (общая для прокруток)
 var _bag: Control
 var _bag_art := -1                   # есть ли арт сумки (−1 — ещё не смотрели)
 var _rb: Control                    # слой радужных сфер — со своим шейдером перелива
@@ -57,6 +58,7 @@ func setup(m: PaxMod) -> void:
 		var roll := Roll.new()
 		roll.setup(mod, eq, ui, cfg)
 		roll.set_katana(Assets.model(mod, "models/weapons/katana.glb"))
+		roll.gate = _gate
 		add_child(roll)
 		_rolls.append(roll)
 	_bag = Control.new()                                      # одна сумка на все прокрутки — поверх них

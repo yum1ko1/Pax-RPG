@@ -4,6 +4,7 @@ extends SceneTree
 
 var roll: Control
 var loot_node: Control
+var multi_big := false              # --multi-big: все три — легендарные (очередь окон характеристик)
 var multi := false                   # --multi: три прокрутки друг над другом (старт с разницей 0,7 с)
 var out_dir := "/tmp"
 var frame := 0
@@ -19,6 +20,9 @@ func _initialize() -> void:
 			kat_dir = a.trim_prefix("--kat=")
 		elif a == "--multi":
 			multi = true
+		elif a == "--multi-big":
+			multi = true
+			multi_big = true
 		elif a.begins_with("--r="):
 			r = int(a.trim_prefix("--r="))
 	root.size = Vector2i(1920, 1080)
@@ -55,11 +59,11 @@ func _tick() -> void:
 	frame += 1
 	if multi:
 		if frame == 40 or frame == 82:
-			loot_node.call("_start", 1 if frame == 40 else 2, 2)
-		if frame in [150, 330, 420]:
+			loot_node.call("_start", 1 if frame == 40 else 2, 4 if multi_big else 2)
+		if frame in ([150, 330, 420] if not multi_big else [420, 640, 980, 1300]):
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png(out_dir.path_join("multi_%d.png" % frame))
-		if frame > 430:
+		if frame > (430 if not multi_big else 1310):
 			quit(0)
 		return
 	if kat_dir != "":

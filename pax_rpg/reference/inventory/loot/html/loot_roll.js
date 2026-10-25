@@ -63,6 +63,7 @@
       wrap.appendChild(tip); document.body.appendChild(wrap);
       return { i, st: null, wrap, tip };
     });
+    const gate = [];                                     // очередь окон характеристик крупных вещей
     let st = null, flights = [], pending = [], last = 0, s = 1, W = 1920, lootN = 0;
     const corner = i => [W - 480, 1080 - 175 - i * ROLL_STEP];
     const freeSlot = () => { const sl = slots.find(x => !x.st && !flights.some(f => f.slot === x.i)); return sl ? sl.i : -1; };
@@ -85,8 +86,8 @@
       const w = items[WIN];
       w.item = makeLoot(w);
       slot.st = { slot, t: 0, items, off0: 2 * CELL, off1: WIN * CELL, tick: -999, cut1: false, cut2: false, revealed: false,
-        big: w.r >= 4 || w.mana, tipAt: -1, tipLen: 0, rolls: [], anchor: corner(slot.i) };
-      st = slot.st; st.orbAt = revealT() + 1.5;
+        big: w.r >= 4 || w.mana, tipAt: -1, tipLen: 0, moveAt: -1, rolls: [], anchor: corner(slot.i) };
+      st = slot.st; st.orbAt = st.big ? 1e9 : revealT() + 1.5;   // крупная — в сумку только после своего окна характеристик
       play("ink", -13);                                       // прокрутки частые — обычные звуки тихие; громко — только редкая вещь
     }
     const stopT = () => T_SPIN + SPIN, c1T = () => T_SPIN + SPIN * CUT1_U, c2T = () => stopT() + CUT2_AFTER;
@@ -96,7 +97,7 @@
     const gap1 = () => st.off1 - offAt(c1T()) - CELL / 2;                           // промежуток перед вещью в миг первого взмаха
     const v1 = () => (st.off1 - st.off0) * 3 * Math.pow(1 - CUT1_U, 2) / SPIN;      // скорость ряда в этот миг, px/с
     const moveOff = () => [MOVE_OFF[0], Math.max(MOVE_OFF[1], 180 - st.anchor[1])];
-    const groupOff = () => { if (!st.big) return [0, 0]; const e = ease((st.t - revealT() - 0.8) / 0.5), m = moveOff(); return [m[0] * e, m[1] * e]; };
+    const groupOff = () => { if (!st.big || st.moveAt < 0) return [0, 0]; const e = ease((st.t - st.moveAt) / 0.5), m = moveOff(); return [m[0] * e, m[1] * e]; };
 
     // окно характеристик: та же подсказка, что в инвентаре (render); усиленные и маны статы прокручиваются по очереди
     function openTip() {
@@ -185,11 +186,16 @@
         lootBag[w.k].push(w.item); bag[w.k].push(w.item);     // вещь — в выбор своего слота (клик по слоту в инвентаре ниже)
         const sl = document.getElementById("slot-" + SLOTS[w.k].key); if (sl) { sl.classList.remove("lootNew"); void sl.offsetWidth; sl.classList.add("lootNew"); }
       }
-      if (st.big && st.tipAt < 0 && st.t >= revealT() + 1.2) openTip();
+      if (st.big && st.moveAt < 0 && st.t >= revealT() + 0.8) {    // окна характеристик — по одному, в порядке выпадения
+        if (!gate.includes(st)) gate.push(st);
+        if (gate[0] === st) st.moveAt = st.t;
+      }
+      if (st.moveAt >= 0 && st.tipAt < 0 && st.t >= st.moveAt + 0.4) openTip();
+      if (st.tipAt >= 0 && st.t >= st.tipAt + st.tipLen + 0.3 && gate.includes(st)) gate.splice(gate.indexOf(st), 1);
       if (st.tipAt >= 0) { tickRolls(); placeTip(); }
       const arrive = st.orbAt + 0.3 + FLY;                    // сфера в сумку: свист, крышка открывается к прилёту и закрывается
       [[st.orbAt, "toBag", -14, 1], [arrive - 0.12, "lid", -15, 1], [arrive + 0.4, "lid", -18, 0.88]].forEach(([t0, n, db, pt]) => { if (st.t >= t0 && st.t - dt < t0) play(n, db, pt); });
-      if (st.t >= st.orbAt + 0.3 + FLY + 0.9) { st.slot.wrap.style.opacity = 0; st.slot.st = null; }
+      if (st.t >= st.orbAt + 0.3 + FLY + 0.9) { st.slot.wrap.style.opacity = 0; if (gate.includes(st)) gate.splice(gate.indexOf(st), 1); st.slot.st = null; }
     }
     const circle = (p, r, col) => { cx.beginPath(); cx.arc(p[0], p[1], Math.max(0.1, r), 0, Math.PI * 2); cx.fillStyle = col; cx.fill(); };
     function group(pos, rot, fn) { cx.save(); cx.translate(pos[0], pos[1]); cx.rotate(rot); fn(); cx.restore(); }
@@ -300,7 +306,7 @@
       const rg = tinted("ink_ring", col, rings), rs = RING * (1.5 - 0.5 * e);
       for (let q = 0; q < 5; q++) circle([0, 0], RING * 0.36 + q * 9, rgba(col, 0.07 * a));
       if (rg) { cx.globalAlpha = a; cx.drawImage(rg, -rs / 2, -rs * rg.height / rg.width / 2, rs, rs * rg.height / rg.width); cx.globalAlpha = 1; }
-      const ta = st.big ? a * (1 - clamp((st.t - reveal - 0.8) / 0.3)) : a; if (ta <= 0.01) return;
+      const ta = st.big && st.moveAt >= 0 ? a * (1 - clamp((st.t - st.moveAt) / 0.3)) : a; if (ta <= 0.01) return;
       const y = RING / 2 + 18;
       cx.textAlign = "center"; cx.lineJoin = "round";
       cx.font = "700 26px 'Cormorant Garamond', serif"; cx.lineWidth = 6; cx.strokeStyle = `rgba(0,0,0,${0.75 * ta})`; cx.fillStyle = rgba(col, ta);

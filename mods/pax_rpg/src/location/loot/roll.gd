@@ -55,6 +55,9 @@ var _big := false
 var _tip: ItemTip
 var _tip_at := -1.0                  # когда открыто окно характеристик
 var _tip_len := 0.0                  # сколько оно открыто
+var _move_at := -1.0                 # когда крупная вещь пошла к окну характеристик (−1 — ждёт очереди)
+## Очередь окон характеристик — общая для всех прокруток (loot.gd): статы показывает одна вещь за раз, по порядку.
+var gate: Array = []
 var _orb_at := 0.0                   # вещь сжимается в сферу и летит в сумку
 var _icons: Dictionary = {}
 var _snd: Dictionary = {}
@@ -146,7 +149,8 @@ func start(force_r := -1) -> void:
 	_big = int(w["r"]) >= 4 or bool(w["mana"])
 	_tip_at = -1.0
 	_tip_len = 0.0
-	_orb_at = _reveal_t() + 1.5
+	_move_at = -1.0
+	_orb_at = 1.0e9 if _big else _reveal_t() + 1.5             # крупная — в сумку только после своего окна характеристик
 	if is_instance_valid(_tip):
 		_tip.queue_free()
 	_tip = null
@@ -224,8 +228,15 @@ func _process(delta: float) -> void:
 		var list: Array = (loot as Array).duplicate() if loot is Array else []
 		list.append(str(it["id"]))
 		mod.set_setting("inv_loot", list)
-	if _big and _tip_at < 0.0 and _t >= reveal + 1.2:
+	if _big and _move_at < 0.0 and _t >= reveal + 0.8:       # своя очередь — вещь уходит влево-вверх, потом окно
+		if not gate.has(self):
+			gate.append(self)
+		if gate[0] == self:
+			_move_at = _t
+	if _move_at >= 0.0 and _tip_at < 0.0 and _t >= _move_at + 0.4:
 		_open_tip()
+	if _tip_at >= 0.0 and _t >= _tip_at + _tip_len + 0.3:    # окно закрылось — очередь следующей вещи
+		gate.erase(self)
 	if is_instance_valid(_tip):
 		_place_tip()
 	if _t > _c2() + 0.6 or _t < _kat_t() - 0.1:
@@ -239,6 +250,7 @@ func _process(delta: float) -> void:
 			_play(str(ev[1]), float(ev[2]), float(ev[3]))
 	if _t >= _orb_at + 0.3 + FLY + 0.9:
 		var id := str(winner()["id"])
+		gate.erase(self)
 		_items = []
 		if is_instance_valid(_tip):
 			_tip.queue_free()
@@ -391,7 +403,7 @@ func _place_tip() -> void:
 func _group_off() -> Vector2:
 	if not _big:
 		return Vector2.ZERO
-	return _move_off() * _ease((_t - _reveal_t() - 0.8) / 0.5)
+	return _move_off() * _ease((_t - _move_at) / 0.5) if _move_at >= 0.0 else Vector2.ZERO
 
 
 func _move_off() -> Vector2:
@@ -576,7 +588,7 @@ func _draw_reveal(reveal: float, fade: float) -> void:
 	for g: int in 5:
 		draw_circle(Vector2.ZERO, RING * 0.36 + g * 9.0, Color(col, 0.07 * a))
 	draw_texture_rect(ring, Rect2(-rs * 0.5, -rh * 0.5, rs, rh), false, Color(col.lerp(Color.WHITE, 0.15), a))
-	var ta := a * (1.0 - clampf((_t - reveal - 0.8) / 0.3, 0.0, 1.0)) if _big else a
+	var ta := a * (1.0 - clampf((_t - _move_at) / 0.3, 0.0, 1.0)) if _big and _move_at >= 0.0 else a
 	if ta <= 0.01:
 		return
 	var full := eq.from_id(str(it["id"]), hero_lvl)
