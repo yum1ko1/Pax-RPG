@@ -19,6 +19,13 @@ var color := Color.WHITE             # цвет подсветки (редкос
 var _frame: Control
 var _mana_fx: Array = []
 var _t := 0.0
+## Показ роллов (лут, src/location/loot/roll.gd): усиленные и пропитанные маной статы сначала с базовым числом,
+## затем по очереди «прокручиваются» и встают на итог — со свечением и звездой. on_roll(i, landed) — для звука.
+const ROLL_GAP := 0.6
+const ROLL_SPIN := 0.45
+var on_roll: Callable
+var _rolls: Array = []               # {label, fx: [узлы свечения], key, base, final}
+var _roll_t := -1.0
 
 
 func build(u: Ui, e: RefCounted, it: Dictionary, k: int, hero_lvl: int, passive: Dictionary) -> void:
@@ -30,6 +37,7 @@ func build(u: Ui, e: RefCounted, it: Dictionary, k: int, hero_lvl: int, passive:
 		c.queue_free()
 	lines = []
 	_mana_fx = []
+	_rolls = []
 	var r := int(it["r"])
 	var rc: Color = eq.rc(r)
 	var mana := bool(it.get("mana", false))
@@ -250,14 +258,17 @@ func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 	var mana := bool(e.get("mana", false))
 	var rc: Color = eq.rc(r)
 	var w := CW - (pos.x - X0)
+	var fx: Array = []
 	if boost:
 		var g := ui.pic(self, ["glow_epic.png", "glow_leg.png", "glow_myth.png"][clampi(r - 3, 0, 2)], Rect2(pos + Vector2(0, h - 10), Vector2(w, 14)), false)
 		g.modulate.a = 0.9
-		_draw_ctl(Rect2(pos, Vector2(w, h)), func(ci: Control) -> void:
-			ci.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(rc.r, rc.g, rc.b, 0.10)))
+		fx.append(g)
+		fx.append(_draw_ctl(Rect2(pos, Vector2(w, h)), func(ci: Control) -> void:
+			ci.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(rc.r, rc.g, rc.b, 0.10))))
 	if mana:
 		var ms := ui.pic(self, "mana_strip.png", Rect2(pos + Vector2(-6, h - 18), Vector2(w, 30)), false)
 		_mana_fx.append(ms)
+		fx.append(ms)
 	if main:
 		var node := ui.pic(self, "node_main.png", Rect2(pos + Vector2(-10, h * 0.5 - 8), Vector2(15, 16)))
 		node.modulate = Color(1, 1, 1).lerp(rc, 0.55) if not bool(e.get("mana_main", false)) else Ui.MANA
@@ -284,9 +295,13 @@ func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 		ui.pic(self, "mana_gem.png", Rect2(Vector2(kl.position.x + kl.size.x + 6, pos.y + h * 0.5 - 6), Vector2(9, 12)))
 	var mx := pos.x + w - 16
 	if mana:
-		ui.pic(self, "mana_gem.png", Rect2(Vector2(mx - (14 if boost else 0), pos.y + h * 0.5 - 8), Vector2(12, 16)))
+		fx.append(ui.pic(self, "mana_gem.png", Rect2(Vector2(mx - (14 if boost else 0), pos.y + h * 0.5 - 8), Vector2(12, 16))))
 	if boost:
-		ui.pic(self, ["star_epic.png", "star_leg.png", "star_myth.png"][clampi(r - 3, 0, 2)], Rect2(Vector2(mx, pos.y + h * 0.5 - 7), Vector2(14, 14)))
+		fx.append(ui.pic(self, ["star_epic.png", "star_leg.png", "star_myth.png"][clampi(r - 3, 0, 2)], Rect2(Vector2(mx, pos.y + h * 0.5 - 7), Vector2(14, 14))))
+	if boost or mana:                                       # база — до усиления (×boost редкости, ×мана)
+		var m := (float((eq.rar[r] as Dictionary)["boost"]) if boost else 1.0) \
+			* (float((eq.d.get("mana", {}) as Dictionary).get("mult", 5)) if mana else 1.0)
+		_rolls.append({"label": vl, "fx": fx, "key": key, "base": float(e["v"]) / maxf(m, 0.01), "final": float(e["v"])})
 	lines.append({"rect": Rect2(pos, Vector2(w, h)), "part": part, "j": j})
 	return pos.y + h + 5
 
@@ -405,6 +420,47 @@ static func _n(v: float) -> String:
 	return str(snappedf(v, 0.01)).replace(".", ",")
 
 
+## Запустить показ роллов; возвращает его длительность, с (0 — усилений нет).
+func start_rolls() -> float:
+	if _rolls.is_empty():
+		return 0.0
+	for ro: Dictionary in _rolls:
+		(ro["label"] as Label).text = eq.fmt(str(ro["key"]), float(ro["base"]))
+		for n: Variant in ro["fx"]:
+			(n as CanvasItem).visible = false
+	_roll_t = 0.0
+	return 0.5 + _rolls.size() * ROLL_GAP + ROLL_SPIN
+
+
+func _tick_rolls(delta: float) -> void:
+	_roll_t += delta
+	for i: int in _rolls.size():
+		var ro: Dictionary = _rolls[i]
+		var t0 := 0.5 + i * ROLL_GAP
+		var l: Label = ro["label"]
+		if _roll_t < t0 or bool(ro.get("landed", false)):
+			continue
+		if _roll_t < t0 + ROLL_SPIN:                          # прокрутка числа — смена раз в 0,05 с
+			var step := floori((_roll_t - t0) / 0.05)
+			if step != int(ro.get("step", -1)):
+				ro["step"] = step
+				var v := lerpf(float(ro["base"]), float(ro["final"]) * 1.15, randf())
+				l.text = eq.fmt(str(ro["key"]), v)
+				if on_roll.is_valid():
+					on_roll.call(i, false)
+			continue
+		ro["landed"] = true
+		l.text = eq.fmt(str(ro["key"]), float(ro["final"]))
+		for n: Variant in ro["fx"]:
+			(n as CanvasItem).visible = true
+		l.modulate = Color(2.2, 2.2, 2.2)
+		create_tween().tween_property(l, "modulate", Color.WHITE, 0.45).set_ease(Tween.EASE_OUT)
+		if on_roll.is_valid():
+			on_roll.call(i, true)
+	if _roll_t > 0.5 + _rolls.size() * ROLL_GAP + ROLL_SPIN:
+		_roll_t = -1.0
+
+
 func set_arm(p: float) -> void:
 	if is_instance_valid(ring):
 		ring.value = p
@@ -420,6 +476,8 @@ func set_pinned(on: bool) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	if _roll_t >= 0.0:
+		_tick_rolls(delta)
 	var a := 0.82 + 0.18 * sin(_t * TAU / 4.0)                  # мана — мягко «дышит» за 4 с
 	for n: Variant in _mana_fx:
 		if is_instance_valid(n):
