@@ -1,5 +1,5 @@
 {
- "_note": "Снаряжение и экран инвентаря (src/location/inventory.gd, src/location/inv/*). Данные перенесены из прототипа pax_rpg/reference/inventory/tooltip_prototype. Пока только показ: статы вещей на бой не влияют.",
+ "_note": "Снаряжение и экран инвентаря (src/location/inventory.gd, src/location/inv/*). Данные перенесены из прототипа pax_rpg/reference/inventory/tooltip_prototype. Пока только показ: статы вещей на бой не влияют. test_library: true — в сумке все вещи обоих сетов (как в прототипе); false — только выбитое (inv_loot).",
  "rarity": [
   {
    "name": "Обычное",
@@ -976,5 +976,6 @@
    "luck",
    "Удача"
   ]
- ]
+ ],
+ "test_library": false
 }

@@ -155,7 +155,7 @@ func open(_view: SubViewport, _player: Node3D, _body: Node3D, _hero: Object, st:
 	var saved: Variant = mod.get_setting("inv_equipped", [])
 	eq.equipped = []
 	for k: int in eq.slots.size():
-		var id := "samurai-%d" % int((eq.slots[k] as Dictionary)["demo"])
+		var id := "samurai-%d" % int((eq.slots[k] as Dictionary)["demo"]) if bool(eq.d.get("test_library", false)) else ""
 		if saved is Array and k < (saved as Array).size() and not eq.find(k, str((saved as Array)[k])).is_empty():
 			id = str((saved as Array)[k])
 		eq.equipped.append(id)
@@ -458,6 +458,9 @@ func _open_tip(s: Array) -> void:
 	_inside_t = 0.0
 	if sid.begins_with("slot:"):
 		var k := int(sid.substr(5))
+		if eq.item_at(k).is_empty():                         # пустой слот — подсказки нет
+			_tip_id = ""
+			return
 		var tip := ItemTip.new()
 		_layer.add_child(tip)
 		tip.build(ui, eq, eq.item_at(k), k, _lvl, eq.d.get("passive", {}))
@@ -711,11 +714,16 @@ func _open_item_menu(k: int) -> void:
 	var tw := (w - 32 - gap * (cols - 1)) / cols
 	var th := tw * 170.0 / 156.0
 	for key: String in eq.set_keys:
+		var of_set: Array = (eq.bag[k] as Array).filter(func(x: Dictionary) -> bool: return str(x["set"]) == key)
+		if of_set.is_empty():
+			continue                                         # заголовки — только у сетов, вещи которых есть в сумке
 		var S: Dictionary = eq.sets[key]
 		ui.pic(_menu, str(S["emblem"]), Rect2(16, y + 2, 18, 18))
 		ui.label(_menu, str(S["name"]).to_upper(), ui.caps(11, 0.1), 11, Color.html(str(S["color"])), Vector2(40, y + 5))
 		y += 24
 		for mana: bool in [false, true]:
+			if of_set.filter(func(x: Dictionary) -> bool: return bool(x.get("mana", false)) == mana).is_empty():
+				continue
 			if mana:
 				ui.label(_menu, "ПРОПИТАНО МАНОЙ", ui.caps(10, 0.12), 10, Ui.MANA, Vector2(16, y))
 				y += 16
@@ -727,6 +735,9 @@ func _open_item_menu(k: int) -> void:
 				_tile(r, it, k)
 				i += 1
 			y += ceilf(i / float(cols)) * (th + gap) + 4
+	if (eq.bag[k] as Array).is_empty():
+		ui.label(_menu, "Сумка пуста — вещи выпадают с врагов", ui.body, 13, Ui.MUTED, Vector2(16, y))
+		y += 24
 	_menu_end(y, w, _r(slot["rect"]))
 	_caption(eq.item_at(k), k)
 

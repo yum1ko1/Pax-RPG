@@ -31,12 +31,14 @@ func rc(r: int) -> Color:
 	return Color.html(str((rar[r] as Dictionary).get("color", "#ffffff")))
 
 
-## Сумка: все вещи обоих сетов во всех редкостях и их версии с маной (как в прототипе) + выбитое (extra_ids).
+## Сумка: выбитое (extra_ids); с test_library в equipment.json — ещё и все вещи обоих сетов во всех редкостях и их
+## версии с маной (как в прототипе).
 func build_bag(hero_lvl: int, extra_ids: Array = []) -> void:
 	bag = []
+	var lib := bool(d.get("test_library", false))
 	for k: int in slots.size():
 		var list: Array = []
-		for key: String in set_keys:
+		for key: String in (set_keys if lib else []):
 			for mana: bool in [false, true]:
 				for r: int in rar.size():
 					list.append(make(k, key, r, hero_lvl + r, mana, mana and r >= 4, "%s-%d%s" % [key, r, "-m" if mana else ""]))
