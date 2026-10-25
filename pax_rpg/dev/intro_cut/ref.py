@@ -23,7 +23,7 @@ def main(lang):
     k = n + 1
     last = "b0"
     lays = [(f"sub_{lang}_{j + 1:02d}.mov", a) for j, (_, a, _, _) in enumerate(overlays.SUBS[lang])]
-    lays += [(f"card_open_{lang}.mov", 1.0), (f"card_end_{lang}.mov", 1243 / FPS)]
+    lays += [(f"card_open_{lang}.mov", 1.0), (f"card_end_{lang}.mov", CARD_END[0] / FPS)]
     for j, (fn, a) in enumerate(lays):
         ins += ["-itsoffset", f"{a:.4f}", "-i", os.path.join(OV, fn)]
         g.append(f"[{last}][{k}:v]overlay=0:0:eof_action=pass:format=auto[o{j}]")

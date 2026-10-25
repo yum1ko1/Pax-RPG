@@ -46,16 +46,16 @@ def main():
             n = int(round((b - a) * FPS))
             o.append(f"  {{{ti}, {L(os.path.join(OV, f'sub_{lang}_{k + 1:02d}.mov'))}, {int(round(a * FPS))}, {n}, nil, \"sub {lang} {k + 1}\"}},")
         o.append(f"  {{{ti}, {L(os.path.join(OV, f'card_open_{lang}.mov'))}, 24, 108, nil, \"card open {lang}\"}},")
-        o.append(f"  {{{ti}, {L(os.path.join(OV, f'card_end_{lang}.mov'))}, 1243, 94, nil, \"card end {lang}\"}},")
+        o.append(f"  {{{ti}, {L(os.path.join(OV, f'card_end_{lang}.mov'))}, {CARD_END[0]}, {CARD_END[1]}, nil, \"card end {lang}\"}},")
     o.append("}")
     o.append("local A = {")
     for i, n in enumerate(("A_master", "A_music", "A_voice", "A_sfx", "A_amb", "A_impacts")):
         o.append(f"  {{{i + 1}, {L(os.path.join(AUDIO, n + '.wav'))}, \"{n[2:].upper()}\"}},")
     o.append("}")
-    marks = [(6.95, "Red", "Врата / луч"), (12.45, "Red", "Небо трескается"), (15.08, "Blue", "Бой"),
-             (22.25, "Purple", "Диалог сестёр"), (27.09, "Red", "Посох против косы"), (34.10, "Red", "Взрыв маны"),
-             (38.75, "Red", "Оружие падает"), (42.10, "Yellow", "Рождается Око"), (45.65, "Red", "Удар клинков"),
-             (46.35, "Purple", "Вознесись"), (51.80, "Yellow", "Титр")]
+    marks = [(6.95, "Red", "Врата / луч"), (12.45, "Red", "Небо трескается"), (15.22, "Blue", "Взрывная волна"),
+             (22.25, "Purple", "Диалог сестёр"), (27.09, "Red", "Посох против косы"), (34.64, "Red", "Взрыв маны"),
+             (39.29, "Red", "Оружие падает"), (42.64, "Yellow", "Рождается Око"), (46.19, "Red", "Удар клинков"),
+             (50.05, "Purple", "Arise"), (MENU_AT, "Yellow", "Бас, меню, титр")]
     o.append("local MARKS = {")
     for t, col, name in marks:
         o.append(f"  {{{int(round(t * FPS))}, \"{col}\", \"{name}\"}},")

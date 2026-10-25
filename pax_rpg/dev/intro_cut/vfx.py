@@ -124,6 +124,62 @@ def bloom(arr, glow_boost):
     return add
 
 
+_SH = {}
+
+
+def _shock_maps():
+    if not _SH:
+        a, b, c, (ox, oy) = SHOCK
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        d = np.sqrt((xx - ox * W) ** 2 + (yy - oy * H) ** 2)
+        _SH["d"] = d
+        _SH["rmax"] = float(d.max())
+        rng = np.random.default_rng(15)
+        lay = []
+        for k, sz in ((0, 24), (1, 60)):
+            n = rng.normal(0, 1, (H // sz + 2, W // sz + 2)).astype(np.float32)
+            im = Image.fromarray(((n * 40) + 128).clip(0, 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)
+            lay.append(np.asarray(im.filter(ImageFilter.GaussianBlur(6)), np.float32) / 255)
+        _SH["n"] = np.clip(lay[0] * 0.5 + lay[1] * 0.5, 0, 1)
+    return _SH
+
+
+def dust_frame(tl):
+    # стена пыли, летящая на камеру: текстура растёт от центра волны
+    m = _shock_maps()
+    a, b, c, (ox, oy) = SHOCK
+    s = 1 + (tl - a) * 0.05
+    n = Image.fromarray((m["n"] * 255).astype(np.uint8))
+    nw, nh = int(W * s), int(H * s)
+    n = n.resize((nw, nh), Image.BILINEAR)
+    l, t = int(ox * W * (s - 1)), int(oy * H * (s - 1))
+    n = np.asarray(n.crop((l, t, l + W, t + H)), np.float32) / 255
+    base = np.array([0.88, 0.74, 0.68], np.float32)
+    return np.clip(base[None, None, :] * (0.60 + 0.75 * n[..., None]), 0, 1), n
+
+
+def shockwave(f, tl):
+    a, b, c, _ = SHOCK
+    if not (a <= tl < c):
+        return f
+    m = _shock_maps()
+    dust, n = dust_frame(tl)
+    if tl < b:
+        p = (tl - a + 1) / (b - a)
+        r = (p ** 1.5) * 1.15 * m["rmax"]
+        inside = np.clip((r - m["d"]) / 110, 0, 1) * 0.97
+        edge = np.exp(-((m["d"] - r) / 60) ** 2)
+        f = f * (1 - inside[..., None]) + dust * inside[..., None]
+        f = f + edge[..., None] * np.array([1.0, 0.86, 0.80], np.float32) * 0.6
+        f = f + p * p * 0.18
+    else:
+        q = (tl - b) / (c - b)
+        val = 0.6 * n + 0.4 * (1 - m["d"] / m["rmax"])
+        al = np.clip((val - (q * 1.4 - 0.25)) * 3.5, 0, 1) * (1 - q) ** 0.6
+        f = f * (1 - al[..., None]) + dust * al[..., None]
+    return f
+
+
 def process(frame, tl_frame, clip, local_i):
     t = tl_frame / FPS
     name, _, _, n, _, _, look, (z0, z1) = clip
@@ -137,6 +193,7 @@ def process(frame, tl_frame, clip, local_i):
     f = arr.astype(np.float32) / 255
     f = 1 - (1 - f) * (1 - bloom(arr, glow))          # экран: свечение не пережигает
     f = f + flash[None, None, :] * (0.35 + 0.65 * f)  # вспышка ярче в светах
+    f = shockwave(f, tl_frame)
     f = f + grain_frame(tl_frame)[..., None] * (0.085 * (1 - np.abs(f - 0.5) * 1.2)).clip(0.02, 1)
     for (a, b, col, mode) in FADES:
         if a <= tl_frame < b:
@@ -148,6 +205,8 @@ def process(frame, tl_frame, clip, local_i):
 
 def decode(clip):
     name, fn, ss, n, rev, *_ = clip
+    if not fn:
+        return np.zeros((n, H, W, 3), np.uint8)
     vf = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1,fps={FPS}"
     if rev:
         vf += ",reverse"

@@ -10,22 +10,22 @@ FONTS = os.environ.get("PAX_FONTS", os.path.join(ROOT, "fonts"))
 BAR = 138
 
 SUBS = {  # (кто, с, по, текст)
-    "ru": [("selune", 22.25, 24.60, "Остановись, сестра."),
+    "ru": [("selune", 22.25, 24.40, "Остановись, сестра."),
            ("iru", 24.45, 26.55, "Небо не вечно…"),
-           ("iru", 26.70, 28.00, "Как и мы."),
-           ("iru", 28.05, 30.60, "Я не исчезну."),
-           ("selune", 30.65, 32.70, "Мир не заплатит…"),
-           ("selune", 32.75, 33.95, "…за твой страх."),
-           ("both", 46.40, 48.95, "Мир не выдержит этой ноши…"),
-           ("both", 49.25, 51.20, "Вознесись.")],
-    "en": [("selune", 22.25, 24.60, "Stop, sister."),
+           ("iru", 26.70, 28.10, "Как и мы."),
+           ("iru", 29.05, 30.95, "Я не исчезну."),
+           ("selune", 31.00, 33.00, "Мир не заплатит…"),
+           ("selune", 33.05, 34.38, "…за твой страх."),
+           ("both", 46.50, 49.20, "Мир не выдержит этой ноши…"),
+           ("both", 50.05, 51.20, "Восстань.")],
+    "en": [("selune", 22.25, 24.40, "Stop, sister."),
            ("iru", 24.45, 26.55, "The sky is not eternal…"),
-           ("iru", 26.70, 28.00, "Neither are we."),
-           ("iru", 28.05, 30.60, "I will not fade."),
-           ("selune", 30.65, 32.70, "The world will not pay…"),
-           ("selune", 32.75, 33.95, "…for your fear."),
-           ("both", 46.40, 48.95, "The world cannot bear this burden…"),
-           ("both", 49.25, 51.20, "Ascend.")],
+           ("iru", 26.70, 28.10, "Neither are we."),
+           ("iru", 29.05, 30.95, "I will not fade."),
+           ("selune", 31.00, 33.00, "The world will not pay…"),
+           ("selune", 33.05, 34.38, "…for your fear."),
+           ("both", 46.50, 49.20, "The world cannot bear this burden…"),
+           ("both", 50.05, 51.20, "Arise.")],
 }
 NAMES = {"ru": {"iru": "ИРУ", "selune": "СЕЛУНЭ"}, "en": {"iru": "IRU", "selune": "SELUNE"}}
 NAME_COL = {"iru": (222, 192, 255), "selune": (244, 138, 142)}
@@ -75,12 +75,12 @@ def frame_layer():
     def bars(i):
         t = i / FPS
         def ease(x): x = min(1, max(0, x)); return x * x * (3 - 2 * x)
-        k = ease((t - 6.6) / 0.7) * (1 - ease((t - 46.4) / 0.8))
+        k = ease((t - 6.6) / 0.7) * (1 - ease((t - MENU_AT - 0.2) / 0.8))
         return int(round(BAR * k))
     cache = {}
     for i in range(TOTAL):
         b = bars(i)
-        v = 0.42 if i < 1097 else 0.28
+        v = 0.42 if i < int(MENU_AT * FPS) else 0.28
         key = (b, v)
         if key not in cache:
             a = (vig * v)
@@ -94,30 +94,21 @@ def frame_layer():
 
 
 def sub_image(lang, who, text):
+    # субтитры в нижней чёрной полосе кинорамки: имя капителью над строкой, без плашки
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    ft = font("cormorant_garamond_italic.ttf", 42, 600)
-    fn = font("cormorant_sc.ttf", 27, 600)
+    ft = font("cormorant_garamond_italic.ttf", 40, 600)
+    fn = font("cormorant_sc.ttf", 24, 600)
     tw = d.textlength(text, font=ft)
     has_name = who in ("iru", "selune")
     name = NAMES[lang].get(who, "")
-    nw = spaced_w(d, name, fn, 6) if has_name else 0
-    pad_x, pad_y = 26, 14
-    th, nh, gap = 44, 28 if has_name else 0, 6 if has_name else 0
-    bw = max(tw, nw) + pad_x * 2
-    bh = th + nh + gap + pad_y * 2
-    y1 = H - BAR - 24
-    y0 = y1 - bh
-    x0 = (W - bw) / 2
-    plate = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(plate).rounded_rectangle((x0, y0, x0 + bw, y1), radius=4, fill=(4, 3, 6, 168))
-    img = Image.alpha_composite(img, plate)
-    d = ImageDraw.Draw(img)
-    ty = y0 + pad_y
+    nh, gap = (24, 4) if has_name else (0, 0)
+    block = nh + gap + 42
+    y0 = H - BAR + (BAR - block) / 2 - 4
     if has_name:
-        spaced(d, ((W - nw) / 2, ty - 2), name, fn, NAME_COL[who] + (255,), 6)
-        ty += nh + gap
-    d.text(((W - tw) / 2, ty - 6), text, font=ft, fill=TEXT_COL[who] + (255,))
+        nw = spaced_w(d, name, fn, 6)
+        spaced(d, ((W - nw) / 2, y0), name, fn, NAME_COL[who] + (255,), 6)
+    d.text(((W - tw) / 2, y0 + nh + gap - 8), text, font=ft, fill=TEXT_COL[who] + (255,))
     return np.asarray(img)
 
 
@@ -191,7 +182,7 @@ def build():
             n = int(round((b - a) * FPS))
             encode(fade_clip(sub_image(lang, who, text), n, 7, 8), n, os.path.join(OV, f"sub_{lang}_{k + 1:02d}.mov"))
         encode(fade_clip(card_open(lang), 108, 20, 24), 108, os.path.join(OV, f"card_open_{lang}.mov"))
-        encode(fade_clip(card_end(lang), 94, 22, 18), 94, os.path.join(OV, f"card_end_{lang}.mov"))
+        encode(fade_clip(card_end(lang), CARD_END[1], 22, 18), CARD_END[1], os.path.join(OV, f"card_end_{lang}.mov"))
         print("subs+cards", lang, flush=True)
 
 
@@ -204,7 +195,7 @@ def preview(lang, t):
             out = Image.alpha_composite(out, Image.fromarray(sub_image(lang, who, text)))
     if 1.0 <= t < 5.5:
         out = Image.alpha_composite(out, Image.fromarray(card_open(lang)))
-    if t >= 51.8:
+    if t * FPS >= CARD_END[0]:
         out = Image.alpha_composite(out, Image.fromarray(card_end(lang)))
     out.convert("RGB").save(os.path.join(ROOT, "prev", f"ov_{lang}_{t:05.2f}.jpg"), quality=88)
 
