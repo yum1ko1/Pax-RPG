@@ -1,0 +1,208 @@
+extends RefCounted
+## Помощники экрана инвентаря: картинки (кэш), рамки 9-slice в нужном масштабе, подписи с замером высоты.
+## Раскладка окон — вручную (позиции и высоты считаются сразу), без контейнеров: размер окна известен в тот же кадр.
+
+const DIR := "textures/inventory/"
+const GOLD := Color(0.79, 0.64, 0.36)
+const GOLD_DIM := Color(0.48, 0.38, 0.22)
+const TEXT := Color(0.93, 0.87, 0.80)
+const MUTED := Color(0.64, 0.57, 0.50)
+const MANA := Color(1.0, 0.37, 0.82)
+const SET := Color(0.31, 0.82, 0.72)
+
+var mod: PaxMod
+## Шрифты — как в прототипе (tooltip_src.html: --font-display / --font-body / --font-caps), файлы — fonts/ мода:
+## Cormorant Garamond 600 (текст) и 700 (заголовки), курсив 500 (лор), капитель — Cinzel с разрядкой, кириллица в нём —
+## Cormorant SC; цифры всюду ровные и моноширинные («lnum», «tnum»).
+var serif: Font                      # 700 — имена, заголовки
+var body: Font                       # 600 — текст
+var italic: Font                     # 500 курсив — лор
+var _caps: Dictionary = {}           # капитель по размеру (разрядка .1em — в пикселях размера)
+var _files: Dictionary = {}
+var _tex: Dictionary = {}
+
+
+func setup(m: PaxMod) -> void:
+	mod = m
+	serif = _var("fonts/cormorant_garamond.ttf", 700)
+	body = _var("fonts/cormorant_garamond.ttf", 600)
+	italic = _var("fonts/cormorant_garamond_italic.ttf", 500)
+
+
+func _file(path: String) -> FontFile:
+	if not _files.has(path):
+		var f := FontFile.new()
+		f.data = mod.read_bytes(path)
+		_files[path] = f
+	return _files[path]
+
+
+func _var(path: String, weight: int) -> FontVariation:
+	var ts := TextServerManager.get_primary_interface()
+	var v := FontVariation.new()
+	v.base_font = _file(path)
+	v.variation_opentype = {ts.name_to_tag("wght"): weight}
+	v.opentype_features = {ts.name_to_tag("lnum"): 1, ts.name_to_tag("tnum"): 1}
+	return v
+
+
+## Капитель как пункты главного меню: Cinzel 600, кириллица — Cormorant SC; разрядка em × spacing.
+func caps(fs: int, spacing := 0.1) -> Font:
+	var key := "%d:%s" % [fs, spacing]
+	if not _caps.has(key):
+		var v := _var("fonts/cinzel.ttf", 600)
+		(v.base_font as FontFile).fallbacks = [_file("fonts/cormorant_sc.ttf")]
+		v.spacing_glyph = roundi(fs * spacing)
+		_caps[key] = v
+	return _caps[key]
+
+
+## Тот же шрифт с разрядкой (заглавные строки: letter-spacing в em).
+func spaced(base: FontVariation, fs: int, em: float) -> Font:
+	var key := "%s:%d:%s" % [base.get_instance_id(), fs, em]
+	if not _caps.has(key):
+		var v := base.duplicate() as FontVariation
+		v.spacing_glyph = roundi(fs * em)
+		_caps[key] = v
+	return _caps[key]
+
+
+func tex(name: String) -> Texture2D:
+	var p := name if name.begins_with("textures/") else DIR + name
+	if not _tex.has(p):
+		_tex[p] = mod.texture(p)
+	return _tex[p]
+
+
+## Рамка 9-slice: margins (л, в, п, н) — в пикселях картинки, k — масштаб углов. Узел-обёртка размером size.
+func frame(parent: Control, name: String, margins: Array, k: float, rect: Rect2) -> Control:
+	var box := Control.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.position = rect.position
+	box.size = rect.size
+	parent.add_child(box)
+	var np := NinePatchRect.new()
+	np.texture = tex(name)
+	np.patch_margin_left = int(margins[0])
+	np.patch_margin_top = int(margins[1])
+	np.patch_margin_right = int(margins[2])
+	np.patch_margin_bottom = int(margins[3])
+	np.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	np.scale = Vector2(k, k)
+	np.size = rect.size / k
+	box.add_child(np)
+	box.set_meta(&"np", np)
+	box.set_meta(&"k", k)
+	return box
+
+
+static func frame_resize(box: Control, sz: Vector2) -> void:
+	box.size = sz
+	var np := box.get_meta(&"np") as NinePatchRect
+	np.size = sz / float(box.get_meta(&"k"))
+
+
+func pic(parent: Control, name: String, rect: Rect2, keep := true) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = tex(name)
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if keep else TextureRect.STRETCH_SCALE
+	t.position = rect.position
+	t.size = rect.size
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
+
+
+## Подпись; width > 0 — с переносом. Возвращает подпись, высота — label.size.y.
+func label(parent: Control, text: String, font: Font, fs: int, color: Color, pos: Vector2, width := 0.0,
+		align := HORIZONTAL_ALIGNMENT_LEFT, shadow := Color(0, 0, 0, 0)) -> Label:
+	fs = px(font, fs)
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", color)
+	if shadow.a > 0.0:
+		l.add_theme_color_override("font_shadow_color", shadow)
+		l.add_theme_constant_override("shadow_outline_size", 6)
+		l.add_theme_constant_override("shadow_offset_x", 0)
+		l.add_theme_constant_override("shadow_offset_y", 0)
+	l.horizontal_alignment = align
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.position = pos
+	var sz := font.get_string_size(text, align, -1, fs)
+	if width > 0.0:
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sz = Vector2(width, font.get_multiline_string_size(text, align, width, fs).y)
+		l.custom_minimum_size = Vector2(width, 0)
+	parent.add_child(l)
+	l.size = sz                                         # после добавления: иначе ширина подписи с переносом сбрасывается
+	return l
+
+
+func text_w(text: String, font: Font, fs: int) -> float:
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px(font, fs)).x
+
+
+## Размер шрифта как в прототипе: у Cormorant мелкие строчные, там font-size-adjust: ex-height .44 — это ×1,1.
+func px(font: Font, fs: int) -> int:
+	var cormorant: bool = font is FontVariation and (font as FontVariation).base_font != _files.get("fonts/cinzel.ttf")
+	return roundi(fs * 1.1) if cormorant else fs
+
+
+## Абзац с наведением на числа: bbcode [url=…]число[/url]; hover(meta, on) — показ разбора.
+func rich(parent: Control, bb: String, fs: int, pos: Vector2, width: float, hover: Callable) -> RichTextLabel:
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.scroll_active = false
+	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	r.add_theme_font_override("normal_font", body)
+	r.add_theme_font_override("bold_font", serif)
+	r.add_theme_font_size_override("normal_font_size", px(body, fs))
+	r.add_theme_font_size_override("bold_font_size", px(body, fs))
+	r.add_theme_color_override("default_color", MUTED)
+	r.meta_underlined = false
+	r.position = pos
+	r.size = Vector2(width, 10)
+	r.mouse_filter = Control.MOUSE_FILTER_PASS
+	parent.add_child(r)
+	r.text = bb
+	r.size = Vector2(width, r.get_content_height())
+	if hover.is_valid():
+		r.meta_hover_started.connect(func(meta: Variant) -> void: hover.call(str(meta), true, r))
+		r.meta_hover_ended.connect(func(meta: Variant) -> void: hover.call(str(meta), false, r))
+	return r
+
+
+## Иконка вещи из листа сета: ячейка вписана «обложкой» в rect (срез по краям — без растяжения).
+func item_icon(parent: Control, sheet: String, cell: Rect2, rect: Rect2) -> TextureRect:
+	var at := AtlasTexture.new()
+	at.atlas = tex(sheet)
+	var want := rect.size.x / rect.size.y
+	var c := cell
+	if c.size.x / c.size.y > want:
+		var w := c.size.y * want
+		c = Rect2(c.position.x + (c.size.x - w) * 0.5, c.position.y, w, c.size.y)
+	else:
+		var h := c.size.x / want
+		c = Rect2(c.position.x, c.position.y + (c.size.y - h) * 0.5, c.size.x, h)
+	at.region = c
+	var t := TextureRect.new()
+	t.texture = at
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.position = rect.position
+	t.size = rect.size
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(t)
+	return t
+
+
+## Рамка редкости вокруг rect: тонкая линия + свечение внутрь (рисуется в _draw узла-обёртки).
+static func rarity_border(ci: CanvasItem, rect: Rect2, c: Color, glow := 0.55) -> void:
+	for i: int in 6:
+		var a := glow * (1.0 - i / 6.0) * 0.35
+		ci.draw_rect(rect.grow(-1.5 - i * 1.6), Color(c.r, c.g, c.b, a), false, 1.6)
+	ci.draw_rect(rect.grow(-0.75), Color(c.r, c.g, c.b, 0.95), false, 1.5)
