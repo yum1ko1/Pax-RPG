@@ -1281,6 +1281,7 @@ M_CRAFTS = [  # ремесло: витрина у фасада, вывеска (
 mrng = random.Random(5757)
 _has = lambda m: os.path.exists(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", m + ".glb"))
 FOOT["house_tall"] = (3.83, 3.81)                     # трёхэтажная мастерская (Meshy, 7.65 × 7.62 × 13 м)
+PLAZA_SV, PLAZA_Y, PLAZA_TOP = 0.6, -0.19, 0.42          # мощение Meshy толщиной 0.4 м: сжато и утоплено, подиум 0.42 м
 
 
 def _in_masters(it):
@@ -1453,43 +1454,38 @@ def masters_street():
                         ("jar_cluster", 20.2, 1.1)):
             if _has("props/" + q):
                 take(q, x, zb + side * d, mrng.uniform(0, 360), 0.45, c=True)
-    # площадь колодца: колодец, четыре каменных фонаря по углам, тотем и туг, скамьи лицом к колодцу, стол с кумысом
+    # площадь колодца по референсу GPT (square_ref): круглое мощение кольцами, колодец на подиуме со ступенью, четыре
+    # изогнутые каменные скамьи по диагоналям, корыто с вёдрами, сакуры в каменных кадках по противоположным углам,
+    # придорожный алтарь с курильницей, тотем на постаменте у начала переулка. Кольцо радиусом ~4.6 — тропа прохожих
     cx, cz = M_SQ[0], 57.5
-    box([M_SQ[2] - M_SQ[1], 0.05, M_S - M_N + 3.0], cx, 0.025, cz, "stone_cut", c=False)
-    if _has("well_stone"):
-        add("@well_stone", cx, cz, 0, c=True)
+    if _has("props/plaza_disc"):
+        add("plaza_disc", cx, cz, 0, c=False, y=PLAZA_Y)
+        items[-1]["sv"] = [1.0, PLAZA_SV, 1.0]
+        well_y = PLAZA_TOP
     else:
-        add("trough", cx, cz, 0, c=True)
-    for dx in (-5.4, 5.4):
-        for dz in (-3.6, 3.6):
-            add("stone_lantern", cx + dx, cz + dz, 0, c=True)
-    add("@totem_pole", cx - 2.6, cz + 2.8, 180, c=True)    # к югу от колодца: север и восток — обходы прохожих
-    add("tug_banner", cx + 2.4, cz + 2.8, 0, c=True)
-    add("bench_long", cx - 3.4, cz, 90, c=True)              # скамья лицом к колодцу
-    add("table_long", M_SQ[1] + 1.2, M_S + 1.0, 90, c=True)
-    add("bench_long", M_SQ[1] + 0.3, M_S + 1.0, 90, c=True)
-    add("bench_long", M_SQ[1] + 2.1, M_S + 1.0, 90, c=True)
-    add("barrel_kumis", M_SQ[1] + 1.2, M_S + 2.4, 0, c=True)
-    if pot:                                                  # кадки у колодца (север площади — обход прохожих)
-        for dx in (-2.6, 2.6):
-            add(pot, cx + dx, cz - 2.3, 0, c=True)
-    for dx in (-5.6, 5.6):                                   # торговые прилавки по северным углам площади
-        add("stall_frame", cx + dx, M_N - 1.0, 180, c=True)
-        add(mrng.choice(["crate", "basket", "sack_grain"]), cx + dx + (1.9 if dx > 0 else -1.9), M_N - 0.6, 0, c=True)
-    add("merchant_cart", M_SQ[2] - 1.2, M_S + 1.2, 90, c=True)
-    # торговля на площади, как на референсе: перед прилавками — корзины с фруктами и кувшины, кадки по углам
-    fb, jc, tp, fp = (pick(q, "basket") for q in ("fruit_basket", "jar_cluster", "tub_plant", "flower_pot"))
-    for dx in (-5.6, 5.6):
-        add(fb, cx + dx - 0.7, M_N + 0.5, mrng.uniform(0, 360), c=True)
-        add(jc, cx + dx + 0.8, M_N + 0.6, mrng.uniform(0, 360), c=True)
-        for dz in (-3.6, 3.6):
-            add(tp, cx + dx * 1.18, cz + dz, mrng.uniform(0, 360), c=True)
-    add(fb, M_SQ[2] - 3.0, M_S + 1.6, 20, c=True)          # у торговой телеги
-    add("crate", M_SQ[2] - 3.0, M_S + 2.8, 10, c=True)
-    add(jc, M_SQ[1] + 1.2, M_S + 3.6, 0, c=True)           # у стола с кумысом
-    add(fp, cx + 1.9, cz + 1.7, 0, c=True)                 # цветы у колодца
-    proxy("person", cx - 1.6, 0, cz + 2.0, 160)
-    proxy("person", cx + 1.4, 0, cz + 2.2, 200)
+        box([M_SQ[2] - M_SQ[1], 0.05, M_S - M_N + 3.0], cx, 0.025, cz, "stone_cut", c=False)
+        well_y = 0.0
+    add("@well_stone" if _has("well_stone") else "trough", cx, cz, 0, c=True, y=well_y)
+    bench = pick("bench_curved", "bench_long")
+    for k in range(4):                                       # скамьи по диагоналям, выпуклостью наружу
+        a_ = math.radians(45 + 90 * k)
+        add(bench, cx + 3.4 * math.cos(a_), cz + 3.4 * math.sin(a_), (90 - (45 + 90 * k)) % 360, c=True)   # +Z модели — выпуклость
+    add("trough", cx + 2.9, cz, 90, c=True)                  # корыто к востоку от колодца, за ступенью подиума
+    for (px, pz) in ((cx - 4.8, cz - 4.3), (cx + 5.2, cz + 4.7)):   # сакуры в каменных кадках: северо-запад, юго-восток
+        box([2.2, 0.6, 2.2], px, 0.3, pz, "stone_dark", c=True)
+        add("@central/sakura_young", px, pz, mrng.uniform(0, 360), s=0.75, c=True, y=0.6)
+        items[-1]["col"] = [0.5, 3.0, 0.5]
+        proxy("petals", px + 1.6, 0, pz, 0)
+    box([1.6, 0.5, 1.6], cx - 6.2, 0.25, cz - 5.6, "stone_cut", c=True)       # алтарь с курильницей в углу
+    add("@central/incense_ding", cx - 6.2, cz - 5.6, 45, s=0.5, c=False, y=0.5)
+    box([1.3, 0.35, 1.3], cx + 2.8, 0.175, M_S + 1.9, "stone_dark", c=True)  # тотем — у начала переулка, на постаменте
+    add("@totem_pole", cx + 2.8, M_S + 1.9, 315, c=True, y=0.35)
+    for (px, pz) in ((cx + 5.4, cz - 3.6), (cx - 5.4, cz + 3.6)):   # два каменных фонаря у свободных углов
+        add("stone_lantern", px, pz, 0, c=True)
+    add("merchant_cart", M_SQ[2] - 1.0, M_S + 2.5, 90, c=True)
+    add(pick("fruit_basket", "basket"), M_SQ[2] - 2.4, M_S + 3.1, 20, c=True)
+    proxy("person", cx - 3.0, 0, cz + 1.2, 110)               # горожане у скамей
+    proxy("person", cx + 1.0, 0, cz - 3.0, 200)
     # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
     for i, (xc, side, hx, m) in enumerate(houses):
         if side < 0:
@@ -1547,7 +1543,8 @@ def masters_street():
 
 M_HOUSES_PLACED = masters_street()
 # маршруты жителей шли через (55, 57.5) — теперь там колодец: обход севернее (вдоль улицы) и восточнее (переулок)
-_AROUND = {"ew": [[50.0, 57.5], [52.0, 54.0], [58.0, 54.0], [60.0, 57.5]], "ns": [[55.0, 50.0], [58.6, 53.2], [58.6, 61.8], [55.0, 65.0]]}
+_AROUND = {"ew": [[50.4, 57.5], [51.8, 54.3], [55.0, 52.9], [58.2, 54.3], [59.6, 57.5]],
+           "ns": [[55.0, 50.0], [55.0, 52.9], [58.2, 54.3], [59.6, 57.5], [58.2, 60.7], [55.0, 62.1], [55.0, 65.0]]}
 for pth in paths:
     for i, q in enumerate(pth):
         if q == [55, 57.5]:
@@ -1557,11 +1554,11 @@ for pth in paths:
             if (a is not None and (a[1] > 57.5 if ns else a[0] > 55)):
                 det = det[::-1]
             if ns and b is not None and b[0] < 55:                 # с переулка — на запад по улице
-                det = [[55.0, 50.0], [51.5, 54.0]]
+                det = [[55.0, 50.0], [55.0, 52.9], [51.8, 54.3]]
             pth[i:i + 1] = det
             break
-paths += [[[19, 55.4], [89, 55.4]],                   # Улица Мастеров: прохожие вдоль лавок, у бордюров
-          [[89, 59.6], [61, 59.6], [58.6, 61.6], [51.5, 61.6], [49, 59.6], [19, 59.6]]]
+paths += [[[19, 55.4], [50.4, 55.4], [51.8, 54.3], [55, 52.9], [58.2, 54.3], [59.6, 55.4], [89, 55.4]],   # вдоль лавок,
+          [[89, 59.6], [59.6, 59.6], [58.2, 60.7], [55, 62.1], [51.8, 60.7], [50.4, 59.6], [19, 59.6]]]  # площадь — по кольцу
 npcs += 4
 shots += [[[12, 2.2, 57.5], [60, 4, 57.5]],              # 13 Улица Мастеров от арки-пайфана
           [[44, 3.0, 55.0], [56, 2.0, 58.5]],            # 14 площадь колодца

@@ -31,7 +31,8 @@ def group_of(rel):
     if any(k in rel for k in ACCENT):
         return "accent"
     if rel.startswith("gharn/props/"):
-        return "stone" if any(k in rel for k in ("road_cobble", "stairs_stone", "rock_small", "wall_hob")) else "prop"
+        return "stone" if any(k in rel for k in ("road_cobble", "stairs_stone", "rock_small", "wall_hob", "plaza_disc",
+                                                    "bench_curved")) else "prop"
     return "building"
 
 
