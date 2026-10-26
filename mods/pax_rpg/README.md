@@ -38,7 +38,7 @@
 | `src/location/motion_blur.gd` | размытие в движении (CompositorEffect по векторам движения) |
 | `src/location/grass.gd` | сплошная трава с ветром и топтанием (`shaders/grass.gdshader`) |
 | `src/location/landscape.gd` | степь (`steppe.gdshader`), горные хребты (`mountain.gdshader`), юрты |
-| `src/location/shop.gd`, `shop_view.gd` | лавка торговца (первый прилавок базара, роль `trader`, разговор → «Лавка»): товар дня по часам компьютера, свой прилавок у каждого города, тыква-фляга — одна на город; Колесо Судьбы — рулетка за золото с гарантами. Числа — `config/shop.json`, картинки — `textures/shop/` (`pax_rpg/dev/gpt/shop_art.py`) |
+| `src/location/shop.gd`, `shop_view.gd` | лавка торговца (первый прилавок базара, роль `trader`, разговор → «Лавка»): вещи снаряжения (`config/equipment.json`) и свои товары, прилавок на сутки по часам компьютера, свой у каждого города, тыква-фляга — одна на город; Колесо Судьбы — прокрутка добычи (`loot/roll.gd`) за золото с гарантами по редкостям вещей. Числа — `config/shop.json`, картинки — `textures/shop/` (GPT через `pax_rpg/dev/gpt/codex_image.py`) |
 
 Концепт графики — `pax_rpg/docs/Графика_концепт.md`.
 
