@@ -51,6 +51,8 @@ const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
 const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
+const Shop := preload("res://mods/pax_rpg/src/location/shop.gd")
+const ShopView := preload("res://mods/pax_rpg/src/location/shop_view.gd")
 const HERO_HP := 100.0
 const HERO_CONC := 100.0
 const BROKEN_TIME := 2.6             # с слома героя (концентрация 0): управление отнято, враг может казнить
@@ -165,6 +167,8 @@ var _npcs: Array = []
 var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
 var _journal: Journal              # журнал заданий (J)
+var _shop: Shop                    # лавка торговца и рулетка (товар дня, гаранты — сохраняются)
+var _shop_view: ShopView           # окно лавки (разговор с торговцем → «Лавка»)
 var _gold_flash := 0.0
 var _style := Style.new()           # шкала стиля (D … SSS): очки за попадания, множит награду
 var _weather: Weather
@@ -515,6 +519,12 @@ func build(city: Dictionary) -> void:
 		_prog.add_gold(coins)
 		_gold_flash = 1.0
 		_toast = {"text": mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0})
+	_talk.shop_requested.connect(_open_shop)
+	_shop_view = ShopView.new()
+	_shop_view.setup(mod, _hud)
+	_shop_view.closed.connect(_close_shop)
+	_shop_view.sound.connect(_sfx_once)
+	add_child(_shop_view)
 	_journal = Journal.new()
 	_journal.setup(mod, _hud)
 	add_child(_journal)
@@ -569,7 +579,7 @@ func build(city: Dictionary) -> void:
 	_zoom_want = 0.0
 	_yaw = 0.0
 	_near_gate = false
-	_flask = int(_hf("flask_charges", 3.0))
+	_flask = _flask_max()
 	_hp_ghost = 1.0
 	_numbers.clear()
 	_toast = {}
@@ -665,7 +675,8 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal,
+			_shop_view]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -781,6 +792,7 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 
 ## Торговцы за прилавками — живые жители (с ними можно говорить, E), а не модели планировки: стоят на месте
 ## (маршрут из одной точки), лицом к покупателю, ремесло — торговец.
+## Первый прилавок — лавочник (роль trader, вывеска над головой): в разговоре кнопка «Лавка» (shop_view.gd).
 var _merchants: Array = []
 
 
@@ -802,8 +814,11 @@ func _spawn_merchants() -> void:
 		var d: Dictionary = _merchants[i]
 		var p: Array = d.get("p", [0, 0, 0])
 		var npc := Npc.new()
-		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, "merchant")
+		var role := "trader" if i == 0 else "merchant"           # первый прилавок — лавка с товаром дня и рулеткой
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, role)
 		npc.rotation.y = deg_to_rad(float(d.get("r", 0.0)))
+		if role == "trader":
+			npc.set_sign("⚖ " + mod.tr_key("pax_rpg_shop_title"))
 		npc.set("npc_index", n0 + i)
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n0 + i, int(npc.get("relation"))))
 		_view.add_child(npc)
@@ -1149,6 +1164,11 @@ func _hf(key: String, fallback: float) -> float:
 	return float(hero_cfg.get(key, cfg.get(key, fallback)))
 
 
+## Заряды эликсира: у героя свои (flask_charges) плюс фляги из лавки и рулетки (progress.flask_bonus).
+func _flask_max() -> int:
+	return int(_hf("flask_charges", 3.0)) + (_prog.flask_bonus if _prog != null else 0)
+
+
 # ---------- управление ----------
 
 ## Пауза (Esc): мир локации замирает, мышь свободна, поверх — меню.
@@ -1202,7 +1222,7 @@ func _dmg_mult() -> float:
 
 func paused() -> bool:
 	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible) \
-		or (is_instance_valid(_journal) and _journal.visible)
+		or (is_instance_valid(_journal) and _journal.visible) or (is_instance_valid(_shop_view) and _shop_view.visible)
 
 
 ## Житель, давший задание, — с меткой ❖ над головой (в его городе).
@@ -1298,6 +1318,49 @@ func _end_talk() -> void:
 		_talk_npc.call("talk", false)
 	if not paused():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Лавка торговца: разговор закрывается, окно лавки — тоже отдельное (3D не рисуется, HUD спрятан), мир на паузе.
+func _open_shop() -> void:
+	if not is_instance_valid(_shop_view) or _prog == null:
+		return
+	var who := str(_talk_npc.get("npc_name")) if is_instance_valid(_talk_npc) else ""
+	if is_instance_valid(_talk) and _talk.visible:
+		_talk.close()
+	if _shop == null:
+		_shop = Shop.new()
+		_shop.setup(mod, _prog)
+		_shop.granted.connect(_shop_granted)
+	_shop.set_city(str(city_data.get("id", "")))         # у торговца каждого города свой прилавок
+	_talk_focus(true)
+	_shop_view.open(_shop, who)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_rmb = false
+	_lmb_queued = false
+
+
+func _close_shop() -> void:
+	_talk_focus(false)
+	if not paused():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Награда лавки или рулетки (золото, очки и фляги shop.gd уже начислил): эликсир — полные заряды, опыт — шариками
+## в шкалу (полетят, когда окно закроется), новая фляга — сразу полная.
+func _shop_granted(effect: String, amount: int) -> void:
+	match effect:
+		"refill":
+			_flask = _flask_max()
+		"flask":
+			_flask = mini(_flask + 1, _flask_max())
+		"gold":
+			_gold_flash = 1.0
+		"xp":
+			var from := get_viewport().get_visible_rect().size * 0.5
+			var n := 10
+			for k: int in n:
+				_orbs.append({"p0": from + Vector2(randf_range(-60, 60), randf_range(-40, 40)), "t": 0.0,
+					"delay": k * 0.06, "v": float(amount) / n, "bend": randf_range(-1.0, 1.0)})
 
 
 ## Клавиши — сначала локации: _input идёт с конца дерева, а узлы мира игры созданы позже мода и раньше ловили Esc —
@@ -2578,7 +2641,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what := str({"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, ""))
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false
@@ -3010,7 +3073,7 @@ func _hero_down_check(attacker: Node3D) -> void:
 		_hp_ghost = 1.0
 		_conc = _conc_max()
 		_broken_t = 0.0
-		_flask = int(_hf("flask_charges", 3.0))
+		_flask = _flask_max()
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_update_hud()
@@ -3420,7 +3483,7 @@ func _hud_tick(delta: float) -> void:
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
 		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash,
 		"style": {"letter": _style.letter(), "rank": _style.rank(), "frac": _style.frac(), "flash": _style.flash,
-			"title": _t("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+			"title": _t("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": _flask_max(),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,
@@ -3510,6 +3573,9 @@ func _input(event: InputEvent) -> void:
 			var pk := (event as InputEventKey).physical_keycode
 			if is_instance_valid(_journal) and _journal.visible and (pk == KEY_ESCAPE or pk == KEY_J):
 				_set_journal(false)
+				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_shop_view) and _shop_view.visible and pk == KEY_ESCAPE:
+				_shop_view.close()
 				get_viewport().set_input_as_handled()
 			elif is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
 				_talk.close()

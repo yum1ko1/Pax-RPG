@@ -12,7 +12,8 @@ const DIR := "models/goblin/"
 ## У моделей Tripo (models/goblin/variants/) клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет
 ## (pax_rpg/dev/gharn/npc_variant.py). Размер — как у модели, без случайного масштаба.
 const COMMON := [["goblin_rigged.glb", 60], ["variants/goblin_b.glb", 40]]
-const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb"}
+const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb",
+	"trader": "variants/goblin_b.glb"}
 const RACE_OF := {"variants/elf_warrior.glb": "elf", "variants/orc_citizen.glb": "orc"}
 const SPEED := 1.3
 
@@ -285,6 +286,24 @@ func set_giver(on: bool) -> void:
 		add_child(_giver)
 	if _giver != null:
 		_giver.visible = on
+
+
+var _sign: Label3D
+
+
+## Над торговцем лавки — вывеска «⚖ Лавка» (видно издалека, как метку задания, но выше и своим цветом).
+func set_sign(text: String) -> void:
+	if _sign == null:
+		_sign = Label3D.new()
+		_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_sign.font_size = 48
+		_sign.outline_size = 12
+		_sign.pixel_size = 0.004
+		_sign.position = Vector3(0.0, 2.15, 0.0)
+		_sign.modulate = Color(1.0, 0.72, 0.42)
+		add_child(_sign)
+	_sign.text = text
+	_sign.visible = text != ""
 
 
 func show_prompt(on: bool) -> void:

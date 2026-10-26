@@ -6,7 +6,7 @@ extends RefCounted
 
 const ROLES := ["merchant", "guard", "herder", "shaman", "smith", "beggar", "cook", "porter", "craftsman", "hunter",
 	"entertainer"]
-const UNIQUE := ["arena_master", "seer"]          # единственные в городе: имя и ремесло — свои (data/lang)
+const UNIQUE := ["arena_master", "seer", "trader"]   # единственные в городе: имя и ремесло — свои (data/lang)
 
 static var _used := {}                            # имена, уже данные в этом городе (без двойников)
 static var _lists := {}                           # ключ → PackedStringArray (разбор строки один раз)

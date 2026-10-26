@@ -1,0 +1,55 @@
+{
+	"_note": "Лавка торговца и рулетка (src/location/shop.gd — логика, shop_view.gd — окно). Товар обновляется раз в сутки по часам компьютера (reset_hour — час обновления, местное время): pinned — всегда на прилавке, ещё slots случайных из goods по weight (без повторов), один из них — «выгода дня» со скидкой deal_off. price — цена, stock — сколько штук в день; у вечных улучшений (cap — сколько всего можно купить) цена растёт: price · grow^(уже куплено); per_city — сколько штук продаст торговец одного города за всю игру (тыква-фляга — одна на город, следующая — в другом городе). effect: refill — эликсир до полных зарядов, xp — опыт (amount), ticket — жетон рулетки (amount), flask — +1 заряд эликсира навсегда, stat — +1 очко характеристик, gold — золото. Рулетка: spin — цена прокрута, spin10 — цена десяти (в десятке хотя бы одна редкая или выше); rarity — шанс (chance, доли), цвет, ключ названия; pool — награды каждой редкости (weight, effect, amount). Гарант: эпическое или выше не реже раза в epic_pity прокрутов; легендарное — не позже legend_pity-го, с soft_from-го прокрута шанс легендарного растёт на soft_step за прокрут. Если награду взять нельзя (кап), выпадает fallback её редкости.",
+	"reset_hour": 4,
+	"slots": 3,
+	"deal_off": 0.3,
+	"pinned": ["elixir_refill"],
+	"goods": {
+		"elixir_refill": {"glyph": "藥", "effect": "refill", "price": 45, "stock": 3, "weight": 0},
+		"xp_scroll": {"glyph": "書", "effect": "xp", "amount": 120, "price": 110, "stock": 2, "weight": 30},
+		"xp_tome": {"glyph": "典", "effect": "xp", "amount": 500, "price": 420, "stock": 1, "weight": 16},
+		"fate_token": {"glyph": "運", "effect": "ticket", "amount": 1, "price": 90, "stock": 2, "weight": 22},
+		"flask_vessel": {"glyph": "瓢", "effect": "flask", "price": 650, "grow": 1.75, "cap": 3, "per_city": 1, "stock": 1, "weight": 12},
+		"stat_scroll": {"glyph": "道", "effect": "stat", "price": 1400, "grow": 1.5, "cap": 10, "stock": 1, "weight": 7}
+	},
+	"gacha": {
+		"spin": 100,
+		"spin10": 900,
+		"epic_pity": 10,
+		"legend_pity": 75,
+		"soft_from": 55,
+		"soft_step": 0.07,
+		"rarity": {
+			"common": {"chance": 0.66, "color": [0.78, 0.76, 0.72]},
+			"rare": {"chance": 0.27, "color": [0.36, 0.62, 1.0]},
+			"epic": {"chance": 0.062, "color": [0.72, 0.4, 1.0]},
+			"legend": {"chance": 0.008, "color": [1.0, 0.76, 0.3]}
+		},
+		"pool": {
+			"common": [
+				{"weight": 30, "effect": "gold", "amount": 20},
+				{"weight": 20, "effect": "gold", "amount": 35},
+				{"weight": 25, "effect": "refill"},
+				{"weight": 25, "effect": "xp", "amount": 40}
+			],
+			"rare": [
+				{"weight": 40, "effect": "gold", "amount": 70},
+				{"weight": 40, "effect": "xp", "amount": 120},
+				{"weight": 20, "effect": "ticket", "amount": 1}
+			],
+			"epic": [
+				{"weight": 40, "effect": "gold", "amount": 250},
+				{"weight": 35, "effect": "xp", "amount": 400},
+				{"weight": 25, "effect": "flask"}
+			],
+			"legend": [
+				{"weight": 60, "effect": "stat"},
+				{"weight": 40, "effect": "gold", "amount": 1000}
+			]
+		},
+		"fallback": {
+			"epic": {"effect": "gold", "amount": 300},
+			"legend": {"effect": "gold", "amount": 1200}
+		}
+	}
+}

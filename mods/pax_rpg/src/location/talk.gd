@@ -9,6 +9,7 @@ extends Control
 signal closed
 signal rewarded(coins: int)          # сдано задание — награда золотом (location.gd → progress.add_gold)
 signal quest_changed                 # выдано или сдано задание — точка на глобусе меняется (location → travel → planet)
+signal shop_requested                # «Лавка» у торговца (location.gd → shop_view.gd)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
@@ -96,6 +97,17 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_give_btn.visible = false
 	_give_btn.pressed.connect(_hand_over)
 	_panel.add_child(_give_btn)
+	_shop_btn = Button.new()                            # «Лавка» — только у торговца (роль trader)
+	_shop_btn.position = Vector2(W - 28 - 180, 20)
+	_shop_btn.size = Vector2(180, 36)
+	_shop_btn.focus_mode = Control.FOCUS_NONE
+	_shop_btn.text = mod.tr_key("pax_rpg_talk_shop")
+	_shop_btn.add_theme_font_override("font", sans)
+	_shop_btn.add_theme_font_size_override("font_size", 15)
+	_shop_btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.4))
+	_shop_btn.visible = false
+	_shop_btn.pressed.connect(func() -> void: shop_requested.emit())
+	_panel.add_child(_shop_btn)
 	_edit = LineEdit.new()
 	_edit.position = Vector2(28, 314)
 	_edit.size = Vector2(W - 56, 40)
@@ -144,6 +156,9 @@ func open(npc: Node) -> void:
 	_edit.grab_focus()
 	_update_give()
 	_panel.queue_redraw()
+
+
+var _shop_btn: Button
 
 
 func close() -> void:
@@ -233,6 +248,7 @@ const CONCERNS := {
 	"beggar": "просит подаяние у фонтана, знает все слухи",
 	"cook": "варит похлёбку на всю улицу, соль подорожала",
 	"porter": "таскает тюки с рынка, болит спина",
+	"trader": "держит лавку на базаре: товар каждый день новый, а ещё при лавке Колесо Судьбы — крутят за золото",
 }
 
 
@@ -381,6 +397,8 @@ func _update_give() -> void:
 	var q := Quest.get_q(mod)
 	var on := _is_giver() and str(q.get("state", "")) == "found"
 	_give_btn.visible = on
+	_shop_btn.visible = is_instance_valid(_npc) and str(_npc.get("role")) == "trader"
+	_give_btn.position.x = W - 28 - 230 - (190.0 if _shop_btn.visible else 0.0)   # рядом с «Лавкой», не под ней
 	if on:
 		_give_btn.text = mod.tr_key("pax_rpg_talk_give") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
 
