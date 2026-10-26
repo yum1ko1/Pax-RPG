@@ -1584,6 +1584,10 @@ func _ult_wave(i: int) -> void:
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	var at := _player.global_position + fwd * (1.8 if i == 1 else 2.4)
 	var rings: Array = [[3.0, 30.0], [5.0, 22.0]] if i == 1 else [[3.5, 60.0], [6.5, 45.0], [9.5, 35.0]]
+	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка у земли (hit_vfx.gd)
+		var col: Array = hero_cfg.get("mana_color", hero_cfg.get("trail_color", [0.8, 0.45, 1.0]))
+		_landing_fx().landing(at - Vector3(0.0, 0.9, 0.0), Color(float(col[0]), float(col[1]), float(col[2])),
+			3.0 if i == 1 else 5.0)
 	for k: int in rings.size():
 		var r: Array = rings[k]
 		var tw := get_tree().create_timer(0.12 * k)
@@ -1818,6 +1822,8 @@ func _orc_slam(at: Vector3) -> void:
 		return
 	var c := Vector3(at.x, at.y, at.z)
 	Rift.crack(mod, _view, c, 3.2, 4.0)
+	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка (hit_vfx.gd)
+		_landing_fx().landing(c, Color(1.0, 0.42, 0.1), 3.2)
 	for k: int in 3:                                      # растёт кольцами
 		var ra := 0.6 + k * 0.8
 		var t := get_tree().create_timer(0.07 * k)
@@ -2527,6 +2533,13 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 func _hit_fx() -> HitVfx:
 	if _hero == null or not is_instance_valid(_view) or String(_hero.action) not in (hero_cfg.get("hit_vfx", []) as Array):
 		return null
+	if _hitfx == null:
+		_hitfx = HitVfx.new(mod, _view)
+	return _hitfx
+
+
+## Эффекты приземлений — те же, что у новых ударов (один на локацию).
+func _landing_fx() -> HitVfx:
 	if _hitfx == null:
 		_hitfx = HitVfx.new(mod, _view)
 	return _hitfx

@@ -5,7 +5,9 @@ extends RefCounted
 ##   thrust — луч укола: плотное ядро-конус, газовая оболочка пошире, две ленты спирали вокруг оси (крутятся);
 ##            выстреливает за 3 кадра, держится, тает от хвоста к острию;
 ##   impact — вспышка-звезда (2–3 кадра, почти весь свет удара — в них), сфера-вспышка, ударный конус вперёд
-##            по удару (раскрывается и тает), кольцо волны поперёк удара, искры по удару (не вверх).
+##            по удару (раскрывается и тает), кольцо волны поперёк удара, искры по удару (не вверх);
+##   landing — приземление спецприёма (прыжок орка, «Сокрушение» рыцаря): вспышка у земли, кольцо по земле, стена
+##            ударной волны (светящийся цилиндр расходится и оседает в землю), корона-воронка пыли, купол воздуха.
 ## Сетки строятся один раз (единичные, по оси X), материалы общие; живые эффекты тикает один tick() из location.gd.
 
 const SH := "shaders/vfx_hit.gdshader"
@@ -44,7 +46,8 @@ func _mat(mask: String, mode: int, col: Color, energy: float) -> ShaderMaterial:
 	return m
 
 
-## Объёмная форма: p — параметры vfx_vol.gdshader (fres, fres_inv, flow, noise_scale, density, heat_k).
+## Объёмная форма: p — параметры vfx_vol.gdshader (fres, fres_inv, flow, noise_scale, density, heat_k; core, edge —
+## свои цвета, напр. у пыли: тогда она не светится, а кроет фон).
 func _vol(name: String, col: Color, energy: float, p: Dictionary) -> ShaderMaterial:
 	var key := name + str(col) + str(energy)
 	if _mats.has(key):
@@ -215,6 +218,37 @@ func impact(at: Vector3, dir: Vector3, col: Color, heft := 1.0) -> void:
 		_apply(e)                               # с первого кадра — в своём начальном виде, а не единичной сеткой
 
 
+## Приземление спецприёма: at — точка на земле, col — энергия приёма, size — радиус волны, м (орк ~3, рыцарь ~5).
+func landing(at: Vector3, col: Color, size := 3.0, dust := Color(0.62, 0.52, 0.42)) -> void:
+	if not is_instance_valid(parent):
+		return
+	var up := Basis(Vector3.UP, Vector3.FORWARD, Vector3.RIGHT)   # ось X сеток — вверх
+	var flash := _node(_quad(), _mat("impact", 0, col, 3.6))
+	flash.global_position = at + Vector3(0.0, 0.5, 0.0)
+	_live.append({"n": flash, "t": 0.0, "life": 0.12, "kind": "star", "s": size * 0.9})
+	var orb := _node(_sphere(), _vol("orb", col, 1.6, {"fres": 1.6, "flow": 2.0, "noise_scale": 2.5, "density": 1.5,
+		"heat_k": 0.7}))
+	orb.global_position = at + Vector3(0.0, 0.2, 0.0)
+	_live.append({"n": orb, "t": 0.0, "life": 0.22, "kind": "orb", "s": size * 0.7})
+	var ring := _node(_quad(), _mat("ring", 2, col, 2.2))
+	ring.global_transform = Transform3D(Basis(Vector3.RIGHT, Vector3.BACK, Vector3.UP), at + Vector3(0.0, 0.06, 0.0))
+	_live.append({"n": ring, "t": 0.0, "life": 0.4, "kind": "ring", "s": size * 2.3, "b": ring.global_transform.basis})
+	# стена волны: цилиндр смотрит осью вниз (UV.x = 0 — мягкий верх, 1 — у земли), тает сверху — оседает в землю
+	var wall := _node(_cone("wall", 1.0, 1.0, 1.0), _vol("wall", col, 1.3, {"fres": 1.2, "flow": -4.0,
+		"noise_scale": 4.0, "density": 1.6, "heat_k": 0.35}))
+	wall.set_instance_shader_parameter(&"seed", randf())
+	_live.append({"n": wall, "t": 0.0, "life": 0.45, "kind": "wall", "at": at, "s": size})
+	# корона пыли: воронка раскрывается вверх-наружу; пыль не светится — кроет фон (свои тёмные цвета)
+	var crown := _node(_cone("crown", 0.55, 1.0, 1.0), _vol("crown", dust, 1.0, {"fres": 0.9, "flow": 2.5,
+		"noise_scale": 3.0, "density": 1.4, "heat_k": 0.0, "core": dust.lightened(0.3),
+		"edge": dust.darkened(0.5)}))
+	crown.set_instance_shader_parameter(&"seed", randf())
+	_live.append({"n": crown, "t": 0.0, "life": 0.8, "kind": "crown", "at": at, "s": size, "b": up})
+	_sparks(at + Vector3(0.0, 0.2, 0.0), Vector3.UP, col, int(10 * size))
+	for e: Dictionary in _live.slice(_live.size() - 5):
+		_apply(e)
+
+
 ## Искры по направлению удара: узкий конус вперёд, быстрые, со шлейфом; к концу жизни тоньше — гаснут, а не висят.
 func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	var p := GPUParticles3D.new()
@@ -291,6 +325,21 @@ func _apply(e: Dictionary) -> void:
 			mi.global_transform.basis = Basis(b.x * l, b.y * r, b.z * r)
 			mi.set_instance_shader_parameter(&"glow", 1.3 * (1.0 - t))
 			mi.set_instance_shader_parameter(&"progress", clampf(t * 1.1, 0.0, 1.0))
+		"wall":                                 # стена волны: быстро расходится, растёт и оседает
+			var r := float(e.s) * lerpf(0.15, 1.0, _out(t))
+			var h := float(e.s) * 0.32 * lerpf(0.4, 1.0, _out(minf(1.0, t * 2.5))) * (1.0 - 0.5 * t)
+			var at: Vector3 = e.at
+			mi.global_transform = Transform3D(Basis(Vector3.DOWN * h, Vector3.FORWARD * r, Vector3.RIGHT * r),
+				at + Vector3(0.0, h, 0.0))
+			mi.set_instance_shader_parameter(&"glow", 1.4 * (1.0 - t))
+			mi.set_instance_shader_parameter(&"progress", clampf(t * 1.05, 0.0, 1.0))
+		"crown":                                # пыль: воронка вверх-наружу, медленнее волны, тает
+			var r := float(e.s) * lerpf(0.2, 0.75, _out(t))
+			var h := float(e.s) * lerpf(0.15, 0.55, _out(t))
+			var at: Vector3 = e.at
+			mi.global_transform = Transform3D(Basis(Vector3.UP * h, Vector3.FORWARD * r, Vector3.RIGHT * r), at)
+			mi.set_instance_shader_parameter(&"glow", 1.0 - t * 0.6)
+			mi.set_instance_shader_parameter(&"progress", clampf(t * 1.1 - 0.1, 0.0, 1.0))
 		"ring":                                 # быстро расходится, рвётся и тает
 			var s := float(e.s) * lerpf(0.12, 1.0, _out(t))
 			var b: Basis = e.b
