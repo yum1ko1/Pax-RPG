@@ -1,0 +1,410 @@
+extends CharacterBody3D
+## Мирный житель (гоблин): ходит по маршрутам улиц из планировки города («paths»: ломаные XZ), иногда
+## останавливается поглазеть; на героя не нападает, обходить его не умеет — просто ждёт, если упёрся.
+## Модель и клипы — как у гоблина-врага (models/goblin/), без боя.
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const Names := preload("res://mods/pax_rpg/src/location/names.gd")
+
+const DIR := "models/goblin/"
+## Облики: горожане — гоблин Meshy (клипы — models/goblin/walk.glb, idle.glb) и гоблин с рюкзаком, их много;
+## стража — вся эльфы-воины; распорядительница Арены (орчиха) и ведунья Древа Клятв (гоблинша-маг) — по одной на город.
+## У моделей Tripo (models/goblin/variants/) клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет
+## (pax_rpg/dev/gharn/npc_variant.py). Размер — как у модели, без случайного масштаба.
+const COMMON := [["goblin_rigged.glb", 60], ["variants/goblin_b.glb", 40]]
+const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb"}
+const RACE_OF := {"variants/elf_warrior.glb": "elf", "variants/orc_citizen.glb": "orc"}
+const SPEED := 1.3
+
+var mod: PaxMod
+var _model: Node3D
+var _anim: AnimationPlayer
+var _path: PackedVector3Array = PackedVector3Array()
+var _i := 0
+var _dir := 1
+var _wait := 0.0
+var _speed := SPEED
+var _stuck := 0                    # сколько раз подряд упёрся — на третий разворачивается назад по маршруту
+# кто это (разговор через нейросеть — talk.gd): имя, род занятий (role) и ремесло, характер, забота, отношение 0..100;
+# имя, ремесло и забота — из генератора (names.gd), свои в каждом прохождении
+const TEMPERS := ["жадный и хитрый", "угрюмый и подозрительный", "болтливый и любопытный", "трусливый, но услужливый",
+	"гордый и вспыльчивый", "добродушный простак", "мрачный, говорит загадками", "насмешливый и дерзкий"]
+var npc_name := ""
+var role := ""
+var trade := ""                     # ремесло словами («торговец коврами»)
+var worry := ""                     # что заботит сегодня
+var race := "goblin"
+var temper := ""
+var relation := 50
+var npc_index := -1                 # номер жителя в городе (задания и отношения — по нему, quest.gd)
+var talking := false
+var _prompt: Label3D
+# уровень детализации (как LOD у сеток, только для движения и анимации): рядом и в кадре — каждый кадр, как раньше;
+# дальше FAR м — анимация 15 раз в секунду (с 30+ м глаз разницы не видит); за кадром — не рисуется, анимация стоит, шаг пути —
+# раз в PHYS_SKIP тактов физики с накопленным временем (маршрут тот же, просто реже считается)
+const FAR := 30.0
+const HIDE := 85.0                   # = visibility_range_end 80 + запас 5 (setup)
+const PHYS_SKIP := 4
+var _anim_acc := 0.0
+var _phys_acc := 0.0
+var _tick := 0
+var _seen := true
+var _far := false
+# лучи жителей (земля — раз в 0.2 с, «упёрся» — раз в 0.25 с) разнесены по тактам: раньше у всех таймеры стартовали
+# с нуля и шли в ногу — 44 луча в одном такте (пик TIME_PHYSICS_PROCESS — это максимум такта за секунду)
+static var _stagger := 0
+var _q: PhysicsRayQueryParameters3D   # один запрос на жителя (свой exclude), а не новый объект на каждый луч
+var _clip_now := ""                   # клип, что уже играет: _play зовут каждый такт — без вопросов к плееру
+
+
+## as_role — род занятий места (стража у ворот, торговец за прилавком, единственные — arena_master, seer); пусто — любой.
+func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int, as_role := "") -> void:
+	mod = m
+	_path = path
+	_i = clampi(start_i, 0, path.size() - 1)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_v, Names.run_seed(m)])
+	_speed = SPEED * rng.randf_range(0.8, 1.25)
+	_dir = 1 if rng.randf() < 0.5 else -1
+	role = as_role if as_role != "" else str(Names.ROLES[rng.randi() % Names.ROLES.size()])
+	npc_name = mod.tr_key("pax_rpg_npc_unique_" + role) if role in Names.UNIQUE else Names.goblin_name(mod, rng)
+	trade = Names.trade(mod, role, rng)
+	worry = Names.worry(mod, role, rng)
+	temper = TEMPERS[rng.randi() % TEMPERS.size()]
+	relation = rng.randi_range(35, 65)
+	_prompt = Label3D.new()                           # «E — поговорить», когда герой рядом (location.gd → show_prompt)
+	_prompt.text = "E · " + npc_name
+	_prompt.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_prompt.font_size = 40
+	_prompt.outline_size = 10
+	_prompt.pixel_size = 0.004
+	_prompt.position = Vector3(0.0, 1.55, 0.0)
+	_prompt.no_depth_test = true
+	_prompt.modulate = Color(1.0, 0.9, 0.75)
+	_prompt.visible = false
+	add_child(_prompt)
+	position = path[_i]
+	_stagger += 1
+	var ph := fmod(_stagger * 0.618034, 1.0)              # золотое сечение: фазы ровно по тактам, без случайных чисел
+	_ground_t = 0.2 * ph
+	_block_t = 0.25 * ph
+	floor_snap_length = 0.4
+	floor_max_angle = deg_to_rad(50.0)
+	var shape := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.3
+	cap.height = 1.1
+	shape.shape = cap
+	shape.position = Vector3(0, 0.55, 0)
+	add_child(shape)
+	var look := str(LOOK_OF[role]) if LOOK_OF.has(role) else _pick_look(rng)
+	race = str(RACE_OF.get(look, "goblin"))
+	_model = Assets.model(mod, DIR + look)
+	if _model == null and look != "goblin_rigged.glb":
+		look = "goblin_rigged.glb"
+		_model = Assets.model(mod, DIR + look)
+	if _model == null:
+		return
+	add_child(_model)
+	for g: Node in _model.find_children("*", "GeometryInstance3D", true, false):   # дальше 80 м жителя не видно в дымке
+		(g as GeometryInstance3D).visibility_range_end = 80.0
+		(g as GeometryInstance3D).visibility_range_end_margin = 5.0
+	Assets.track(DIR + look, _model)
+	_anim = _find(_model)
+	if _anim != null:
+		_anim.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # ведёт _process (LOD)
+	if _anim != null:
+		var lib: AnimationLibrary = _anim.get_animation_library("") if _anim.has_animation_library("") else AnimationLibrary.new()
+		for clip: String in ["walk", "idle"]:
+			if _anim.has_animation(clip):                  # у гостей Tripo клипы — в самой модели
+				_anim.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
+				continue
+			var src := Assets.model(mod, DIR + clip + ".glb")
+			if src == null:
+				continue
+			var a := _find(src)
+			if a != null and a.get_animation_list().size() > 0:
+				var an: Animation = a.get_animation(a.get_animation_list()[0]).duplicate()
+				an.loop_mode = Animation.LOOP_LINEAR
+				lib.add_animation(clip, an)
+			src.free()
+		if not _anim.has_animation_library(""):
+			_anim.add_animation_library("", lib)
+		_play("walk")
+		_anim.seek(rng.randf_range(0.0, 1.0), true)
+
+
+static func _pick_look(rng: RandomNumberGenerator) -> String:
+	var total := 0
+	for l: Array in COMMON:
+		total += int(l[1])
+	var r := rng.randi_range(0, total - 1)
+	for l: Array in COMMON:
+		r -= int(l[1])
+		if r < 0:
+			return str(l[0])
+	return "goblin_rigged.glb"
+
+
+static func _find(n: Node) -> AnimationPlayer:
+	if n is AnimationPlayer:
+		return n
+	for c in n.get_children():
+		var f := _find(c)
+		if f != null:
+			return f
+	return null
+
+
+func _play(c: String) -> void:
+	if _anim == null or (c == _clip_now and _anim.is_playing()):
+		return
+	if _anim.has_animation(c) and _anim.current_animation != c:
+		_anim.play(c, 0.3)
+	if _anim.current_animation == c:
+		_clip_now = c
+
+
+# ---------- один ведущий житель ведёт всех: 2 вызова из движка в кадр вместо 2 × N (как менеджеры толпы) ----------
+static var all: Array = []
+static var _driver: Node
+
+
+func _enter_tree() -> void:
+	all.append(self)
+	var lead := _driver == null or not is_instance_valid(_driver)
+	if lead:
+		_driver = self
+	set_process(lead)
+	set_physics_process(lead)
+
+
+func _exit_tree() -> void:
+	all.erase(self)
+	if _driver != self:
+		return
+	_driver = null
+	for n: Variant in all:
+		if is_instance_valid(n) and (n as Node).is_inside_tree():
+			_driver = n
+			(n as Node).set_process(true)
+			(n as Node).set_physics_process(true)
+			break
+
+
+func _process(delta: float) -> void:
+	if _driver != self:
+		set_process(false)
+		return
+	var t0 := Time.get_ticks_usec()
+	for n: Variant in all:
+		n._proc_tick(delta)
+	Prof.add("NPC анимация", t0)                      # видимость и позы жителей (кадр; физика — «NPC»)
+
+
+func _physics_process(delta: float) -> void:
+	if _driver != self:
+		set_physics_process(false)
+		return
+	var t0 := Time.get_ticks_usec()
+	for n: Variant in all:
+		n._phys_tick(delta)
+	Prof.add("NPC", t0)                                 # все жители за такт — одной меткой (и её пик)
+	Prof.peak("NPC", t0)
+
+
+func _phys_tick(delta: float) -> void:
+	_tick += 1
+	_phys_acc += delta
+	if _seen or _tick % PHYS_SKIP == get_instance_id() % PHYS_SKIP:   # за кадром — реже, такты разнесены по жителям
+		_phys(_phys_acc)
+		_phys_acc = 0.0
+
+
+func _proc_tick(delta: float) -> void:
+	if _anim == null:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		var p := global_position + Vector3(0.0, 0.6, 0.0)
+		_seen = true                                    # шар 1 м вокруг жителя хоть краем в кадре — виден
+		var fr := Engine.get_process_frames()
+		if fr != _fr_frame:                             # пирамида камеры — одна на кадр для всех жителей (раньше
+			_fr_frame = fr                              # каждый житель собирал свой массив плоскостей)
+			_frustum = cam.get_frustum()
+		for pl: Plane in _frustum:
+			if pl.distance_to(p) > 1.0:
+				_seen = false
+				break
+		var dc := p.distance_to(cam.global_position)
+		_far = dc > FAR
+		if dc > HIDE:
+			_seen = false                               # дальше дальности видимости модели (80 + 5 м) его и так не видно,
+			                                            # но тени огней дальность не проверяют: поза двигалась — тень огня
+			                                            # перерисовывалась каждый кадр (и с тенью невидимого жителя)
+		if _model != null and _model.visible != _seen:
+			_model.visible = _seen                      # вне кадра не рисуется совсем (и тень не считается)
+	_anim_acc += delta
+	if not _seen:
+		return                                          # за кадром поза не нужна; время копится — шаг не дёрнется
+	if _far and _anim_acc < 1.0 / 15.0:
+		return
+	_anim.advance(minf(_anim_acc, 0.5))
+	_anim_acc = 0.0
+
+
+const _foot_off := 0.0               # начало тела — у ступней (капсула поднята на 0.55)
+var _ground_t := 0.0
+var _ground_y := 0.1
+var _block_t := 0.0
+var _settle := 0                     # стоящий на месте: сколько раз уже искал землю под ногами
+
+
+## Высота земли под жителем (пандусы и ступени): один луч вниз.
+func _probe_ground() -> void:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return
+	var t0 := Time.get_ticks_usec()
+	var p := global_position
+	var hit := space.intersect_ray(_query(p + Vector3(0, 1.2, 0), p - Vector3(0, 3.0, 0)))
+	if not hit.is_empty():
+		_ground_y = (hit.position as Vector3).y + _foot_off
+	else:
+		_ground_y = p.y
+	Prof.add("NPC лучи", t0)
+
+
+## Впереди на шаг кто-то стоит (герой, другой житель, телега) — луч на уровне груди.
+func _blocked(d: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state if is_inside_tree() else null
+	if space == null:
+		return false
+	var t0 := Time.get_ticks_usec()
+	var p := global_position + Vector3(0, 0.6, 0)
+	var hit := not space.intersect_ray(_query(p, p + d * 0.7)).is_empty()
+	Prof.add("NPC лучи", t0)
+	return hit
+
+
+## Запрос луча — тот же, что давал create(): маска 0xFFFFFFFF, без зон, сам житель исключён.
+func _query(from: Vector3, to: Vector3) -> PhysicsRayQueryParameters3D:
+	if _q == null:
+		_q = PhysicsRayQueryParameters3D.new()
+		_q.exclude = [get_rid()]
+	_q.from = from
+	_q.to = to
+	return _q
+
+
+static var _frustum: Array[Plane] = []
+static var _fr_frame := -1
+
+
+var _giver: Label3D
+
+
+## Над жителем, давшим задание, — золотой ❖ с именем (видно издалека, quest.gd).
+func set_giver(on: bool) -> void:
+	if on and _giver == null:
+		_giver = Label3D.new()
+		_giver.text = "❖ " + npc_name
+		_giver.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_giver.font_size = 56
+		_giver.outline_size = 12
+		_giver.pixel_size = 0.004
+		_giver.position = Vector3(0.0, 1.9, 0.0)
+		_giver.modulate = Color(1.0, 0.8, 0.35)
+		add_child(_giver)
+	if _giver != null:
+		_giver.visible = on
+
+
+func show_prompt(on: bool) -> void:
+	if _prompt != null and _prompt.visible != on:
+		_prompt.visible = on
+
+
+## Житель на месте (убранство улиц, location.gd): лицом по yaw (рад).
+func stand(yaw: float) -> void:
+	if _model != null:
+		_model.rotation.y = yaw
+	_play("idle")
+
+
+## Разговор: стоит и смотрит на героя (look — куда).
+func talk(on: bool, look := Vector3.ZERO) -> void:
+	talking = on
+	if on:
+		show_prompt(false)
+		_play("idle")
+		if _model != null:
+			var d := look - global_position
+			_model.rotation.y = atan2(d.x, d.z)
+
+
+## Настроение ответа (talk.gd): пока — только отношение; позы под настроение — когда будут клипы.
+func react(_mood: String) -> void:
+	pass
+
+
+func _phys(delta: float) -> void:
+	if talking:
+		velocity = Vector3.ZERO
+		return
+	if _path.size() < 2:                              # стоит на посту (стража, зазывала, караванщик) — покой
+		if _settle < 10:                              # первые 2 с — на землю под ногами (мостовая, ступени арки):
+			_ground_t -= delta                        # раньше стоял на высоте точки из планировки (0.1 м) — над землёй
+			if _ground_t <= 0.0:
+				_ground_t = 0.2
+				_settle += 1
+				_probe_ground()
+				global_position.y = _ground_y
+		_play("idle")
+		return
+	# кинематика, как у толп в больших играх: позиция — напрямую по маршруту, без move_and_slide (полный расчёт
+	# столкновений на каждого жителя каждый такт). Земля — луч вниз раз в 0.2 с, «упёрся» — луч вперёд раз в 0.25 с.
+	_ground_t -= delta
+	if _ground_t <= 0.0:
+		_ground_t = 0.2
+		_probe_ground()
+	if absf(global_position.y - _ground_y) > 0.002:
+		global_position.y = move_toward(global_position.y, _ground_y, delta * 6.0)
+	velocity = Vector3.ZERO
+	if _wait > 0.0:
+		_wait -= delta
+		_play("idle")
+		return
+	var target := _path[_i]
+	var to := target - global_position
+	to.y = 0.0
+	if to.length() < 0.5:
+		_stuck = 0
+		var nxt := _i + _dir
+		if nxt < 0 or nxt >= _path.size():
+			_dir = -_dir
+			_wait = randf_range(2.0, 6.0)               # конец маршрута — постоять
+			return
+		_i = nxt
+		if randf() < 0.12:
+			_wait = randf_range(1.5, 4.0)
+		return
+	var d := to.normalized()
+	_block_t -= delta
+	if _block_t <= 0.0:
+		_block_t = 0.25
+		if _blocked(d):                              # упёрся (в героя, в соседа) — постоять, потом назад
+			_stuck += 1
+			_wait = 0.8
+			if _stuck >= 3:
+				_stuck = 0
+				_dir = -_dir
+				_i = clampi(_i + _dir, 0, _path.size() - 1)
+			return
+		_stuck = 0
+	global_position += Vector3(d.x, 0.0, d.z) * _speed * delta
+	_play("walk")
+	if _model != null:
+		var ry := atan2(d.x, d.z)
+		if absf(angle_difference(_model.rotation.y, ry)) > 0.0005:   # уже смотрит по ходу (< 0.03°) — поворот не пишем
+			_model.rotation.y = lerp_angle(_model.rotation.y, ry, minf(1.0, delta * 6.0))

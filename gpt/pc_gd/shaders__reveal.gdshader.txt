@@ -1,0 +1,28 @@
+// Экран загрузки уходит не затемнением, а «расползается» от точки (где упал воин): дыра с рваным краем
+// растёт, под ней — игра. Висит на холсте экрана загрузки: всё, что он рисует, внутри радиуса прозрачно.
+shader_type canvas_item;
+render_mode unshaded;
+
+uniform vec2 center = vec2(0.5, 0.85);    // в долях экрана
+uniform float radius = 0.0;               // в высотах экрана
+uniform float aspect = 1.777;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+}
+
+void fragment() {
+	vec4 c = COLOR;                        // уже с текстурой рисуемого
+	vec2 d = (SCREEN_UV - center) * vec2(aspect, 1.0);
+	float a = atan(d.y, d.x);
+	float ink = noise(vec2(a * 3.0, radius * 4.0)) * 0.6 + noise(vec2(a * 9.0, radius * 7.0)) * 0.4;
+	float r = radius * (0.82 + 0.36 * ink);
+	float edge = radius > 0.0 ? smoothstep(r - 0.01, r + 0.035, length(d)) : 1.0;
+	// по краю — тлеющая сакурная кайма
+	float rim = (1.0 - smoothstep(0.0, 0.03, abs(length(d) - r))) * step(0.001, radius);
+	c.rgb = mix(c.rgb, vec3(1.0, 0.5, 0.75), rim * 0.7);
+	COLOR = vec4(c.rgb, c.a * edge);
+}

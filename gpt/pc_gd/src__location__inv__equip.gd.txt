@@ -1,0 +1,221 @@
+extends RefCounted
+## Снаряжение героя: данные (config/equipment.json) и генерация вещей — перенос прототипа
+## pax_rpg/reference/inventory/tooltip_prototype (makeItem). Пока только показ: статы вещей на бой не влияют.
+## Вещь — словарь: id, slot (индекс), set, r (редкость 0…5), lvl, name, main / extra (строки статов), price, mana.
+## Строка стата: key, v, boost (свечение), minor (основной стат в роли доп.), mana / mana_main, hero + base (плащ ×1,5).
+## Сумка генерируется с сидом от id вещи — одинаковая при каждом открытии; надетое и выбитое хранятся в настройках мода.
+
+var d: Dictionary = {}               # весь equipment.json
+var rar: Array = []
+var stats: Dictionary = {}
+var order: Array = []
+var slots: Array = []
+var sets: Dictionary = {}
+var set_keys: Array = ["samurai", "gharn"]
+var bag: Array = []                  # bag[k] — вещи для слота k
+var equipped: Array = []             # id надетой вещи по слотам
+var _rng := RandomNumberGenerator.new()
+
+
+func load_data(mod: PaxMod) -> void:
+	var p: Variant = JSON.parse_string(mod.read_text("config/equipment.json"))
+	d = p if p is Dictionary else {}
+	rar = d.get("rarity", [])
+	stats = d.get("stats", {})
+	order = d.get("order", [])
+	slots = d.get("slots", [])
+	sets = d.get("sets", {})
+
+
+func rc(r: int) -> Color:
+	return Color.html(str((rar[r] as Dictionary).get("color", "#ffffff")))
+
+
+## Сумка: выбитое (extra_ids); с test_library в equipment.json — ещё и все вещи обоих сетов во всех редкостях и их
+## версии с маной (как в прототипе).
+func build_bag(hero_lvl: int, extra_ids: Array = []) -> void:
+	bag = []
+	var lib := bool(d.get("test_library", false))
+	for k: int in slots.size():
+		var list: Array = []
+		for key: String in (set_keys if lib else []):
+			for mana: bool in [false, true]:
+				for r: int in rar.size():
+					list.append(make(k, key, r, hero_lvl + r, mana, mana and r >= 4, "%s-%d%s" % [key, r, "-m" if mana else ""]))
+		bag.append(list)
+	for id: Variant in extra_ids:
+		var it := from_id(str(id), hero_lvl)
+		if not it.is_empty():
+			(bag[int(it["slot"])] as Array).append(it)
+
+
+## Вещь по id «слот:сет-редкость[-m]#номер» (выбитые) — те же правила, свой сид.
+func from_id(id: String, hero_lvl: int) -> Dictionary:
+	var parts := id.split(":")
+	if parts.size() != 2:
+		return {}
+	var k := int(parts[0])
+	var rest := parts[1].split("#")[0].split("-")
+	if k < 0 or k >= slots.size() or rest.size() < 2 or not sets.has(rest[0]):
+		return {}
+	var r := clampi(int(rest[1]), 0, rar.size() - 1)
+	var mana := rest.size() > 2 and rest[2] == "m"
+	return make(k, rest[0], r, hero_lvl + r, mana, false, id)
+
+
+func item_at(k: int) -> Dictionary:
+	for it: Dictionary in bag[k]:
+		if str(it["id"]) == str(equipped[k]):
+			return it
+	return (bag[k] as Array)[0] if not (bag[k] as Array).is_empty() else {}
+
+
+func find(k: int, id: String) -> Dictionary:
+	for it: Dictionary in bag[k]:
+		if str(it["id"]) == id:
+			return it
+	return {}
+
+
+func set_count(key: String) -> int:
+	var n := 0
+	for k: int in slots.size():
+		if str(item_at(k).get("set", "")) == key:
+			n += 1
+	return n
+
+
+func req_level(it: Dictionary) -> int:
+	return maxi(1, int(it["lvl"]) - 5 + int(it["r"]))
+
+
+func fmt(key: String, v: float) -> String:
+	if bool((stats[key] as Dictionary).get("pct", false)):
+		return "+" + ("%.1f" % v).replace(".", ",") + " %"
+	return "+" + str(int(v))
+
+
+static func money(v: int) -> String:
+	var s := str(v)
+	var out := ""
+	while s.length() > 3:
+		out = " " + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return s + out
+
+
+func _lvl_mult(pct: bool, lvl: int) -> float:
+	return 1.0 + (0.02 if pct else 0.08) * (lvl - 1)
+
+
+func _roll(key: String, r: int, lvl: int, minor: bool) -> float:
+	var s: Dictionary = stats[key]
+	var v := _rng.randf_range(float(s["lo"]), float(s["hi"])) * float((rar[r] as Dictionary)["mult"]) \
+		* _lvl_mult(bool(s.get("pct", false)), lvl) * (float(d.get("minor", 0.45)) if minor else 1.0)
+	return roundf(v * 10.0) / 10.0 if bool(s.get("pct", false)) else maxf(1.0, roundf(v))
+
+
+func _scale(key: String, v: float, m: float) -> float:
+	return roundf(v * m * 10.0) / 10.0 if bool((stats[key] as Dictionary).get("pct", false)) else roundf(v * m)
+
+
+func _shuffle(a: Array) -> Array:
+	for i: int in range(a.size() - 1, 0, -1):
+		var j := _rng.randi_range(0, i)
+		var t: Variant = a[i]
+		a[i] = a[j]
+		a[j] = t
+	return a
+
+
+func make(k: int, set_key: String, r: int, lvl: int, mana: bool, force_stack: bool, id: String) -> Dictionary:
+	_rng.seed = hash(id + "|" + str(k))
+	var slot: Dictionary = slots[k]
+	var R: Dictionary = rar[r]
+	var mains: Array = _shuffle((slot["main"] as Array).duplicate()).slice(0, int(R["main"]))
+	var main: Array = []
+	for key: String in mains:
+		main.append({"key": key, "v": _roll(key, r, lvl, false)})
+	var w: Dictionary = slot.get("w", {})
+	var pool: Array = []
+	for key: String in order:
+		if not mains.has(key):
+			pool.append({"key": key, "w": float(d.get("minor_w", 0.6)) if bool((stats[key] as Dictionary).get("main", false)) else float(w.get(key, 1.0))})
+	var extra: Array = []
+	for i: int in int(R["extra"]):
+		if pool.is_empty():
+			break
+		var total := 0.0
+		for p: Dictionary in pool:
+			total += float(p["w"])
+		var x := _rng.randf() * total
+		var pick: Dictionary = pool[pool.size() - 1]
+		for p: Dictionary in pool:
+			x -= float(p["w"])
+			if x <= 0.0:
+				pick = p
+				break
+		pool.erase(pick)
+		var minor := bool((stats[pick["key"]] as Dictionary).get("main", false))
+		extra.append({"key": pick["key"], "minor": minor})
+	for e: Dictionary in extra:
+		e["v"] = _roll(str(e["key"]), r, lvl, bool(e["minor"]))
+	var idx: Array = []
+	for i: int in extra.size():
+		idx.append(i)
+	_shuffle(idx)
+	var boosted: Array = idx.slice(0, int(R["guar"]))
+	for i: int in idx.slice(int(R["guar"]), int(R["guar"]) + int(R["rnd"])):
+		if _rng.randf() < float(R["chance"]):
+			boosted.append(i)
+	for i: int in boosted:
+		var e: Dictionary = extra[i]
+		e["boost"] = true
+		e["v"] = _scale(str(e["key"]), float(e["v"]), float(R["boost"]))
+	if mana:                                              # пропитано маной: +1 основной стат, 1 доп. стат ×5
+		var mm: Dictionary = d.get("mana", {})
+		var more: Array = []
+		for key: String in (slot["main"] if (slot["main"] as Array).size() > mains.size() else ["atk", "arm", "hp", "ha"]):
+			if not mains.has(key):
+				more.append(key)
+		if not more.is_empty():
+			var key: String = more[_rng.randi_range(0, more.size() - 1)]
+			main.append({"key": key, "v": _roll(key, r, lvl, false), "mana_main": true})
+		var keep: Array = []
+		for e: Dictionary in extra:
+			var dup := false
+			for m: Dictionary in main:
+				if m["key"] == e["key"]:
+					dup = true
+			if not dup:
+				keep.append(e)
+		extra = keep
+		var glow: Array = extra.filter(func(e: Dictionary) -> bool: return bool(e.get("boost", false)))
+		var plain: Array = extra.filter(func(e: Dictionary) -> bool: return not bool(e.get("boost", false)))
+		var from: Array = glow if (force_stack or _rng.randf() < float(mm.get("stack", 0.08))) and not glow.is_empty() else (plain if not plain.is_empty() else glow)
+		if not from.is_empty():
+			var e: Dictionary = from[_rng.randi_range(0, from.size() - 1)]
+			e["mana"] = true
+			e["v"] = _scale(str(e["key"]), float(e["v"]), float(mm.get("mult", 5)))
+	extra.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return order.find(a["key"]) < order.find(b["key"]))
+	if str(slot["key"]) == "cloak":                     # пассив Тянь Лун: статы плаща ×1,5
+		var cm := float((d.get("passive", {}) as Dictionary).get("cloak", 1.5))
+		for e: Dictionary in main + extra:
+			e["base"] = e["v"]
+			e["hero"] = true
+			e["v"] = _scale(str(e["key"]), float(e["v"]), cm)
+	var price_base: Array = d.get("price", [20])
+	var raw := float(price_base[r]) * (1.0 + 0.05 * (lvl - 1)) * (1.0 + 0.12 * boosted.size()) * (4.0 if mana else 1.0) * _rng.randf_range(0.9, 1.15)
+	var step := float((d.get("price_step", [1]) as Array)[r])
+	var price := maxi(int((d.get("price_min", [1]) as Array)[r]), int(roundf(raw / step) * step))
+	var names: Array = (sets[set_key] as Dictionary).get("names", [])
+	return {"id": id, "slot": k, "set": set_key, "r": r, "lvl": lvl, "name": str(names[k]) if k < names.size() else str(slot["type"]),
+		"main": main, "extra": extra, "price": price, "mana": mana}
+
+
+## Ячейка листа предметов: прямоугольник иконки вещи (слот k, редкость r) в листе сета.
+func cell(set_key: String, k: int, r: int) -> Rect2:
+	var S: Dictionary = sets[set_key]
+	var c: Array = (S["cols"] as Array)[r]
+	var row: Array = (S["rows"] as Array)[k]
+	return Rect2(float(c[0]), float(row[0]), float(c[1]) - float(c[0]), float(row[1]) - float(row[0]))

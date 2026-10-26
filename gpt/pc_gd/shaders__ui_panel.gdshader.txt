@@ -1,0 +1,49 @@
+// Панель интерфейса «Сакура и сталь» (инвентарь, HUD): тёмный лак с зерном и разводами кисти, по краю — двойная
+// золотая рамка с уголками-скобами; selected — розовое свечение изнутри, empty — пунктирная рамка пустого слота.
+// px — размер панели в пикселях макета (для толщины линий; ставит inventory.gd при изменении размера).
+shader_type canvas_item;
+
+uniform vec4 ink : source_color = vec4(0.05, 0.06, 0.15, 0.94);
+uniform vec4 edge : source_color = vec4(0.86, 0.66, 0.34, 0.85);
+uniform vec4 glow : source_color = vec4(1.0, 0.55, 0.78, 1.0);
+uniform vec2 px = vec2(300.0, 100.0);
+uniform float selected = 0.0;
+uniform float empty = 0.0;
+uniform float corner = 16.0;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p), f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+}
+
+void fragment() {
+	vec2 p = UV * px;
+	// лак: зерно, горизонтальные разводы кисти, лёгкий блик сверху
+	float grain = noise(p * 0.35) * 0.35 + noise(p * 1.7) * 0.15;
+	float brush = noise(vec2(p.x * 0.012, p.y * 0.22)) * 0.5;
+	vec3 col = ink.rgb * (0.82 + grain * 0.5 + brush * 0.25);
+	col += vec3(0.05, 0.05, 0.1) * (1.0 - smoothstep(0.0, 0.5, UV.y));
+	float a = ink.a * (empty > 0.5 ? 0.35 : 1.0);
+	// расстояние до края
+	vec2 q = min(p, px - p);
+	float d = min(q.x, q.y);
+	// двойная рамка: внешняя линия у края, внутренняя тонкая чуть глубже
+	float l1 = 1.0 - smoothstep(0.0, 1.6, abs(d - 1.5));
+	float l2 = 1.0 - smoothstep(0.0, 1.0, abs(d - 6.0));
+	if (empty > 0.5) {                                   // пустой слот — пунктир
+		float t = (q.x < q.y) ? p.y : p.x;
+		l1 *= step(0.5, fract(t / 10.0));
+		l2 = 0.0;
+	}
+	// уголки-скобы: толще в углах
+	float cb = step(q.x, corner) * step(q.y, corner);
+	float bracket = cb * (1.0 - smoothstep(0.0, 1.2, min(abs(q.x - 3.0), abs(q.y - 3.0)) - 0.6));
+	float line = max(max(l1, l2 * 0.55), bracket);
+	col = mix(col, edge.rgb * (0.85 + 0.3 * noise(p * 0.5)), line * edge.a);
+	a = max(a, line * edge.a);
+	// выбранный — розовое свечение от рамки внутрь
+	col += glow.rgb * selected * exp(-d / 14.0) * 0.55;
+	COLOR = vec4(col, a);
+}

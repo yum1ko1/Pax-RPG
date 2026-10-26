@@ -1,0 +1,59 @@
+extends RefCounted
+## Мини-задание жителя (одно за раз): житель (talk.gd, манера/слова «задание») просит найти потерянную вещь в лесу у
+## своего города. Задание — запись в настройках мода «quest»: кто дал (город, номер жителя, имя), что найти, зерно леса
+## (forest.gd), где точка на глобусе, состояние active → found → (сдано: запись стёрта, точка и лес исчезают).
+## Отношения жителей к герою — «npc_rel» (город → номер жителя → 0..100): переживают выход из города.
+
+const ITEMS := ["amulet", "pouch", "dagger", "lamp", "ring", "scroll"]
+
+
+static func get_q(mod: PaxMod) -> Dictionary:
+	var q: Variant = mod.get_setting("quest", {})
+	return q if q is Dictionary else {}
+
+
+static func active(mod: PaxMod) -> bool:
+	return not get_q(mod).is_empty()
+
+
+## Новое задание от жителя: вещь, зерно леса, точка на глобусе рядом с городом (lat/lon города + сдвиг).
+static func give(mod: PaxMod, city: Dictionary, npc_index: int, npc_name: String) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var q := {
+		"city": str(city.get("id", "")), "npc": npc_index, "npc_name": npc_name,
+		"item": ITEMS[rng.randi() % ITEMS.size()], "seed": rng.randi(), "state": "active", "goblins": 2,
+		"lat": float(city.get("lat", 0.0)) + rng.randf_range(1.2, 2.0) * (1.0 if rng.randf() < 0.5 else -1.0),
+		"lon": float(city.get("lon", 0.0)) + rng.randf_range(1.2, 2.0) * (1.0 if rng.randf() < 0.5 else -1.0),
+	}
+	mod.set_setting("quest", q)
+	return q
+
+
+static func found(mod: PaxMod) -> void:
+	var q := get_q(mod)
+	if q.is_empty():
+		return
+	q["state"] = "found"
+	mod.set_setting("quest", q)
+
+
+## Сдано: запись стёрта — точка на глобусе и лес (он строится только по ней) пропадают.
+static func finish(mod: PaxMod) -> void:
+	mod.set_setting("quest", {})
+
+
+static func relation(mod: PaxMod, city: String, idx: int, def: int) -> int:
+	var all: Variant = mod.get_setting("npc_rel", {})
+	if all is Dictionary and (all as Dictionary).get(city, {}) is Dictionary:
+		return int(((all as Dictionary)[city] as Dictionary).get(str(idx), def))
+	return def
+
+
+static func set_relation(mod: PaxMod, city: String, idx: int, v: int) -> void:
+	var all: Variant = mod.get_setting("npc_rel", {})
+	var d: Dictionary = all if all is Dictionary else {}
+	var c: Dictionary = d.get(city, {}) if d.get(city, {}) is Dictionary else {}
+	c[str(idx)] = v
+	d[city] = c
+	mod.set_setting("npc_rel", d)
