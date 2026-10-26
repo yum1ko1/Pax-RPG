@@ -1,0 +1,5 @@
+Game HUD UI element for an East Asian fantasy action RPG (Yuruma). Current HUD theme: crimson and antique gold,
+ornate baroque frame work with carved roses and leaves, engraved dark gold metal with worn highlights, deep crimson
+lacquer or velvet accents, thin black inner channels. Orthographic flat front view, no perspective, symmetric where
+sensible, crisp clean silhouette that reads at small size, no characters, no text, no numbers, no letters, no icons
+inside. Empty dark inner channels or windows where bars, portraits or icons will be placed by the game.

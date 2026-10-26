@@ -1262,6 +1262,335 @@ items[:] = [i for i in items if not ("m" in i and i["m"].split("/")[-1][:-4] in 
                                         and 54.5 < i["p"][2] < 60.5 and abs(i["p"][0]) > 5.2)]   # устье переулка свободно
 
 
+# ===================== Улица Мастеров v2: столичная ремесленная улица (референс GPT: masters_shot, masters_plan) =====
+# Было: грунтовка 3.4 м и редкие дома с огородами — деревня. Стало: мощёная улица 10 м от арки-пайфана (у Аллеи) до
+# стены, сплошные ряды домов-мастерских вплотную (фасады к улице, крыши разной высоты), у каждого — открытая лавка
+# по ремеслу (кожевник, гончар, пивовар, плотник, оружейник), вывеска на кронштейне, занавес, окна; через улицу —
+# гирлянды; посередине — площадь с колодцем на перекрёстке с переулком (таверна ↔ задворки). За домами юга — дворы.
+# Старая раскладка (districts()) строится как прежде — от неё зависят случайные числа остального города; её предметы
+# в прямоугольнике MASTERS здесь снимаются. Своё случайное — mrng: город вне улицы не меняется.
+MASTERS = (15.6, 91.0, 42.6, 83.0)                      # x0, x1, z0, z1 — что внутри, строится заново
+M_N, M_S = 52.5, 62.5                                    # линии фасадов (север, юг): улица 10 м, ось z 57.5
+M_SQ = (55.0, 48.0, 62.0)                                # площадь колодца: ось переулка x 55, края x 48…62
+M_ROWS = [(21.0, 47.6), (62.4, 90.4)]                   # отрезки рядов домов (запад, восток от площади)
+M_HOUSES = ["@house_stone_c", "@house_bal_a", "@house_tall", "@house_stone_a", "@house_bal_c", "@house_stone_d",
+            "@house_bal_b", "@house_tall", "@house_stone_b"]
+M_CRAFTS = [  # ремесло: витрина у фасада, вывеска (иероглиф, подпись), иероглиф кронштейна
+    ("tannery", ("革", "Кожевня"), "革"), ("potter", ("陶", "Гончарня"), "陶"), ("brewer", ("酒", "Кумыс и брага"), "酒"),
+    ("carpenter", ("木", "Плотник"), "木"), ("armorer", ("武", "Оружейник"), "武"), ("weaver", ("布", "Ткани"), "布")]
+mrng = random.Random(5757)
+_has = lambda m: os.path.exists(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", m + ".glb"))
+FOOT["house_tall"] = (3.83, 3.81)                     # трёхэтажная мастерская (Meshy, 7.65 × 7.62 × 13 м)
+PLAZA_SV, PLAZA_Y, PLAZA_TOP = 0.6, -0.19, 0.42          # мощение Meshy толщиной 0.4 м: сжато и утоплено, подиум 0.42 м
+
+
+def _in_masters(it):
+    p = it.get("p")
+    return p is not None and MASTERS[0] <= p[0] <= MASTERS[1] and MASTERS[2] <= p[2] <= MASTERS[3] \
+        and "palisade" not in it.get("m", "")
+
+
+items[:] = [i for i in items if not _in_masters(i)]
+_inside = lambda sh: sh[0] == "rect" and sh[1] >= MASTERS[0] - 1 and sh[2] <= MASTERS[1] + 1 and sh[3] >= MASTERS[2] - 1 \
+    and sh[4] <= MASTERS[3] + 1
+TRAILS[:] = [t for t in TRAILS if not _inside(t)]       # дворы старых участков
+ROADS[:] = [r for r in ROADS if r != ("rect", 5, 88, 55.8, 59.2)]
+ROADS.extend([("rect", MASTERS[0] - 0.6, 90.6, M_N, M_S), ("rect", M_SQ[1], M_SQ[2], M_N - 2.0, M_S + 2.0),
+              ("rect", 5, MASTERS[0], 55.8, 59.2)])     # улица, площадь, связка с переулком Аллеи
+TRAILS.append(("rect", 53.4, 56.6, M_S, 80.0))          # переулок на задворки юга
+
+
+def masters_street():
+    houses = []                                          # (x центра, сторона −1 север / +1 юг, полуширина, модель)
+    k = 0
+    for x0, x1 in M_ROWS:
+        for side in (-1, 1):
+            seg, row = x1 - x0, []
+            while True:                                  # дома вплотную: добавляем, пока ряд не длиннее отрезка / 0.9
+                m = M_HOUSES[k % len(M_HOUSES)]
+                if not _has(m.lstrip("@")):
+                    k += 1
+                    continue
+                w_ = sum(2 * FOOT[q.lstrip("@")][0] for q in row) + 2 * FOOT[m.lstrip("@")][0]
+                if w_ > seg / 0.9:
+                    break
+                row.append(m)
+                k += 1
+            tot = sum(2 * FOOT[q.lstrip("@")][0] for q in row)
+            sc = min(1.0, seg / tot)
+            gap = (seg - tot * sc) / max(1, len(row) - 1)
+            x = x0
+            for j, m in enumerate(row):
+                hx, hz = FOOT[m.lstrip("@")][0] * sc, FOOT[m.lstrip("@")][1] * sc
+                xc = x + hx
+                zc = M_N - hz if side < 0 else M_S + hz
+                add(m, xc, zc, 0 if side < 0 else 180, s=round(sc, 3), c=True)
+                if (j + (side > 0)) % 2 and "tall" not in m:   # неровная линия крыш: каждый второй — выше
+                    items[-1]["sv"] = [1.0, 1.16, 1.0]
+                houses.append((xc, side, hx, m))
+                x += 2 * hx + gap
+                if j < len(row) - 1 and gap > 0.5:       # щель между домами — каменная стена в рост, за ней не видно
+                    box([gap + 0.4, 3.0, 0.5], round(x - gap / 2, 2), 1.5, (M_N - 0.6) if side < 0 else (M_S + 0.6),
+                        "stone_dark", c=True)
+    # тротуары и бордюры: мостовая проезжей части — маска дорог, тротуар — светлая плита у фасадов
+    for x0, x1 in M_ROWS:
+        for side in (-1, 1):
+            zf = M_N if side < 0 else M_S
+            box([x1 - x0, 0.06, 1.8], round((x0 + x1) / 2, 2), 0.03, zf - side * 0.9, "stone_cut", c=False)
+            box([x1 - x0, 0.14, 0.25], round((x0 + x1) / 2, 2), 0.07, zf - side * 1.9, "stone_dark", c=False)
+    yaw = lambda side: 0 if side < 0 else 180            # лицом к улице
+    occ = [(21.4, 53.5, 0.7), (21.4, 61.5, 0.7)]           # занятое на тротуарах: (x, z, радиус); жаровни у арки
+
+    def take(m, x, z, r, rad, force=False, **kw):        # поставить, если место у фасада свободно (force — всегда)
+        if not force and any(math.hypot(x - ox, z - oz) < rad + orad for ox, oz, orad in occ):
+            return False
+        occ.append((x, z, rad))
+        add(m, x, z, r, **kw)
+        return True
+    pick = lambda m, alt: m if _has(m if m.startswith("@") else "props/" + m) else alt
+    pot = pick("potted_shrub", None)
+    for (x1_, s1_, h1_, _), (x2_, s2_, h2_, _) in zip(houses, houses[1:]):   # в стыках домов — фонари и знамёна
+        if s1_ != s2_ or x2_ - x1_ > h1_ + h2_ + 1.5:
+            continue
+        xj, zf = (x1_ + h1_ + x2_ - h2_) / 2, (M_N if s1_ < 0 else M_S)
+        add("stone_lantern", xj, zf - s1_ * 1.75, yaw(s1_), c=True)
+        add("banner_clan", xj, zf - s1_ * 0.25, yaw(s1_), s=1.15, c=True)
+        occ.extend([(xj, zf - s1_ * 1.75, 0.5), (xj, zf - s1_ * 0.25, 0.5)])
+    for i, (xc, side, hx, m) in enumerate(houses):
+        craft, sign, glyph = M_CRAFTS[i % len(M_CRAFTS)]
+        zf = M_N if side < 0 else M_S
+        zw = zf - side * 1.0                              # витрина — на тротуаре у стены
+        occ += [(xc + 2.9, zf - side * 1.4, 0.5), (xc + 0.2, zf - side * 0.6, 0.7)]   # вывеска, проход в дверь
+        if i % 3 == 1:
+            occ.append((xc - 0.4, zf - side * 1.3, 0.4))   # зазывала
+        Z = lambda d: zf - side * d                      # d — отступ от линии фасада к улице
+        R = yaw(side)
+        if craft == "tannery":                            # высокая рама со шкурами — без навеса
+            take("@hide_frame", xc - 1.2, zw, R, 1.2, force=True, c=True)
+            if i % 2:
+                take("@spear_rack", xc + 2.0, Z(0.9), R, 0.9, s=0.8, force=True, c=True)
+        elif craft == "potter":
+            take("pottery_stand" if _has("props/pottery_stand") else "@market_stall_hide", xc - 1.2, zw, R, 1.2,
+                 force=True, c=True)
+            take(pick("jar_cluster", "basket"), xc + 2.0, Z(0.6), R + mrng.uniform(-30, 30), 0.7, force=True, c=True)
+        elif craft == "brewer":
+            for j in range(3):
+                take("barrel_kumis", xc - 2.2 + j * 0.95, Z(0.9), mrng.uniform(0, 360), 0.45, force=True, c=True)
+            take("table_long", xc + 1.6, Z(0.4), R + 90, 0.8, s=0.8, force=True, c=True)
+        elif craft == "carpenter":
+            take("wood_pile", xc - 1.6, zw, R, 1.0, force=True, c=True)
+            take("cart", xc + 1.8, Z(0.8), R, 0.9, s=0.7, force=True, c=True)
+        elif craft == "armorer":                          # оружейная лавка: щиты у стены, стол с клинками, копья
+            take(pick("shield_stand", "weapon_rack"), xc - 1.4, Z(0.45), R, 1.0, force=True, c=True)
+            if _has("props/weapon_table"):
+                take("weapon_table", xc - 1.4, Z(1.35), R, 0.9, force=True, c=True)
+            take("@spear_rack", xc + 1.9, Z(0.6), R, 0.9, force=True, c=True)
+        else:
+            take(pick("cloth_rack", "@market_stall_hide"), xc - 1.0, zw, R, 1.1, force=True, c=True)
+            if _has("props/cloth_pile"):
+                take("cloth_pile", xc + 2.1, Z(0.55), R, 0.8, force=True, c=True)
+        if craft not in ("tannery",):                     # красный навес над товаром, как на референсе
+            take("awning", xc - 1.25, Z(1.2), R, 0.1, force=True, c=False)
+        items.append({"sign": list(sign), "p": [round(xc + 2.9, 2), 0.0, round(zf - side * 1.4, 2)], "r": yaw(side),
+                      "c": True})
+        proxy("noren", xc + 0.2, 0.0, zf - side * 0.1, yaw(side), c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])
+        proxy("hang_sign", xc - hx + 1.4, 0.0, zf - side * 0.5, yaw(side), glyph=glyph)
+        tall = "tall" in m                                # окна — свои у моделей: фасад отступает от линии габарита,
+                                                          # заглушка окна на линии повисла бы в воздухе
+        if i % 2 == 0:
+            proxy("smoke", xc + 1.5, 13.4 if tall else 7.2, zf + side * 5.0)
+        # у двери — зелень: кадка с кустом, куст в бочке, цветы в горшке
+        greens = [g for g in (pot, pick("tub_plant", None), pick("flower_pot", None)) if g]
+        for dx in ((1.2, -0.75) if greens else ()):
+            take(mrng.choice(greens), xc + 0.2 + dx, Z(0.4), mrng.uniform(0, 360), 0.35, s=mrng.uniform(0.85, 1.0),
+                 c=True)
+        # остальное у стены и перед товаром — мелкий товар и тара, сколько встанет (как на референсе — без пустот)
+        small = [q for q in ("fruit_basket", "jar_cluster", "flower_pot") if _has("props/" + q)] + \
+            ["basket", "sack_grain", "crate", "barrel_water", "@bucket_set", "crate_saerith"]
+        rad_of = {"fruit_basket": 0.5, "jar_cluster": 0.65, "flower_pot": 0.3, "crate": 0.4, "crate_saerith": 0.4,
+                  "basket": 0.3, "sack_grain": 0.3, "barrel_water": 0.4, "@bucket_set": 0.4}
+        wt = {"fruit_basket": 4, "jar_cluster": 3, "flower_pot": 1.5, "basket": 1, "sack_grain": 1, "crate": 1,
+              "barrel_water": 1, "@bucket_set": 0.5, "crate_saerith": 0.5}
+        low = ("fruit_basket", "jar_cluster", "basket", "sack_grain", "flower_pot")
+        for x in [xc - hx + 0.5 + k * 0.7 for k in range(int((2 * hx - 1.0) / 0.7) + 1)]:
+            for d in (0.4, 1.55):
+                pool = [q for q in small if d < 1 or q in low]
+                order = sorted(pool, key=lambda q: -wt[q] * mrng.random())   # чаще — фрукты, кувшины, цветы
+                for q in order:                            # первое, что встанет
+                    if take(q, x + mrng.uniform(-0.15, 0.15), Z(d), mrng.uniform(0, 360), rad_of[q],
+                            s=1.0 if q in ("fruit_basket", "jar_cluster", "flower_pot") else mrng.uniform(0.75, 0.95),
+                            c=True):
+                        break
+        for bx in (xc - hx + 0.5, xc + hx - 0.5):          # полотнища со знаком клана под карнизом, по краям фасада
+            proxy("banner_x", bx, 4.7, Z(0.5), 0, ln=1.5, c2=(0, 1, 3)[(i + int(bx)) % 3])
+        # бумажные фонари под карнизом вдоль фасада
+        items.append({"lanterns": [round(xc - hx + 0.7, 2), round(zf - side * 0.35, 2), round(xc + hx - 0.7, 2),
+                                   round(zf - side * 0.35, 2), 3.3, 0, 0], "seed": int(xc * 7 + side), "p": [xc, 0, zf],
+                      "c": False})
+        for j in range(3):                                 # сорная трава у цоколя
+            add("grass_tuft", xc + mrng.uniform(-hx, hx), zf - side * 0.15, mrng.uniform(0, 360),
+                s=mrng.uniform(0.5, 0.8), c=False)
+        if i % 3 == 1:                                     # прохожий у лавки и зазывала
+            proxy("crier", xc - 0.4, 0, zf - side * 1.3, yaw(side))
+    # гирлянды фонарей через улицу на высоте второго этажа: свет — у каждой второй
+    for k, x in enumerate([24.0, 31.0, 38.0, 45.0, 65.0, 72.0, 79.0, 86.0]):
+        items.append({"lanterns": [x, M_N + 0.3, x + 0.6, M_S - 0.3, (5.8, 6.1, 5.6, 6.0)[k % 4], 1 if k % 2 == 0 else 0, 0],
+                      "seed": int(x * 11 + k), "p": [x, 0, 57.5], "c": False})
+    for x in range(22, 90, 3):                            # мусор у бордюров: щепки, черепки, солома
+        for side in (-1, 1):
+            if M_SQ[1] - 1 < x < M_SQ[2] + 1 or mrng.random() > 0.6:
+                continue
+            proxy("debris", x + mrng.uniform(-1.0, 1.0), 0, (M_N if side < 0 else M_S) - side * mrng.uniform(2.0, 2.4),
+                  mrng.uniform(0, 360), n=mrng.randint(4, 8))
+    proxy("ruts", 54.0, 0, 57.5, 90, len=60)              # колеи повозок вдоль улицы
+    # вход с Аллеи: арка-пайфан (13 м, ×0.85), коллизия — только четыре столба, проход свободен
+    add("@central/paifang_gate", 18.4, 57.5, 90, s=0.85, c=True)
+    items[-1]["col"] = [[1.0, 6.0, 1.0, px, 3.0, 0.0] for px in (-5.0, -2.3, 2.3, 5.0)]
+    for side in (-1, 1):
+        add("@brazier_tusk", 21.4, 57.5 + side * 4.0, 0, s=0.8, c=True)
+        items.append({"brazier": True, "p": [21.4, 0.0, 57.5 + side * 4.0], "c": False})
+        zb = 57.5 + side * 4.0                             # у жаровен внутри арки — зелень и товар, сколько встанет
+        for q, x, d in (("tub_plant", 19.8, 0.0), ("flower_pot", 22.4, 0.5), ("fruit_basket", 22.6, -0.6),
+                        ("jar_cluster", 20.2, 1.1)):
+            if _has("props/" + q):
+                take(q, x, zb + side * d, mrng.uniform(0, 360), 0.45, c=True)
+    # площадь колодца по референсу GPT (square_ref): круглое мощение кольцами, колодец на подиуме со ступенью, четыре
+    # изогнутые каменные скамьи по диагоналям, корыто с вёдрами, сакуры в каменных кадках по противоположным углам,
+    # придорожный алтарь с курильницей, тотем на постаменте у начала переулка. Кольцо радиусом ~4.6 — тропа прохожих
+    cx, cz = M_SQ[0], 57.5
+    if _has("props/plaza_disc"):
+        add("plaza_disc", cx, cz, 0, c=False, y=PLAZA_Y)
+        items[-1]["sv"] = [1.0, PLAZA_SV, 1.0]
+        well_y = PLAZA_TOP
+    else:
+        box([M_SQ[2] - M_SQ[1], 0.05, M_S - M_N + 3.0], cx, 0.025, cz, "stone_cut", c=False)
+        well_y = 0.0
+    add("@well_stone" if _has("well_stone") else "trough", cx, cz, 0, c=True, y=well_y)
+    bench = pick("bench_curved", "bench_long")
+    for k in range(4):                                       # скамьи по диагоналям, выпуклостью наружу
+        a_ = math.radians(45 + 90 * k)
+        add(bench, cx + 3.4 * math.cos(a_), cz + 3.4 * math.sin(a_), (90 - (45 + 90 * k)) % 360, c=True)   # +Z модели — выпуклость
+    add("trough", cx + 2.9, cz, 90, c=True)                  # корыто к востоку от колодца, за ступенью подиума
+    def nat(n, x, z, s_, y=0.0):                              # трава и цветы из набора природы (models/nature)
+        items.append({"m": "models/nature/%s.glb" % n, "p": [round(x, 2), round(y + 0.02, 2), round(z, 2)],
+                      "r": round(mrng.uniform(0, 360), 1), "s": round(s_, 2), "c": False})
+    # сакуры в каменных кадках — в углах карманов за линией фасадов (северо-запад, юго-восток), улицу и переулок не перекрывают
+    for (px, pz) in ((cx - 5.6, M_N - 1.3), (cx + 5.6, M_S + 1.3)):
+        box([2.2, 0.6, 2.2], px, 0.3, pz, "stone_dark", c=True)
+        add("@central/sakura_young", px, pz, mrng.uniform(0, 360), s=0.75, c=True, y=0.6)
+        items[-1]["col"] = [0.5, 3.0, 0.5]
+        for k in range(5):                                   # цветы и листва в кадке вокруг ствола
+            a_ = math.radians(30 + 72 * k)
+            nat(("plant_flower", "plant_cover_1", "plant_flower", "plant_leaf", "plant_flower")[k],
+                px + 0.72 * math.cos(a_), pz + 0.72 * math.sin(a_), mrng.uniform(0.3, 0.42), y=0.6)
+        for k in range(4):                                   # трава у подножия кадки
+            a_ = math.radians(mrng.uniform(0, 360))
+            nat(mrng.choice(["grass_fresh", "grass_tall_low"]), px + 1.35 * math.cos(a_), pz + 1.35 * math.sin(a_),
+                mrng.uniform(0.9, 1.3))
+        proxy("petals", px + (1.6 if px < cx else -1.6), 0, pz + (1.2 if pz < cz else -1.2), 0)
+    shx, shz = cx - 2.9, M_N - 1.5                           # алтарь с курильницей — рядом с северо-западной сакурой
+    box([1.6, 0.5, 1.6], shx, 0.25, shz, "stone_cut", c=True)
+    add("@central/incense_ding", shx, shz, 45, s=0.5, c=False, y=0.5)
+    add(pick("potted_shrub", "flower_pot"), shx, shz - 1.25, mrng.uniform(0, 360), c=True)
+    for (dx, dz) in ((-0.95, 0.5), (0.2, 0.95), (-0.6, -0.9)):
+        nat(mrng.choice(["plant_flower", "grass_fresh"]), shx + dx, shz + dz, mrng.uniform(0.35, 0.9))
+    tx_, tz_ = cx + 2.8, M_S + 1.9                           # тотем — у начала переулка, на постаменте, лицом к колодцу
+    box([1.3, 0.35, 1.3], tx_, 0.175, tz_, "stone_dark", c=True)
+    add("@totem_pole", tx_, tz_, math.degrees(math.atan2(cx - tx_, cz - tz_)) % 360, c=True, y=0.35)
+    for k in range(6):                                       # трава и цветы у постамента
+        a_ = math.radians(15 + 60 * k + mrng.uniform(-12, 12))
+        nat("plant_flower" if k % 3 == 0 else mrng.choice(["grass_fresh", "grass_tall_low"]),
+            tx_ + 0.95 * math.cos(a_), tz_ + 0.95 * math.sin(a_), 0.38 if k % 3 == 0 else mrng.uniform(0.8, 1.1))
+    for (px, pz) in ((cx + 5.6, M_N - 1.4), (cx - 5.6, M_S + 1.3)):   # каменные фонари — в двух свободных углах карманов
+        add("stone_lantern", px, pz, 0, c=True)
+        for k in range(3):
+            a_ = math.radians(mrng.uniform(0, 360))
+            nat(mrng.choice(["grass_fresh", "grass_tall_low", "plant_flower"]), px + 0.7 * math.cos(a_),
+                pz + 0.7 * math.sin(a_), mrng.uniform(0.4, 0.9))
+    for (px, pz) in ((cx - 2.6, M_S + 1.2), (cx + 2.6, M_N - 0.9)):    # кадки с зеленью по сторонам переулков
+        add(pick("tub_plant", "potted_shrub"), px, pz, mrng.uniform(0, 360), c=True)
+    proxy("person", cx - 3.0, 0, cz + 1.2, 110)               # горожане у скамей
+    proxy("person", cx + 1.0, 0, cz - 3.0, 200)
+    # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
+    for i, (xc, side, hx, m) in enumerate(houses):
+        if side < 0:
+            continue
+        by = M_S + 2 * FOOT[m.lstrip("@")][1] + 3.2
+        if by > MASTERS[3] - 3:
+            continue
+        for fx in (-hx + 0.3, hx - 0.3):
+            add("fence_wood", xc + fx, by + 0.5, 90, c=True)
+        add("fence_wood", xc - 2.0, by + 2.7, 0, c=True)
+        add("fence_wood", xc + 2.1, by + 2.7, 0, c=True)
+        add(mrng.choice(["@hide_frame", "wood_pile", "hay_bale"]), xc - 1.8, by + 0.6, mrng.uniform(0, 360), c=True)
+        add(mrng.choice(["barrel_water", "@bucket_set", "crate"]), xc + 1.9, by + 0.4, mrng.uniform(0, 360), c=True)
+        items.append({"laundry": [round(xc - hx + 0.8, 2), round(by + 1.6, 2), round(xc + hx - 0.8, 2), round(by + 1.6, 2)],
+                      "seed": int(xc), "p": [xc, 0, by], "c": False})
+        # мастерский двор: грядка или поленница, навес-сарай под черепицей, сакура или телега
+        if _has("props/veg_bed") and i % 3 != 1:
+            add("veg_bed", xc - 1.8, by + 4.4, 0, c=True)
+        else:
+            add("wood_pile", xc - 1.8, by + 4.4, 90, c=True)
+        if i % 2 == 0:
+            add("@central/sakura_young", xc + 2.2, by + 6.4, mrng.uniform(0, 360), s=0.8, c=True)
+            items[-1]["col"] = [0.5, 3.0, 0.5]
+            add(mrng.choice(["@hide_frame", "barrel_kumis", "hay_bale"]), xc - 1.8, by + 7.0, mrng.uniform(0, 360), c=True)
+        elif _has("props/yard_shed"):
+            add("yard_shed", xc + 1.2, by + 6.6, 180, c=True)
+            add(mrng.choice(["cart", "@hay_wagon"]), xc - 2.0, by + 7.0, 90, c=True)
+        else:
+            add(mrng.choice(["stall_frame", "@hay_wagon", "cart"]), xc, by + 5.0, mrng.choice((0, 180)), c=True)
+    # по обе стороны переулка — общие огороды и двор кожевников за плетнём (на референсе — без пустыря)
+    for fz in (68.0, 72.0, 76.0):
+        add("fence_wood", 53.0, fz, 90, c=True)
+        add("fence_wood", 57.0, fz, 90, c=True)
+    if _has("props/veg_bed"):
+        for x in (49.4, 51.6):
+            for z in (67.6, 70.6, 73.6):
+                add("veg_bed", x, z, 90, c=True)
+        for z in (71.2, 74.2):
+            add("veg_bed", 58.6, z, 90, c=True)
+    add("@hide_frame", 50.4, 77.4, 0, c=True)
+    add("wood_pile", 50.6, 80.2, 0, c=True)
+    add("barrel_water", 52.2, 76.0, 0, c=True)
+    add("@bucket_set", 48.8, 76.2, 30, c=True)
+    if _has("props/yard_shed"):
+        add("yard_shed", 60.6, 67.6, 270, c=True)         # навес открыт к переулку
+    add("cart", 60.4, 77.6, 0, c=True)
+    add("hay_bale", 58.6, 78.0, 15, c=True)
+    add("crate", 61.4, 74.0, 20, c=True)
+    add("@central/sakura_young", 59.6, 81.0, 40, s=0.8, c=True)
+    items[-1]["col"] = [0.5, 3.0, 0.5]
+    add("ovoo_cairn", 55.0, 80.6, 0, c=True)              # конец переулка у стены: тур с лентами и туг
+    add("tug_banner", 57.0, 80.6, 0, c=True)
+    return houses
+
+
+M_HOUSES_PLACED = masters_street()
+# маршруты жителей шли через (55, 57.5) — теперь там колодец: обход севернее (вдоль улицы) и восточнее (переулок)
+_AROUND = {"ew": [[50.4, 57.5], [51.8, 54.3], [55.0, 52.9], [58.2, 54.3], [59.6, 57.5]],
+           "ns": [[55.0, 50.0], [55.0, 52.9], [58.2, 54.3], [59.6, 57.5], [58.2, 60.7], [55.0, 62.1], [55.0, 65.0]]}
+for pth in paths:
+    for i, q in enumerate(pth):
+        if q == [55, 57.5]:
+            a, b = pth[i - 1] if i else None, pth[i + 1] if i + 1 < len(pth) else None
+            ns = (a is not None and a[0] == 55) or (b is not None and b[0] == 55)
+            det = _AROUND["ns" if ns else "ew"]
+            if (a is not None and (a[1] > 57.5 if ns else a[0] > 55)):
+                det = det[::-1]
+            if ns and b is not None and b[0] < 55:                 # с переулка — на запад по улице
+                det = [[55.0, 50.0], [55.0, 52.9], [51.8, 54.3]]
+            pth[i:i + 1] = det
+            break
+paths += [[[19, 55.4], [50.4, 55.4], [51.8, 54.3], [55, 52.9], [58.2, 54.3], [59.6, 55.4], [89, 55.4]],   # вдоль лавок,
+          [[89, 59.6], [59.6, 59.6], [58.2, 60.7], [55, 62.1], [51.8, 60.7], [50.4, 59.6], [19, 59.6]]]  # площадь — по кольцу
+npcs += 4
+shots += [[[12, 2.2, 57.5], [60, 4, 57.5]],              # 13 Улица Мастеров от арки-пайфана
+          [[44, 3.0, 55.0], [56, 2.0, 58.5]],            # 14 площадь колодца
+          [[55, 30, 92], [55, 0, 57]],                   # 15 Улица Мастеров сверху
+          [[87, 2.4, 56.0], [66, 1.4, 57.0]],            # 16 восточный конец улицы: лавки на уровне глаз
+          [[44, 12, 88], [60, 0, 70]]]                   # 17 задворки юга и огороды у переулка
+
 CENTER_KEEP = ("central/", "stone_lantern", "tug_banner", "tusk_arch", "oath_tree", "ovoo_cairn", "flame_tree",
                "banner_clan", "bench_long", "spear_rack", "brazier_tusk", "hay_bale", "trough", "war_drum", "bucket_set",
                "khan_palace", "yurt_noble", "loot_pile")

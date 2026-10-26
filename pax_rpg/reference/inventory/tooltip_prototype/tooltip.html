@@ -1,0 +1,1433 @@
+<title>Подсказка предмета Pax RPG</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+SC:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&display=swap">
+<style>
+/* Макет: инвентарь игры во всю ширину, подсказка всплывает рядом со слотом и закрепляется при долгом наведении;
+   ниже — короткая справка по системе. Один тёмный мир игры (лак, багрянец, старое золото), без светлой темы. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0708;
+  --panel: #150d0e;
+  --panel-2: #1d1213;
+  --line: #3a2a1f;
+  --gold: #c9a35c;
+  --gold-dim: #7c6036;
+  --text: #ecdfcb;
+  --muted: #a39280;
+  --r0: #a4a4a4; --r1: #57c46b; --r2: #4f8dff; --r3: #b46fff; --r4: #f2b84b; --r5: #ff4436;
+  --pin: 1200ms;
+  --set: #4fd1b8;
+  --mana: #ff5fd0;
+  --font-display: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+  /* как пункты главного меню игры: Cinzel (латиница), кириллица — Cormorant SC; заглавные с разрядкой */
+  --font-caps: "Cinzel", "Cormorant SC", "Cormorant Garamond", Georgia, serif;
+  --font-body: "Cormorant Garamond", "Times New Roman", Georgia, serif;   /* шрифт меню игры (mods/pax_rpg/fonts/cormorant_garamond.ttf) */
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 16px; font-weight: 600;
+       font-size-adjust: ex-height .44; font-feature-settings: "lnum" 1; }
+.tt, .tt *, .menu, .menu *, .mini, .mini * { font-feature-settings: "lnum" 1, "tnum" 1 !important; }   /* сокращение font сбрасывает это свойство */   /* у Cormorant мелкие строчные — подравниваем к прежней читаемости */
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+        padding-block: 18px 40px; max-width: 1240px; margin: 0 auto; display: grid; gap: 18px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; margin: 0; letter-spacing: .02em; text-wrap: balance; }
+.lead { margin: 4px 0 0; color: var(--muted); max-width: 72ch; line-height: 1.45; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.bar label { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
+button, select { font: 500 14px var(--font-body); color: var(--text); background: var(--panel-2); border: 1px solid var(--gold-dim);
+                 border-radius: 3px; padding: 7px 12px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--gold); }
+button:focus-visible, select:focus-visible, input:focus-visible, .slot:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+input[type=range] { accent-color: var(--gold); width: 140px; }
+.lvl { font-variant-numeric: tabular-nums; color: var(--gold); min-width: 2ch; display: inline-block; }
+
+/* инвентарь */
+.ttHolder { position: relative; }
+.stage { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1536 / 1024; border: 1px solid var(--line);
+         background: #120a0b url("inventory.jpg") center / 100% 100% no-repeat; }
+.slot { position: absolute; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: default; }
+.slot:hover { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); }
+/* оружие: верхнее окно — основное, среднее — второе; слои поверх макета: серый фон и оружие, сверху — кружок, гнездо
+   навыка и перемычки, вырезанные с макета; герой в центре держит основное оружие */
+.wwin { position: absolute; z-index: 1; overflow: hidden; pointer-events: none; background: url("ui/wpn_bg_s.jpg") center / cover no-repeat;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, .55); }
+.wicon { position: absolute; inset: 3% 4%; background: center / contain no-repeat; transition: opacity 220ms ease-out, transform 320ms cubic-bezier(.22, 1, .36, 1); }
+.wk-spear { background-image: url("ui/wpn_spear_s.png"); }
+.wk-katana { background-image: url("ui/wpn_katana_s.png"); }
+.wwin.out .wicon { opacity: 0; transform: translateY(var(--dy)) scale(.96); transition: opacity 170ms ease-in, transform 170ms ease-in; }
+/* иконка приёма — внутри гнезда навыка (восьмиугольник со срезанными углами), поверх его тёмного дна, под золотой каймой */
+.wsk { position: absolute; z-index: 2; pointer-events: none; background: center / cover no-repeat; transition: opacity 220ms ease-out;
+       clip-path: polygon(11% 0, 89% 0, 100% 11%, 100% 89%, 89% 100%, 11% 100%, 0 89%, 0 11%); }
+.wsk.out { opacity: 0; transition: opacity 170ms ease-in; }
+.sk-sunset { background-image: url("ui/sk_sunset_s.jpg"); }
+.sk-vine { background-image: url("ui/sk_vine_s.jpg"); }
+.sk-moon { background-image: url("ui/sk_moon_s.jpg"); }
+.sk-iai { background-image: url("ui/sk_iai_s.jpg"); }
+.wui { position: absolute; z-index: 2; pointer-events: none; background: center / 100% 100% no-repeat; }
+.wui1 { background-image: url("ui/wui_1_s.png"); }
+.wui2 { background-image: url("ui/wui_2_s.png"); }
+.whero { position: absolute; z-index: 1; pointer-events: none; background: url("ui/hero_katana_s.jpg") center / 100% 100% no-repeat;
+         opacity: 0; transition: opacity 450ms ease-in-out; }
+.whero.on { opacity: 1; }
+.wslot { position: absolute; z-index: 3; background: transparent; border: 0; padding: 0; border-radius: 2px; cursor: pointer; }
+.wslot:hover, .wslot:focus-visible { box-shadow: inset 0 0 0 1px rgba(255, 236, 200, .55), 0 0 14px rgba(255, 220, 160, .25); outline: none; }
+.wslot .wtag { position: absolute; left: 6%; top: 4%; font: 600 10px var(--font-caps); letter-spacing: .12em; text-transform: uppercase;
+               color: var(--gold); text-shadow: 0 1px 3px #000, 0 0 6px #000; opacity: .9; }
+/* кнопка смены: медальон на перекладине между окнами, при смене поворачивается */
+.wswap { position: absolute; z-index: 4; width: 2.1%; aspect-ratio: 1; transform: translate(-50%, -50%); padding: 0; cursor: pointer;
+         border: 1.5px solid #d9b26a; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #3a2414, #120a0b 70%);
+         box-shadow: 0 0 0 2px rgba(10, 6, 7, .85), 0 0 10px rgba(255, 200, 120, .35); color: #f0cf8a; display: grid; place-items: center; }
+.wswap svg { width: 62%; height: 62%; transition: transform 420ms cubic-bezier(.22, 1, .36, 1); }
+.wswap:hover, .wswap:focus-visible { outline: none; border-color: #ffe3a6; box-shadow: 0 0 0 2px rgba(10, 6, 7, .85), 0 0 14px rgba(255, 210, 140, .7); }
+.wswap.turn svg { transform: rotate(180deg); }
+.mgrid.w2 { grid-template-columns: repeat(2, 1fr); }
+.mi.wmi { aspect-ratio: 3 / 4; --rc: var(--gold-dim); background: center / contain no-repeat, url("ui/wpn_bg_s.jpg") center / cover no-repeat; }
+.mi.wmi.wk-spear { background-image: url("ui/wpn_spear_s.png"), url("ui/wpn_bg_s.jpg"); }
+.mi.wmi.wk-katana { background-image: url("ui/wpn_katana_s.png"), url("ui/wpn_bg_s.jpg"); }
+.mi.wmi .wother { position: absolute; left: 4px; bottom: 4px; font: 600 9.5px var(--font-caps); letter-spacing: .08em; text-transform: uppercase;
+                  color: var(--gold); background: rgba(10, 6, 7, .8); padding: 1px 5px; border-radius: 1px; }
+.hint { position: absolute; left: 1.2%; bottom: 1.6%; font-size: 12px; color: var(--text); background: rgba(10, 6, 7, .72);
+        border: 1px solid var(--gold-dim); padding: 4px 9px; border-radius: 2px; pointer-events: none; }
+
+/* подсказка */
+.tt { position: absolute; z-index: 5; width: 316px; max-width: calc(100% - 16px); pointer-events: none;
+      border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
+      border-image: url("ui/frame_main_s.png") 70 70 48 75 fill / 52.8px 52.8px 36.2px 56.6px stretch;
+      filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7));
+      opacity: 0; transform: translateY(6px) scale(.975); transform-origin: var(--ox, 100%) 20%;
+      transition: opacity 110ms ease-in, transform 130ms ease-in, filter 300ms; }
+/* незакреплённое окно курсор не ловит: увёл мышь с вещи (в том числе на само окно) — окно пропадает;
+   курсор ловит только закреплённое (.tt.pinned) */
+.tt.show { opacity: 1; transform: none;
+           transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1), filter 300ms; }
+.tt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
+/* закреплённое: яркая кайма цвета редкости (--pg) вокруг всей рамки, мягко дышит; у вещи с маной — розовая */
+.tt { --pg: var(--rc); }
+.tt.mana { --pg: var(--mana); }
+/* цвет каймы — RGB-тройками (обычный sRGB плавно анимируется; цвет из color-mix в filter переключается рывком):
+   --pgc — цвет редкости, --pgl — он же, светлее на 20 % */
+.tt { --pgc: 201 163 92; --pgl: 212 181 125; }
+.tt[data-r="0"] { --pgc: 164 164 164; --pgl: 182 182 182; }
+.tt[data-r="1"] { --pgc: 87 196 107; --pgl: 121 208 137; }
+.tt[data-r="2"] { --pgc: 79 141 255; --pgl: 114 164 255; }
+.tt[data-r="3"] { --pgc: 180 111 255; --pgl: 195 140 255; }
+.tt[data-r="4"] { --pgc: 242 184 75; --pgl: 245 198 111; }
+.tt[data-r="5"] { --pgc: 255 68 54; --pgl: 255 105 94; }
+.tt.mana { --pgc: 255 95 208; --pgl: 255 127 217; }
+@keyframes pinGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgb(var(--pgl) / .95)) drop-shadow(0 0 14px rgb(var(--pgc) / .65)); }
+                     50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgb(var(--pgl) / 1)) drop-shadow(0 0 22px rgb(var(--pgc) / .9)); } }
+/* закрепление — кайма видна в тот же кадр (с половины силы) и за 0,15 с доходит до дыхания, без вспышки */
+@keyframes pinIn { from { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 2px rgb(var(--pgl) / .9)) drop-shadow(0 0 8px rgb(var(--pgc) / .45)); }
+                   to { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgb(var(--pgl) / .95)) drop-shadow(0 0 14px rgb(var(--pgc) / .65)); } }
+.tt .inner { margin: -30px -36px -18px -40px; position: relative; }   /* содержимое заходит под широкие уголки рамки */
+.tt .sweep { position: absolute; inset: -40px -40px -24px -44px; pointer-events: none; overflow: hidden; }
+.tt .sweep::before { content: ""; position: absolute; inset: -40% -60%; opacity: 0;
+                     background: linear-gradient(105deg, transparent 40%, color-mix(in srgb, var(--pg) 26%, transparent) 47%,
+                                 color-mix(in srgb, var(--pg) 30%, rgba(255, 255, 255, .22)) 50%, color-mix(in srgb, var(--pg) 26%, transparent) 53%, transparent 60%); }
+.tt.show .sweep::before { animation: sweep 900ms 40ms cubic-bezier(.3, .6, .2, 1) both; }
+.tt.pinned .sweep::before { animation: sweep 900ms 0ms ease-out both; opacity: .6; }
+@keyframes sweep { from { transform: translateX(-35%); opacity: 1; } to { transform: translateX(35%); opacity: 0; } }
+
+/* кольцо фиксации: гнездо нарисовано в рамке, поверх — заполняемое кольцо и печать */
+.pin { position: absolute; top: 3px; right: 5px; width: 23px; height: 23px; }   /* по центру гнезда рамки */
+.pin i { position: absolute; inset: -1px; background: center / contain no-repeat; }
+.pin .empty { background-image: url("ui/ring_empty_s.png"); }
+.pin .full { background-image: url("ui/ring_full_s.png"); --p: 0deg;
+             -webkit-mask: conic-gradient(#000 var(--p), transparent 0); mask: conic-gradient(#000 var(--p), transparent 0); }
+@property --p { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.tt.arming .pin .full { animation: arm var(--pin) linear forwards; }
+@keyframes arm { from { --p: 0deg; } to { --p: 360deg; } }
+.pin .seal { background-image: url("ui/ring_seal_s.png"); transform: scale(.4); opacity: 0; transition: transform 240ms cubic-bezier(.3, 1.6, .5, 1), opacity 120ms; }
+.tt.pinned .pin .full { --p: 360deg; }
+.tt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
+
+.tt header { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; padding: 14px 0 10px 4px; position: relative;
+             background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--rc) 22%, transparent), transparent 60%); }
+.slotArt { position: absolute; inset: 0; pointer-events: none; background: #120a0b no-repeat; border-radius: 2px;
+           box-shadow: inset 0 0 0 2px var(--rc), inset 0 0 12px color-mix(in srgb, var(--rc) 55%, transparent); }
+.icon { width: 64px; height: 66px; border: 1px solid var(--rc); box-shadow: 0 0 10px color-mix(in srgb, var(--rc) 45%, transparent);
+        background-color: #120a0b; background-repeat: no-repeat; border-radius: 2px; }
+.name { font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.1; color: var(--rc); margin: 0;
+        text-shadow: 0 0 12px color-mix(in srgb, var(--rc) 40%, transparent); text-wrap: balance; }
+/* шапка: тип со значком слота и уровень, ниже — плашка редкости */
+/* цена — рамка с монетой игры в правом верхнем углу, под кольцом фиксации */
+.price { align-self: start; margin-top: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 4px; white-space: nowrap;
+         border: 1px solid var(--gold-dim); border-radius: 2px; background: linear-gradient(180deg, #24170f, #140c0a);
+         box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), 0 0 8px rgba(201, 163, 92, .15); }
+.price .coin { width: 22px; height: 22px; flex: none; }
+.price b { font: 600 15px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(243, 213, 140, .3); }
+/* тип вещи — своя полоса под шапкой: значок слота в рамке, название и категория, справа уровень */
+.kind { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px;
+        border: 1px solid rgba(201, 163, 92, .28); border-radius: 2px;
+        background: linear-gradient(90deg, rgba(201, 163, 92, .1), rgba(201, 163, 92, .02) 70%); }
+.kind .kt { width: 40px; height: 40px; background: center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6)); }
+.kind .kn { display: grid; line-height: 1.15; }
+.kind .kn b { font: 700 15px var(--font-body); color: var(--text); letter-spacing: .02em; }
+.kind .kn small { font-size: 12px; color: var(--muted); }
+/* плашка уровня: края и ромб по центру — без растяжения, тянется только середина */
+.lvlp { display: flex; align-items: center; justify-content: space-between; white-space: nowrap; height: 34px; margin: 0 0 8px; padding: 0 30px; line-height: 1;
+        background-repeat: no-repeat; background-size: auto 100%, auto 100%, auto 100%, calc(100% - 140px) 100%;
+        background-position: left center, right center, center center, center center;
+        background-image: url("ui/lvl_ok_L.png"), url("ui/lvl_ok_R.png"), url("ui/lvl_ok_C.png"), url("ui/lvl_ok_M.png"); }
+.ilv { margin-top: 5px; font-size: 13px; color: var(--muted); }
+.ilv b { color: var(--text); font-weight: 600; }
+.lvlp small { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lvlp b { font: 600 19px var(--font-body); color: #f3d58c; font-variant-numeric: tabular-nums; }
+.lvlp.bad { background-image: url("ui/lvl_bad_L.png"), url("ui/lvl_bad_R.png"), url("ui/lvl_bad_C.png"), url("ui/lvl_bad_M.png");
+            animation: lvlbad 2.4s ease-in-out infinite; }
+.lvlp.bad small { color: #ff9a8f; } .lvlp.bad b { color: #ff5a4c; text-shadow: 0 0 8px rgba(255, 70, 60, .6); }
+@keyframes lvlbad { 0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 60, 50, .3)); } 50% { filter: drop-shadow(0 0 7px rgba(255, 60, 50, .75)); } }
+.tt .lore { margin: 10px 0 2px; }
+.kind .ilvl { display: grid; justify-items: end; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); line-height: 1.1; }
+.kind .ilvl b { font: 700 17px var(--font-body); color: var(--gold); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.meta { margin-top: 6px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text); }
+.meta .type { display: inline-flex; align-items: center; gap: 6px; }
+.meta .type i { width: 16px; height: 16px; background: center / contain no-repeat; }
+.meta .ilvl { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+.meta .ilvl b { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rarity { margin-top: 6px; display: inline-flex; align-items: center; gap: 7px; padding: 2px 12px 2px 7px; border-radius: 2px;
+          font: 700 11.5px var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--rc);
+          border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent);
+          background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 26%, transparent), transparent 90%);
+          text-shadow: 0 0 8px color-mix(in srgb, var(--rc) 45%, transparent); }
+.rarity i { width: 7px; height: 7px; transform: rotate(45deg); background: var(--rc); box-shadow: 0 0 6px var(--rc); }
+.sub { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+.sub .rar { color: var(--rc); letter-spacing: .05em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
+.sub .ilvl { margin-left: auto; color: var(--gold); font-variant-numeric: tabular-nums; }
+.orn { height: 14px; margin: 0 -6px; background: url("ui/div_header_s.png") center / 100% 100% no-repeat; }
+
+/* статы: основные — узлы древа, дополнительные — ветки со сдвигом вправо */
+.stats { padding: 8px 0 10px; display: grid; gap: 2px; }
+.cap { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); margin: 2px 0 4px; padding-bottom: 6px;
+       background: url("ui/div_section_s.png") left bottom / 150px 8px no-repeat; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+li { display: grid; grid-template-columns: 18px auto 1fr auto; align-items: center; gap: 8px; position: relative;
+     padding: 2px 6px; border-radius: 2px; font-size: 14.5px; }
+li img.si { width: 18px; height: 18px; object-fit: contain; }
+li .v { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+li .k { color: var(--muted); }
+li .mark { width: 14px; height: 14px; background: center / contain no-repeat; }
+ul.main { margin-left: 12px; }
+ul.main li { font-size: 16px; padding-left: 14px; }
+ul.main li::before { content: ""; position: absolute; left: -10px; top: 50%; width: 15px; height: 16px; margin-top: -8px;
+                     background: url("ui/node_main_s.png") center / contain no-repeat; filter: drop-shadow(0 0 4px var(--rc)); }
+ul.main li::after { content: ""; position: absolute; left: -10px; top: 50%; width: 15px; height: 16px; margin-top: -8px; opacity: .75;
+                    background: var(--rc); mix-blend-mode: color;
+                    -webkit-mask: url("ui/node_main_s.png") center / contain no-repeat; mask: url("ui/node_main_s.png") center / contain no-repeat; }
+ul.main li .v { color: #fff3dc; font-size: 17px; }
+ul.main li .k { color: var(--text); }
+.branch { margin-left: 13px; position: relative; padding-top: 6px; }
+.branch .cap { margin-left: 24px; }
+ul.tree { position: relative; }
+ul.tree li { margin-left: 24px; }
+ul.tree li::before { content: ""; position: absolute; left: -24px; top: 50%; width: 22px; height: 6px; margin-top: -3px;
+                     background: linear-gradient(var(--gold-dim), var(--gold-dim)) left center / 17px 1px no-repeat,
+                                 url("ui/node_bead_s.png") right center / 6px 6px no-repeat; }
+ul.tree li::after { content: ""; position: absolute; left: -24px; top: -3px; bottom: -3px; width: 1px; background: var(--gold-dim); }
+ul.tree li:first-child::after { top: -30px; }
+ul.tree li:last-child::after { bottom: 50%; }
+li.minor .v { color: var(--text); font-weight: 500; }
+/* усиленная строка: лёгкий цветной фон + полоса свечения подчёркиванием под текстом, звезда справа */
+li.boost { --tint: linear-gradient(90deg, color-mix(in srgb, var(--bc) 16%, transparent), transparent 85%);
+           background-repeat: no-repeat; background-size: 100% 14px, 100% 100%; background-position: left 0 bottom -6px, 0 0; }
+li.boost.b3 { background-image: url("ui/glow_epic_s.png"), var(--tint); }  li.boost.b3 .mark { background-image: url("ui/star_epic_s.png"); }
+li.boost.b4 { background-image: url("ui/glow_leg_s.png"), var(--tint); }   li.boost.b4 .mark { background-image: url("ui/star_leg_s.png"); }
+li.boost.b5 { background-image: url("ui/glow_myth_s.png"), var(--tint); }  li.boost.b5 .mark { background-image: url("ui/star_myth_s.png"); }
+li.boost .v, li.boost .k { color: var(--bc); text-shadow: 0 0 8px color-mix(in srgb, var(--bc) 60%, transparent); }
+li.boost img.si { filter: drop-shadow(0 0 4px var(--bc)); }
+li.boost .mark { animation: twinkle 3.6s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { transform: scale(.85); opacity: .8; } 50% { transform: scale(1.1); opacity: 1; } }
+.tt.pinned li:hover { background-color: rgba(201, 163, 92, .12); }
+.tt.show li.boost { animation: glow 3.6s ease-in-out infinite; }
+@keyframes glow { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 12px color-mix(in srgb, var(--bc) 30%, transparent); } }
+/* строки проявляются вместе с окном почти сразу, лёгкой волной сверху вниз (≤ 0,25 с на всё окно) */
+.tt.show li { animation: lineIn 300ms cubic-bezier(.22, 1, .36, 1) both; animation-delay: calc(min(var(--i), 16) * 12ms + 20ms); }
+.tt.show li.boost { animation: lineIn 300ms cubic-bezier(.22, 1, .36, 1) both, glow 3.6s ease-in-out infinite;
+                    animation-delay: calc(min(var(--i), 16) * 12ms + 20ms), calc(min(var(--i), 16) * 12ms + 320ms); }
+@keyframes lineIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+.tt footer { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0 6px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(201, 163, 92, .18); }
+.tt footer b { color: var(--gold); font-weight: 500; font-variant-numeric: tabular-nums; }
+/* список вещей слота: сетка иконок — строки по сетам, столбцы по редкости */
+.menu { position: absolute; z-index: 7; width: 336px; padding: 0;
+        border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
+        filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .7)); pointer-events: none;
+        opacity: 0; transform: translateY(8px) scale(.97); transform-origin: var(--ox, 100%) 10%;
+        transition: opacity 140ms ease-in, transform 160ms ease-in; }
+.menu.show { opacity: 1; transform: none; pointer-events: auto; transition: opacity 240ms ease-out, transform 340ms cubic-bezier(.22, 1, .36, 1); }
+/* плитки проявляются лёгкой волной вслед за окном */
+.menu.show .mi { animation: tileIn 280ms cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(var(--n, 0) * 10ms + 40ms); }
+@keyframes tileIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.mhead { display: flex; align-items: baseline; gap: 8px; font: 700 19px var(--font-display); color: var(--gold); padding: 0 2px 4px; }
+.mhead span { margin-left: auto; font: 400 12px var(--font-body); color: var(--muted); }
+.mset { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--set); padding: 6px 2px 4px; }
+.mset i { width: 18px; height: 18px; background: center / contain no-repeat; }
+.mgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.mi { position: relative; aspect-ratio: 156 / 170; max-width: 100%; padding: 0; border: 1px solid var(--rc); border-radius: 2px; cursor: pointer;
+      background-color: #120a0b; background-repeat: no-repeat; box-shadow: inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent);
+      transition: transform 120ms, box-shadow 120ms; }
+.mi:hover, .mi:focus-visible { transform: translateY(-2px); outline: none;
+      box-shadow: 0 0 0 1px var(--rc), 0 0 12px color-mix(in srgb, var(--rc) 70%, transparent), inset 0 0 8px color-mix(in srgb, var(--rc) 35%, transparent); }
+.mi.eq::after { content: ""; position: absolute; inset: -4px; border: 2px solid var(--set); border-radius: 3px; box-shadow: 0 0 8px var(--set); pointer-events: none; }
+.mi.eq::before, .mi.wmi.eq::before { content: "✓"; position: absolute; right: 1px; top: 0; z-index: 1; font: 700 11px var(--font-body); color: #0b1714;
+                 background: var(--set); width: 13px; height: 13px; line-height: 13px; text-align: center; border-radius: 1px; }
+.mcap { margin-top: 8px; min-height: 34px; padding-top: 6px; border-top: 1px solid rgba(201, 163, 92, .2); display: grid; gap: 1px; }
+.mcap b { color: var(--rc, var(--text)); font-size: 14px; }
+.mcap span { color: var(--muted); font-size: 12px; }
+
+/* сет: плашка с эмблемой, значки слотов, печати порогов */
+.setbox { margin-top: 10px; display: grid; gap: 6px; }
+/* плашка из трёх частей: края с гнездом и орнаментом — без растяжения, тянется только середина */
+.plaque { position: relative; height: 46px; margin: 0 -4px; padding: 0 36px 0 66px; display: flex; align-items: center; gap: 8px;
+          background-image: url("ui/plaque_L_s.png"), url("ui/plaque_R_s.png"), url("ui/plaque_M_s.png");
+          background-repeat: no-repeat; background-size: auto 100%, auto 100%, 100% 100%;
+          background-position: left top, right top, 0 0;
+          background-origin: border-box, border-box, content-box; background-clip: border-box, border-box, content-box; }
+.plaque .emb { position: absolute; left: 23px; top: 7px; width: 32px; height: 32px; background: center / contain no-repeat; border-radius: 50%;
+               filter: drop-shadow(0 0 4px color-mix(in srgb, var(--set) 60%, transparent)); }
+.plaque b { font-family: var(--font-display); font-size: 16.5px; line-height: 1; color: var(--set); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            text-shadow: 0 0 10px color-mix(in srgb, var(--set) 40%, transparent); padding-left: 4px; }
+.plaque span { margin-left: auto; color: #dffbf5; font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
+.pips { display: flex; justify-content: space-between; padding: 0 6px; }
+.pips i { width: 24px; height: 24px; background: center / contain no-repeat; opacity: .7; }
+.pips i.on { opacity: 1; }
+.pips i.me { transform: scale(1.18); filter: drop-shadow(0 0 3px #fff3dc); }
+ul.setb { gap: 4px; }
+ul.setb li { grid-template-columns: 26px 1fr; align-items: center; font-size: 13.5px; line-height: 1.3; padding: 2px 4px; }
+ul.setb li .n { width: 26px; height: 26px; display: grid; place-items: center; background: url("ui/seal_off_s.png") center / contain no-repeat;
+                font: 600 13px var(--font-body); color: var(--muted); font-variant-numeric: tabular-nums; }
+ul.setb li.act .n { background-image: url("ui/seal_on_s.png"); color: #eafff9; text-shadow: 0 0 4px #000; }
+ul.setb li .t { color: var(--muted); }
+ul.setb li.act .t { color: var(--set); }
+ul.setb li.act .t b { color: #dffbf5; font-weight: 700; }
+ul.setb li:not(.act) { opacity: .7; }
+.setnote { font-size: 12px; color: var(--muted); }
+/* лор вещи — свиток целиком, без растяжения частей (пропорции картинки); текст подгоняется по размеру */
+.lore { aspect-ratio: 1000 / 242; overflow: hidden; padding: 5.4% 12.5% 5.2%; display: grid; place-items: center; text-align: center;
+        background: url("ui/lore_full.png") center / 100% 100% no-repeat;
+        font: italic 500 14px/1.22 var(--font-body); color: #e2d0b0; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+.lore span { display: block; }
+
+
+
+/* стиль главного меню: все заголовки, подписи, кнопки и плашки — заглавными, с разрядкой */
+h1, .card h2, button:not(.mi):not(.slot), select, .bar label, th, .cap, .rarity, .lvlp small, .kind .kn b, .plaque b,
+.mhead, .mset, .name, .mini h3, .sethead b, .hint {
+  font-family: var(--font-caps); font-variant: normal; letter-spacing: .1em; }
+h1, .card h2, .name, .plaque b, .mhead, .kind .kn b { letter-spacing: .07em; }
+.name { font-weight: 600; font-size: 19px; }
+h1 { font-weight: 600; font-size: 26px; text-transform: uppercase; letter-spacing: .16em; color: #e6dcc9;
+     text-shadow: 0 4px 14px rgba(179, 36, 43, .45); }
+.card h2 { text-transform: uppercase; font-size: 17px; letter-spacing: .14em; }
+button:not(.mi):not(.slot), select, .bar label { text-transform: uppercase; font-size: 12.5px; letter-spacing: .14em; }
+.kind .kn b { font-size: 15px; text-transform: uppercase; }
+.plaque b { font-size: 16px; letter-spacing: .03em; }
+.plaque span { white-space: nowrap; }
+.mhead { text-transform: uppercase; font-size: 16px; letter-spacing: .12em; }
+.mini h3 { font-size: 14px; text-transform: uppercase; }
+
+/* пропитано маной: центр — цвет редкости, рамка переливается розовым */
+@keyframes manaText { to { background-position: 300% 0; } }
+/* рамка слота с кристаллами (35) — 9 частей: углы с кристаллами не тянутся, тянутся только края. Линия рамки в картинке
+   (320 px) — в 32 px от края, угол — 76 px; при ширине угла --mw линия ложится ровно на край слота за счёт выноса
+   --mw·32/76 наружу. Узкая --mw — тонкая рамка, кристаллы выходят за край всего на пару пикселей и не налезают на соседей */
+.icon.mrim { position: relative; }
+.mrim::after, .mi .mr { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; --mw: 14px;
+  border-style: solid; border-width: var(--mw);
+  border-image: url("ui/mana_rim_s.png") 76 / var(--mw) / calc(var(--mw) * 32 / 76) stretch;
+  animation: manaRim 4s ease-in-out infinite; }
+.mi .mr { --mw: 11px; }
+@keyframes manaRim { 0%, 100% { opacity: .7; filter: brightness(.95); } 50% { opacity: .92; filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 95, 208, .45)); } }
+/* уголки окна с кристаллами (36) и плавающие частицы маны (38) */
+.mcorners { position: absolute; inset: -52.8px -52.8px -36.2px -56.6px; pointer-events: none; z-index: 2; }
+.mcorners .c { position: absolute; width: 96px; background: center / contain no-repeat; animation: manaRim 4s ease-in-out infinite; }
+.mcorners .tl { left: -14px; top: -12px; aspect-ratio: 200 / 185; background-image: url("ui/mana_c_tl_s.png"); }
+.mcorners .tr { right: -14px; top: -12px; aspect-ratio: 200 / 185; background-image: url("ui/mana_c_tr_s.png"); animation-delay: -1s; }
+.mcorners .bl { left: -14px; bottom: -12px; aspect-ratio: 200 / 161; background-image: url("ui/mana_c_bl_s.png"); animation-delay: -2s; }
+.mcorners .br { right: -14px; bottom: -12px; aspect-ratio: 200 / 161; background-image: url("ui/mana_c_br_s.png"); animation-delay: -3s; }
+.mcorners .p { position: absolute; width: var(--s); aspect-ratio: 1; background: center / contain no-repeat; opacity: 0;
+               animation: manaDrift var(--d) ease-in-out var(--w) infinite; }
+@keyframes manaDrift { 0% { opacity: 0; transform: translate(0, 6px) scale(.8); } 30%, 60% { opacity: .75; }
+                       100% { opacity: 0; transform: translate(var(--dx), -26px) scale(1); } }
+/* рамка окна в цвете редкости: перекрашенная копия золотой рамки под содержимым (z-index −1 внутри .tt);
+   у вещи с маной вместо цвета редкости — розовая рамка маны, она в приоритете */
+.tt::after { content: ""; position: absolute; z-index: -1; pointer-events: none; inset: -52.8px -52.8px -36.2px -56.6px;
+  border-style: solid; border-width: 52.8px 52.8px 36.2px 56.6px;
+  border-image: url("ui/frame_main_s.png") 70 70 48 75 / 52.8px 52.8px 36.2px 56.6px stretch; }
+.tt[data-r="0"]::after { filter: grayscale(1) brightness(1.08) contrast(1.05); }
+.tt[data-r="1"]::after { filter: hue-rotate(70deg) saturate(1.15); }
+.tt[data-r="2"]::after { filter: hue-rotate(170deg) saturate(1.3) brightness(1.08); }
+.tt[data-r="3"]::after { filter: hue-rotate(232deg) saturate(1.25) brightness(1.08); }
+.tt[data-r="4"]::after { filter: saturate(1.2) brightness(1.1); }
+.tt[data-r="5"]::after { filter: hue-rotate(-38deg) saturate(1.8) brightness(.95); }
+.tt.mana::after { filter: hue-rotate(-80deg) saturate(1.9) brightness(1.15); animation: manaFrame 4s ease-in-out infinite; }
+@keyframes manaFrame { 0%, 100% { filter: hue-rotate(-80deg) saturate(1.9) brightness(1.1); }
+                       50% { filter: hue-rotate(-95deg) saturate(1.7) brightness(1.35); } }
+.tt.mana { animation: manaGlow 3s ease-in-out infinite; }
+.tt.mana.pinned { animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
+@keyframes manaGlow { 0%, 100% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 3px rgba(255, 120, 220, .8)) drop-shadow(0 0 14px rgba(255, 90, 210, .45)); }
+                      50% { filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .7)) drop-shadow(0 0 4px rgba(255, 180, 240, .95)) drop-shadow(0 0 22px rgba(220, 110, 255, .65)); } }
+/* плашка «Пропитано маной» (37): края с ромбом не тянутся, тянется только середина */
+.manatag { margin: 3px 0 0 -8px; display: inline-flex; align-items: center; height: 30px; padding: 0 2px 1px 0; font-family: var(--font-caps);
+           font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; white-space: nowrap;
+           border-style: solid; border-width: 0 21.25px 0 26.25px; border-image: url("ui/mana_badge_s.png") 0 51 0 63 fill / 0 21.25px 0 26.25px stretch; }
+/* переливающийся текст — во вложенном span: заливка плашки рисуется поверх фона самой плашки */
+.manatag span { background: linear-gradient(90deg, #ff9ae3, #fff0fb, #e0a8ff, #ff9ae3); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+           color: transparent; animation: manaText 3s linear infinite; }
+li.mana .v, li.mana .k { background: linear-gradient(90deg, #ff7ad9, #ffe3f8, #c77dff, #ff7ad9); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; animation: manaText 2.6s linear infinite; }
+/* строка с маной: полоса маны (37) подчёркиванием, при наложении на свечение — обе полосы */
+li.mana { --tint: linear-gradient(90deg, rgba(255, 95, 208, .2), rgba(200, 112, 255, .06) 70%, transparent);
+          background-repeat: no-repeat; background-image: url("ui/mana_strip_s.png"), var(--tint);
+          background-size: 100% 30px, 100% 100%; background-position: left -6px bottom -19px, 0 0; }
+li.mana.boost.b3 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_epic_s.png"), var(--tint); }
+li.mana.boost.b4 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_leg_s.png"), var(--tint); }
+li.mana.boost.b5 { background-image: url("ui/mana_strip_s.png"), url("ui/glow_myth_s.png"), var(--tint); }
+li.mana.boost { background-size: 100% 30px, 100% 14px, 100% 100%; background-position: left -6px bottom -19px, left 0 bottom -6px, 0 0; }
+li.mana img.si { filter: drop-shadow(0 0 4px var(--mana)); }
+li.mana .mark { width: 12px; height: 16px; background-image: url("ui/mana_gem_s.png") !important; animation: twinkle 3.6s ease-in-out infinite; }
+/* мана поверх свечения: ромб маны и звезда редкости рядом */
+li.mana.boost .mark { width: 26px; background-size: 11px 14px, 13px 13px; background-position: left center, right center; }
+li.mana.boost.b3 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_epic_s.png") !important; }
+li.mana.boost.b4 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_leg_s.png") !important; }
+li.mana.boost.b5 .mark { background-image: url("ui/mana_gem_s.png"), url("ui/star_myth_s.png") !important; }
+ul.main li.manaMain::after { background: var(--mana); opacity: .9; }
+ul.main li.manaMain .k::after { content: ""; display: inline-block; width: 9px; height: 12px; margin-left: 6px; vertical-align: -1px;
+                                background: url("ui/mana_gem_s.png") center / contain no-repeat; }
+
+.msub { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--mana); padding: 6px 2px 4px; font-family: var(--font-caps); }
+
+/* мини-подсказка стата */
+.mini { position: absolute; z-index: 6; width: 236px; pointer-events: none; padding: 0;
+        border-style: solid; border-width: 14px; border-image: url("ui/frame_mini_s.png") 28 fill / 14px stretch;
+        filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .65));
+        opacity: 0; transform: translateX(var(--mx, 6px)); transition: opacity 110ms ease-in, transform 110ms ease-in; }
+.mini.show { opacity: 1; transform: none; transition: opacity 160ms ease-out, transform 200ms cubic-bezier(.16, 1, .3, 1); }
+/* описание приёма / пассива: та же рамка, что у мини-подсказки, шире; иконка слева от названия */
+.mini.skt.wide { width: 340px; }
+.mini.skt { width: 300px; z-index: 8; --pgc: 201 163 92; --pgl: 212 181 125; }
+.mini.skt.pinned { pointer-events: auto; cursor: pointer; animation: pinIn .15s ease-out, pinGlow 2.6s ease-in-out .15s infinite; }
+/* окно описаний — рамка из листа 23 (wf_frame_s.png, 9-slice, срезы 83 65 65 68 px): углы с сакурой, гнездо кольца
+   закрепления в правом верхнем углу, ромб по центру верха; фон — лак с сэйгайха из той же рамки */
+.mini.skt { border-width: 16px 9px 9px 9px; padding: 6px 10px 14px;
+            border-image: url("ui/wf_frame_s.png") 83 65 65 68 fill / 41px 33px 33px 34px stretch; }
+.mini.skt::before { content: ""; position: absolute; left: 50%; top: -16px; width: 36px; height: 19px; transform: translateX(-50%);
+                    background: url("ui/wf_gem_s.png") center / contain no-repeat; pointer-events: none; }
+.skt .pin { top: -13px; right: -2px; width: 18px; height: 18px; }   /* в гнезде кольца рамки */
+/* гнездо иконки приёма и пассива: золотое кольцо с ромбами, иконка — кругом внутри */
+.skh .ski.sock { width: 52px; height: 52px; border: 0; box-shadow: none; border-radius: 50%; position: relative;
+                 background: none; }
+.skh .ski.sock::after { content: ""; position: absolute; inset: 0; background: url("ui/wf_socket_s.png") center / contain no-repeat; }
+.skh .ski.sock i { position: absolute; z-index: 1; inset: 19%; border-radius: 50%; box-shadow: 0 0 4px rgba(0, 0, 0, .8) inset; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.skh { grid-template-columns: 52px 1fr; }
+.skt.arming .pin .full { animation: arm var(--pin) linear forwards; }
+.skt.pinned .pin .full { --p: 360deg; }
+.skt.pinned .pin .seal { transform: scale(1.15); opacity: 1; }
+.pas-ic { background-image: url("ui/pas_dance_s.jpg"); }
+/* репутация — в правом круге под героем; ступень — общее отношение пяти империй */
+.wrep { position: absolute; z-index: 4; border-radius: 50%; cursor: help; display: grid; place-items: center; }
+/* ранг — в левом круге под героем */
+.wrank { position: absolute; z-index: 4; border-radius: 50%; cursor: help; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .75)); }
+.wrank:hover { filter: brightness(1.15) drop-shadow(0 4px 8px rgba(0, 0, 0, .75)) drop-shadow(0 0 8px rgba(240, 207, 138, .5)); }
+.rkreq { display: grid; grid-template-columns: 18px 1fr auto; gap: 4px 6px; margin-top: 6px; font-size: 13px; align-items: center; }
+.rkreq .ok { color: #8fe09e; } .rkreq .no { color: #e0706a; }
+.rkreq .rv { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.rkhead { margin-top: 8px; font: 600 12.5px var(--font-caps); letter-spacing: .06em; color: #f0cf8a; }
+.rpi { display: block; width: 100%; height: 100%; background: center / contain no-repeat; }
+.rep-0 { background-image: url("ui/rep_0_s.png"); } .rep-1 { background-image: url("ui/rep_1_s.png"); }
+.rep-2 { background-image: url("ui/rep_2_s.png"); } .rep-3 { background-image: url("ui/rep_3_s.png"); }
+.rep-4 { background-image: url("ui/rep_4_s.png"); }
+.rank-0 { background-image: url("ui/rank_0_s.png"); } .rank-1 { background-image: url("ui/rank_1_s.png"); }
+.rank-2 { background-image: url("ui/rank_2_s.png"); } .rank-3 { background-image: url("ui/rank_3_s.png"); }
+.rank-4 { background-image: url("ui/rank_4_s.png"); } .rank-5 { background-image: url("ui/rank_5_s.png"); }
+.rank-6 { background-image: url("ui/rank_6_s.png"); }
+.wrep { filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .75)); }
+.wrep:hover { filter: brightness(1.15) drop-shadow(0 4px 8px rgba(0, 0, 0, .75)) drop-shadow(0 0 8px rgba(240, 207, 138, .5)); }
+.skh .ski.rep { border: 0; box-shadow: none; background: none; }
+/* общая шкала: −100…+100 пятью равными отрезками ступеней, над ней значки ступеней, текущая — подсвечена */
+.repscale { margin: 6px 4px 12px; }
+.repicons { position: relative; height: 44px; }
+.repicons i { position: absolute; bottom: 9px; width: 30px; height: 30px; transform: translateX(-50%); opacity: .42; filter: grayscale(.75) brightness(.8);
+              transition: opacity 200ms, filter 200ms, transform 200ms; display: grid; place-items: center; }
+
+.repicons i.on { opacity: 1; filter: drop-shadow(0 0 6px var(--tc)) drop-shadow(0 0 2px var(--tc)); transform: translateX(-50%) scale(1.3); }
+.repbar { position: relative; height: 8px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(240, 207, 138, .25);
+          background: linear-gradient(90deg, rgba(224, 112, 106, .45) 0 20%, rgba(216, 154, 90, .4) 20% 40%, rgba(207, 198, 180, .32) 40% 60%,
+                      rgba(127, 214, 168, .4) 60% 80%, rgba(240, 207, 138, .5) 80%); }
+.repbar.rkbar { background: linear-gradient(90deg, #9a8f8655, #b9b2a655, #c98a4b66, #c9d2dc55, #f0cf8a66, #ff6a5a66, #ff8fd866); }
+.repbar s { position: absolute; top: -2px; bottom: -2px; width: 1px; background: rgba(10, 6, 7, .9); }
+.repbar::after { content: ""; position: absolute; inset: -5px -7px; background: url("ui/wf_track_s.png") center / 100% 100% no-repeat; pointer-events: none; }
+.repbar u { position: absolute; z-index: 1; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); background: url("ui/wf_marker_s.png") center / contain no-repeat;
+            filter: drop-shadow(0 0 5px var(--tc)); }
+.repends { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.reps { display: grid; grid-template-columns: 1fr 64px 34px; gap: 5px 8px; align-items: center; margin-top: 8px; font-size: 13px; }
+.reps .en { color: var(--text); display: flex; align-items: center; gap: 6px; }
+/* герб империи рядом с названием */
+.reps .en i { width: 24px; height: 24px; flex: none; background-position: center; background-size: contain; background-repeat: no-repeat; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)); }
+.emp-throne { background-image: url("ui/emp_throne_s.png"); }
+.emp-haddur { background-image: url("ui/emp_haddur_s.png"); }
+.emp-gharn { background-image: url("ui/emp_gharn_s.png"); }
+.emp-saerith { background-image: url("ui/emp_saerith_s.png"); }
+.emp-blossom { background-image: url("ui/emp_blossom_s.png"); }
+.reps .bar { position: relative; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .08); }
+.reps .bar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: rgba(240, 207, 138, .5); }
+.reps .bar b { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--tc); }
+.reps .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--tc); font-weight: 600; }
+.reps .tn { grid-column: 1 / -1; margin: -6px 0 0 30px; font-size: 11.5px; color: var(--tc); }
+
+.mini.sk2 { width: 310px; z-index: 9; }
+.skt .num { white-space: nowrap; color: #fff3dc; font-weight: 600; border-bottom: 1px dotted var(--gold); cursor: help; font-variant-numeric: tabular-nums; }
+.skt .num:hover, .skt .num:focus-visible { color: #ffe3a6; border-bottom-style: solid; outline: none; }
+.skt .cost { color: var(--text); font-size: 12.5px; }
+.skvw { position: relative; margin-top: 9px; aspect-ratio: 480 / 246; background: url("ui/wf_video_s.png") center / 100% 100% no-repeat; }
+.skvw .skv { position: absolute; inset: 4.5% 3.4%; width: 93.2%; height: 91%; object-fit: cover; }
+.skt .skv { display: block; border-radius: 1px;
+            background: #0d0809; box-shadow: 0 0 10px rgba(0, 0, 0, .6) inset; }
+.skt .draft { font-size: 11.5px; color: var(--muted); font-style: italic; }
+.sk2 .bd { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin-top: 6px; font-size: 12.5px; }
+.sk2 .bd span { color: var(--muted); } .sk2 .bd b { color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.hv { cursor: help; }
+.reps .en.hv:hover { color: #fff3dc; }
+.repicons i.hv:hover { opacity: .95; filter: none; }
+.sk2 .hvh { display: flex; align-items: center; gap: 8px; }
+.sk2 .hvh i, .sk2 .hvh .rpi { width: 26px; height: 26px; flex: none; background-position: center; background-size: contain; background-repeat: no-repeat; }
+.sk2 .hvp { margin-top: 6px; font-size: 12.5px; }
+.sk2 .bd .sum { color: #f0cf8a; padding-top: 4px; border-top: 1px solid rgba(201, 163, 92, .25); }
+
+.skh { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-bottom: 7px; }
+.skh .ski { width: 44px; height: 44px; display: grid; place-items: center; background-position: center; background-size: cover; background-repeat: no-repeat; border: 1px solid var(--gold-dim); border-radius: 2px;
+            box-shadow: 0 0 8px rgba(0, 0, 0, .6); }
+.skh .ski svg { width: 80%; height: 80%; }
+.skh h3 { margin: 0; }
+.skh .sks { font-size: 11.5px; letter-spacing: .06em; color: var(--gold); margin-top: 2px; }
+.skt p + p { margin-top: 6px; }
+.skt .pb { margin-top: 6px; padding-top: 19px; background: url("ui/wf_div_s.png") center top / 52% auto no-repeat; }
+.skt .pb b { display: block; font: 600 12.5px var(--font-caps); letter-spacing: .06em; color: #f0cf8a; margin-bottom: 2px; }
+.skt .tiers { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin-top: 4px; font-size: 13px; color: var(--text); }
+.skt .tiers span:nth-child(odd) { color: var(--muted); }
+.wsk { pointer-events: auto !important; cursor: pointer; z-index: 4 !important; }
+.wsk:hover { filter: brightness(1.15); }
+/* пассивный навык — в гнезде «Пас» над героем */
+.wpas { position: absolute; z-index: 4; cursor: help; display: grid; place-items: center;
+        clip-path: polygon(10% 0, 90% 0, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0 90%, 0 10%);
+        background: url("ui/pas_dance_s.jpg") center / cover no-repeat; }
+.wpas:hover { filter: brightness(1.2); }
+.heronote { margin-top: 9px; padding: 4px 8px; font-size: 12.5px; color: #f0cf8a; border-left: 2px solid var(--gold);
+            background: linear-gradient(90deg, rgba(201, 163, 92, .12), transparent); }
+.mini h3 { margin: 0 0 4px; display: flex; gap: 7px; align-items: center; font: 700 15px var(--font-body); color: var(--text); }
+.mini h3 img { width: 22px; height: 22px; object-fit: contain; }
+.mini p { margin: 0; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.mini .here { margin-top: 7px; font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+.mini .tag { margin-top: 5px; font-size: 12px; color: var(--bc, var(--gold)); }
+
+/* справка */
+.ref { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.card { background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; border-radius: 3px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-size: 20px; margin: 0 0 8px; color: var(--gold); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+td.r { font-weight: 700; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.45; margin: 8px 0 0; }
+
+@media (max-width: 760px) {
+  .tt { position: relative; left: auto !important; top: auto !important; width: auto; max-width: none; margin-top: 12px; }
+  .mini { left: 16px !important; right: 16px; width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt, .tt.show, .mini, .mini.show { transform: none !important; filter: none !important; transition: opacity 120ms linear; }
+  .tt.show li, .tt.show li.boost, .tt.show .sweep::before, .tt.pinned .sweep::before, .menu.show .mi { animation: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Подсказка предмета</h1>
+    <p class="lead">Наведите курсор на вещь в колонке экипировки — всплывёт подсказка; если держать курсор на вещи, кольцо в углу заполнится и подсказка закрепится (увели раньше — не закрепится), тогда на статы и бонусы сета можно наводить. Клик по слоту открывает список вещей этого типа: в тестовой версии там все вещи обоих сетов во всех редкостях. Бонусы сета считаются по надетым вещам при любой их редкости. Оружие: верхнее окно — основное, среднее — второе; клик по окну — выбрать оружие, медальон между окнами — поменять их местами. Одно оружие не может стоять сразу в обоих слотах, герой в центре держит основное.</p>
+  </div>
+
+  <div class="bar">
+    <button id="reroll" type="button">Перебросить статы</button>
+    <label for="hero">Уровень героя <input id="hero" type="range" min="1" max="50" value="14"> <span class="lvl" id="heroOut">14</span></label>
+    <label for="lvl">Уровень предмета <input id="lvl" type="range" min="1" max="50" value="10"> <span class="lvl" id="lvlOut">10</span></label>
+  </div>
+
+  <div class="ttHolder" id="holder">
+    <div class="stage" id="stage">
+      <div class="hint">Наведите на вещь — подсказка, клик — выбрать другую</div>
+    </div>
+    <div class="tt" id="tt" role="tooltip" aria-hidden="true"></div>
+    <div class="mini" id="mini" role="tooltip" aria-hidden="true"></div>
+    <div class="mini skt" id="skt" role="tooltip" aria-hidden="true"></div>
+    <div class="mini sk2" id="sk2" role="tooltip" aria-hidden="true"></div>
+    <div class="menu" id="menu" role="dialog" aria-label="Выбор вещи" aria-hidden="true"></div>
+  </div>
+
+  <div class="ref">
+    <div class="card">
+      <h2>Редкость</h2>
+      <div class="scroll"><table id="rarTable"></table></div>
+      <p class="note">Значения статов умножаются на множитель редкости. Усиленный стат дополнительно умножается на коэффициент свечения. Числа примерные, для настройки баланса.</p>
+    </div>
+    <div class="card">
+      <h2>Статы</h2>
+      <div class="scroll"><table id="statTable"></table></div>
+      <p class="note">Диапазоны указаны для обычного предмета 1-го уровня. Уровень предмета: числовые статы ×(1 + 0,08·(ур − 1)), проценты ×(1 + 0,02·(ур − 1)). Надеть можно с уровня героя «уровень предмета − 5 + ступень редкости» (обычное 0 … мифическое 5). Основной стат в роли дополнительного даёт 45% своего диапазона.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const SHEET = { w: 1024, h: 1536,
+    cols: [[16,172],[182,341],[350,508],[517,676],[684,844],[852,1010]],
+    rows: [[16,177],[185,348],[357,519],[528,691],[701,870],[878,1065],[1073,1258],[1267,1462]] };
+  const STAGE = { w: 1536, h: 1024 };
+  const PIN_MS = 1200;
+
+  const RAR = [
+    { name: "Обычное",     mult: 1.00, main: 1, extra: 2, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 52  },
+    { name: "Необычное",   mult: 1.25, main: 1, extra: 3, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 27  },
+    { name: "Редкое",      mult: 1.55, main: 1, extra: 4, guar: 0, rnd: 0, chance: 0,    boost: 1,    drop: 13  },
+    { name: "Эпическое",   mult: 1.90, main: 1, extra: 5, guar: 0, rnd: 1, chance: 0.40, boost: 1.35, drop: 6   },
+    { name: "Легендарное", mult: 2.35, main: 2, extra: 6, guar: 1, rnd: 1, chance: 0.35, boost: 1.60, drop: 1.6 },
+    { name: "Мифическое",  mult: 2.90, main: 2, extra: 6, guar: 2, rnd: 2, chance: 0.30, boost: 2.00, drop: 0.4 },
+  ];
+
+  const ICON = {
+    atk:  '<path d="M3 13 13 3M10 3h3v3M4 10l2 2M2.5 14.5l1.5-1.5"/>',
+    arm:  '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/>',
+    hp:   '<path d="M8 13.8S2 10.2 2 6.1A3 3 0 0 1 8 4.4a3 3 0 0 1 6 1.7c0 4.1-6 7.7-6 7.7z"/>',
+    ha:   '<path d="M8 2.2a5.8 5.8 0 1 0 5.8 5.8"/><path d="M8 5.2A2.8 2.8 0 1 0 10.8 8"/><path d="M13.8 2.2v3.4h-3.4"/>',
+    crit: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="2.2"/><path d="M8 .8v2.6M8 12.6v2.6M.8 8h2.6M12.6 8h2.6"/>',
+    cdmg: '<path d="M8 1.5 9.6 6l4.8.2-3.8 3 1.4 4.6L8 11.1l-4 2.7 1.4-4.6-3.8-3L6.4 6z"/>',
+    rphy: '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/><path d="M5.5 6.5l5 3M10.5 6.5l-5 3"/>',
+    rele: '<path d="M8 1.8 13.5 4v4c0 3.2-2.4 5.4-5.5 6.4C4.9 13.4 2.5 11.2 2.5 8V4z"/><path d="M8 5.2c1.4 1.6 2 2.6 2 3.6a2 2 0 0 1-4 0c0-1 .6-2 2-3.6z"/>',
+    aspd: '<path d="M2 5h7M4 8h8M2 11h7"/><path d="M11 3.5 14 8l-3 4.5"/>',
+  };
+
+  // база — обычный предмет 1-го уровня; pct — проценты; info — текст мини-подсказки
+  const STATS = {
+    atk:  { name: "Атака", lo: 2, hi: 4, pct: false, main: true,
+            info: "Прибавляется к урону каждого удара, приёма и добивания." },
+    arm:  { name: "Броня", lo: 3, hi: 6, pct: false, main: true,
+            info: "Снижает урон, который вы получаете от ударов. Чем больше брони, тем меньше выгода от каждого нового очка." },
+    hp:   { name: "ОЗ", lo: 8, hi: 15, pct: false, main: true,
+            info: "Очки здоровья: увеличивают максимум здоровья героя." },
+    ha:   { name: "ХА", lo: 3, hi: 6, pct: false, main: true,
+            info: "Увеличивает запас концентрации: дольше держите блок и серию ударов, позже ломается стойка." },
+    crit: { name: "Шанс крита", lo: 1, hi: 3, pct: true,
+            info: "Вероятность, что удар станет критическим." },
+    cdmg: { name: "Крит. урон", lo: 5, hi: 10, pct: true,
+            info: "На сколько процентов критический удар сильнее обычного." },
+    rphy: { name: "СПР физ. урону", lo: 2, hi: 5, pct: false,
+            info: "Сопротивление физическому урону: снижает урон от оружия, когтей и снарядов." },
+    rele: { name: "СПР стих. урону", lo: 2, hi: 5, pct: false,
+            info: "Сопротивление стихиям: снижает урон от огня, льда, молний и маны разлома." },
+    aspd: { name: "Скорость атаки", lo: 1, hi: 3, pct: true,
+            info: "Ускоряет удары и серии ударов." },
+  };
+  const ORDER = ["atk", "arm", "hp", "ha", "crit", "cdmg", "rphy", "rele", "aspd"];
+
+  // сет: вещи сета — в первых N слотах (переключатель «Вещей сета надето»); бонусы действуют при любой редкости вещей
+  const SHEET_GHARN = { w: 1024, h: 1536,
+    cols: [[12,165],[180,335],[345,509],[515,679],[685,850],[856,1016]],
+    rows: [[8,179],[185,360],[366,528],[535,708],[714,887],[894,1118],[1124,1292],[1298,1530]] };
+  const SETS = {};
+  SHEET.img = "items.jpg"; SHEET_GHARN.img = "items_gharn.jpg";
+  const PIPS = {helmet_on: "ui/pip_helmet_on_s.png", helmet_off: "ui/pip_helmet_off_s.png", chest_on: "ui/pip_chest_on_s.png", chest_off: "ui/pip_chest_off_s.png", gloves_on: "ui/pip_gloves_on_s.png", gloves_off: "ui/pip_gloves_off_s.png", shoulders_on: "ui/pip_shoulders_on_s.png", shoulders_off: "ui/pip_shoulders_off_s.png", boots_on: "ui/pip_boots_on_s.png", boots_off: "ui/pip_boots_off_s.png", cloak_on: "ui/pip_cloak_on_s.png", cloak_off: "ui/pip_cloak_off_s.png", ring_on: "ui/pip_ring_on_s.png", ring_off: "ui/pip_ring_off_s.png", amulet_on: "ui/pip_amulet_on_s.png", amulet_off: "ui/pip_amulet_off_s.png"};
+  const TYPES = {helmet: "ui/type_helmet_s.png", chest: "ui/type_chest_s.png", gloves: "ui/type_gloves_s.png", shoulders: "ui/type_shoulders_s.png", boots: "ui/type_boots_s.png", cloak: "ui/type_cloak_s.png", ring: "ui/type_ring_s.png", amulet: "ui/type_amulet_s.png"};
+  SETS.samurai = { name: "Самурай Восхода Юрумы", sheet: SHEET, cls: "", emblem: "ui/emb_samurai_s.png",
+    names: ["Кабуто Восхода", "До Восхода", "Котэ Восхода", "Содэ Восхода", "Поножи Восхода", "Хаори Восхода", "Кольцо Восхода", "Омамори Восхода"],
+    lore: "Доспехи они-ронинов, что встречают рассвет Хоэна под Оком Раскола. Кто пережил ночь, тот встаёт с солнцем.",
+    bonuses: [
+      { n: 2, title: "Первый луч Хоэна", text: "<b>+10</b> ХА, концентрация восстанавливается на <b>15 %</b> быстрее",
+        info: "Как утренний свет после ночи боя: стойка держится дольше и быстрее приходит в себя." },
+      { n: 4, title: "Взгляд на Око", text: "первый удар по новой цели — <b>критический</b>, <b>+6 %</b> шанс крита",
+        info: "Они смотрят на Око Раскола перед боем. Первый удар после захвата новой цели всегда критический." },
+      { n: 6, title: "Клинок рассвета", text: "после парирования следующий удар — <b>крит</b> и <b>+30 %</b> урона по концентрации",
+        info: "Удар в течение 1,5 с после успешного парирования. Враг быстрее открывается для Кровожадного удара." },
+      { n: 8, title: "Восход Хоэна", text: "при ОЗ ниже <b>30 %</b>: 6 с стойка не ломается, <b>+25 %</b> скорость атаки, Кровожадный удар лечит <b>15 %</b> ОЗ",
+        info: "Срабатывает само, раз в 90 с. Кто пережил ночь Раскола, встречает рассвет." },
+    ] };
+  SETS.gharn = { name: "Воитель песков Гхарна", sheet: SHEET_GHARN, cls: "gharn", emblem: "ui/emb_gharn_s.png",
+    names: ["Шлем Песков", "Куяк Песков", "Наручи Песков", "Оплечья Песков", "Гутулы Песков", "Бурка Песков", "Перстень Клыка", "Оберег Клыка"],
+    lore: "Доспехи туменов, что идут сквозь пыльные бури плато. Хаан правит, пока побеждает — и воин тоже.",
+    bonuses: [
+      { n: 2, title: "Закалка бурей", text: "<b>+15</b> ОЗ, <b>+8</b> СПР физ. урону, <b>+8</b> СПР стих. урону",
+        info: "Кто вырос в песчаных бурях плато, держит и удар, и ману шаманов." },
+      { n: 4, title: "Право сильного", text: "каждое убийство: <b>+4 %</b> атаки на 10 с, до <b>5</b> раз",
+        info: "Хаан правит, пока побеждает. Новое убийство обновляет время и добавляет заряд." },
+      { n: 6, title: "Песчаный вихрь", text: "уворот поднимает песок: враги в <b>3 м</b> на 1 с слепнут, их концентрация не спадает <b>3 с</b>",
+        info: "Багбиры ходят там, где не пройдёт никто. Ослеплённый враг не атакует и не уходит в блок." },
+      { n: 8, title: "Бунчук Хаана", text: "при <b>5</b> зарядах Права сильного удар — рёв орды: враги в 4 м оглушены <b>1,5 с</b>, <b>+40</b> к их концентрации",
+        info: "Заряды сгорают. Оглушённые ближе к Кровожадному удару. Раз в 30 с." },
+    ] };
+  const MINOR = 0.45, MINOR_W = 0.6;
+  const PRICE = [20, 90, 450, 2600, 11000, 32000];        // обычное … мифическое, 1-й уровень
+  const PRICE_MIN = [5, 40, 200, 1500, 8000, 30000];
+  const PRICE_STEP = [1, 5, 10, 50, 100, 500];
+  const money = v => v.toLocaleString("ru-RU").replace(/\u00a0|,/g, "\u2009");
+
+  // слоты: имя, основные статы, веса доп. статов, место на макете, редкость на макете, названия по редкости
+  const COIN = `<svg class="coin" viewBox="0 0 80 80" aria-hidden="true"><defs><radialGradient id="cg" cx=".44" cy=".44" r=".6"><stop offset="0" stop-color="#ffd161"/><stop offset=".75" stop-color="#9e6b1a"/><stop offset="1" stop-color="#734710"/></radialGradient></defs><circle cx="40" cy="40" r="36" fill="#ff9ad0" opacity=".18"/><circle cx="40" cy="40" r="30" fill="url(#cg)"/><circle cx="40" cy="40" r="27.6" fill="none" stroke="#7f5214" stroke-width="4" stroke-dasharray="1.2 3.6" opacity=".7"/><circle cx="40" cy="40" r="24" fill="none" stroke="#8c5c14" stroke-width="1.4"/><circle cx="40" cy="40" r="29.7" fill="none" stroke="#ffe699" stroke-width="1.2" opacity=".8"/><g fill="#7a4d0f" stroke="#7a4d0f" stroke-linejoin="round"><path d="M30.4 42.4a9.6 9.6 0 0 1 19.2 0" fill="none" stroke-width="4.2"/><path d="M25 43h30l2.4 5.4H22.6z" stroke-width=".6"/><path d="M27.4 49h25.2l2.4 4.2H25z" stroke-width=".6"/><path d="M43 33.4l4.8-6 4.2-6.6M37 33.4l-4.8-6-4.2-6.6" fill="none" stroke-width="2.1" stroke-linecap="round"/><circle cx="40" cy="33.4" r="1.8"/><path d="M35.2 43.9h9.6L43 48.4h-6z" fill="#5c3810" stroke="none"/></g></svg>`;
+  const LORE = {"samurai": [["Ржа съела рога, подкладку не раз меняли чужие руки. Кто бы ни носил его последним, он не знал, чей знак когда-то горел у него на лбу.", "Шлем чистили и чинили, будто ждали, что хозяин вернётся. Под слоем лака — вмятина от удара, которого никто из живых не видел.", "Синий шнур завязан узлом, каким вяжут только перед последним боем. Развязать его так никто и не решился.", "Металл помнит жар того утра. Стоит надеть шлем — и в ушах шумит небо, которого больше нет.", "Золото не потускнело ни на волос. Говорят, носивший его стоял ближе всех к Ней, когда небо раскололось, — и поклонился, а не бежал.", "Шлем не пережил ту ночь — он её запомнил. Камень во лбу всё ещё смотрит туда, где Она подняла руку, и ждёт приказа."], ["Пластины сшиты заново грубой ниткой, половины не хватает. Доспех служил многим, и ни один из них не был тем, для кого его ковали.", "Под нагрудником — вышитый лоскут с солнцем, затёртый почти до нитей. Кто-то берёг его дольше, чем саму броню.", "Синяя шнуровка цела, ряды пластин ровны. Так держат строй те, кого учили стоять, пока стоит знамя.", "Изнутри выжжен след ладони. Тот, кто носил этот доспех, прижал руку к сердцу в миг, когда свет стал слишком ярким.", "Феникс на груди сделан не для красоты: в полку его носили лишь те, кто однажды вернулся из огня. Этот вернулся дважды.", "Трещины светятся изнутри, будто под пластинами всё ещё бьётся чужое сердце. Доспех тёплый — даже в снегу."], ["От перчаток остались обмотки и пара заклёпок. Пальцы сами ложатся так, как держали древко, — привычка, пережившая хозяина.", "Кожа истёрлась на ладони ровным пятном: здесь тысячу раз лежала рукоять. Тысяча первого раза не случилось.", "Сталь пальцев покрыта мелкими зарубками — по одной на каждый удар, отведённый от чужой спины.", "Когти поцарапаны о что-то, что не было ни деревом, ни камнем, ни плотью. Царапины до сих пор шевелятся.", "Золото на костяшках стёрто только с одной стороны: тот, кто их носил, бил лишь тех, кто шёл к Ней.", "Перчатки не отпускают оружие, пока бой не кончен. Говорят, их сняли с руки, которая так и не разжалась."], ["Одна пластина на месте, остальные заменены чем пришлось. Плечо, на котором это держалось, давно стало землёй.", "Края содэ отполированы чужими щитами: в строю стояли так тесно, что броня тёрлась о броню.", "Герб на наплечнике выскоблен ножом. Кто-то не хотел, чтобы знали, под чьим знаменем он стоял, — или стыдился, что выжил.", "Лик они на плече скалится не врагу, а небу. Мастер знал, откуда придёт беда.", "Перья не сгорели в том огне, в котором сгорело всё остальное. Их подобрали на пепелище и пришили заново.", "Череп на наплечнике — не украшение. Тот, кому он принадлежал, просил, чтобы и после смерти стоять в строю."], ["Подошвы меняли столько раз, что от первых ног не осталось и следа. Только ремни ещё помнят чью-то походку.", "На голенищах — засохшая глина далёкой долины. Её так и не отмыли: хозяин верил, что это земля, по которой Она шла.", "Поножи стёрты на коленях. В них подолгу стояли на коленях — то ли в молитве, то ли над павшими.", "Фиолетовый огонь у щиколоток не обжигает, а тянет вперёд. Ноги в них не умеют отступать.", "Золото сияет, будто поножи никто не носил. Носили. Просто тот, кто носил, не сделал ни шага назад.", "След этих поножей до сих пор горит на камнях одного перевала. Не ищи его — он сам найдёт того, кто их наденет."], ["Ткань выцвела до цвета пыли, герб на спине распорот и зашит наизнанку. Кто-то прятал, чей это хаори.", "Подкладка расшита мелкими солнцами — по одному на каждое утро, которое пережил хозяин. Последние стежки неровные.", "Мех на вороте всё ещё пахнет дымом. Не костра — неба.", "Полы колышутся без ветра. Говорят, так ткань отвечает на шаги тех, кого с нами больше нет.", "Дракон на спине вышит волосом с головы самой швеи. Она шила всю ночь перед тем утром и не успела закончить хвост.", "Хаори горит и не сгорает. Кто стоял в нём рядом с Ней, видел, как рассвет начался не на небе, а у Неё в ладонях."], ["Простое железное кольцо, стёртое до тонкой полоски. В полку такое давали в первый день — и забирали в последний.", "Нефрит в оправе треснул, но его не заменили. Трещина, говорят, прошла в тот же миг, когда треснуло небо.", "Внутри ободка было выцарапано одно слово, но за долгие годы его стёрли пальцем. Осталась только первая черта.", "Аметист в шипах тёмный днём и светится лишь перед рассветом — будто ждёт часа, когда всё случилось.", "Дракон обвил солнце, чтобы его не украли. Такие кольца давали тем, кто клялся охранять Её до конца — и после конца.", "Камень в кольце — капля той самой зари. Если долго смотреть в него, можно увидеть, как Она обернулась."], ["Дерево омамори потрескалось, надпись внутри давно истлела. Его носили, не зная, о чём оно просит.", "Магатаму стёрли пальцами до гладкости. Перед боем её сжимали так, будто держались за чью-то руку.", "Сапфир холоден даже в огне. Его вешали на шею тем, кто первым шёл в прорыв, чтобы не дрогнуло сердце.", "Полумесяц на подвеске повёрнут не так, как на небе сейчас. Так он стоял в ту ночь — и больше никогда.", "Медальон согревает грудь, когда рядом враг. В тот день, говорят, он был горячим, как угли.", "Талисман не защитил хозяина. Он защитил то, что хозяин закрывал собой. Поэтому талисман цел, а хозяина нет."]], "gharn": [["Войлок, верёвка и козья кожа — всё, что было у новичка в загоне. Шлем держит песок, а удар — как повезёт.", "Бронзовую стрелку на нос выменяли у кузнеца за половину первой награды. Вторую половину проели.", "Железо снято с чужого шлема: победитель берёт всё. Конский хвост на макушке отращивали три сезона боёв.", "Клыки — от зверя, которого выпустили против одного бойца. С песка ушёл только боец. Руны шаман вырезал бесплатно.", "Золото бросили на песок кошелём, не глядя. Мастер переплавил его не в монеты, а в шлем: монеты кончаются, слава — нет.", "Железо для шлема закаляли в красном песке, что светится по ночам. Кузнец, который это делал, больше не берёт заказов."], ["Стёганый войлок и пара пластин из сыромятной кожи. Каждый шов прошит самим бойцом — и видно, что он спешил.", "Пластины вываривали в масле три ночи, чтобы кожа стала твёрже кости. Пахнет до сих пор.", "Железные пластины склёпаны из клинков проигравших. Красный лак — не краска.", "Шипы на груди — из рогов того, кого не мог одолеть никто до него. Руны шепчут имя. Не своё.", "Солнце на нагруднике выбили из золота трёх побед подряд. Так одеваются те, кого толпа зовёт по имени.", "Трещины светятся там, где мастер вплавил осколки красного кристалла. Доспех стал легче — и голоднее."], ["Тряпичные обмотки, пропитанные жиром. Зато удар не сдирает кожу с костяшек — на первые бои хватает.", "Кожаные наручи с бронзовыми бляхами. Бирюзовую бусину на шнуре дала мать — бойцы о таком не говорят.", "Железные пластины на пальцах сняты с наручей чемпиона прошлого сезона. Чемпиону они больше не нужны.", "Когти — клыки, вбитые в кожу по одному после каждой победы. Двенадцатый вбит криво: рука дрожала.", "Золото на костяшках — награда за бой, о котором не принято вспоминать. Наручи ни разу не мыли.", "Когти выкованы из железа, что пролежало сезон в красном песке. Теперь они режут то, что не режет сталь."], ["Кусок сыромятной кожи, подвязанный верёвкой. Чтобы с трибун было видно: этот ещё дерётся.", "Пластины из дублёной кожи, сшитые шнуром. Новичкам их пришивают по одной на каждый выигранный бой.", "Конская бахрома окрашена в синий — цвет загона, откуда вышел боец. На арене цвета помнят дольше, чем имена.", "Череп вепря на плече — не трофей, а долг. Зверь убил того, кто учил хозяина держать клинок.", "Белые перья — от птиц, что гнездятся над ложей правителя. Их не продают: их можно только получить.", "Кость на оплечьях не от зверя. Мастер не сказал, от кого, а покупатель не спросил."], ["Сандалии, обмотанные тряпьём до колен. Песок арены жжёт ступни сильнее любого клинка.", "Войлочные гутулы на кожаной подошве. Подкладку набивали шерстью, чтобы ноги не мёрзли в ночных загонах.", "Поножи склёпаны из обломков щитов, на которых бойца выносили с песка. На третий раз он вышел сам.", "Шипы на коленях — из клыков, а фиолетовое пламя у щиколоток — подарок шамана, проигравшего спор.", "Позолота — от песка, которым посыпают арену в дни больших игр. Его собирали горстями после боя.", "Где прошли эти поножи, песок краснеет. Кузнец клялся, что просто закалял железо. Его подмастерье исчез."], ["Рваный войлок с вуалью от бурь. Им же закрывают лицо тем, кто не встал.", "Дорожный плащ с капюшоном, подбит овчиной. Бирюза на застёжке — первый подарок толпы.", "Синяя бурка с клыком на спине — знак загона. Хвосты пришивают за каждого, кто сдался, не дожидаясь удара.", "Волчья шкура — с вожака стаи, которую выпустили на одного. Фиолетовый дым поднимается, когда бурка чует кровь.", "Белый мех и золотое солнце носят те, кому разрешено выходить на песок последним. Толпа встаёт, когда видит этот плащ.", "Нити вымачивали в красном песке. Бурка рассыпается искрами — и снова собирается на плечах."], ["Кольцо из кости, выточенное ножом в ночь перед первым боем. На удачу. Удача — это когда утром ты ещё жив.", "Бронзовое кольцо с бирюзой. Такие продают у ворот арены — и почти всегда снимают с тех, кто не вернулся.", "Печатка с клыком — знак, что боец выкупил себя из загона. Ею ставят оттиск на долговой расписке. Своей.", "Кольцо из клыка с фиолетовой руной. Шаман сказал: руна помнит каждого, кто упал от этой руки.", "Золотой клык вокруг янтарного солнца. Такой перстень снимают с пальца только вместе с пальцем.", "Красный осколок парит над оправой и не касается её. Мастер держал его щипцами три дня, пока железо не согласилось."], ["Зуб на кожаном шнурке — первый, который боец выбил сам. Свой или чужой — не говорят.", "Бирюзовые чётки с бронзовым кругом. Их перебирают перед выходом на песок: по бусине на каждый вдох.", "Бронзовый клык с конским хвостом дарят тому, кто победил трижды за один день.", "Связка клыков с рунами. Каждый — от зверя, которого не должны были убить. Каждый шепчет.", "Золотой диск с клыком носят те, кому однажды кивнули из высокой ложи. Одного кивка хватает на всю жизнь.", "Кристалл в виде клыка пульсирует, как сердце. Кузнец нашёл его в красном песке — и больше туда не ходил."]]};
+  // уровень, нужный чтобы надеть: у обычной вещи на 5 ниже уровня предмета, каждая ступень редкости — на 1 выше
+  const reqLevel = it => Math.max(1, it.lvl - 5 + it.r);
+  // плашка уровня: золотая, если уровень героя достаточен, красная — если нет
+  function lvlPlaque(item) {
+    const hero = +heroIn.value, req = reqLevel(item), bad = req > hero;
+    return `<span class="lvlp${bad ? " bad" : ""}"><small>Требуется уровень</small><b>${req}</b></span>`;
+  }
+  const KIND = { helmet: "Доспех · голова", chest: "Доспех · тело", gloves: "Доспех · руки", shoulders: "Доспех · плечи",
+                 boots: "Доспех · ноги", cloak: "Накидка · спина", ring: "Украшение · палец", amulet: "Украшение · шея" };
+  const SLOTS = [
+    { key: "helmet", type: "Шлем", main: ["atk", "arm", "hp"], w: { rele: 1.5 }, rect: [961, 210, 1086, 361], demo: 4,
+      names: ["Ржавая дзингаса", "Кабуто ополченца", "Кабуто Синего прилива", "Рогатый шлем Они", "Шлем Золотого дракона", "Корона Кровавой луны"] },
+    { key: "chest", type: "Нагрудник", main: ["arm", "hp"], w: { rphy: 2 }, rect: [1098, 210, 1224, 361], demo: 5,
+      names: ["Стёганая куртка", "Ламеллярный до", "Доспех Синей стражи", "Панцирь Аметистового демона", "Нагрудник Феникса", "Доспех Алой бездны"] },
+    { key: "gloves", type: "Перчатки", main: ["atk", "ha"], w: { crit: 2, aspd: 2, cdmg: 1.3 }, rect: [961, 372, 1086, 531], demo: 3,
+      names: ["Тканевые обмотки", "Кожаные котэ", "Латные котэ", "Когти Аметиста", "Когти Золотого дракона", "Когти Кровавой луны"] },
+    { key: "shoulders", type: "Наплечники", main: ["arm", "hp"], w: { rphy: 1.5 }, rect: [1098, 372, 1224, 531], demo: 2,
+      names: ["Кожаный наплечник", "Лёгкие содэ", "Содэ Синего прилива", "Наплечники Лика они", "Крылья Феникса", "Наплечники Черепа они"] },
+    { key: "boots", type: "Сапоги", main: ["arm", "ha"], w: { rphy: 1.3, rele: 1.3, aspd: 1.2 }, rect: [961, 542, 1086, 706], demo: 1,
+      names: ["Варадзи странника", "Кожаные таби", "Поножи Синей стражи", "Поножи Фиолетового пламени", "Поножи Золотого рассвета", "Поножи Кровавого следа"] },
+    { key: "cloak", type: "Плащ", main: ["atk", "hp", "ha"], w: { rele: 1.6 }, rect: [1098, 542, 1224, 706], demo: 0,
+      names: ["Соломенная мино", "Дорожный плащ", "Хаори Синего прилива", "Плащ Духов пламени", "Хаори Золотого дракона", "Плащ Алых лепестков"] },
+    { key: "ring", type: "Кольцо", main: ["atk", "arm", "hp", "ha"], w: { crit: 1.4, cdmg: 1.6 }, rect: [961, 716, 1086, 917], demo: 5,
+      names: ["Железное кольцо", "Нефритовое кольцо", "Сапфировое кольцо", "Шипастое кольцо Аметиста", "Кольцо Свернувшегося дракона", "Кольцо Кровавой луны"] },
+    { key: "amulet", type: "Амулет", main: ["atk", "arm", "hp", "ha"], w: { cdmg: 1.3, rele: 1.3 }, rect: [1098, 716, 1224, 917], demo: 4,
+      names: ["Деревянный омамори", "Нефритовая магатама", "Сапфировая подвеска", "Подвеска Лунного серпа", "Солнечный медальон Феникса", "Талисман Кровавой луны"] },
+  ];
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pickW = (items) => { let s = items.reduce((t, it) => t + it.w, 0), r = Math.random() * s;
+    for (const it of items) { r -= it.w; if (r <= 0) return it; } return items[items.length - 1]; };
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  // рост статов с уровнем предмета: числа +8 % за уровень, проценты +2 % за уровень (медленнее — у них капы)
+  const lvlMult = (pct, lvl) => pct ? 1 + 0.02 * (lvl - 1) : 1 + 0.08 * (lvl - 1);
+  const roll = (key, r, lvl, minor) => {
+    const s = STATS[key]; let v = rnd(s.lo, s.hi) * RAR[r].mult * lvlMult(s.pct, lvl) * (minor ? MINOR : 1);
+    return s.pct ? Math.round(v * 10) / 10 : Math.max(1, Math.round(v));
+  };
+
+  // пропитанная маной вещь: +1 основной стат и 1 доп. стат ×5 (розовый); изредка мана ложится на стат со свечением — множители перемножаются
+  const MANA = { chance: 0.01, mult: 5, stack: 0.08 };
+  // пассивный навык Тянь Лун: плащи ×1,5; урон за серию ударов без полученного урона; синергия с Копьём Алого Заката
+  const PASSIVE = { name: "Танец Избранницы", cloak: 1.5, streak: [[5, 5], [10, 8], [20, 10]],
+                    synergy: { weapon: "spear", agi: 1.1, ha: 1.15 } };
+  const HERO_AGI = 60;   // Ловкость Тянь Лун (config/hero_tianlong.json)
+  function makeItem(slot, r, lvl, mana, forceStack) {
+    const R = RAR[r];
+    const mains = shuffle(slot.main.slice()).slice(0, R.main);
+    const main = mains.map(k => ({ key: k, v: roll(k, r, lvl, false) }));
+    let pool = ORDER.filter(k => !mains.includes(k)).map(k => ({ key: k, w: STATS[k].main ? MINOR_W : (slot.w[k] || 1) }));
+    const extra = [];
+    for (let i = 0; i < R.extra && pool.length; i++) { const it = pickW(pool); pool = pool.filter(p => p !== it); extra.push({ key: it.key, minor: !!STATS[it.key].main }); }
+    extra.forEach(e => { e.v = roll(e.key, r, lvl, e.minor); });
+    const order = shuffle(extra.map((_, i) => i));
+    const boosted = order.slice(0, R.guar);
+    order.slice(R.guar, R.guar + R.rnd).forEach(i => { if (Math.random() < R.chance) boosted.push(i); });
+    boosted.forEach(i => { const e = extra[i], s = STATS[e.key]; e.boost = true;
+      e.v = s.pct ? Math.round(e.v * R.boost * 10) / 10 : Math.round(e.v * R.boost); });
+    if (mana) {
+      const more = (slot.main.filter(k => !mains.includes(k)).length ? slot.main : ["atk", "arm", "hp", "ha"]).filter(k => !mains.includes(k));
+      if (more.length) { const k = more[Math.floor(Math.random() * more.length)]; main.push({ key: k, v: roll(k, r, lvl, false), manaMain: true }); }
+      const pool2 = extra.filter(e => !main.some(m => m.key === e.key));
+      const glow = pool2.filter(e => e.boost), plain = pool2.filter(e => !e.boost);
+      const pickFrom = (forceStack || Math.random() < MANA.stack) && glow.length ? glow : (plain.length ? plain : glow);
+      const e = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+      if (e) { const st = STATS[e.key]; e.mana = true; e.v = st.pct ? Math.round(e.v * MANA.mult * 10) / 10 : Math.round(e.v * MANA.mult); }
+      extra.splice(0, extra.length, ...extra.filter(x => !main.some(m => m.key === x.key)));
+    }
+    extra.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+    // пассив Тянь Лун: все статы надетого плаща ×1,5 (поверх свечения и маны); base — без пассива, для мини-подсказки
+    if (slot.key === "cloak") [...main, ...extra].forEach(e => { const st = STATS[e.key]; e.base = e.v; e.hero = true;
+      e.v = st.pct ? Math.round(e.v * PASSIVE.cloak * 10) / 10 : Math.round(e.v * PASSIVE.cloak); });
+    // цена: база редкости × уровень × усиленные статы × разброс 0,9–1,15; мифическое — не дешевле 30 000
+    const raw = PRICE[r] * (1 + 0.05 * (lvl - 1)) * (1 + 0.12 * boosted.length) * (mana ? 4 : 1) * rnd(0.9, 1.15);
+    const price = Math.max(PRICE_MIN[r], Math.round(raw / PRICE_STEP[r]) * PRICE_STEP[r]);
+    return { slot, r, lvl, name: slot.names[r], main, extra, price, set: false, mana: !!mana };
+  }
+
+  const fmt = (key, v) => STATS[key].pct ? "+" + v.toFixed(1).replace(".", ",") + " %" : "+" + v;
+  const RC = ["--r0", "--r1", "--r2", "--r3", "--r4", "--r5"];
+  const svg = (key, cls) => `<img class="${cls}" src="ui/st_${key}_s.png" alt="">`;
+
+  function iconStyle(slotIdx, r, sheet) {
+    sheet = sheet || SHEET;
+    const [x0, x1] = sheet.cols[r], [y0, y1] = sheet.rows[slotIdx];
+    const s = 64 / (x1 - x0);
+    return `background-size:${sheet.w * s}px ${sheet.h * s}px;background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - 66 / s) / 2) * s}px`;
+  }
+  const line = (e, i, j, part, cls) => `<li class="${cls}${e.boost ? " boost" : ""}${e.mana ? " mana" : ""}${e.manaMain ? " manaMain" : ""}" style="--i:${i}" data-part="${part}" data-j="${j}">` +
+    `${svg(e.key, "si")}<span class="v">${fmt(e.key, e.v)}</span><span class="k">${STATS[e.key].name}</span><i class="mark"></i></li>`;
+
+  // вещи игрока: в тестовой версии — все вещи обоих сетов во всех редкостях; сет считается по надетым вещам
+  const SET_KEYS = ["samurai", "gharn"];
+  let bag = [];                                          // bag[k] — вещи для слота k
+  const equipped = SLOTS.map(s => `samurai-${s.demo}`);  // по умолчанию — полный сет Самурая с редкостями макета
+  const itemAt = k => bag[k].find(it => it.id === equipped[k]);
+  const setCount = key => SLOTS.reduce((n, _, k) => n + (itemAt(k).setKey === key ? 1 : 0), 0);
+
+  function sprite(slotIdx, r, sheet, w, h) {
+    const [x0, x1] = sheet.cols[r], [y0, y1] = sheet.rows[slotIdx];
+    const s = w / (x1 - x0);
+    return `background-image:url(${sheet.img});background-size:${sheet.w * s}px ${sheet.h * s}px;` +
+      `background-position:${-x0 * s}px ${-(y0 + ((y1 - y0) - h / s) / 2) * s}px`;
+  }
+
+  const PIP = ["helmet", "chest", "gloves", "shoulders", "boots", "cloak", "ring", "amulet"];
+  function setBox(item, idx, next) {
+    const S = SETS[item.setKey], n = setCount(item.setKey);
+    return `<div class="setbox">
+      <div class="plaque"><i class="emb" style="background-image:url(${S.emblem})"></i><b>${S.name}</b><span>${n} / ${SLOTS.length}</span></div>
+      <div class="pips">${SLOTS.map((sl, k) => { const on = itemAt(k).setKey === item.setKey;
+        return `<i class="${on ? "on" : ""}${k === idx ? " me" : ""}" title="${sl.type}" style="background-image:url(${PIPS[PIP[k] + (on ? "_on" : "_off")]})"></i>`; }).join("")}</div>
+      <ul class="setb">${S.bonuses.map((b, j) => `<li class="${n >= b.n ? "act" : ""}" style="--i:${next()}" data-part="set" data-j="${j}">` +
+        `<span class="n">${b.n}</span><span class="t">${b.title}: ${b.text}</span></li>`).join("")}</ul>
+</div>`;
+  }
+
+  // 4 уголка с кристаллами и несколько частиц маны вдоль рамки, у каждой — своё место, скорость и задержка
+  const MPART = ["ui/mana_p0_s.png", "ui/mana_p1_s.png", "ui/mana_p3_s.png", "ui/mana_p5_s.png", "ui/mana_p6_s.png", "ui/mana_p7_s.png",
+                 "ui/mana_p11_s.png", "ui/mana_p12_s.png", "ui/mana_p14_s.png"];
+  const MSPOT = [[6, 10], [94, 8], [3, 48], [97, 40], [8, 90], [92, 92], [50, 2], [30, 97], [70, 97]];
+  function manaDeco() {
+    return `<div class="mcorners"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>` +
+      MSPOT.map(([x, y], n) => `<i class="p" style="left:${x}%;top:${y}%;--s:${12 + (n * 5) % 9}px;--d:${5 + (n * 7) % 4}s;--w:-${(n * 1.3).toFixed(1)}s;` +
+        `--dx:${(n % 2 ? 1 : -1) * (4 + n % 3 * 3)}px;background-image:url(${MPART[n]})"></i>`).join("") + `</div>`;
+  }
+
+  function render(item, idx) {
+    let i = 0;
+    return `<div class="sweep"></div>${item.mana ? manaDeco() : ""}<div class="inner">
+      <div class="pin" title="Закрепление"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>
+      <header><div class="icon${item.mana ? " mrim" : ""}" style="${sprite(idx, item.r, SETS[item.setKey].sheet, 64, 66)}"></div>
+        <div><p class="name">${item.name}</p>
+          <div class="rarity"><i></i>${RAR[item.r].name}</div>
+          ${item.mana ? '<div class="manatag"><span>Пропитано маной</span></div>' : ""}
+          <div class="ilv">Уровень предмета <b>${item.lvl}</b></div></div>
+        <div class="price" title="Цена">${COIN}<b>${money(item.price)}</b></div></header>
+      <div class="kind"><span class="kt" style="background-image:url(${TYPES[PIP[idx]]})"></span>
+        <span class="kn"><b>${item.slot.type}</b><small>${KIND[item.slot.key]}</small></span></div>
+      ${lvlPlaque(item)}
+      <div class="orn"></div>
+      <div class="stats">
+        <div class="cap">Основные</div>
+        <ul class="main">${item.main.map((e, j) => line(e, i++, j, "main", "")).join("")}</ul>
+        <div class="branch"><div class="cap">Дополнительные</div>
+          <ul class="tree">${item.extra.map((e, j) => line(e, i++, j, "extra", e.minor ? "minor" : "")).join("")}</ul></div>
+        ${item.slot.key === "cloak" ? `<div class="heronote">✧ ${PASSIVE.name}: на Тянь Лун все статы плаща ×1,5</div>` : ""}
+        ${setBox(item, idx, () => i++)}
+      </div>
+      <div class="lore"><span>${LORE[item.setKey][idx][item.r]}</span></div>
+</div>`;
+  }
+
+  const holder = document.getElementById("holder"), stage = document.getElementById("stage");
+  const tt = document.getElementById("tt"), mini = document.getElementById("mini"), menu = document.getElementById("menu");
+  const lvlIn = document.getElementById("lvl"), lvlOut = document.getElementById("lvlOut");
+  const heroIn = document.getElementById("hero"), heroOut = document.getElementById("heroOut");
+  const narrow = () => window.matchMedia("(max-width: 760px)").matches;
+  let ttEntered = false, ttLeaveT = 0, current = -1, showT = 0, hideT = 0, pinT = 0, pinned = false, leaving = false, inTT = false, onSlot = false, lastXY = [-1, -1], suppressUntil = 0, menuSlot = -1, menuClosedAt = { k: -1, t: 0 };
+
+  function generate() {
+    const lvl = +lvlIn.value;
+    // в тестовой сумке у каждой вещи есть и версия, пропитанная маной; у легендарной и мифической мана для примера ложится на стат со свечением
+    bag = SLOTS.map((s, k) => SET_KEYS.flatMap(key => [false, true].flatMap(mana => RAR.map((_, r) => {
+      const it = makeItem(s, r, lvl + r, mana, mana && r >= 4);   // чем реже вещь, тем выше её уровень (для примера)
+      return Object.assign(it, { set: true, setKey: key, name: SETS[key].names[k], id: `${key}-${r}${mana ? "-m" : ""}` });
+    }))));
+    slotArt();
+    if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); }
+    if (menuSlot >= 100) openWeaponMenu(menuSlot - 100); else if (menuSlot >= 0) openMenu(menuSlot);
+  }
+
+  function sideOf(idx, w, h) { return sideOfRect(idx >= 100 ? WSLOTS[idx - 100].rect : SLOTS[idx].rect, w, h); }
+  function sideOfRect(rect, w, h) {
+    // вплотную слева от той вещи, на которую навели, — курсор переходит в окно, не задевая соседние слоты
+    const [x0, y0, x1] = rect, W = stage.clientWidth, H = stage.clientHeight, k = W / STAGE.w, gap = 6;
+    let left = x0 * k - w - gap, origin = "100%";
+    if (left < 8) { left = x1 * k + gap; origin = "0%"; }
+    const top = Math.max(8, Math.min(Math.max(8, y0 * k - 8), H - h - 8));
+    return { left, top, origin };
+  }
+  function place(idx) {
+    if (narrow()) return;
+    const p = sideOf(idx, tt.offsetWidth, tt.offsetHeight);
+    tt.style.left = p.left + "px"; tt.style.top = p.top + "px"; tt.style.setProperty("--ox", p.origin);
+  }
+
+  function fill(idx, keepShown) {
+    current = idx;
+    const it = itemAt(idx);
+    tt.style.setProperty("--rc", `var(${RC[it.r]})`);
+    tt.classList.toggle("mana", !!it.mana);
+    tt.dataset.r = it.r;
+    tt.innerHTML = render(it, idx);
+    tt.querySelectorAll("li.boost").forEach(li => { li.style.setProperty("--bc", `var(${RC[it.r]})`); li.classList.add("b" + it.r); });
+    if (!keepShown) { tt.classList.remove("show", "pinned", "arming"); void tt.offsetWidth; }
+    fitLore();
+    place(idx);
+    tt.classList.add("show"); tt.setAttribute("aria-hidden", "false");
+  }
+
+  // текст лора уменьшается, пока не уместится в свиток
+  function fitLore() {
+    const box = tt.querySelector(".lore"), sp = box && box.firstElementChild;
+    if (!sp) return;
+    let fs = 14;
+    sp.style.fontSize = fs + "px";
+    while (fs > 10.5 && sp.scrollHeight > box.clientHeight - box.clientWidth * 0.106) { fs -= 0.5; sp.style.fontSize = fs + "px"; }
+  }
+  function arm() {
+    clearTimeout(pinT);
+    tt.classList.remove("arming"); void tt.offsetWidth; tt.classList.add("arming");
+    pinT = setTimeout(pin, PIN_MS);
+  }
+  function pin() {
+    clearTimeout(pinT);
+    if (leaving) return;   // курсор уже ушёл со слота и не дошёл до окна — не закрепляем
+    pinned = true; ttEntered = inTT;   // закрепилось под курсором — выход за рамку закроет окно
+    tt.classList.remove("arming"); tt.classList.add("pinned");
+  }
+
+  function open(idx, instant) {
+    if (menuSlot >= 0) return;
+    if (pinned) {   // закреплённое: вернулись на его вещь — остаётся; навели на другую вещь не из окна — закрываем и открываем новое
+      if (idx === current) { onSlot = true; clearTimeout(ttLeaveT); return; }
+      if (inTT) return;
+      clearTimeout(ttLeaveT); hide();
+    }
+    onSlot = true;
+    clearTimeout(hideT); clearTimeout(showT); leaving = false;
+    const go = () => { const same = current === idx && tt.classList.contains("show"); fill(idx, same); tt.classList.add("live"); arm(); };   // кольцо копится, пока курсор на вещи
+    instant ? go() : (showT = setTimeout(go, 0));   // без задержки: окно сразу начинает плавно проявляться
+  }
+  function hide() {
+    clearTimeout(showT); clearTimeout(pinT); hideMini();
+    pinned = false;
+    tt.classList.remove("show", "pinned", "arming", "live"); tt.setAttribute("aria-hidden", "true"); current = -1; inTT = false;
+  }
+  // закреплённое живёт, пока курсор на его вещи или в самом окне; ушёл и оттуда, и оттуда — пропадает
+  // (0,06 с — перейти через зазор между вещью и окном)
+  function dropPinnedSoon() { clearTimeout(ttLeaveT); ttLeaveT = setTimeout(() => { if (pinned && !inTT && !onSlot) hide(); }, 60); }
+  function leave() {
+    onSlot = false;
+    if (pinned) { dropPinnedSoon(); return; }
+    clearTimeout(showT); clearTimeout(pinT); tt.classList.remove("arming");   // ушёл с вещи раньше — окно не закрепляется, кольцо сброшено
+    leaving = true; hideT = setTimeout(hide, 30);   // окно вплотную к слоту: 0,03 с хватает, чтобы курсор перешёл в него
+  }
+
+  // мини-подсказка стата (только у закреплённой)
+  function showMini(li) {
+    if (li.dataset.part === "set") return showSetMini(li);
+    const it = itemAt(current), e = (li.dataset.part === "main" ? it.main : it.extra)[+li.dataset.j], s = STATS[e.key];
+    let tag = "";
+    const kx = v => "×" + (+v.toFixed(2)).toString().replace(".", ",");
+    if (e.mana && e.boost) tag = `◆ Мана ${kx(MANA.mult)} поверх свечения ${kx(RAR[it.r].boost)} — всего ${kx(MANA.mult * RAR[it.r].boost)}`;
+    else if (e.mana) tag = `◆ Усилено маной · ${kx(MANA.mult)}`;
+    else if (e.manaMain) tag = "◆ Лишний основной стат от маны";
+    else if (e.boost) tag = `✦ Усилено свечением · ×${RAR[it.r].boost.toFixed(2).replace(".", ",")}`;
+    else if (e.minor) tag = "Основной стат в роли дополнительного · 45 % силы";
+    else if (li.dataset.part === "main") tag = "Основной стат предмета";
+    mini.style.setProperty("--bc", e.mana || e.manaMain ? "var(--mana)" : e.boost ? `var(${RC[it.r]})` : "var(--gold)");
+    mini.innerHTML = `<h3>${svg(e.key, "")}${s.name}</h3><p>${s.info}</p>` +
+      `<div class="here">На этом предмете: <b>${fmt(e.key, e.v)}</b></div>` + (tag ? `<div class="tag">${tag}</div>` : "") +
+      (e.hero ? `<div class="tag" style="color:#f0cf8a">✧ ${PASSIVE.name}: плащ на Тянь Лун ×1,5 · без пассива ${fmt(e.key, e.base)}</div>` : "");
+    positionMini(li);
+  }
+  function showSetMini(li) {
+    const key = itemAt(current).setKey, b = SETS[key].bonuses[+li.dataset.j], n = setCount(key);
+    mini.style.setProperty("--bc", "var(--set)");
+    mini.innerHTML = `<h3>(${b.n}) ${b.title}</h3><p>${b.text}. ${b.info}</p>` +
+      `<div class="here">Нужно вещей сета: <b>${b.n}</b> · надето: <b>${n}</b></div>` +
+      `<div class="tag">${n >= b.n ? "Бонус действует" : "Не хватает: " + (b.n - n)}</div>`;
+    positionMini(li);
+  }
+  function positionMini(li) {
+    const hb = holder.getBoundingClientRect(), lb = li.getBoundingClientRect(), tb = tt.getBoundingClientRect();
+    const mw = mini.offsetWidth || 236, gap = 10;
+    let left = tb.left - hb.left - mw - gap, dir = "6px";
+    if (left < 4) { left = tb.right - hb.left + gap; dir = "-6px"; }
+    let top = lb.top - hb.top - 8;
+    if (!narrow()) { mini.style.left = left + "px"; }
+    else { top = lb.bottom - hb.top + 6; }
+    mini.style.top = Math.max(4, top) + "px"; mini.style.setProperty("--mx", dir);
+    mini.classList.remove("show"); void mini.offsetWidth; mini.classList.add("show"); mini.setAttribute("aria-hidden", "false");
+  }
+  function hideMini() { mini.classList.remove("show"); mini.setAttribute("aria-hidden", "true"); }
+
+  // закреплённая: курсор вышел и за рамку окна, и с вещи — подсказка закрывается (dropPinnedSoon)
+  // незакреплённая: кольцо копится, только пока курсор на вещи; в самом окне оно не идёт; из окна на слот — кольцо заново,
+  // из окна в сторону — окно закрывается
+  document.addEventListener("pointermove", e => { lastXY = [e.clientX, e.clientY]; }, { passive: true });
+  tt.addEventListener("mouseenter", () => {
+    inTT = true;
+    if (pinned) { ttEntered = true; clearTimeout(ttLeaveT); return; }
+    if (tt.classList.contains("show") && tt.classList.contains("live")) { clearTimeout(hideT); clearTimeout(showT); leaving = false; }   // окно остаётся, но не закрепляется
+  });
+  tt.addEventListener("mouseleave", e => {
+    inTT = false;
+    if (pinned) { dropPinnedSoon(); return; }
+    if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".slot"))) leave();
+  });
+  tt.addEventListener("mouseover", e => { const li = e.target.closest("li"); if (pinned && li) showMini(li); });
+  tt.addEventListener("mouseout", e => { const li = e.target.closest("li"); if (li && !li.contains(e.relatedTarget)) hideMini(); });
+
+  // выпадающий список вещей слота: только вещи этого типа, по сетам
+  function openMenu(k) {
+    hide();
+    menuSlot = k;
+    const s = SLOTS[k], cur = itemAt(k);
+    menu.innerHTML = `<div class="mhead">${s.type}<span>${bag[k].length} в сумке</span></div>` +
+      SET_KEYS.map(key => `<div class="mset"><i style="background-image:url(${SETS[key].emblem})"></i>${SETS[key].name}</div>` + [false, true].map(mana =>
+        `${mana ? '<div class="msub">Пропитано маной</div>' : ""}<div class="mgrid">` +
+        bag[k].filter(it => it.setKey === key && it.mana === mana).map(it => { const eq = it.id === equipped[k];
+          return `<button type="button" class="mi${eq ? " eq" : ""}${it.mana ? " mana" : ""}" data-id="${it.id}" aria-label="${it.name}, ${RAR[it.r].name}${it.mana ? ", пропитано маной" : ""}${eq ? ", надето" : ""}" ` +
+            `style="--rc:var(${RC[it.r]});--n:${it.r};${spriteCover(k, it.r, SETS[key].sheet)}">${it.mana ? '<i class="mr"></i>' : ""}</button>`; }).join("") +
+        `</div>`).join("")).join("") +
+      `<div class="mcap" id="mcap" style="--rc:var(${RC[cur.r]})"><b>${cur.name}</b><span>${RAR[cur.r].name} · надето</span></div>`;
+    menu.classList.remove("show"); void menu.offsetWidth;
+    if (!narrow()) { const p = sideOf(k, menu.offsetWidth || 336, menu.offsetHeight || 320);
+      menu.style.left = p.left + "px"; menu.style.top = p.top + "px"; menu.style.setProperty("--ox", p.origin); }
+    menu.classList.add("show"); menu.setAttribute("aria-hidden", "false");
+    const eqBtn = menu.querySelector(".mi.eq"); if (eqBtn) eqBtn.focus({ preventScroll: true });
+  }
+  // плитка — ячейка листа целиком (по размеру кнопки, проценты — без пересчёта при ресайзе)
+  function spriteCover(k, r, sh) {
+    const [x0, x1] = sh.cols[r], [y0, y1] = sh.rows[k], cw = x1 - x0, ch = y1 - y0;
+    return `background-image:url(${sh.img});background-size:${sh.w / cw * 100}% ${sh.h / ch * 100}%;` +
+      `background-position:${x0 / (sh.w - cw) * 100}% ${y0 / (sh.h - ch) * 100}%`;
+  }
+  function menuCaption(btn) {
+    if (btn.dataset.w) return weaponCaption(btn.dataset.w);
+    const k = menuSlot, it = bag[k].find(x => x.id === btn.dataset.id), cap = document.getElementById("mcap");
+    if (!it || !cap) return;
+    cap.style.setProperty("--rc", `var(${RC[it.r]})`);
+    cap.innerHTML = `<b>${it.name}</b><span>${SETS[it.setKey].name} · ${RAR[it.r].name}${it.mana ? " · пропитано маной" : ""}${it.id === equipped[k] ? " · надето" : ""}</span>`;
+  }
+  menu.addEventListener("mouseover", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
+  menu.addEventListener("focusin", e => { const b = e.target.closest(".mi"); if (b) menuCaption(b); });
+  function closeMenu() {
+    if (menuSlot < 0) return;
+    menuClosedAt = { k: menuSlot, t: Date.now() };
+    menuSlot = -1; menu.classList.remove("show"); menu.setAttribute("aria-hidden", "true");
+  }
+  menu.addEventListener("click", e => {
+    const b = e.target.closest(".mi"); if (!b) return;
+    if (b.dataset.w) { const w = menuSlot - 100; closeMenu(); chooseWeapon(w, b.dataset.w); return; }
+    const k = menuSlot; equipped[k] = b.dataset.id;
+    clearTimeout(hideT);   // не дать отложенному скрытию (курсор только что ушёл со слота в список) погасить новое окно
+    closeMenu(); slotArt(); fill(k, false); tt.classList.add("live"); leaving = false;
+    requestAnimationFrame(() => {   // окно встало под курсор — окно остаётся; кольцо пойдёт, когда курсор вернётся на вещь
+      const el = document.elementFromPoint(lastXY[0], lastXY[1]);
+      if (el && tt.contains(el)) inTT = true;
+    });
+  });
+
+  // закреплённая подсказка закрывается кликом в любом месте, в том числе по ней самой; открытый список — кликом вне него;
+  // касание стата на телефоне показывает его мини-подсказку
+  document.addEventListener("pointerdown", e => {
+    if (menuSlot >= 0 && !(e.target.closest && e.target.closest("#menu"))) closeMenu();
+    if (!pinned) return;
+    const li = e.target.closest && e.target.closest("#tt li");
+    if (li && e.pointerType !== "mouse") { showMini(li); return; }
+    hide();
+    if (!(e.target.closest && e.target.closest(".slot"))) suppressUntil = Date.now() + 350;   // по слоту — тот же клик сразу открывает список
+  }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenu(); if (current >= 0) hide(); } });
+
+  SLOTS.forEach((s, idx) => {
+    const b = document.createElement("button");
+    b.className = "slot"; b.type = "button"; b.id = "slot-" + s.key;
+    b.setAttribute("aria-label", s.type + " — выбрать вещь");
+    const [x0, y0, x1, y1] = s.rect;
+    Object.assign(b.style, { left: x0 / STAGE.w * 100 + "%", top: y0 / STAGE.h * 100 + "%",
+      width: (x1 - x0) / STAGE.w * 100 + "%", height: (y1 - y0) / STAGE.h * 100 + "%" });
+    b.addEventListener("mouseenter", () => open(idx));
+    b.addEventListener("mouseleave", leave);
+    b.addEventListener("focus", () => open(idx));
+    b.addEventListener("blur", leave);
+    b.addEventListener("click", () => {
+      if (Date.now() < suppressUntil) return;
+      if (menuClosedAt.k === idx && Date.now() - menuClosedAt.t < 350) return;   // второй клик по тому же слоту — закрыть
+      openMenu(idx);
+    });
+    stage.appendChild(b);
+  });
+
+  // ── оружие: основное и второе; одно и то же оружие не может стоять в обоих слотах — выбор занятого меняет их местами
+  // у каждого оружия два приёма: [когда основное, когда второе]; каждый — только своим оружием
+  const WEAPONS = { spear: { name: "Копьё Алого Заката", attr: "Сила", skills: [["sunset", "Алый Закат"], ["vine", "Вихрь алой лозы"]] },
+                    katana: { name: "Катана", attr: "Ловкость", skills: [["moon", "Лунный росчерк"], ["iai", "Иай: остановка времени"]] } };
+  // приёмы: числа — из игры (config/hero*.json, weapons.json, spear_ult.gd, location.gd → _iai_cut); у «Вихря» и «Росчерка»
+  // кода ещё нет — числа предварительные. Урон = база приёма × уровень героя (+3 % за уровень) × оружие от характеристик
+  // (Progress.scaling_mult: 1 + Σ оценка × насыщение характеристики)
+  const SKILLS = {
+    sunset: { weapon: "spear", base: 45, hits: [0.35, 0.6, 0.2, 1.5], cd: 12, range: 7 },
+    vine: { weapon: "spear", base: 18, hits: [1, 1], ha: 20, cd: 8, conc: 10, range: 10, draft: true },
+    moon: { weapon: "katana", base: 50, ha: 25, cd: 10, conc: 40, range: 6, draft: true },
+    iai: { weapon: "katana", base: 60, cd: 90, concBoss: 40 } };
+  const SCALING = { spear: { agility: "A" }, katana: { agility: "B", strength: "D" } };
+  const GRADES = { S: 1.4, A: 1.1, B: 0.85, C: 0.6, D: 0.35, E: 0.15 };
+  const ATTR = { agility: 60, strength: 30 }, ATTR_NAME = { agility: "Ловкость", strength: "Сила" };
+  function saturation(v) {   // как в progress.gd: до 10 — ничего, 10→20 быстро, 20→40 ровно, после 60 отдача падает
+    const pts = [[10, 0], [20, 0.35], [40, 0.75], [60, 0.9], [99, 1]];
+    if (v <= 10) return 0;
+    for (let i = 1; i < pts.length; i++) if (v <= pts[i][0]) return pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * (v - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]);
+    return 1;
+  }
+  function heroAttrs() { const a = { ...ATTR }; if (weapons[0] === PASSIVE.synergy.weapon) a.agility = Math.round(a.agility * PASSIVE.synergy.agi); return a; }
+  function dmgCalc(sk) {
+    const S = SKILLS[sk], lvl = +heroIn.value, lm = 1 + 0.03 * (lvl - 1), a = heroAttrs();
+    const parts = Object.entries(SCALING[S.weapon]).map(([k, g]) => ({ k, g, v: a[k], add: GRADES[g] * saturation(a[k]) }));
+    const wm = 1 + parts.reduce((t, x) => t + x.add, 0), one = S.base * lm * wm;
+    const hits = (S.hits || [1]).map(h => Math.round(one * h));
+    return { S, lvl, lm, parts, wm, one, hits, total: hits.reduce((t, x) => t + x, 0) };
+  }
+  const num = v => String(+(+v).toFixed(2)).replace(".", ",");
+  const N = (kind, sk, text) => `<span class="num" data-k="${kind}" data-s="${sk}" tabindex="0">${text}</span>`;
+  // ролики приёмов, что уже есть в игре: записаны в Godot (сцена pax_rpg/dev/skill_clips) с моделью и клипами Тянь Лун
+  const CLIPS = { sunset: "ui/clip_sunset.webm", iai: "ui/clip_iai.webm" };
+  function skillText(sk) {
+    const d = dmgCalc(sk), S = d.S;
+    const dmg = N("dmg", sk, d.total);   // в описании — только итог; разбор — при наведении
+    const ha = S.ha ? `Стоимость ${N("ha", sk, S.ha + " ХА")} · откат ${S.cd} с` : `Откат ${S.cd} с`;
+    const T = {
+      sunset: [`Серия из 4 ударов по одной цели до ${S.range} м. Урон: ${dmg}.`,
+               "1-й удар оглушает, 2-й отбрасывает, 3-й сбивает с ног, 4-й бьёт по лежащему.",
+               "Все 4 удара попали — ХА Тянь Лун +50 %."],
+      vine: [`Бросок копья по дуге до ${S.range} м; копьё возвращается в руку. Каждый враг на пути получает 2 удара — туда и обратно.`,
+             `Урон: ${dmg}, ХА врага ${N("conc", sk, "−" + S.conc)} за каждый удар.`],
+      moon: [`Рывок на ${S.range} м сквозь цель. Урон: ${dmg}, ХА цели ${N("conc", sk, "−" + S.conc)}.`,
+             "Если у цели ХА ниже 33 — сразу слом и окно Кровожадной атаки."],
+      iai: [`Бьёт всех врагов в досягаемости. Урон: ${dmg} каждому.`,
+            `Обычные враги гибнут сразу, у босса — урон и ${N("conc", sk, "−" + S.concBoss + " % ХА")}.`,
+            "Удар по Тянь Лун в первые 0,6 с срывает приём."] }[sk];
+    const clip = CLIPS[sk] ? `<div class="skvw"><video class="skv" src="${CLIPS[sk]}" autoplay loop muted playsinline aria-label="Как выглядит приём"></video></div>` : "";
+    return T.map(t => `<p>${t}</p>`).join("") + `<p class="cost">${ha}</p>` + (S.draft ? `<p class="draft">Числа предварительные</p>` : "") + clip;
+  }
+  const WSLOTS = [{ name: "Основное оружие", tag: "Основное", rect: [377, 150, 522, 411], ui: [370, 321, 556, 418], sk: [460, 333.5, 515.5, 393], dy: "14px" },
+                  { name: "Второе оружие", tag: "Второе", rect: [377, 417, 522, 650], ui: [370, 561, 556, 657], sk: [460, 574, 515.5, 633.5], dy: "-14px" }];
+  const HERO_PANEL = [548, 138, 938, 928], SWAP_AT = [413, 414];   // центр с героем; медальон смены — на перекладине между окнами
+  const weapons = ["spear", "katana"];                              // [основное, второе]
+  const pct = (r, el) => Object.assign(el.style, { left: r[0] / STAGE.w * 100 + "%", top: r[1] / STAGE.h * 100 + "%",
+    width: (r[2] - r[0]) / STAGE.w * 100 + "%", height: (r[3] - r[1]) / STAGE.h * 100 + "%" });
+  const hero = document.createElement("div"); hero.className = "whero"; pct(HERO_PANEL, hero); stage.appendChild(hero);
+  const wwin = WSLOTS.map((ws, w) => {
+    const win = document.createElement("div"); win.className = "wwin"; win.style.setProperty("--dy", ws.dy); pct(ws.rect, win);
+    win.innerHTML = '<div class="wicon"></div>'; stage.appendChild(win);
+    const ui = document.createElement("div"); ui.className = "wui wui" + (w + 1); pct(ws.ui, ui); stage.appendChild(ui);
+    const sk = document.createElement("div"); sk.className = "wsk"; sk.id = "wsk-" + w; pct(ws.sk, sk); stage.appendChild(sk);
+    sk.addEventListener("mouseenter", () => showSkill(w)); sk.addEventListener("mouseleave", sktLeaveSocket);
+    sk.addEventListener("click", () => { hideSkt(); if (menuClosedAt.k === 100 + w && Date.now() - menuClosedAt.t < 350) return; openWeaponMenu(w); });
+    const b = document.createElement("button"); b.type = "button"; b.className = "wslot"; b.id = "wslot-" + w; pct(ws.rect, b);
+    b.innerHTML = `<span class="wtag">${ws.tag}</span>`;
+    b.addEventListener("click", () => {
+      if (menuClosedAt.k === 100 + w && Date.now() - menuClosedAt.t < 350) return;
+      openWeaponMenu(w);
+    });
+    stage.appendChild(b);
+    return win;
+  });
+  const swapBtn = document.createElement("button");
+  swapBtn.type = "button"; swapBtn.className = "wswap"; swapBtn.title = "Поменять основное и второе оружие местами";
+  swapBtn.setAttribute("aria-label", swapBtn.title);
+  Object.assign(swapBtn.style, { left: SWAP_AT[0] / STAGE.w * 100 + "%", top: SWAP_AT[1] / STAGE.h * 100 + "%" });
+  swapBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M8 4v15M4 15l4 4 4-4M16 20V5M12 9l4-4 4 4"/></svg>';
+  swapBtn.addEventListener("click", () => { closeMenu(); chooseWeapon(0, weapons[1]); });
+  stage.appendChild(swapBtn);
+
+  // гнездо «Пас» над героем — пассивный навык
+  const PAS_RECT = [575, 163, 635, 225];
+  const pas = document.createElement("div"); pas.className = "wpas"; pct(PAS_RECT, pas);
+  pas.setAttribute("aria-label", "Пассивный навык: " + PASSIVE.name); pas.tabIndex = 0;
+  pas.addEventListener("mouseenter", showPassive); pas.addEventListener("mouseleave", sktLeaveSocket);
+  pas.addEventListener("focus", showPassive); pas.addEventListener("blur", sktLeaveSocket);
+  stage.appendChild(pas);
+
+  // репутация: у каждой империи своё отношение к герою (−100…+100), общая — их среднее; ступени — 5 иконок
+  const REP_RECT = [776, 793, 884, 901];                         // круг репутации прямо на арте героя (окно под ним убрано)
+  const REP_TIERS = [{ min: -100, name: "Враг", c: "#e0706a" }, { min: -59, name: "Недоверие", c: "#d89a5a" },
+                     { min: -19, name: "Нейтрально", c: "#cfc6b4" }, { min: 20, name: "Уважение", c: "#7fd6a8" },
+                     { min: 60, name: "Почитание", c: "#f0cf8a" }];
+  const EMPIRES = [{ key: "throne", name: "Лазурный Престол", v: 0, c: "#5aa8ff" }, { key: "haddur", name: "Пиковый Доминион Хаддур", v: 0, c: "#9fb4c8" },
+                   { key: "gharn", name: "Орда Гхарн", v: 0, c: "#d9a14a" }, { key: "saerith", name: "Империум Саэрит", v: 0, c: "#4fc49a" },
+                   { key: "blossom", name: "Двор Вечного Цветения", v: 0, c: "#ff8fc8" }];      // на старте игрок ни к кому не примкнул — везде 0
+  const tierOf = v => REP_TIERS.reduce((t, x, i) => v >= x.min ? i : t, 0);
+  const repTotal = () => Math.round(EMPIRES.reduce((t, e) => t + e.v, 0) / EMPIRES.length);
+  const sgn = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v);
+  const repIcon = t => `<b class="rpi rep-${t}" aria-hidden="true"></b>`;   // иконка ступени (лист 20 v3)
+  const repEl = document.createElement("div"); repEl.className = "wrep"; repEl.tabIndex = 0; pct(REP_RECT, repEl);
+  function repArt() { const t = tierOf(repTotal()); repEl.innerHTML = repIcon(t); repEl.setAttribute("aria-label", "Репутация: " + REP_TIERS[t].name); }
+  repArt(); stage.appendChild(repEl);
+  function showRep() {
+    const tot = repTotal(), t = tierOf(tot), T = REP_TIERS[t];
+    const bar = v => `<span class="bar"><b style="${v >= 0 ? `left:50%;width:${v / 2}%` : `left:${50 + v / 2}%;width:${-v / 2}%`}"></b></span>`;
+    sktOpen(`<div class="skh"><i class="ski rep">${repIcon(t)}</i><div><h3>Репутация: ${T.name}</h3>` +
+      `<div class="sks">${sgn(tot)} · среднее отношение пяти империй</div></div></div>` +
+      // значки ступеней — над серединами их отрезков (−80, −40, 0, +40, +80)
+      `<div class="repscale" style="--tc:${T.c}"><div class="repicons">${REP_TIERS.map((x, i) =>
+        `<i class="hv${i === t ? " on" : ""}" style="left:${10 + i * 20}%;--tc:${x.c}" data-h="tier" data-i="${i}">${repIcon(i)}</i>`).join("")}</div>` +
+      `<div class="repbar">${[20, 40, 60, 80].map(x => `<s style="left:${x}%"></s>`).join("")}<u style="left:${(tot + 100) / 2}%"></u></div>` +
+      `<div class="repends"><span>−100</span><span>0</span><span>+100</span></div></div>` +
+      `<div class="reps">${EMPIRES.map(e => { const et = REP_TIERS[tierOf(e.v)];
+        return `<span class="en hv" data-h="emp" data-i="${EMPIRES.indexOf(e)}"><i class="emp-${e.key}"></i>${e.name}</span>${bar(e.v).replace('class="bar"', `class="bar" style="--tc:${et.c}"`)}` +
+          `<span class="v" style="--tc:${et.c}">${sgn(e.v)}</span><span class="tn" style="--tc:${et.c}">${et.name}</span>`; }).join("")}</div>`,
+      REP_RECT, "rep");
+  }
+  repEl.addEventListener("mouseenter", showRep); repEl.addEventListener("mouseleave", () => sktLeaveSocket());
+  repEl.addEventListener("focus", showRep); repEl.addEventListener("blur", () => sktLeaveSocket());
+
+  // ранг: 7 ступеней по экипировке, уровню, лучшему комбо и данжам; текущий — высший, все условия которого выполнены
+  const RANK_RECT = [598, 793, 706, 901];                        // круг ранга прямо на арте героя (окно под ним убрано)
+  const RANKS = [
+    { name: "Без ранга" },
+    { name: "Асигару", rar: 1, lvl: 20 },
+    { name: "Самурай", rar: 2, lvl: 40 },
+    { name: "Хатамото", rar: 3, lvl: 60, combo: 10 },
+    { name: "Даймё", rar: 4, lvl: 80, combo: 15, leg: 1 },
+    { name: "Сёгун", rar: 5, lvl: 100, combo: 20, leg: 20, night: 1 },
+    { name: "Избранница Богини", rar: 5, mana: 1, lvl: 150, combo: 20, leg: 50, night: 10 }];
+  const RANK_C = ["#9a8f86", "#b9b2a6", "#c98a4b", "#c9d2dc", "#f0cf8a", "#ff6a5a", "#ff8fd8"];
+  const PROGRESS = { combo: 0, leg: 0, night: 0 };                // игрок только начал
+  function rankState() {
+    const items = SLOTS.map((_, k) => itemAt(k));
+    return { rar: Math.min(...items.map(it => it.r)), mana: items.filter(it => it.r === 5 && it.mana).length,
+             lvl: +heroIn.value, ...PROGRESS };
+  }
+  const RQ = [["rar", (v, st) => `Все вещи — ${RAR[v].name.toLowerCase()}${v < 5 ? " или выше" : ""}`, st => st.rar >= 0 ? RAR[st.rar].name : ""],
+              ["mana", () => "Мифическая вещь, пропитанная маной", st => st.mana],
+              ["lvl", v => `Уровень ${v}+`, st => st.lvl], ["combo", v => `Лучшее комбо — ${v}+ ударов`, st => st.combo],
+              ["leg", v => `Легендарные данжи: ${v}+`, st => st.leg], ["night", v => `Кошмарные данжи: ${v}+`, st => st.night]];
+  const meets = (R, st) => RQ.every(([k]) => R[k] === undefined || st[k] >= R[k]);
+  const rankOf = st => RANKS.reduce((t, R, i) => meets(R, st) && i === t + 1 ? i : t, 0);
+  const rankIcon = r => `<b class="rpi rank-${r}" aria-hidden="true"></b>`;   // иконки рангов (лист 22)
+  const rankEl = document.createElement("div"); rankEl.className = "wrank"; rankEl.tabIndex = 0; pct(RANK_RECT, rankEl);
+  function rankArt() { const r = rankOf(rankState()); rankEl.innerHTML = rankIcon(r); rankEl.setAttribute("aria-label", `Ранг ${r}: ${RANKS[r].name}`); }
+  stage.appendChild(rankEl);
+  function showRank() {
+    const st = rankState(), r = rankOf(st), next = RANKS[r + 1];
+    const reqs = next ? RQ.filter(([k]) => next[k] !== undefined).map(([k, label, cur]) => { const ok = st[k] >= next[k];
+      return `<span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✕"}</span><span>${label(next[k], st)}</span><span class="rv">${k === "mana" ? (ok ? "есть" : "нет") : cur(st)}</span>`; }).join("") : "";
+    sktOpen(`<div class="skh"><i class="ski rep">${rankIcon(r)}</i><div><h3>Ранг ${r}: ${RANKS[r].name}</h3>` +
+      `<div class="sks">${next ? `Следующий — ранг ${r + 1}: ${next.name}` : "Высший ранг"}</div></div></div>` +
+      `<div class="repscale"><div class="repicons">${RANKS.map((x, i) => `<i class="hv${i === r ? " on" : ""}" style="left:${100 / 14 + i * 100 / 7}%;--tc:${RANK_C[i]}" data-h="rank" data-i="${i}">${rankIcon(i)}</i>`).join("")}</div>` +
+      `<div class="repbar rkbar">${[1, 2, 3, 4, 5, 6].map(x => `<s style="left:${x * 100 / 7}%"></s>`).join("")}<u style="left:${(r + 0.5) * 100 / 7}%;--tc:${RANK_C[r]}"></u></div></div>` +
+      (next ? `<div class="rkhead">До ранга ${r + 1}</div><div class="rkreq">${reqs}</div>` : ""), RANK_RECT, "rank");
+  }
+  rankEl.addEventListener("mouseenter", showRank); rankEl.addEventListener("mouseleave", () => sktLeaveSocket());
+  rankEl.addEventListener("focus", showRank); rankEl.addEventListener("blur", () => sktLeaveSocket());
+
+  const skt = document.getElementById("skt");
+  function placeSkt(rect) {
+    const hb = holder.getBoundingClientRect(), sb = stage.getBoundingClientRect(), k = sb.width / STAGE.w;
+    const w = skt.offsetWidth || 292, h = skt.offsetHeight || 200;
+    let left = sb.left - hb.left + rect[2] * k + 10, dir = "-6px";
+    if (left + w > hb.width - 4) { left = sb.left - hb.left + rect[0] * k - w - 10; dir = "6px"; }
+    const top = Math.max(4, Math.min(sb.top - hb.top + rect[1] * k - 12, hb.height - h - 4));
+    skt.style.left = Math.max(4, left) + "px"; skt.style.top = top + "px"; skt.style.setProperty("--mx", dir);
+    skt.classList.remove("show"); void skt.offsetWidth; skt.classList.add("show"); skt.setAttribute("aria-hidden", "false");
+  }
+  // описания приёмов и пассива закрепляются как подсказка экипировки: кольцо копится, пока курсор на гнезде (1,2 с);
+  // увёл раньше — описание пропадает. Закреплённое ловит курсор (цифры раскрывают разбор), закрывается кликом в любом
+  // месте, Esc или когда курсор уйдёт и с гнезда, и из окна описания
+  const PIN_HTML = '<div class="pin"><i class="empty"></i><i class="full"></i><i class="seal"></i></div>';
+  let sktT = 0, sktPinT = 0, sktPinned = false, sktEntered = false, inSkt = false, onSock = false, sktKey = "";
+  function sktDropSoon() { clearTimeout(sktT); sktT = setTimeout(() => { if (sktPinned && !inSkt && !onSock) hideSkt(); }, 60); }
+  function sktOpen(html, rect, key) {
+    if (sktPinned) { if (key === sktKey) { onSock = true; clearTimeout(sktT); return; } if (inSkt) return; hideSkt(); }
+    sktKey = key; onSock = true; skt.classList.toggle("wide", key === "rep" || key === "rank");
+    clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
+    skt.innerHTML = PIN_HTML + html;
+    skt.classList.remove("arming", "pinned");
+    placeSkt(rect);
+    void skt.offsetWidth; skt.classList.add("arming");
+    sktPinT = setTimeout(pinSkt, PIN_MS);
+  }
+  function pinSkt() { sktPinned = true; sktEntered = inSkt; skt.classList.remove("arming"); skt.classList.add("pinned"); }
+  function sktLeaveSocket() {
+    onSock = false;
+    if (sktPinned) { sktDropSoon(); return; }
+    clearTimeout(sktPinT); clearTimeout(sktT); sktT = setTimeout(hideSkt, 30);
+  }
+  function hideSkt() {
+    clearTimeout(sktT); clearTimeout(sktPinT); hideSk2();
+    sktPinned = sktEntered = inSkt = onSock = false; sktKey = "";
+    skt.classList.remove("show", "arming", "pinned"); skt.setAttribute("aria-hidden", "true");
+  }
+  skt.addEventListener("mouseenter", () => { inSkt = true; if (sktPinned) { sktEntered = true; clearTimeout(sktT); } });
+  skt.addEventListener("mouseleave", () => { inSkt = false; if (sktPinned) sktDropSoon(); });
+  skt.addEventListener("mouseover", e => { const n = e.target.closest(".num, .hv"); if (n && sktPinned) showSk2(n); });
+  skt.addEventListener("mouseout", e => { const n = e.target.closest(".num, .hv"); if (n && !n.contains(e.relatedTarget)) hideSk2(); });
+  document.addEventListener("pointerdown", () => { if (sktPinned) hideSkt(); }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") hideSkt(); });
+
+  function showSkill(w) {
+    const key = weapons[w], wp = WEAPONS[key], [sk, name] = wp.skills[w];
+    sktOpen(`<div class="skh"><i class="ski sock"><i class="sk-${sk}"></i></i><div><h3>${name}</h3>` +
+      `<div class="sks">${w ? "Второй" : "Основной"} приём · ${wp.name}</div></div></div>` + skillText(sk), WSLOTS[w].sk, "w" + w);
+  }
+  // разбор числа: откуда урон / сколько ХА
+  const sk2 = document.getElementById("sk2");
+  function breakdown(kind, sk) {
+    const d = dmgCalc(sk), S = d.S;
+    const row = (a, b, cls) => `<span${cls ? ` class="${cls}"` : ""}>${a}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b>`;
+    if (kind === "dmg") {
+      const pc = v => (v >= 0 ? "+" : "") + Math.round(v * 100) + " %";
+      let r = row("База приёма", S.base) +
+        (S.hits && S.hits.length > 1 ? row("Удары, доля базы", S.hits.map(h => Math.round(h * 100) + " %").join(" / ")) : "") +
+        row(`Уровень Тянь Лун ${d.lvl}`, pc(d.lm - 1)) +
+        d.parts.map(x => row(`${ATTR_NAME[x.k]} ${x.v} (оценка ${x.g})`, pc(x.add))).join("");
+      if (d.hits.length > 1) r += row("По ударам", d.hits.join(" + "));
+      r += row("Итого", d.total, "sum");
+      return `<h3>Урон: ${d.total}</h3><div class="bd">${r}</div>`;
+    }
+    if (kind === "ha") return `<h3>Стоимость: ${S.ha} ХА</h3><p>Приём тратит ХА Тянь Лун — выдержку бойца: ХА уходит на удары и приёмы и восстанавливается, пока она не бьёт; на 0 — слом.</p>`;
+    return `<h3>ХА врага</h3><p>Выдержка врага: в начале боя у всех 100, на 0 — слом и окно Кровожадной атаки.</p>` +
+      `<div class="bd">${S.concBoss ? row("У босса", `−${S.concBoss} % полоски`) : row("Обычный враг, из 100", `−${S.conc}${S.hits && S.hits.length > 1 ? " за удар" : ""}`)}</div>`;
+  }
+  // империи (лор — 02 Лор/Империи): столица, кто правит, народы, чего не выносят; ступени — что значат для жителей
+  const EMP_INFO = {
+    throne: { cap: "Азур-Тэлль", rule: "Небесная Владычица и Совет Девяти Зеркал", folk: "люди и эльфы северо-запада Велламира", hate: "магии без разрешения академий" },
+    haddur: { cap: "Хаддур", rule: "Тан Горы и Каменный Совет кланов", folk: "голиафы и дварфы горного хребта", hate: "нарушенного слова" },
+    gharn: { cap: "Гхарн", rule: "Хаан — пока побеждает", folk: "орки, гоблины, хобгоблины и багбиры экватора Шерракса", hate: "трусости и долгих разговоров" },
+    saerith: { cap: "Саэрит", rule: "Жрец-Император — голос спящего дракона Ваэт-Сарра", folk: "драконорождённые и кобольды юга Шерракса", hate: "неуважения к дракону" },
+    blossom: { cap: "Двор Цветения", rule: "Королева — по договорам с двором фей", folk: "эльфы, гномы, полурослики и феи Лунниэля", hate: "грубости и нарушенных клятв" } };
+  const TIER_INFO = [
+    "Стража нападает, торговцы и мастера не говорят с вами, задания империи закрыты.",
+    "Стража следит, цены выше, часть заданий и мест закрыта.",
+    "Обычные цены и обычные задания — так к вам относятся со старта.",
+    "Цены ниже, открываются особые задания, жители помогают в пути.",
+    "Лучшие цены, доступ к знати и редким наградам, вас знают по имени." ];
+  function hoverInfo(kind, i) {
+    const row = (a, b, cls) => `<span${cls ? ` class="${cls}"` : ""}>${a}</span><b${cls ? ` class="${cls}"` : ""}>${b}</b>`;
+    if (kind === "emp") {
+      const e = EMPIRES[i], d = EMP_INFO[e.key], T = REP_TIERS[tierOf(e.v)];
+      return `<h3 class="hvh"><i class="emp-${e.key}"></i>${e.name}</h3>` +
+        `<div class="bd">${row("Столица", d.cap)}${row("Правит", d.rule)}${row("Народы", d.folk)}${row("Не выносят", d.hate)}` +
+        `${row("Отношение к вам", `${sgn(e.v)} · ${T.name}`, "sum")}</div>`;
+    }
+    if (kind === "tier") {
+      const T = REP_TIERS[i], hi = i < REP_TIERS.length - 1 ? REP_TIERS[i + 1].min - 1 : 100;
+      return `<h3 class="hvh"><b class="rpi rep-${i}"></b>${T.name}</h3>` +
+        `<div class="bd">${row("Отношение", `${sgn(T.min)} … ${sgn(hi)}`)}</div><p class="hvp">${TIER_INFO[i]}</p>`;
+    }
+    const R = RANKS[i], st = rankState(), cur = rankOf(st);
+    const reqs = RQ.filter(([k]) => R[k] !== undefined).map(([k, label]) => { const ok = st[k] >= R[k];
+      return `<span class="${ok ? "ok" : "no"}">${ok ? "✓" : "✕"}</span><span>${label(R[k], st)}</span><span></span>`; }).join("");
+    return `<h3 class="hvh"><b class="rpi rank-${i}"></b>Ранг ${i}: ${R.name}</h3>` +
+      (reqs ? `<div class="rkreq">${reqs}</div>` : `<p class="hvp">Со старта, без условий.</p>`) +
+      `<p class="hvp">${i < cur ? "Пройден" : i === cur ? "Ваш ранг" : i === cur + 1 ? "Следующий ранг" : "Впереди"}${i > 0 ? " · условия всех младших рангов тоже нужны" : ""}</p>`;
+  }
+  function showSk2(el) {
+    sk2.innerHTML = el.dataset.h ? hoverInfo(el.dataset.h, +el.dataset.i) : breakdown(el.dataset.k, el.dataset.s);
+    const hb = holder.getBoundingClientRect(), eb = el.getBoundingClientRect(), tb = skt.getBoundingClientRect();
+    const w = sk2.offsetWidth || 260;
+    let left = tb.right - hb.left + 8, dir = "-6px";
+    if (left + w > hb.width - 4) { left = tb.left - hb.left - w - 8; dir = "6px"; }
+    sk2.style.left = Math.max(4, left) + "px"; sk2.style.top = Math.max(4, eb.top - hb.top - 14) + "px"; sk2.style.setProperty("--mx", dir);
+    sk2.classList.remove("show"); void sk2.offsetWidth; sk2.classList.add("show"); sk2.setAttribute("aria-hidden", "false");
+  }
+  function hideSk2() { sk2.classList.remove("show"); sk2.setAttribute("aria-hidden", "true"); }
+  function showPassive() {
+    const syn = PASSIVE.synergy, num = v => String(v).replace(".", ",");
+    sktOpen(`<div class="skh"><i class="ski sock"><i class="pas-ic"></i></i>` +
+      `<div><h3>${PASSIVE.name}</h3><div class="sks">Пассивный навык · Тянь Лун</div></div></div>` +
+      `<div class="pb"><b>Плащ по плечу</b><p>Плащи на Тянь Лун: все статы плаща ×${num(PASSIVE.cloak)}.</p></div>` +
+      `<div class="pb"><b>Танец без ран</b><p>Удары подряд, пока Тянь Лун не получает урон, усиливают каждый следующий удар:</p>` +
+      `<div class="tiers">${PASSIVE.streak.map(([n, d]) => `<span>больше ${n} ударов</span><span>+${d} % урона</span>`).join("")}</div>` +
+      `<p style="margin-top:4px">Пропущенный удар обнуляет серию.</p></div>` +
+      `<div class="pb"><b>Синергия: ${WEAPONS[syn.weapon].name}</b><p>Когда копьё в руках (основное оружие): Ловкость ×${num(syn.agi)}, ХА восстанавливается в ${num(syn.ha)} раза быстрее.</p></div>`,
+      PAS_RECT, "pas");
+  }
+
+  function weaponArt() {
+    wwin.forEach((win, w) => { const wp = WEAPONS[weapons[w]], [sk, skName] = wp.skills[w];
+      win.querySelector(".wicon").className = "wicon wk-" + weapons[w];
+      document.getElementById("wsk-" + w).className = "wsk sk-" + sk;
+      const b = document.getElementById("wslot-" + w);
+      b.setAttribute("aria-label", `${WSLOTS[w].name}: ${wp.name}, приём «${skName}» — выбрать`); b.title = `${wp.name} · приём «${skName}»`; });
+    hero.classList.toggle("on", weapons[0] === "katana");
+  }
+  let swapT = 0;
+  function chooseWeapon(w, key) {
+    hideSkt();
+    if (weapons[w] === key) return;
+    const other = 1 - w;
+    if (weapons[other] === key) weapons[other] = weapons[w];      // это оружие уже во втором слоте — меняем местами
+    weapons[w] = key;
+    clearTimeout(swapT);
+    wwin.forEach(win => win.classList.add("out")); document.querySelectorAll(".wsk").forEach(el => el.classList.add("out"));
+    swapBtn.classList.toggle("turn");
+    hero.classList.toggle("on", weapons[0] === "katana");          // герой берёт в руки новое основное
+    swapT = setTimeout(() => { weaponArt(); wwin.forEach(win => win.classList.remove("out")); document.querySelectorAll(".wsk").forEach(el => el.classList.remove("out")); }, 170);
+  }
+  function openWeaponMenu(w) {
+    hide(); hideSkt();
+    menuSlot = 100 + w;
+    menu.innerHTML = `<div class="mhead">${WSLOTS[w].name}<span>${Object.keys(WEAPONS).length} в сумке</span></div><div class="mgrid w2">` +
+      Object.keys(WEAPONS).map((key, n) => { const eq = weapons[w] === key, inOther = weapons[1 - w] === key;
+        return `<button type="button" class="mi wmi wk-${key}${eq ? " eq" : ""}" data-w="${key}" style="--n:${n}" ` +
+          `aria-label="${WEAPONS[key].name}${eq ? ", надето" : inOther ? ", во втором слоте — поменяются местами" : ""}">` +
+          `${inOther ? `<span class="wother">${w ? "Основное" : "Второе"}</span>` : ""}</button>`; }).join("") +
+      `</div><div class="mcap" id="mcap"></div>`;
+    weaponCaption(weapons[w]);
+    menu.classList.remove("show"); void menu.offsetWidth;
+    if (!narrow()) { const p = sideOfRect(WSLOTS[w].rect, menu.offsetWidth || 336, menu.offsetHeight || 320);
+      menu.style.left = p.left + "px"; menu.style.top = p.top + "px"; menu.style.setProperty("--ox", p.origin); }
+    menu.classList.add("show"); menu.setAttribute("aria-hidden", "false");
+    const eqBtn = menu.querySelector(".mi.eq"); if (eqBtn) eqBtn.focus({ preventScroll: true });
+  }
+  function weaponCaption(key) {
+    const cap = document.getElementById("mcap"), w = menuSlot - 100;
+    if (!cap || w < 0) return;
+    const state = weapons[w] === key ? "надето" : weapons[1 - w] === key ? `сейчас ${w ? "основное" : "второе"} — поменяются местами` : "";
+    const [, m] = WEAPONS[key].skills[0], [, sec] = WEAPONS[key].skills[1];
+    cap.innerHTML = `<b>${WEAPONS[key].name}</b><span>Главный атрибут — ${WEAPONS[key].attr}${state ? " · " + state : ""}</span>` +
+      `<span>Основным — «${m}», вторым — «${sec}»</span>`;
+  }
+  weaponArt();
+
+  window.addEventListener("resize", () => { if (current >= 0) place(current); hideMini(); slotArt(); closeMenu(); });
+
+  document.getElementById("reroll").addEventListener("click", generate);
+  lvlIn.addEventListener("input", () => { lvlOut.textContent = lvlIn.value; generate(); });
+  heroIn.addEventListener("input", () => { heroOut.textContent = heroIn.value; rankArt(); if (current >= 0) { const keep = pinned; fill(current, true); if (keep) pin(); } });
+
+  // иконки надетых вещей поверх слотов макета
+  function slotArt() {
+    SLOTS.forEach((s, k) => {
+      const b = document.getElementById("slot-" + s.key), it = itemAt(k), sh = SETS[it.setKey].sheet;
+      let art = b.querySelector(".slotArt");
+      if (!art) { art = document.createElement("span"); art.className = "slotArt"; b.appendChild(art); }
+      const [x0, x1] = sh.cols[it.r], [y0, y1] = sh.rows[k];
+      const w = b.clientWidth, h = b.clientHeight, sc = Math.max(w / (x1 - x0), h / (y1 - y0));
+      art.style.backgroundImage = `url(${sh.img})`;
+      art.style.backgroundSize = `${sh.w * sc}px ${sh.h * sc}px`;
+      art.style.backgroundPosition = `${-(x0 * sc - (w - (x1 - x0) * sc) / 2)}px ${-(y0 * sc - (h - (y1 - y0) * sc) / 2)}px`;
+      art.style.setProperty("--rc", `var(${RC[it.r]})`);
+      art.classList.toggle("mrim", !!it.mana);
+    });
+    if (typeof rankArt === "function") rankArt();
+  }
+
+  // справочные таблицы
+  const dec = v => v.toString().replace(".", ",");
+  document.getElementById("rarTable").innerHTML =
+    "<tr><th>Редкость</th><th>Осн.</th><th>Доп.</th><th>Усилено</th><th>Множ.</th><th>Свечение</th><th>Выпадение</th></tr>" +
+    RAR.map((R, i) => `<tr><td class="r" style="color:var(${RC[i]})">${R.name}</td><td>${R.main}</td><td>${R.extra}</td>` +
+      `<td>${R.guar ? R.guar + " гарант." : ""}${R.guar && R.rnd ? " + " : ""}${R.rnd ? R.rnd + " × " + Math.round(R.chance * 100) + " %" : ""}${!R.guar && !R.rnd ? "—" : ""}</td>` +
+      `<td>×${dec(R.mult.toFixed(2))}</td><td>${R.boost > 1 ? "×" + dec(R.boost.toFixed(2)) : "—"}</td><td>${dec(R.drop)} %</td></tr>`).join("");
+  document.getElementById("statTable").innerHTML =
+    "<tr><th>Стат</th><th>Диапазон</th><th>Основной у слотов</th></tr>" +
+    ORDER.map(k => { const s = STATS[k];
+      const slots = SLOTS.filter(sl => sl.main.includes(k)).map(sl => sl.type).join(", ") || "только доп.";
+      return `<tr><td>${s.name}</td><td>${s.lo}–${s.hi}${s.pct ? " %" : ""}</td><td>${slots}</td></tr>`; }).join("");
+
+  generate();
+})();
+</script>
