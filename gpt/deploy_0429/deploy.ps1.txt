@@ -1,0 +1,26 @@
+$g='C:\Users\mbkli\AppData\Local\Programs\Pax Universe'
+$m="$g\mods\pax_rpg"
+$bk='C:\Users\mbkli\Desktop\pax_rpg_work\backup_0429'
+$B='e19b29760830235851a23ffec7d2bbe0f755d27d'
+$D='4ddd55ace7e0c89a4ea0584b7e2397a909dc9a6d'
+Set-Location $g
+New-Item -ItemType Directory -Force $bk | Out-Null
+foreach($c in @(@('main.gd','main.gd.txt'), @('src\location\location.gd','src__location__location.gd.txt'))){
+  $now=(git hash-object "$m\$($c[0])").Trim(); $was=(git rev-parse "0586151d:gpt/pc_gd/$($c[1])").Trim()
+  if($now -ne $was){ "CHANGED on PC since snapshot: $($c[0]) — stop"; exit 1 }
+}
+$items = @()
+foreach($f in @('config/gharn_map.json','config/hud2.json','config/loot.json','config/world_ui.json','data/lang/en.json','data/lang/ru.json','mod.json','src/location/city_map.gd','src/location/hud2.gd','src/location/inventory.gd','src/location/loot/loot.gd','src/location/loot/roll.gd','src/planet/world_ui.gd','src/travel/travel.gd','textures/hud2/boss.png','textures/hud2/boss_name.png','textures/hud2/compass.png','textures/hud2/enemy.png','textures/hud2/hero.png','textures/hud2/minimap.png','textures/hud2/quest.png','textures/hud2/skills.png','textures/map/gharn_map_en.jpg','textures/map/gharn_map_ru.jpg','textures/map/gharn_mini_en.jpg','textures/map/gharn_mini_ru.jpg','textures/map/glyphs.png','textures/world/btn_dark.png','textures/world/btn_red.png','textures/world/card.png','textures/world/event.png','textures/world/event_dragon.png','textures/world/event_golems.png','textures/world/event_hunt.png','textures/world/event_peace.png','textures/world/event_rift.png','textures/world/event_war.png','textures/world/popup.png','textures/world/round.png','textures/world/sky.png')){ $items += ,@($f, "${B}:mods/pax_rpg/$f") }
+$items += ,@('main.gd', "${D}:gpt/deploy_0429/main.gd.txt")
+$items += ,@('src/location/location.gd', "${D}:gpt/deploy_0429/src__location__location.gd.txt")
+$n=0
+foreach($it in $items){
+  $f=$it[0]; $src=$it[1]
+  $dst=Join-Path $m ($f -replace '/','\')
+  if(Test-Path $dst){ $b=Join-Path $bk ($f -replace '/','\'); New-Item -ItemType Directory -Force (Split-Path $b) | Out-Null; Copy-Item $dst $b -Force }
+  New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+  cmd /c "git show $src > `"$dst`""
+  if($LASTEXITCODE -ne 0){ "FAIL $f" } else { $n++ }
+}
+"written $n of $($items.Count)"
+Select-String -Path "$m\mod.json" -Pattern '"version"'
