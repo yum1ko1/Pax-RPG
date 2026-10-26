@@ -210,6 +210,9 @@ const SIM_H := 2.6
 const SIM_BASE := 0.14
 const SIM_FLAME := 1.0                                 # высота языков в симуляции, м (угли в ней — круг r 0.3 м)
 static var _sim_sh: Shader
+## Дрожь воздуха над огнём (shaders/vfx_heat.gdshader) пока выключена: копия экрана берётся до прозрачного,
+## и дрожь вырезает в нём дыру — дым соседней трубы, другой огонь, стекло за жаровней.
+const HEAT_HAZE := false
 
 
 func sim_flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance3D:
@@ -240,6 +243,8 @@ func sim_flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInst
 	parent.add_child(mi)
 	if push != 0.0:
 		mi.set_instance_shader_parameter(&"push", push)
+	if not HEAT_HAZE:
+		return mi
 	var hz := MeshInstance3D.new()                       # горячий воздух над огнём
 	var hq := QuadMesh.new()
 	hq.size = Vector2(SIM_W * 0.8, SIM_H * 0.9) * k
