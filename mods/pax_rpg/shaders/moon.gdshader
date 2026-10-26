@@ -29,8 +29,8 @@ float fbm3(vec3 p) {
 
 // Селунэ (kind 0): серый камень, по жилам бежит красная мана; Иру (kind 1): лиловая, насквозь в розовой мане.
 // p — точка на сфере луны; albedo — под светом Хоэна, glow светит сам.
-void moon_look(float kind, vec3 p, float time, out vec3 albedo, out vec3 glow) {
-	if (kind < 0.5) {
+void moon_look(float k, vec3 p, float time, out vec3 albedo, out vec3 glow) {
+	if (k < 0.5) {
 		float g = 0.42 + 0.3 * fbm3(p * 3.0 + 3.0);
 		float mar = smoothstep(0.48, 0.66, fbm3(p * 1.7 + 7.0));
 		float c = noise3(p * 9.0 + 2.0);
