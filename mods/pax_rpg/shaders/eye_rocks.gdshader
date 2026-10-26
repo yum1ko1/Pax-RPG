@@ -1,0 +1,46 @@
+// Осколки вокруг Ока у глобуса (planet/heavens3d.gd): экземпляры MultiMesh, каждый летит по своему кругу в
+// плоскости кольца (внутренние быстрее), качается, отходит и возвращается, кувыркается. В custom — радиус круга,
+// начальный угол, угловая скорость и seed; остальное — хэш от seed. Свет — от Хоэна (sun — в осях Ока).
+shader_type spatial;
+render_mode unshaded, cull_disabled, shadows_disabled;
+
+uniform vec3 sun = vec3(1.0, 0.0, 0.0);
+uniform float ring_r = 1.0;
+
+varying vec3 v_n;
+
+float h1(float n) {
+	return fract(sin(n * 12.9898) * 43758.5453);
+}
+
+mat3 turn(vec3 ax, float a) {
+	float c = cos(a), s = sin(a), k = 1.0 - c;
+	return mat3(vec3(c + ax.x * ax.x * k, ax.y * ax.x * k + ax.z * s, ax.z * ax.x * k - ax.y * s),
+			vec3(ax.x * ax.y * k - ax.z * s, c + ax.y * ax.y * k, ax.z * ax.y * k + ax.x * s),
+			vec3(ax.x * ax.z * k + ax.y * s, ax.y * ax.z * k - ax.x * s, c + ax.z * ax.z * k));
+}
+
+void vertex() {
+	vec4 cd = INSTANCE_CUSTOM;
+	float sd = cd.w;
+	float r0 = cd.x / ring_r;
+	float near = exp(-(r0 - 1.0) * (r0 - 1.0) / 0.15);
+	float s = (0.006 + pow(h1(sd + 1.0), 4.0) * 0.045) * (0.6 + near) * ring_r / 1.1;
+	vec3 sc = vec3(s, s * (0.5 + h1(sd + 2.0)), s * (0.4 + h1(sd + 3.0)));
+	float z0 = (h1(sd + 4.0) - 0.5) * 0.6 * ring_r * (1.2 - near);
+	float bob = h1(sd + 5.0) * 6.28;
+	float bob_a = (0.02 + h1(sd + 6.0) * 0.05) * ring_r;
+	float drift = (0.03 + h1(sd + 7.0) * 0.08) * ring_r;
+	vec3 ax = normalize(vec3(h1(sd + 8.0), h1(sd + 9.0), h1(sd + 10.0)) - 0.5 + 1e-3);
+	float spin = (h1(sd + 11.0) - 0.5) * 2.5;
+	float a = cd.y + TIME * cd.z;
+	float r = cd.x + sin(TIME * 0.3 + bob) * drift;
+	mat3 rot = turn(ax, h1(sd + 12.0) * 6.28 + TIME * spin);
+	v_n = rot * NORMAL;
+	VERTEX = vec3(cos(a) * r, sin(a) * r, z0 + sin(TIME * 0.8 + bob) * bob_a) + rot * (VERTEX * sc);
+}
+
+void fragment() {
+	float l = max(dot(normalize(v_n), normalize(sun)), 0.0);
+	ALBEDO = vec3(0.23, 0.19, 0.22) * (0.2 + 0.9 * l) + vec3(0.31, 0.1, 0.24) * 0.35;
+}
