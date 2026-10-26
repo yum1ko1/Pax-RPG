@@ -1366,10 +1366,8 @@ def masters_street():
                       "c": True})
         proxy("noren", xc + 0.2, 0.0, zf - side * 0.1, yaw(side), c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])
         proxy("hang_sign", xc - hx + 1.4, 0.0, zf - side * 0.5, yaw(side), glyph=glyph)
-        tall = "tall" in m                                # у трёхэтажной свои окна-решётки и навес лавки
-        for dx in (-1.8, 1.8) if not tall else ():        # тёплые окна второго этажа
-            if (i + (dx > 0)) % 3:
-                proxy("window", xc + dx, 4.3, zf - side * 0.05, yaw(side))
+        tall = "tall" in m                                # окна — свои у моделей: фасад отступает от линии габарита,
+                                                          # заглушка окна на линии повисла бы в воздухе
         if i % 2 == 0:
             proxy("smoke", xc + 1.5, 13.4 if tall else 7.2, zf + side * 5.0)
         for j in range(mrng.randint(1, 3)):              # кучка у двери: мешки, корзины, ящики
