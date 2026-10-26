@@ -17,6 +17,7 @@ func _initialize() -> void:
 		if a == "--cam=game":
 			game_cam = true
 	root.size = Vector2i(1280, 720)
+	seed(7)                                  # гоблин блокирует по randf — с этим зерном укол попадает
 	mod = (load("res://mods/pax_rpg/main.gd") as GDScript).new()
 	mod.set("id", "pax_rpg")
 	root.add_child(mod)
