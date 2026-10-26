@@ -15,7 +15,8 @@ const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const GRAV := 14.0
 const FLY := 0.8                     # полёт радужной сферы в угол, с
 const ROLLS := 3                     # прокруток на экране одновременно
-const ROLL_STEP := 250.0             # шаг прокруток вверх, px макета
+const BAG_H := 112.0                 # высота сумки, px макета
+const ROLL_STEP := 172.0             # шаг прокруток вверх, px макета (при roll_scale 1)
 const SIZE := {"gold": 0.34, "xp": 0.3, "rainbow": 0.6}   # поперечник в мире, м
 
 var mod: PaxMod
@@ -189,11 +190,11 @@ func _free_slot() -> int:
 	return -1
 
 
-## Центр прокрутки i в px макета (высота 1080): правый нижний угол, следующие — выше; справа — колонка сумки.
+## Центр прокрутки i в px макета (высота 1080): между панелью приёмов и сумкой в правом нижнем углу, следующие — выше.
 func _corner(i := 0) -> Vector2:
 	var w := size.x / maxf(size.y / 1080.0, 0.001)
-	var k := float(cfg.get("roll_scale", 0.7))
-	return Vector2(w - 130.0 - 350.0 * k, 1080.0 - 175.0 * k - i * ROLL_STEP * k)
+	var k := float(cfg.get("roll_scale", 0.68))
+	return Vector2(w - 120.0 - 350.0 * k, 1080.0 - 140.0 * k - i * ROLL_STEP * k)
 
 
 func _screen_r(o: Dictionary) -> float:
@@ -260,7 +261,7 @@ func _draw_bag() -> void:
 		_bag_art = 0 if mod.read_bytes("textures/loot/bag_closed.png").is_empty() else 1
 	if _bag_art == 1:
 		var bt := ui.tex("textures/loot/bag_open.png" if st.y > 0.5 else "textures/loot/bag_closed.png")
-		var bh := 140.0 * st.z
+		var bh := BAG_H * st.z
 		var bw := bt.get_width() * bh / bt.get_height()
 		_bag.draw_texture_rect(bt, Rect2(pos - Vector2(bw * 0.5, bh * 0.5), Vector2(bw, bh)), false, Color(1, 1, 1, st.x))
 	else:

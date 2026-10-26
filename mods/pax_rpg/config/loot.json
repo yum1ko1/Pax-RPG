@@ -6,7 +6,7 @@
 	"rarity_w": [46, 28, 14, 8, 3.2, 0.8],
 	"mana_chance": 0.04,
 	"sets": ["samurai", "gharn"],
-	"roll_scale": 0.7,
+	"roll_scale": 0.68,
 	"spin_time": 3.6,
 	"items": 36,
 	"win_at": 30,

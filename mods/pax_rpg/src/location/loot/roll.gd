@@ -74,7 +74,7 @@ func setup(m: PaxMod, equip: Equip, fonts: Ui, c: Dictionary) -> void:
 	eq = equip
 	ui = fonts
 	cfg = c
-	K = float(cfg.get("roll_scale", 0.7))
+	K = float(cfg.get("roll_scale", 0.68))
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_rng.randomize()
@@ -620,9 +620,9 @@ func bag_state() -> Vector3:
 	return Vector3(ba, open, 1.0 + 0.12 * maxf(0.0, 1.0 - absf(_t - arrive) / 0.25))
 
 
-## Где сумка, px макета: своя колонка у правого края — под всеми прокрутками.
+## Где сумка, px макета: правый нижний угол, правее прокруток (центр; сумка 112 px — loot.gd BAG_H).
 func bag_pos() -> Vector2:
-	return Vector2(size.x / maxf(size.y / 1080.0, 0.001) - 70.0, 1080.0 - 120.0)
+	return Vector2(size.x / maxf(size.y / 1080.0, 0.001) - 78.0, 1080.0 - 74.0)
 
 
 ## Сфера вещи, летящая в сумку (сумка рисуется поверх — сфера в неё «входит»).

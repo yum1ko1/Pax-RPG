@@ -19,7 +19,7 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const SpearUlt := preload("res://mods/pax_rpg/src/location/spear_ult.gd")
 const Blood := preload("res://mods/pax_rpg/src/location/blood.gd")
-const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Hud := preload("res://mods/pax_rpg/src/location/hud2.gd")   # HUD v2 (рамки инвентаря) поверх hud.gd
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
@@ -543,6 +543,7 @@ func build(city: Dictionary) -> void:
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
+	_hud.set_city(layout)                             # миникарта — запечённый план города (если есть)
 	add_child(_city_map)
 	_help = HelpPanel.new()
 	_help.setup(mod)
@@ -1220,7 +1221,7 @@ func _dmg_mult() -> float:
 
 func paused() -> bool:
 	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible) \
-		or (is_instance_valid(_journal) and _journal.visible)
+		or (is_instance_valid(_journal) and _journal.visible) or (is_instance_valid(_city_map) and _city_map.visible)
 
 
 ## Житель, давший задание, — с меткой ❖ над головой (в его городе).
@@ -1231,6 +1232,14 @@ func _mark_giver() -> void:
 			var me := not q.is_empty() and str(q.get("city", "")) == str(city_data.get("id", "")) \
 				and int(q.get("npc", -1)) == int((n as Node).get("npc_index"))
 			(n as Node).call("set_giver", me)
+
+
+## Карта города (M): мир на паузе, мышь — карте (масштаб, перетаскивание, метка); закрыть — M или Esc.
+func _set_city_map(on: bool) -> void:
+	if not is_instance_valid(_city_map):
+		return
+	_city_map.set_open(on)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if _city_map.visible else (Input.MOUSE_MODE_CAPTURED if not paused() else Input.mouse_mode)
 
 
 func _set_journal(on: bool) -> void:
@@ -1358,8 +1367,7 @@ func _on_wrist(id: String) -> void:
 		"inventory":
 			_set_inventory(true)
 		"map":
-			if is_instance_valid(_city_map):
-				_city_map.toggle()
+			_set_city_map(true)
 		"menu":
 			_set_paused(true)
 		"leave":
@@ -3529,6 +3537,9 @@ func _input(event: InputEvent) -> void:
 			if is_instance_valid(_journal) and _journal.visible and (pk == KEY_ESCAPE or pk == KEY_J):
 				_set_journal(false)
 				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_city_map) and _city_map.visible and (pk == KEY_ESCAPE or pk == KEY_M):
+				_set_city_map(false)
+				get_viewport().set_input_as_handled()
 			elif is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
 				_talk.close()
 				get_viewport().set_input_as_handled()
@@ -3602,7 +3613,7 @@ func _input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.physical_keycode == KEY_J:
 			_set_journal(true)                       # журнал заданий
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):
-			_city_map.toggle()                       # карта города
+			_set_city_map(true)                      # карта города (мир на паузе, мышь — карте)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE and is_instance_valid(_city_map) \
 				and _city_map.visible:
 			_city_map.visible = false
