@@ -1,0 +1,4 @@
+Top-down orthographic game level plan of an East Asian fantasy town in Yuruma, viewed straight from above like a
+readable map for level design. Clear street network, plazas, gates and walls, building footprints with curved tiled
+roofs seen from above, rivers and bridges, trees as round canopies. Strong contrast between walkable streets
+(light packed earth / stone) and buildings (dark roofs). No perspective tilt, no text, no labels, no compass.
