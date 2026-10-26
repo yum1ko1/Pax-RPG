@@ -1471,19 +1471,44 @@ def masters_street():
         a_ = math.radians(45 + 90 * k)
         add(bench, cx + 3.4 * math.cos(a_), cz + 3.4 * math.sin(a_), (90 - (45 + 90 * k)) % 360, c=True)   # +Z модели — выпуклость
     add("trough", cx + 2.9, cz, 90, c=True)                  # корыто к востоку от колодца, за ступенью подиума
-    for (px, pz) in ((cx - 4.8, cz - 4.3), (cx + 5.2, cz + 4.7)):   # сакуры в каменных кадках: северо-запад, юго-восток
+    def nat(n, x, z, s_, y=0.0):                              # трава и цветы из набора природы (models/nature)
+        items.append({"m": "models/nature/%s.glb" % n, "p": [round(x, 2), round(y + 0.02, 2), round(z, 2)],
+                      "r": round(mrng.uniform(0, 360), 1), "s": round(s_, 2), "c": False})
+    # сакуры в каменных кадках — в углах карманов за линией фасадов (северо-запад, юго-восток), улицу и переулок не перекрывают
+    for (px, pz) in ((cx - 5.6, M_N - 1.3), (cx + 5.6, M_S + 1.3)):
         box([2.2, 0.6, 2.2], px, 0.3, pz, "stone_dark", c=True)
         add("@central/sakura_young", px, pz, mrng.uniform(0, 360), s=0.75, c=True, y=0.6)
         items[-1]["col"] = [0.5, 3.0, 0.5]
-        proxy("petals", px + 1.6, 0, pz, 0)
-    box([1.6, 0.5, 1.6], cx - 6.2, 0.25, cz - 5.6, "stone_cut", c=True)       # алтарь с курильницей в углу
-    add("@central/incense_ding", cx - 6.2, cz - 5.6, 45, s=0.5, c=False, y=0.5)
-    box([1.3, 0.35, 1.3], cx + 2.8, 0.175, M_S + 1.9, "stone_dark", c=True)  # тотем — у начала переулка, на постаменте
-    add("@totem_pole", cx + 2.8, M_S + 1.9, 315, c=True, y=0.35)
-    for (px, pz) in ((cx + 5.4, cz - 3.6), (cx - 5.4, cz + 3.6)):   # два каменных фонаря у свободных углов
+        for k in range(5):                                   # цветы и листва в кадке вокруг ствола
+            a_ = math.radians(30 + 72 * k)
+            nat(("plant_flower", "plant_cover_1", "plant_flower", "plant_leaf", "plant_flower")[k],
+                px + 0.72 * math.cos(a_), pz + 0.72 * math.sin(a_), mrng.uniform(0.3, 0.42), y=0.6)
+        for k in range(4):                                   # трава у подножия кадки
+            a_ = math.radians(mrng.uniform(0, 360))
+            nat(mrng.choice(["grass_fresh", "grass_tall_low"]), px + 1.35 * math.cos(a_), pz + 1.35 * math.sin(a_),
+                mrng.uniform(0.9, 1.3))
+        proxy("petals", px + (1.6 if px < cx else -1.6), 0, pz + (1.2 if pz < cz else -1.2), 0)
+    shx, shz = cx - 2.9, M_N - 1.5                           # алтарь с курильницей — рядом с северо-западной сакурой
+    box([1.6, 0.5, 1.6], shx, 0.25, shz, "stone_cut", c=True)
+    add("@central/incense_ding", shx, shz, 45, s=0.5, c=False, y=0.5)
+    add(pick("potted_shrub", "flower_pot"), shx, shz - 1.25, mrng.uniform(0, 360), c=True)
+    for (dx, dz) in ((-0.95, 0.5), (0.2, 0.95), (-0.6, -0.9)):
+        nat(mrng.choice(["plant_flower", "grass_fresh"]), shx + dx, shz + dz, mrng.uniform(0.35, 0.9))
+    tx_, tz_ = cx + 2.8, M_S + 1.9                           # тотем — у начала переулка, на постаменте, лицом к колодцу
+    box([1.3, 0.35, 1.3], tx_, 0.175, tz_, "stone_dark", c=True)
+    add("@totem_pole", tx_, tz_, math.degrees(math.atan2(cx - tx_, cz - tz_)) % 360, c=True, y=0.35)
+    for k in range(6):                                       # трава и цветы у постамента
+        a_ = math.radians(15 + 60 * k + mrng.uniform(-12, 12))
+        nat("plant_flower" if k % 3 == 0 else mrng.choice(["grass_fresh", "grass_tall_low"]),
+            tx_ + 0.95 * math.cos(a_), tz_ + 0.95 * math.sin(a_), 0.38 if k % 3 == 0 else mrng.uniform(0.8, 1.1))
+    for (px, pz) in ((cx + 5.6, M_N - 1.4), (cx - 5.6, M_S + 1.3)):   # каменные фонари — в двух свободных углах карманов
         add("stone_lantern", px, pz, 0, c=True)
-    add("merchant_cart", M_SQ[2] - 1.0, M_S + 2.5, 90, c=True)
-    add(pick("fruit_basket", "basket"), M_SQ[2] - 2.4, M_S + 3.1, 20, c=True)
+        for k in range(3):
+            a_ = math.radians(mrng.uniform(0, 360))
+            nat(mrng.choice(["grass_fresh", "grass_tall_low", "plant_flower"]), px + 0.7 * math.cos(a_),
+                pz + 0.7 * math.sin(a_), mrng.uniform(0.4, 0.9))
+    for (px, pz) in ((cx - 2.6, M_S + 1.2), (cx + 2.6, M_N - 0.9)):    # кадки с зеленью по сторонам переулков
+        add(pick("tub_plant", "potted_shrub"), px, pz, mrng.uniform(0, 360), c=True)
     proxy("person", cx - 3.0, 0, cz + 1.2, 110)               # горожане у скамей
     proxy("person", cx + 1.0, 0, cz - 3.0, 200)
     # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
