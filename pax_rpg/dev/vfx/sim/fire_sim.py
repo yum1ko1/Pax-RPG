@@ -83,9 +83,6 @@ fs.texture_offset = 0.0
 fs.keyframe_insert("texture_offset", frame=F0)
 fs.texture_offset = 9.0
 fs.keyframe_insert("texture_offset", frame=F1)
-for fc in (src.animation_data.action.fcurves if src.animation_data and src.animation_data.action else []):
-    for k in fc.keyframe_points:
-        k.interpolation = "LINEAR"
 src.hide_render = True
 
 bpy.context.view_layer.objects.active = dom
