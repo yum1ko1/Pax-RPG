@@ -20,75 +20,89 @@ RX, RY = 256, 512                  # кадр
 E_K = 0.6                          # масштаб свечения в PNG (линейно, 1.0 = белое)
 
 os.makedirs(out, exist_ok=True)
-bpy.ops.wm.read_factory_settings(use_empty=True)
-sc = bpy.context.scene
-sc.frame_start, sc.frame_end = F0, F1
-sc.render.fps = 30
+BLEND = os.path.join(out, "fire.blend")
+if mode == "render" and os.path.exists(BLEND):     # газ уже посчитан: сцена с ним (флаг «запечено» живёт в .blend)
+    bpy.ops.wm.open_mainfile(filepath=BLEND)
+    sc = bpy.context.scene
+    dom = bpy.data.objects["domain"]
+else:
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    sc = bpy.context.scene
 
-bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, H / 2))
-dom = bpy.context.object
-dom.name = "domain"
-dom.scale = (W, W, H)
-bpy.ops.object.transform_apply(scale=True)
-md = dom.modifiers.new("fluid", "FLUID")
-md.fluid_type = "DOMAIN"
-ds = md.domain_settings
-ds.domain_type = "GAS"
-ds.resolution_max = res
-ds.cache_directory = os.path.join(out, "cache")
-ds.cache_type = "ALL"
-ds.cache_frame_start, ds.cache_frame_end = F0, F1
-ds.use_adaptive_domain = False
-ds.vorticity = 0.15
-ds.alpha = 0.3                     # подъём от плотности дыма
-ds.beta = 1.8                      # подъём от жара — языки тянутся вверх и рвутся
-ds.burning_rate = 0.9
-ds.flame_smoke = 0.5
-ds.flame_vorticity = 1.0
-ds.flame_ignition = 1.25
-ds.flame_max_temp = 3.0
-ds.use_dissolve_smoke = True
-ds.use_dissolve_smoke_log = True
-ds.dissolve_speed = 45
-ds.time_scale = 0.85
-ds.use_noise = True                # мелкие вихри поверх основного газа (upres ×2) — рваный край пламени
-ds.noise_scale = 2
-ds.noise_strength = 1.2
-ds.noise_pos_scale = 2.0
-ds.use_collision_border_bottom = True
 
-# «угли» в чаше: диск, подача рвётся текстурой облаков, текстура плывёт — пламя не стоит столбом
-bpy.ops.mesh.primitive_cylinder_add(radius=0.3, depth=0.1, location=(0, 0, 0.14), vertices=32)
-src = bpy.context.object
-src.name = "coals"
-mf = src.modifiers.new("fluid", "FLUID")
-mf.fluid_type = "FLOW"
-fs = mf.flow_settings
-fs.flow_type = "BOTH"
-fs.flow_behavior = "INFLOW"
-fs.flow_source = "MESH"
-fs.surface_distance = 0.5
-fs.fuel_amount = 1.4
-fs.temperature = 1.3
-fs.density = 0.35
-fs.smoke_color = (0.1, 0.09, 0.085)
-tex = bpy.data.textures.new("flick", "CLOUDS")
-tex.noise_scale = 0.09
-tex.noise_depth = 2
-fs.use_texture = True
-fs.noise_texture = tex
-fs.texture_map_type = "AUTO"
-fs.texture_size = 1.0
-fs.texture_offset = 0.0
-fs.keyframe_insert("texture_offset", frame=F0)
-fs.texture_offset = 9.0
-fs.keyframe_insert("texture_offset", frame=F1)
-src.hide_render = True
+def setup():
+    global dom, src, ds, fs
+    sc.frame_start, sc.frame_end = F0, F1
+    sc.render.fps = 30
 
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, H / 2))
+    dom = bpy.context.object
+    dom.name = "domain"
+    dom.scale = (W, W, H)
+    bpy.ops.object.transform_apply(scale=True)
+    md = dom.modifiers.new("fluid", "FLUID")
+    md.fluid_type = "DOMAIN"
+    ds = md.domain_settings
+    ds.domain_type = "GAS"
+    ds.resolution_max = res
+    ds.cache_directory = os.path.join(out, "cache")
+    ds.cache_type = "ALL"
+    ds.cache_frame_start, ds.cache_frame_end = F0, F1
+    ds.use_adaptive_domain = False
+    ds.vorticity = 0.15
+    ds.alpha = 0.3                     # подъём от плотности дыма
+    ds.beta = 1.8                      # подъём от жара — языки тянутся вверх и рвутся
+    ds.burning_rate = 0.9
+    ds.flame_smoke = 0.5
+    ds.flame_vorticity = 1.0
+    ds.flame_ignition = 1.25
+    ds.flame_max_temp = 3.0
+    ds.use_dissolve_smoke = True
+    ds.use_dissolve_smoke_log = True
+    ds.dissolve_speed = 45
+    ds.time_scale = 0.85
+    ds.use_noise = True                # мелкие вихри поверх основного газа (upres ×2) — рваный край пламени
+    ds.noise_scale = 2
+    ds.noise_strength = 1.2
+    ds.noise_pos_scale = 2.0
+    ds.use_collision_border_bottom = True
+
+    # «угли» в чаше: диск, подача рвётся текстурой облаков, текстура плывёт — пламя не стоит столбом
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.3, depth=0.1, location=(0, 0, 0.14), vertices=32)
+    src = bpy.context.object
+    src.name = "coals"
+    mf = src.modifiers.new("fluid", "FLUID")
+    mf.fluid_type = "FLOW"
+    fs = mf.flow_settings
+    fs.flow_type = "BOTH"
+    fs.flow_behavior = "INFLOW"
+    fs.flow_source = "MESH"
+    fs.surface_distance = 0.5
+    fs.fuel_amount = 1.4
+    fs.temperature = 1.3
+    fs.density = 0.35
+    fs.smoke_color = (0.1, 0.09, 0.085)
+    tex = bpy.data.textures.new("flick", "CLOUDS")
+    tex.noise_scale = 0.09
+    tex.noise_depth = 2
+    fs.use_texture = True
+    fs.noise_texture = tex
+    fs.texture_map_type = "AUTO"
+    fs.texture_size = 1.0
+    fs.texture_offset = 0.0
+    fs.keyframe_insert("texture_offset", frame=F0)
+    fs.texture_offset = 9.0
+    fs.keyframe_insert("texture_offset", frame=F1)
+    src.hide_render = True
+
+
+if not (mode == "render" and os.path.exists(BLEND)):
+    setup()
 bpy.context.view_layer.objects.active = dom
 if mode in ("bake", "all"):
     with bpy.context.temp_override(object=dom, active_object=dom, selected_objects=[dom], scene=sc):
         bpy.ops.fluid.bake_all()
+    bpy.ops.wm.save_as_mainfile(filepath=BLEND)
     print("baked")
 
 
@@ -204,6 +218,12 @@ if mode in ("render", "all"):
         cy.samples = 32
         r.filepath = os.path.join(fr, "e_%04d.png" % f)
         bpy.ops.render.render(write_still=True)
+        if f == F_A:                                   # пусто — газ не подхватился: дальше считать незачем
+            im = bpy.data.images.load(r.filepath)
+            mx = max(im.pixels[:])
+            print("peak", mx, flush=True)
+            if mx <= 0.0:
+                sys.exit("пустой кадр: нет газа в кэше")
         # проход 2: дым, освещённый солнцем и слабым небом, фон прозрачный
         dom.data.materials[0] = ms
         r.film_transparent = True
