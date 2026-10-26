@@ -12,6 +12,10 @@
 //   grade — киношный цвет: сочность без кислотности (вибрация — ненасыщенное насыщается сильнее), мягкая S-кривая,
 //     раздельный тон — света тёплые, тени холодные (tone_hi / tone_lo от часа: золото на заре, синева ночью).
 // Всё здесь, а не в эффектах потока рендера: с отдельным потоком рендера те вешали игру.
+// Удар спецприёма о землю (location.gd → _screen_hit, приём Black Desert / DMC — «кадр-удар»): hit 0..1 гаснет за ~0.4 с;
+//   hit_center — точка удара на экране; радиальное размытие к ней (мир «втягивается» в удар), расслоение цвета,
+//   hit_wave — кольцо преломления от точки удара по экрану, кадр контрастнее и плотнее, свет в цвет приёма (hit_tint),
+//   края темнеют; hit_flash — миг белого в первые кадры.
 // Тут же «Остановка времени» иая (iai.gd ставит k / wave / flash / center на этот же материал):
 //   k 0..1 — рыбий глаз сильнее, расслоение цвета, мир уходит в сиреневый монохром; wave — кольцо волны от героя;
 //   flash — белая вспышка. Без иая k = 0 — только слой камеры.
@@ -42,6 +46,11 @@ uniform float flash = 0.0;
 uniform vec2 center = vec2(0.5, 0.55);
 uniform vec3 tint = vec3(0.78, 0.66, 1.0);
 uniform float strength = 0.38;        // рыбий глаз иая: центр крупнее в 1 / (1 − strength) раз
+uniform float hit = 0.0;
+uniform vec2 hit_center = vec2(0.5);
+uniform float hit_wave = -1.0;
+uniform float hit_flash = 0.0;
+uniform vec3 hit_tint = vec3(1.0, 0.5, 0.2);
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }   // шум без узора
@@ -57,14 +66,28 @@ void fragment() {
 	float rc = length(dc);
 	float front = wave > 0.0 ? exp(-pow((rc - wave) / 0.012, 2.0)) : 0.0;
 	fe += normalize(dc + 1e-5) * front * 0.025;
+	vec2 dh = (UV - hit_center) * asp;
+	float rh = length(dh);
+	float hfront = hit_wave > 0.0 ? exp(-pow((rh - hit_wave) / 0.03, 2.0)) * (1.0 - smoothstep(0.3, 0.9, hit_wave)) : 0.0;
+	fe += normalize(dh + 1e-5) * hfront * 0.03;
 	vec2 base = fe / asp + vec2(0.5);
-	// аберрация: R/B разъезжаются к краям (у иая — сильнее)
-	float shift = (ca + k * 0.006) * (0.3 + rr * 1.7) + front * 0.012;
-	vec2 dir = normalize(d + 1e-5) / asp;
+	// аберрация: R/B разъезжаются к краям (у иая — сильнее; в миг удара — от точки удара)
+	float shift = (ca + k * 0.006) * (0.3 + rr * 1.7) + front * 0.012 + hit * 0.007 * (0.4 + rh * 1.6) + hfront * 0.01;
+	vec2 dir = normalize(mix(d, dh, step(0.001, hit)) + 1e-5) / asp;
 	vec3 col;
 	col.r = textureLod(TEXTURE, base + dir * shift, 0.0).r;
 	col.g = textureLod(TEXTURE, base, 0.0).g;
 	col.b = textureLod(TEXTURE, base - dir * shift, 0.0).b;
+	// удар о землю: радиальное размытие к точке удара — у неё резко, к краям сильнее
+	if (hit > 0.01) {
+		vec2 to = hit_center - base;
+		float amt = hit * 0.11 * smoothstep(0.02, 0.5, rh);
+		vec3 acc = col;
+		for (int i = 1; i <= 9; i++) {
+			acc += textureLod(TEXTURE, base + to * amt * float(i) / 9.0, 0.0).rgb;
+		}
+		col = acc / 10.0;
+	}
 	// размытие поворота: вдоль смещения кадра, по краям сильнее, центр (герой) резкий
 	float mb_len = length(mblur);
 	if (mb_len > 0.0005) {
@@ -122,6 +145,16 @@ void fragment() {
 		col += vec3(0.9, 0.75, 1.0) * clamp(front, 0.0, 1.0) * 0.55;
 		col *= 1.0 - k * 0.45 * smoothstep(0.15, 0.6, r2);
 	}
+	// удар о землю: кадр плотнее и контрастнее, света — в цвет приёма, края в тень, миг белого
+	if (hit > 0.01) {
+		float l = dot(max(col, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
+		vec3 c = mix(col, vec3(l), hit * 0.35);                                        // чуть сбить цвет — свет приёма ярче
+		c = mix(c, c * c * (3.0 - 2.0 * clamp(c, 0.0, 1.0)) * 1.08, hit * 0.6);         // S-кривая
+		c += hit_tint * smoothstep(0.55, 1.0, l) * hit * 0.35;
+		c += hit_tint * hfront * 0.25;
+		c *= 1.0 - hit * 0.55 * smoothstep(0.1, 0.7, r2);
+		col = c;
+	}
 	col *= 1.0 - vignette * smoothstep(0.2, 0.75, r2);
 	// блики объектива от солнца
 	if (sun_vis > 0.001 && flare > 0.0) {
@@ -148,5 +181,6 @@ void fragment() {
 	float g = hash(gp + fract(TIME * 17.0) * 113.0) - 0.5;
 	col += g * grain * (1.25 - smoothstep(0.0, 0.8, lum));
 	col = mix(col, vec3(1.0, 0.95, 1.0), flash);
+	col = mix(col, mix(vec3(1.0), hit_tint, 0.25), hit_flash);
 	COLOR = vec4(max(col, vec3(0.0)), 1.0);
 }

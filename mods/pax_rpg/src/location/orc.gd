@@ -613,8 +613,8 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		_snd(_snd_swing)
 	if _atk == "JumpAttack" and not _slam_done and hits.size() > 0 and frac >= float(hits[0]):
 		_slam_done = true
-		var fw := -global_transform.basis.z
-		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.2)
+		var fw := _model.global_transform.basis.z if _model != null else -global_transform.basis.z   # модель смотрит по +Z
+		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.7)   # куда вбит топор
 	if _hits_done < hits.size():
 		var ht := float(hits[_hits_done])
 		if not holding and frac >= ht - float(WINDOW[0]):

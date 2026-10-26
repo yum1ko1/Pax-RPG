@@ -37,6 +37,10 @@ func _tick() -> void:
 	fwd.y = 0.0
 	fwd = fwd.normalized()
 	var side := fwd.cross(Vector3.UP)
+	if frame == 20:                          # слой камеры: в прогоне вне игры apply_viewport обрывается раньше него
+		var gfx: Object = loc.get("_gfx")
+		if gfx != null and gfx.get("lens_mat") == null:
+			gfx.call("_lens_layer", loc.get("_view"))
 	if frame == 30:
 		for g: Variant in loc.get("_goblins"):
 			(g as Node3D).global_position += Vector3(0.0, -50.0, 0.0)   # гоблины не мешают кадру

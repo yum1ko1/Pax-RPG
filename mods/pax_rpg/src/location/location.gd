@@ -1586,8 +1586,9 @@ func _ult_wave(i: int) -> void:
 	var rings: Array = [[3.0, 30.0], [5.0, 22.0]] if i == 1 else [[3.5, 60.0], [6.5, 45.0], [9.5, 35.0]]
 	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка у земли (hit_vfx.gd)
 		var col: Array = hero_cfg.get("mana_color", hero_cfg.get("trail_color", [0.8, 0.45, 1.0]))
-		_landing_fx().landing(at - Vector3(0.0, 0.9, 0.0), Color(float(col[0]), float(col[1]), float(col[2])),
-			3.0 if i == 1 else 5.0)
+		var cc := Color(float(col[0]), float(col[1]), float(col[2]))
+		_landing_fx().landing(at - Vector3(0.0, 0.9, 0.0), cc, 3.0 if i == 1 else 5.0)
+		_screen_hit(at - Vector3(0.0, 0.9, 0.0), cc, 0.6 if i == 1 else 1.0)
 	for k: int in rings.size():
 		var r: Array = rings[k]
 		var tw := get_tree().create_timer(0.12 * k)
@@ -1821,9 +1822,11 @@ func _orc_slam(at: Vector3) -> void:
 	if not is_instance_valid(_view):
 		return
 	var c := Vector3(at.x, at.y, at.z)
+	var d0 := c.distance_to(_player.global_position)
 	Rift.crack(mod, _view, c, 3.2, 4.0)
 	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка (hit_vfx.gd)
 		_landing_fx().landing(c, Color(1.0, 0.42, 0.1), 3.2)
+		_screen_hit(c, Color(1.0, 0.45, 0.15), clampf(1.4 - d0 / 14.0, 0.3, 1.0))
 	for k: int in 3:                                      # растёт кольцами
 		var ra := 0.6 + k * 0.8
 		var t := get_tree().create_timer(0.07 * k)
@@ -2228,6 +2231,7 @@ func _physics_body(delta: float) -> void:
 	_flash_tick(delta)
 	if _hitfx != null:
 		_hitfx.tick(delta)
+	_screen_hit_tick(delta)
 	Prof.add("камера", tc)
 	if is_instance_valid(_arena):
 		_arena.tick()
@@ -2536,6 +2540,43 @@ func _hit_fx() -> HitVfx:
 	if _hitfx == null:
 		_hitfx = HitVfx.new(mod, _view)
 	return _hitfx
+
+
+## «Кадр-удар» приземления (шейдер слоя камеры lens.gdshader → hit*): радиальное размытие к точке удара, расслоение
+## цвета, кольцо преломления по экрану, контраст и свет в цвет приёма, миг белого; камера на миг уже кадр.
+var _shit_t := -1.0
+var _shit_power := 0.0
+var _shit_at := Vector3.ZERO
+
+
+func _screen_hit(at: Vector3, col: Color, power: float) -> void:
+	if not bool(mod.get_setting("combat_cam", true)) or _gfx == null or _gfx.lens_mat == null:
+		return
+	_shit_power = maxf(power, _shit_power if _shit_t >= 0.0 else 0.0)   # второй удар «Сокрушения» — не слабее первого
+	_shit_t = 0.0
+	_shit_at = at
+	_gfx.lens_mat.set_shader_parameter("hit_tint", col)
+	_fov_punch = maxf(_fov_punch, 0.8 * power)
+
+
+func _screen_hit_tick(delta: float) -> void:
+	if _shit_t < 0.0 or _gfx == null or _gfx.lens_mat == null:
+		return
+	_shit_t += delta
+	var m := _gfx.lens_mat
+	if _shit_t > 0.7:
+		_shit_t = -1.0
+		_shit_power = 0.0
+		m.set_shader_parameter("hit", 0.0)
+		m.set_shader_parameter("hit_wave", -1.0)
+		m.set_shader_parameter("hit_flash", 0.0)
+		return
+	var t := _shit_t
+	m.set_shader_parameter("hit", _shit_power * minf(1.0, t / 0.03) * exp(-t * 6.0))
+	m.set_shader_parameter("hit_wave", 0.02 + t * 1.6)
+	m.set_shader_parameter("hit_flash", _shit_power * 0.45 * exp(-t * 28.0))
+	if is_instance_valid(_cam) and _view is SubViewport:
+		m.set_shader_parameter("hit_center", _cam.unproject_position(_shit_at) / Vector2((_view as SubViewport).size))
 
 
 ## Эффекты приземлений — те же, что у новых ударов (один на локацию).

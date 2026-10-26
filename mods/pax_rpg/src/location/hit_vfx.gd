@@ -245,8 +245,66 @@ func landing(at: Vector3, col: Color, size := 3.0, dust := Color(0.62, 0.52, 0.4
 	crown.set_instance_shader_parameter(&"seed", randf())
 	_live.append({"n": crown, "t": 0.0, "life": 0.8, "kind": "crown", "at": at, "s": size, "b": up})
 	_sparks(at + Vector3(0.0, 0.2, 0.0), Vector3.UP, col, int(10 * size))
+	_shards(at, size, dust, col)
 	for e: Dictionary in _live.slice(_live.size() - 5):
 		_apply(e)
+
+
+## Осколки приземления: крупные камни (кувыркаются, падают), раскалённые сколы цвета приёма, мелкая крошка.
+func _shards(at: Vector3, size: float, dust: Color, col: Color) -> void:
+	var k := size / 3.0
+	_chunks(at, int(26 * k), dust.darkened(0.45), Vector3(0.16, 0.11, 0.13), Vector2(5.0, 11.0) * sqrt(k), 45.0, 1.0, false)
+	_chunks(at, int(40 * k), dust.darkened(0.25), Vector3(0.06, 0.05, 0.05), Vector2(6.0, 14.0) * sqrt(k), 60.0, 0.8, false)
+	_chunks(at, int(18 * k), col, Vector3(0.05, 0.03, 0.04), Vector2(7.0, 15.0) * sqrt(k), 55.0, 0.6, true)
+
+
+func _chunks(at: Vector3, amount: int, c: Color, box: Vector3, speed: Vector2, spread: float, life: float,
+		hot: bool) -> void:
+	var p := GPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 0.92
+	p.amount = maxi(4, amount)
+	p.lifetime = life
+	p.local_coords = false
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.5
+	pm.direction = Vector3.UP
+	pm.spread = spread
+	pm.initial_velocity_min = speed.x
+	pm.initial_velocity_max = speed.y
+	pm.gravity = Vector3(0.0, -19.0, 0.0)
+	pm.particle_flag_rotate_y = true
+	pm.angle_min = -180.0
+	pm.angle_max = 180.0
+	pm.angular_velocity_min = -540.0
+	pm.angular_velocity_max = 540.0
+	pm.scale_min = 0.5
+	pm.scale_max = 1.7
+	var shrink := Curve.new()                    # к концу — меньше: падают и пропадают, а не проваливаются в землю
+	shrink.add_point(Vector2(0.0, 1.0))
+	shrink.add_point(Vector2(0.75, 1.0))
+	shrink.add_point(Vector2(1.0, 0.0))
+	var sc := CurveTexture.new()
+	sc.curve = shrink
+	pm.scale_curve = sc
+	p.process_material = pm
+	var m := BoxMesh.new()
+	m.size = box
+	var mat := StandardMaterial3D.new()
+	if hot:                                      # раскалённый скол — светится цветом приёма
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = Color(c.r * 3.0, c.g * 3.0, c.b * 3.0)
+	else:
+		mat.albedo_color = c
+		mat.roughness = 1.0
+	m.material = mat
+	p.draw_pass_1 = m
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(p)
+	p.global_position = at + Vector3(0.0, 0.15, 0.0)
+	p.emitting = true
+	p.finished.connect(p.queue_free)
 
 
 ## Искры по направлению удара: узкий конус вперёд, быстрые, со шлейфом; к концу жизни тоньше — гаснут, а не висят.
