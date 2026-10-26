@@ -42,6 +42,8 @@ var _drop: AudioStreamPlayer                     # бочка с басом из
 var _mus_tw: Tween
 var _intro: Intro
 static var _intro_seen := false                  # ролик — один раз за запуск игры
+var _world_up := false                           # мир игры загружен (world_ready → attach): ролик не идёт поверх загрузки
+var _boot_t := 0.0                               # сколько ждём мира; дольше 25 с — ролик всё равно (без сохранений мира нет)
 var _rocks: Array = []                           # [TextureRect, u, v, w, h, фаза, амплитуда, период, поворот, глубина]
 var _brush: FontFile                             # Katsuno (только латиница) — заголовок и пункты по-английски
 ## Стили (настройка menu_style): A — «Цусима»: название кистью, пункты — Cinzel, бледно-лиловые, выделение —
@@ -346,6 +348,7 @@ func _rebuild() -> void:
 ## значит, игрок вернулся на главный шаг меню: из настроек, сети или из партии). Ни опроса, ни обхода дерева.
 func attach(menu: Node) -> void:
 	active = self
+	_world_up = true
 	if menu == null or menu == _menu:
 		return
 	_menu = menu
@@ -658,6 +661,9 @@ func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("main_menu._process")
 	var want := _want
 	if want and not _shown and _cine and not _intro_seen and Intro.available(mod):
+		_boot_t += delta
+		if not _world_up and _boot_t < 25.0:          # игра ещё грузит мир — ни меню, ни ролика
+			return
 		_intro_seen = true                            # первый показ нового меню за запуск — сперва ролик
 		var intro := Intro.new()
 		intro.setup(mod)

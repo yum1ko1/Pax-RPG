@@ -1,6 +1,8 @@
 extends CanvasLayer
-## Вступительный ролик «Битва при Расколе» перед новым главным меню: video/intro.ogv — всё до кадра меню, кинорамка
-## вшита, зерна нет (его кладёт шейдер — так видео сжимается без блоков). Субтитры, имена и карточку «Юрума»
+## Вступительный ролик «Битва при Расколе» перед новым главным меню: всё до кадра меню, кинорамка и зерно вшиты.
+## Theora 20 Мбит/с — две части (video/intro_1.ogv, intro_2.ogv: файл в репозитории ≤ 100 МБ) со стыком на жёсткой
+## склейке, звук отдельно (intro_audio.ogg): по его часам идут картинка, вторая часть и субтитры. Перед стартом —
+## секунда чёрного, чтобы улеглись рывки загрузки мира. Субтитры, имена и карточку «Юрума»
 ## рисуем сами, на языке игры, как в ролике: строка — Cormorant курсивом в нижней полосе рамки, имя — капителью
 ## над ней. Esc, пробел, Enter или щелчок — пропустить. Кончился или пропущен — сигнал done: меню появляется на
 ## бочке из саундтрека. Монтаж и тайминги — pax_rpg/dev/intro_cut (edl.py, overlays.py).
@@ -22,10 +24,15 @@ const SUBS := [                                 # кто, с, по, ключ п�
 const NAME_COL := {"iru": Color(0.87, 0.75, 1.0), "selune": Color(0.96, 0.54, 0.56)}
 const TEXT_COL := {"iru": Color(1.0, 0.94, 0.97), "selune": Color(0.93, 0.93, 0.95), "both": Color(0.95, 0.93, 0.89)}
 const CARD := Vector2(1.0, 5.5)                 # карточка «Юрума»: с, по (проявление 0,83 с, уход 1 с)
+const SPLIT := 28.75                            # стык частей: склейка c06 → c07 (game_media.py, SPLIT = 690 кадров)
+const LEAD := 1.0                               # секунда чёрного перед стартом
 
 var mod: PaxMod
 var _root: Control
-var _player: VideoStreamPlayer
+var _p1: VideoStreamPlayer
+var _p2: VideoStreamPlayer
+var _audio: AudioStreamPlayer
+var _started := false
 var _name: Label
 var _line: Label
 var _card: Control
@@ -44,9 +51,10 @@ var _held := true                               # клавишу пропуск�
 const SKIP_KEYS: Array[Key] = [KEY_ESCAPE, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
 
 
-## Есть ли файл ролика (без чтения 46 МБ).
+## Есть ли файлы ролика (без чтения самих файлов).
 static func available(m: PaxMod) -> bool:
-	return m.list_files("video").has("intro.ogv")
+	var f := m.list_files("video")
+	return f.has("intro_1.ogv") and f.has("intro_2.ogv") and f.has("intro_audio.ogg")
 
 
 func setup(m: PaxMod) -> void:
@@ -64,15 +72,13 @@ func setup(m: PaxMod) -> void:
 	black.set_anchors_preset(Control.PRESET_FULL_RECT)
 	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(black)
-	_player = VideoStreamPlayer.new()
-	var vs := VideoStreamTheora.new()
-	vs.file = mod.path("video/intro.ogv")
-	_player.stream = vs
-	_player.expand = true
-	_player.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_player.material = grain_material(0.06)
-	_player.finished.connect(_finish)
-	_root.add_child(_player)
+	_p1 = _video("video/intro_1.ogv")
+	_p2 = _video("video/intro_2.ogv")
+	_p2.visible = false
+	_audio = AudioStreamPlayer.new()
+	_audio.stream = mod.sound("video/intro_audio.ogg")
+	_audio.finished.connect(_finish)
+	add_child(_audio)
 	_card = Control.new()
 	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card.modulate.a = 0.0
@@ -106,7 +112,17 @@ func setup(m: PaxMod) -> void:
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_hint.modulate.a = 0.0
 	_root.add_child(_hint)
-	ready.connect(_player.play)
+
+
+func _video(rel: String) -> VideoStreamPlayer:
+	var p := VideoStreamPlayer.new()
+	var vs := VideoStreamTheora.new()
+	vs.file = mod.path(rel)
+	p.stream = vs
+	p.expand = true
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(p)
+	return p
 
 
 func _font(rel: String, bold: float) -> Font:
@@ -131,7 +147,7 @@ func _label(f: Font, col: Color, text: String) -> Label:
 	return l
 
 
-## Плёночное зерно поверх видео: в файле его нет — Theora сжимает чистую картинку без блоков.
+## Лёгкое плёночное зерно поверх видео без своего зерна (фон нового меню), по пикселю.
 static func grain_material(amount: float) -> ShaderMaterial:
 	var sh := Shader.new()
 	sh.code = GRAIN
@@ -146,7 +162,7 @@ uniform float amount = 0.06;
 float h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void fragment() {
 	vec4 c = texture(TEXTURE, UV);
-	vec2 cell = floor(FRAGCOORD.xy * 0.6);
+	vec2 cell = floor(FRAGCOORD.xy);
 	float g = h(cell + vec2(floor(TIME * 24.0) * 17.31, 0.0)) - 0.5;
 	float w = clamp(1.0 - abs(dot(c.rgb, vec3(0.333)) - 0.5) * 1.2, 0.15, 1.0);   // в средних тонах сильнее
 	c.rgb += g * amount * w;
@@ -163,8 +179,9 @@ func _layout(vs: Vector2) -> void:
 	_s = s
 	var size := SRC * s
 	var o := (vs - size) * 0.5
-	_player.position = o
-	_player.size = size
+	for p: VideoStreamPlayer in [_p1, _p2]:
+		p.position = o
+		p.size = size
 	_name.add_theme_font_size_override("font_size", roundi(24.0 * s))
 	_name.add_theme_constant_override("outline_size", 0)
 	_line.add_theme_font_size_override("font_size", roundi(40.0 * s))
@@ -208,7 +225,20 @@ func _process(delta: float) -> void:
 		_finish()
 		return
 	_held = down
-	var t := _player.stream_position if _player.stream_position > 0.0 else _t
+	if not _started and _t >= LEAD:                    # обе части стартуют разом, вторая ждёт на паузе с готовым кадром
+		_started = true
+		_p1.play()
+		_p2.play()
+		_p2.paused = true
+		_audio.play()
+	var t := _t - LEAD
+	if _started and _audio.playing:                      # часы — звук (с поправкой на буфер вывода)
+		t = _audio.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
+	if t >= SPLIT and _p1.visible:
+		_p2.paused = false
+		_p2.visible = true
+		_p1.stop()
+		_p1.visible = false
 	_hint.modulate.a = 0.6 * clampf((t - 0.8) / 0.6, 0.0, 1.0)
 	_card.modulate.a = clampf(minf((t - CARD.x) / 0.83, (CARD.y - t) / 1.0), 0.0, 1.0)
 	var idx := -1
@@ -243,7 +273,7 @@ func _show_line(idx: int) -> void:
 	_name.add_theme_font_override("font", nf)
 	_line.text = mod.tr_key(str(sb[3]))
 	_line.add_theme_color_override("font_color", TEXT_COL.get(who, Color.WHITE) as Color)
-	var top := _player.position.y + (SRC.y - BAR) * _s
+	var top := _p1.position.y + (SRC.y - BAR) * _s
 	var block := (70.0 if named else 42.0) * _s
 	var y0 := top + (BAR * _s - block) * 0.5 - 6.0 * _s
 	_name.position.y = y0
@@ -275,8 +305,10 @@ func _finish() -> void:
 	_ending = true
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_root, "modulate", Color.BLACK, 0.25)
-	tw.tween_property(_player, "volume_db", -60.0, 0.25)
+	tw.tween_property(_audio, "volume_db", -60.0, 0.25)
 	tw.chain().tween_callback(func() -> void:
-		_player.stop()
+		_p1.stop()
+		_p2.stop()
+		_audio.stop()
 		done.emit()
 		queue_free())
