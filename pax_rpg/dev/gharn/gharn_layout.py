@@ -1338,30 +1338,54 @@ def masters_street():
             box([x1 - x0, 0.06, 1.8], round((x0 + x1) / 2, 2), 0.03, zf - side * 0.9, "stone_cut", c=False)
             box([x1 - x0, 0.14, 0.25], round((x0 + x1) / 2, 2), 0.07, zf - side * 1.9, "stone_dark", c=False)
     yaw = lambda side: 0 if side < 0 else 180            # лицом к улице
+    occ = []                                              # занятое на тротуарах: (x, z, радиус)
+
+    def take(m, x, z, r, rad, force=False, **kw):        # поставить, если место у фасада свободно (force — всегда)
+        if not force and any(math.hypot(x - ox, z - oz) < rad + orad for ox, oz, orad in occ):
+            return False
+        occ.append((x, z, rad))
+        add(m, x, z, r, **kw)
+        return True
+    pick = lambda m, alt: m if _has(m if m.startswith("@") else "props/" + m) else alt
+    pot = pick("potted_shrub", None)
+    for (x1_, s1_, h1_, _), (x2_, s2_, h2_, _) in zip(houses, houses[1:]):   # в стыках домов — фонари и знамёна
+        if s1_ != s2_ or x2_ - x1_ > h1_ + h2_ + 1.5:
+            continue
+        xj, zf = (x1_ + h1_ + x2_ - h2_) / 2, (M_N if s1_ < 0 else M_S)
+        add("stone_lantern", xj, zf - s1_ * 1.75, yaw(s1_), c=True)
+        add("banner_clan", xj, zf - s1_ * 0.25, yaw(s1_), s=1.15, c=True)
+        occ.extend([(xj, zf - s1_ * 1.75, 0.5), (xj, zf - s1_ * 0.25, 0.5)])
     for i, (xc, side, hx, m) in enumerate(houses):
         craft, sign, glyph = M_CRAFTS[i % len(M_CRAFTS)]
         zf = M_N if side < 0 else M_S
         zw = zf - side * 1.0                              # витрина — на тротуаре у стены
+        occ += [(xc + 2.9, zf - side * 1.4, 0.5), (xc + 0.2, zf - side * 0.6, 0.7)]   # вывеска, проход в дверь
         if craft == "tannery":
-            add("@hide_frame", xc - 1.2, zw, yaw(side), c=True)
-            add("@spear_rack", xc + 2.0, zw - side * 0.1, yaw(side), s=0.8, c=True) if i % 2 else None
+            take("@hide_frame", xc - 1.2, zw, yaw(side), 1.2, force=True, c=True)
+            if i % 2:
+                take("@spear_rack", xc + 2.0, zw - side * 0.1, yaw(side), 0.9, s=0.8, force=True, c=True)
+            take("crate", xc - 3.0, zf - side * 0.5, mrng.uniform(0, 360), 0.4, s=1.0, c=True)
         elif craft == "potter":
-            if _has("props/pottery_stand"):
-                add("pottery_stand", xc - 0.8, zw, yaw(side), c=True)
-            else:
-                add("@market_stall_hide", xc - 0.8, zw, yaw(side), c=True)
+            take("pottery_stand" if _has("props/pottery_stand") else "@market_stall_hide", xc - 1.2, zw, yaw(side),
+                 1.2, force=True, c=True)
+            take("awning", xc - 1.2, zf - side * 1.2, yaw(side), 0.1, force=True, c=False)     # навес над товаром
         elif craft == "brewer":
             for j in range(3):
-                add("barrel_kumis", xc - 2.2 + j * 0.95, zw + side * 0.1, mrng.uniform(0, 360), c=True)
-            add("table_long", xc + 1.6, zw - side * 0.6, yaw(side) + 90, s=0.8, c=True)
+                take("barrel_kumis", xc - 2.2 + j * 0.95, zw + side * 0.1, mrng.uniform(0, 360), 0.45, force=True, c=True)
+            take("table_long", xc + 1.6, zw - side * 0.6, yaw(side) + 90, 0.8, s=0.8, force=True, c=True)
+            take("awning", xc - 1.25, zf - side * 1.2, yaw(side), 0.1, force=True, c=False)
         elif craft == "carpenter":
-            add("wood_pile", xc - 1.6, zw, yaw(side), c=True)
-            add("cart", xc + 1.8, zw - side * 0.2, yaw(side), s=0.7, c=True)
+            take("wood_pile", xc - 1.6, zw, yaw(side), 1.0, force=True, c=True)
+            take("cart", xc + 1.8, zw - side * 0.2, yaw(side), 0.9, s=0.7, force=True, c=True)
         elif craft == "armorer":
-            add("weapon_rack", xc - 1.4, zf - side * 0.3, yaw(side), c=True)
-            add("@spear_rack", xc + 1.4, zw, yaw(side), c=True)
+            if _has("props/shield_stand"):
+                take("shield_stand", xc - 1.4, zf - side * 0.5, yaw(side), 1.0, force=True, c=True)
+            else:
+                take("weapon_rack", xc - 1.4, zf - side * 0.3, yaw(side), 1.0, force=True, c=True)
+            take("@spear_rack", xc + 1.6, zw, yaw(side), 0.9, force=True, c=True)
         else:
-            add("@market_stall_hide", xc - 0.6, zw, yaw(side), c=True)
+            take(pick("cloth_rack", "@market_stall_hide"), xc - 1.0, zw, yaw(side), 1.1, force=True, c=True)
+            take("basket", xc - 2.8, zf - side * 0.5, 0, 0.35, s=1.0, c=True)
         items.append({"sign": list(sign), "p": [round(xc + 2.9, 2), 0.0, round(zf - side * 1.4, 2)], "r": yaw(side),
                       "c": True})
         proxy("noren", xc + 0.2, 0.0, zf - side * 0.1, yaw(side), c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])
@@ -1370,21 +1394,23 @@ def masters_street():
                                                           # заглушка окна на линии повисла бы в воздухе
         if i % 2 == 0:
             proxy("smoke", xc + 1.5, 13.4 if tall else 7.2, zf + side * 5.0)
-        for j in range(mrng.randint(1, 3)):              # кучка у двери: мешки, корзины, ящики
-            dx = mrng.choice((-1, 1)) * mrng.uniform(2.6, 3.4)
-            add(mrng.choice(["basket", "sack_grain", "crate", "barrel_water", "@bucket_set"]), xc + dx,
-                zf - side * mrng.uniform(0.4, 0.7), mrng.uniform(0, 360), s=mrng.uniform(0.75, 0.95), c=True)
+        # у двери — кадка с кустом, у стены — мешки, корзины, ящики (сколько встанет)
+        for dx in ((1.25, -0.85) if pot else ()):
+            if take(pot, xc + 0.2 + dx, zf - side * 0.45, mrng.uniform(0, 360), 0.4, s=mrng.uniform(0.85, 1.0), c=True):
+                break
+        for j in range(4):
+            dx = mrng.choice((-1, 1)) * mrng.uniform(2.4, hx - 0.4)
+            take(mrng.choice(["basket", "sack_grain", "crate", "barrel_water", "@bucket_set", "barrel_kumis"]), xc + dx,
+                 zf - side * mrng.uniform(0.4, 0.7), mrng.uniform(0, 360), 0.4, s=mrng.uniform(0.75, 0.95), c=True)
+        # бумажные фонари под карнизом вдоль фасада
+        items.append({"lanterns": [round(xc - hx + 0.7, 2), round(zf - side * 0.35, 2), round(xc + hx - 0.7, 2),
+                                   round(zf - side * 0.35, 2), 3.3, 0, 0], "seed": int(xc * 7 + side), "p": [xc, 0, zf],
+                      "c": False})
         for j in range(3):                                 # сорная трава у цоколя
             add("grass_tuft", xc + mrng.uniform(-hx, hx), zf - side * 0.15, mrng.uniform(0, 360),
                 s=mrng.uniform(0.5, 0.8), c=False)
         if i % 3 == 1:                                     # прохожий у лавки и зазывала
             proxy("crier", xc - 0.4, 0, zf - side * 1.3, yaw(side))
-    for (x1_, s1_, h1_, _), (x2_, s2_, h2_, _) in zip(houses, houses[1:]):   # в стыках домов — фонари и знамёна
-        if s1_ != s2_ or x2_ - x1_ > h1_ + h2_ + 1.5:
-            continue
-        xj, zf = (x1_ + h1_ + x2_ - h2_) / 2, (M_N if s1_ < 0 else M_S)
-        add("stone_lantern", xj, zf - s1_ * 1.75, yaw(s1_), c=True)
-        add("banner_clan", xj, zf - s1_ * 0.25, yaw(s1_), s=1.15, c=True)
     # гирлянды фонарей через улицу на высоте второго этажа: свет — у каждой второй
     for k, x in enumerate([24.0, 31.0, 38.0, 45.0, 65.0, 72.0, 79.0, 86.0]):
         items.append({"lanterns": [x, M_N + 0.3, x + 0.6, M_S - 0.3, (5.8, 6.1, 5.6, 6.0)[k % 4], 1 if k % 2 == 0 else 0, 0],
@@ -1402,6 +1428,8 @@ def masters_street():
     for side in (-1, 1):
         add("@brazier_tusk", 21.4, 57.5 + side * 4.0, 0, s=0.8, c=True)
         items.append({"brazier": True, "p": [21.4, 0.0, 57.5 + side * 4.0], "c": False})
+        if pot:
+            add(pot, 23.2, 57.5 + side * 4.4, 0, c=True)
     # площадь колодца: колодец, четыре каменных фонаря по углам, тотем и туг, скамьи лицом к колодцу, стол с кумысом
     cx, cz = M_SQ[0], 57.5
     box([M_SQ[2] - M_SQ[1], 0.05, M_S - M_N + 3.0], cx, 0.025, cz, "stone_cut", c=False)
@@ -1419,6 +1447,13 @@ def masters_street():
     add("bench_long", M_SQ[1] + 0.3, M_S + 1.0, 90, c=True)
     add("bench_long", M_SQ[1] + 2.1, M_S + 1.0, 90, c=True)
     add("barrel_kumis", M_SQ[1] + 1.2, M_S + 2.4, 0, c=True)
+    if pot:                                                  # кадки у колодца (север площади — обход прохожих)
+        for dx in (-2.6, 2.6):
+            add(pot, cx + dx, cz - 2.3, 0, c=True)
+    for dx in (-5.6, 5.6):                                   # торговые прилавки по северным углам площади
+        add("stall_frame", cx + dx, M_N - 1.0, 180, c=True)
+        add(mrng.choice(["crate", "basket", "sack_grain"]), cx + dx + (1.9 if dx > 0 else -1.9), M_N - 0.6, 0, c=True)
+    add("merchant_cart", M_SQ[2] - 1.2, M_S + 1.2, 90, c=True)
     proxy("person", cx - 1.6, 0, cz + 2.0, 160)
     proxy("person", cx + 1.4, 0, cz + 2.2, 200)
     # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
@@ -1436,9 +1471,18 @@ def masters_street():
         add(mrng.choice(["barrel_water", "@bucket_set", "crate"]), xc + 1.9, by + 0.4, mrng.uniform(0, 360), c=True)
         items.append({"laundry": [round(xc - hx + 0.8, 2), round(by + 1.6, 2), round(xc + hx - 0.8, 2), round(by + 1.6, 2)],
                       "seed": int(xc), "p": [xc, 0, by], "c": False})
+        # мастерский двор: грядка или поленница, навес-сарай под черепицей, сакура или телега
+        if _has("props/veg_bed") and i % 3 != 1:
+            add("veg_bed", xc - 1.8, by + 4.4, 0, c=True)
+        else:
+            add("wood_pile", xc - 1.8, by + 4.4, 90, c=True)
         if i % 2 == 0:
-            add("@central/sakura_young", xc + 0.5, by + 5.6, mrng.uniform(0, 360), s=0.8, c=True)
+            add("@central/sakura_young", xc + 2.2, by + 6.4, mrng.uniform(0, 360), s=0.8, c=True)
             items[-1]["col"] = [0.5, 3.0, 0.5]
+            add(mrng.choice(["@hide_frame", "barrel_kumis", "hay_bale"]), xc - 1.8, by + 7.0, mrng.uniform(0, 360), c=True)
+        elif _has("props/yard_shed"):
+            add("yard_shed", xc + 1.2, by + 6.6, 180, c=True)
+            add(mrng.choice(["cart", "@hay_wagon"]), xc - 2.0, by + 7.0, 90, c=True)
         else:
             add(mrng.choice(["stall_frame", "@hay_wagon", "cart"]), xc, by + 5.0, mrng.choice((0, 180)), c=True)
     add("ovoo_cairn", 55.0, 80.6, 0, c=True)              # конец переулка у стены: тур с лентами и туг
