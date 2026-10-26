@@ -2,7 +2,7 @@
 Запуск (на ПК, фоном — без окна и без мышки):
   blender -b -P fire_sim.py -- <папка> [bake|render|all] [res] [gpu|cpu]
 bake   — газ (пламя + дым) в <папка>/cache;
-render — кадры F_A..F_B в <папка>/frames, два прохода Cycles на кадр (ортокамера сбоку, без перспективы):
+render (emit — только свечение) — кадры F_A..F_B в <папка>/frames, два прохода Cycles на кадр (ортокамера сбоку, без перспективы):
   e_####.png — свечение пламени, 16 бит линейно (одна величина: цвет по жару даёт шейдер игры);
   s_####.png — дым, RGBA 16 бит: освещён сверху-спереди мягким солнцем, альфа — плотность.
 E_K — масштаб свечения: подобран так, чтобы ядро пламени не упиралось в 1.0."""
@@ -21,7 +21,7 @@ E_K = 0.6                          # масштаб свечения в PNG (л�
 
 os.makedirs(out, exist_ok=True)
 BLEND = os.path.join(out, "fire.blend")
-if mode == "render" and os.path.exists(BLEND):     # газ уже посчитан: сцена с ним (флаг «запечено» живёт в .blend)
+if mode in ("render", "emit") and os.path.exists(BLEND):   # газ уже посчитан: сцена с ним (флаг «запечено» живёт в .blend)
     bpy.ops.wm.open_mainfile(filepath=BLEND)
     sc = bpy.context.scene
     dom = bpy.data.objects["domain"]
@@ -97,7 +97,7 @@ def setup():
     src.hide_render = True
 
 
-if not (mode == "render" and os.path.exists(BLEND)):
+if not (mode in ("render", "emit") and os.path.exists(BLEND)):
     setup()
 bpy.context.view_layer.objects.active = dom
 if mode in ("bake", "all"):
@@ -158,7 +158,7 @@ def mat_smoke():
     return m
 
 
-if mode in ("render", "all"):
+if mode in ("render", "emit", "all"):
     r = sc.render
     r.engine = "CYCLES"
     cy = sc.cycles
@@ -238,6 +238,9 @@ if mode in ("render", "all"):
             print("peak", mx, flush=True)
             if mx <= 0.0:
                 sys.exit("пустой кадр: нет газа в кэше")
+        if mode == "emit":                             # emit — только свечение (дым прежний)
+            print("frame", f, flush=True)
+            continue
         # проход 2: дым, освещённый солнцем и слабым небом, фон прозрачный
         dom.data.materials[0] = ms
         r.film_transparent = True
