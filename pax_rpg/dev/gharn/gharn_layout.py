@@ -1280,7 +1280,7 @@ M_CRAFTS = [  # ремесло: витрина у фасада, вывеска (
     ("carpenter", ("木", "Плотник"), "木"), ("armorer", ("武", "Оружейник"), "武"), ("weaver", ("布", "Ткани"), "布")]
 mrng = random.Random(5757)
 _has = lambda m: os.path.exists(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", m + ".glb"))
-FOOT.setdefault("house_tall", (4.0, 4.0))
+FOOT["house_tall"] = (3.83, 3.81)                     # трёхэтажная мастерская (Meshy, 7.65 × 7.62 × 13 м)
 
 
 def _in_masters(it):
@@ -1366,11 +1366,12 @@ def masters_street():
                       "c": True})
         proxy("noren", xc + 0.2, 0.0, zf - side * 0.1, yaw(side), c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])
         proxy("hang_sign", xc - hx + 1.4, 0.0, zf - side * 0.5, yaw(side), glyph=glyph)
-        for dx in (-1.8, 1.8):                            # тёплые окна второго этажа
+        tall = "tall" in m                                # у трёхэтажной свои окна-решётки и навес лавки
+        for dx in (-1.8, 1.8) if not tall else ():        # тёплые окна второго этажа
             if (i + (dx > 0)) % 3:
                 proxy("window", xc + dx, 4.3, zf - side * 0.05, yaw(side))
         if i % 2 == 0:
-            proxy("smoke", xc + 1.5, 7.2, zf + side * 5.0)
+            proxy("smoke", xc + 1.5, 13.4 if tall else 7.2, zf + side * 5.0)
         for j in range(mrng.randint(1, 3)):              # кучка у двери: мешки, корзины, ящики
             dx = mrng.choice((-1, 1)) * mrng.uniform(2.6, 3.4)
             add(mrng.choice(["basket", "sack_grain", "crate", "barrel_water", "@bucket_set"]), xc + dx,
@@ -1422,9 +1423,9 @@ def masters_street():
     add("barrel_kumis", M_SQ[1] + 1.2, M_S + 2.4, 0, c=True)
     proxy("person", cx - 1.6, 0, cz + 2.0, 160)
     proxy("person", cx + 1.4, 0, cz + 2.2, 200)
-    # задворки юга: у каждого второго дома — двор за плетнём (шкуры, дрова, бочки, бельё), дым из печи
+    # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
     for i, (xc, side, hx, m) in enumerate(houses):
-        if side < 0 or i % 2:
+        if side < 0:
             continue
         by = M_S + 2 * FOOT[m.lstrip("@")][1] + 3.2
         if by > MASTERS[3] - 3:
@@ -1437,6 +1438,11 @@ def masters_street():
         add(mrng.choice(["barrel_water", "@bucket_set", "crate"]), xc + 1.9, by + 0.4, mrng.uniform(0, 360), c=True)
         items.append({"laundry": [round(xc - hx + 0.8, 2), round(by + 1.6, 2), round(xc + hx - 0.8, 2), round(by + 1.6, 2)],
                       "seed": int(xc), "p": [xc, 0, by], "c": False})
+        if i % 3 == 0:
+            add("@central/sakura_young", xc + 0.5, by + 5.6, mrng.uniform(0, 360), s=0.8, c=True)
+            items[-1]["col"] = [0.5, 3.0, 0.5]
+        else:
+            add(mrng.choice(["stall_frame", "@hay_wagon", "cart"]), xc, by + 5.0, mrng.choice((0, 180)), c=True)
     return houses
 
 
