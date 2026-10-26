@@ -17,7 +17,7 @@ F0, F1 = 1, 170
 F_A, F_B = 81, 160                 # 80 кадров установившегося горения: 64 в петлю + 16 на перехлёст
 W, H = 1.3, 2.6                    # домен, м: огонь в чаше ~0.6 м, языки до ~1.5 м
 RX, RY = 256, 512                  # кадр
-E_K = 1.5                          # масштаб свечения в PNG (линейно; make_fire_atlas.py нормирует по пику)
+E_K = 3.0                          # масштаб свечения в PNG (линейно; make_fire_atlas.py нормирует по пику)
 
 os.makedirs(out, exist_ok=True)
 BLEND = os.path.join(out, "fire.blend")
@@ -121,10 +121,21 @@ def mat_emit():
     o = nt.nodes.new("ShaderNodeOutputMaterial")
     e = nt.nodes.new("ShaderNodeEmission")
     e.inputs["Color"].default_value = (1, 1, 1, 1)
+    # светится тонкая зона горения, а не весь горячий газ: крутой порог по flame — у языков чёткая кромка
+    # (иначе свечение копится по лучу сквозь объём и огонь выходит светящимся туманом)
+    mr = nt.nodes.new("ShaderNodeMapRange")
+    mr.interpolation_type = "SMOOTHSTEP"
+    mr.inputs["From Min"].default_value = 0.18
+    mr.inputs["From Max"].default_value = 0.75
+    pw = nt.nodes.new("ShaderNodeMath")
+    pw.operation = "POWER"
+    pw.inputs[1].default_value = 2.0
     mul = nt.nodes.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
     mul.inputs[1].default_value = 1.0
-    nt.links.new(attr(nt, "flame").outputs["Fac"], mul.inputs[0])
+    nt.links.new(attr(nt, "flame").outputs["Fac"], mr.inputs["Value"])
+    nt.links.new(mr.outputs["Result"], pw.inputs[0])
+    nt.links.new(pw.outputs[0], mul.inputs[0])
     nt.links.new(mul.outputs[0], e.inputs["Strength"])
     nt.links.new(e.outputs[0], o.inputs["Volume"])
     return m
@@ -205,6 +216,7 @@ if mode in ("render", "all"):
     sc.world = world
 
     me, ms = mat_emit(), mat_smoke()
+    mul = [n for n in me.node_tree.nodes if n.type == "MATH" and n.operation == "MULTIPLY"][0]
     dom.data.materials.clear()
     dom.data.materials.append(me)
     fr = os.path.join(out, "frames")
@@ -213,11 +225,11 @@ if mode in ("render", "all"):
         sc.frame_set(f)
         # проход 1: только свечение пламени на чёрном
         dom.data.materials[0] = me
-        me.node_tree.nodes["Math"].inputs[1].default_value = E_K
+        mul.inputs[1].default_value = E_K
         r.film_transparent = False
         bg.inputs["Strength"].default_value = 0.0
         sun.hide_render = True
-        cy.samples = 96
+        cy.samples = 256
         cy.use_denoising = False               # свечение не шумит, а шумодав размыл бы кромку языков
         r.filepath = os.path.join(fr, "e_%04d.png" % f)
         bpy.ops.render.render(write_still=True)

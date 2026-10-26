@@ -208,7 +208,7 @@ const SIM_FIRE := "textures/vfx/sim/brazier_fire"
 const SIM_W := 1.3
 const SIM_H := 2.6
 const SIM_BASE := 0.14
-const SIM_FLAME := 1.2                                 # высота языков в симуляции, м
+const SIM_FLAME := 1.0                                 # высота языков в симуляции, м (угли в ней — круг r 0.3 м)
 static var _sim_sh: Shader
 
 
