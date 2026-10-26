@@ -40,6 +40,8 @@ var _s := -1.0                                  # масштаб кадра на
 var _cur := -1
 var _t := 0.0
 var _ending := false
+var _held := true                               # клавишу пропуска держали ещё до ролика — ждём, пока отпустят
+const SKIP_KEYS: Array[Key] = [KEY_ESCAPE, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
 
 
 ## Есть ли файл ролика (без чтения 46 МБ).
@@ -199,6 +201,13 @@ func _process(delta: float) -> void:
 	if vs.x <= 0.0:
 		return
 	_layout(vs)
+	var down := false                                    # опрос, а не только событие: Esc игра может забрать раньше
+	for k: Key in SKIP_KEYS:
+		down = down or Input.is_key_pressed(k) or Input.is_physical_key_pressed(k)
+	if down and not _held:
+		_finish()
+		return
+	_held = down
 	var t := _player.stream_position if _player.stream_position > 0.0 else _t
 	_hint.modulate.a = 0.6 * clampf((t - 0.8) / 0.6, 0.0, 1.0)
 	_card.modulate.a = clampf(minf((t - CARD.x) / 0.83, (CARD.y - t) / 1.0), 0.0, 1.0)
@@ -246,7 +255,8 @@ func _input(e: InputEvent) -> void:
 		return
 	var skip := false
 	if e is InputEventKey and (e as InputEventKey).pressed and not (e as InputEventKey).echo:
-		skip = (e as InputEventKey).keycode in [KEY_ESCAPE, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]
+		var ke := e as InputEventKey
+		skip = ke.keycode in SKIP_KEYS or ke.physical_keycode in SKIP_KEYS
 	elif e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
 		skip = (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT
 	if skip:

@@ -120,8 +120,9 @@ func _cine_bg() -> void:
 	box.add_child(_video)
 	var shade := TextureRect.new()
 	var g := Gradient.new()
-	g.set_color(0, Color(0.03, 0.01, 0.06, 0.62))
-	g.set_color(1, Color(0.03, 0.01, 0.06, 0.0))
+	g.set_color(0, Color(0.03, 0.01, 0.06, 0.78))
+	g.add_point(0.55, Color(0.03, 0.01, 0.06, 0.5))
+	g.set_color(g.get_point_count() - 1, Color(0.03, 0.01, 0.06, 0.0))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
 	gt.fill = GradientTexture2D.FILL_RADIAL
@@ -130,10 +131,10 @@ func _cine_bg() -> void:
 	shade.texture = gt
 	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	shade.stretch_mode = TextureRect.STRETCH_SCALE
-	shade.anchor_left = 0.36
-	shade.anchor_right = 0.9
-	shade.anchor_top = -0.05
-	shade.anchor_bottom = 0.95
+	shade.anchor_left = 0.38
+	shade.anchor_right = 0.86
+	shade.anchor_top = 0.0
+	shade.anchor_bottom = 1.0
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(shade)
 
@@ -209,14 +210,14 @@ func _texts() -> void:
 	title.position = Vector2(70, 26)
 	title.name = "Title"
 	if _cine:
-		title.add_theme_font_size_override("font_size", 132)
+		title.add_theme_font_size_override("font_size", 104)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		title.anchor_left = 0.62
 		title.anchor_right = 0.62
 		title.offset_left = -600.0
 		title.offset_right = 600.0
-		title.offset_top = 130.0
-		title.offset_bottom = 330.0
+		title.offset_top = 70.0
+		title.offset_bottom = 260.0
 	_root.add_child(title)
 	var sub := Label.new()                           # подпись: другой оттенок и шрифт — название на её фоне ярче
 	sub.text = "YURUMA   ·   YEAR MXLVII OF THE SHATTERED SKY"
@@ -237,8 +238,8 @@ func _texts() -> void:
 		sub.anchor_right = 0.62
 		sub.offset_left = -600.0
 		sub.offset_right = 600.0
-		sub.offset_top = 330.0
-		sub.offset_bottom = 370.0
+		sub.offset_top = 286.0
+		sub.offset_bottom = 320.0
 	elif str(st.sub_at) == "under":
 		sub.position = Vector2(84, 214)
 		var tick := ColorRect.new()                  # алая черточка перед подписью — связь с названием
@@ -259,7 +260,7 @@ func _texts() -> void:
 		_col.anchor_right = 0.62
 		_col.offset_left = -190.0
 		_col.offset_right = 250.0
-		_col.offset_top = 410.0
+		_col.offset_top = 372.0
 		_col.offset_bottom = 900.0
 	_col.add_theme_constant_override("separation", int(st.gap))
 	_root.add_child(_col)
