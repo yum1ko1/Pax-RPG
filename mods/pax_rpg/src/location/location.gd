@@ -539,7 +539,7 @@ func build(city: Dictionary) -> void:
 		_toast = {"text": mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0})
 	_talk.shop_requested.connect(_open_shop)
 	_shop_view = ShopView.new()
-	_shop_view.setup(mod, _hud)
+	_shop_view.setup(mod)
 	_shop_view.closed.connect(_close_shop)
 	_shop_view.sound.connect(_sfx_once)
 	add_child(_shop_view)
@@ -1364,21 +1364,14 @@ func _close_shop() -> void:
 
 
 ## Награда лавки или рулетки (золото, очки и фляги shop.gd уже начислил): эликсир — полные заряды, опыт — шариками
-## в шкалу (полетят, когда окно закроется), новая фляга — сразу полная.
-func _shop_granted(effect: String, amount: int) -> void:
+## Свой товар лавки выдан (тыква-фляга — progress.gd уже прибавил заряд): эликсир — полные заряды, новая фляга —
+## сразу полная. Вещи лавка кладёт в сумку сама (inv_loot).
+func _shop_granted(effect: String, _amount: int) -> void:
 	match effect:
 		"refill":
 			_flask = _flask_max()
 		"flask":
 			_flask = mini(_flask + 1, _flask_max())
-		"gold":
-			_gold_flash = 1.0
-		"xp":
-			var from := get_viewport().get_visible_rect().size * 0.5
-			var n := 10
-			for k: int in n:
-				_orbs.append({"p0": from + Vector2(randf_range(-60, 60), randf_range(-40, 40)), "t": 0.0,
-					"delay": k * 0.06, "v": float(amount) / n, "bend": randf_range(-1.0, 1.0)})
 
 
 ## Клавиши — сначала локации: _input идёт с конца дерева, а узлы мира игры созданы позже мода и раньше ловили Esc —
