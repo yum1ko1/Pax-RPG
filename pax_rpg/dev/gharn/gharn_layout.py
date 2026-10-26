@@ -1485,6 +1485,27 @@ def masters_street():
             add(mrng.choice(["cart", "@hay_wagon"]), xc - 2.0, by + 7.0, 90, c=True)
         else:
             add(mrng.choice(["stall_frame", "@hay_wagon", "cart"]), xc, by + 5.0, mrng.choice((0, 180)), c=True)
+    # по обе стороны переулка — общие огороды и двор кожевников за плетнём (на референсе — без пустыря)
+    for fz in (68.0, 72.0, 76.0):
+        add("fence_wood", 53.0, fz, 90, c=True)
+        add("fence_wood", 57.0, fz, 90, c=True)
+    if _has("props/veg_bed"):
+        for x in (49.4, 51.6):
+            for z in (67.6, 70.6, 73.6):
+                add("veg_bed", x, z, 90, c=True)
+        for z in (71.2, 74.2):
+            add("veg_bed", 58.6, z, 90, c=True)
+    add("@hide_frame", 50.4, 77.4, 0, c=True)
+    add("wood_pile", 50.6, 80.2, 0, c=True)
+    add("barrel_water", 52.2, 76.0, 0, c=True)
+    add("@bucket_set", 48.8, 76.2, 30, c=True)
+    if _has("props/yard_shed"):
+        add("yard_shed", 60.6, 67.6, 270, c=True)         # навес открыт к переулку
+    add("cart", 60.4, 77.6, 0, c=True)
+    add("hay_bale", 58.6, 78.0, 15, c=True)
+    add("crate", 61.4, 74.0, 20, c=True)
+    add("@central/sakura_young", 59.6, 81.0, 40, s=0.8, c=True)
+    items[-1]["col"] = [0.5, 3.0, 0.5]
     add("ovoo_cairn", 55.0, 80.6, 0, c=True)              # конец переулка у стены: тур с лентами и туг
     add("tug_banner", 57.0, 80.6, 0, c=True)
     return houses
@@ -1510,7 +1531,9 @@ paths += [[[19, 55.4], [89, 55.4]],                   # Улица Мастер�
 npcs += 4
 shots += [[[12, 2.2, 57.5], [60, 4, 57.5]],              # 13 Улица Мастеров от арки-пайфана
           [[44, 3.0, 55.0], [56, 2.0, 58.5]],            # 14 площадь колодца
-          [[55, 30, 92], [55, 0, 57]]]                   # 15 Улица Мастеров сверху
+          [[55, 30, 92], [55, 0, 57]],                   # 15 Улица Мастеров сверху
+          [[87, 2.4, 56.0], [66, 1.4, 57.0]],            # 16 восточный конец улицы: лавки на уровне глаз
+          [[44, 12, 88], [60, 0, 70]]]                   # 17 задворки юга и огороды у переулка
 
 CENTER_KEEP = ("central/", "stone_lantern", "tug_banner", "tusk_arch", "oath_tree", "ovoo_cairn", "flame_tree",
                "banner_clan", "bench_long", "spear_rack", "brazier_tusk", "hay_bale", "trough", "war_drum", "bucket_set",
