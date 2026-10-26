@@ -1338,7 +1338,7 @@ def masters_street():
             box([x1 - x0, 0.06, 1.8], round((x0 + x1) / 2, 2), 0.03, zf - side * 0.9, "stone_cut", c=False)
             box([x1 - x0, 0.14, 0.25], round((x0 + x1) / 2, 2), 0.07, zf - side * 1.9, "stone_dark", c=False)
     yaw = lambda side: 0 if side < 0 else 180            # лицом к улице
-    occ = []                                              # занятое на тротуарах: (x, z, радиус)
+    occ = [(21.4, 53.5, 0.7), (21.4, 61.5, 0.7)]           # занятое на тротуарах: (x, z, радиус); жаровни у арки
 
     def take(m, x, z, r, rad, force=False, **kw):        # поставить, если место у фасада свободно (force — всегда)
         if not force and any(math.hypot(x - ox, z - oz) < rad + orad for ox, oz, orad in occ):
@@ -1448,8 +1448,11 @@ def masters_street():
     for side in (-1, 1):
         add("@brazier_tusk", 21.4, 57.5 + side * 4.0, 0, s=0.8, c=True)
         items.append({"brazier": True, "p": [21.4, 0.0, 57.5 + side * 4.0], "c": False})
-        if pot:
-            add(pot, 23.2, 57.5 + side * 4.4, 0, c=True)
+        zb = 57.5 + side * 4.0                             # у жаровен внутри арки — зелень и товар, сколько встанет
+        for q, x, d in (("tub_plant", 19.8, 0.0), ("flower_pot", 22.4, 0.5), ("fruit_basket", 22.6, -0.6),
+                        ("jar_cluster", 20.2, 1.1)):
+            if _has("props/" + q):
+                take(q, x, zb + side * d, mrng.uniform(0, 360), 0.45, c=True)
     # площадь колодца: колодец, четыре каменных фонаря по углам, тотем и туг, скамьи лицом к колодцу, стол с кумысом
     cx, cz = M_SQ[0], 57.5
     box([M_SQ[2] - M_SQ[1], 0.05, M_S - M_N + 3.0], cx, 0.025, cz, "stone_cut", c=False)
@@ -1474,6 +1477,17 @@ def masters_street():
         add("stall_frame", cx + dx, M_N - 1.0, 180, c=True)
         add(mrng.choice(["crate", "basket", "sack_grain"]), cx + dx + (1.9 if dx > 0 else -1.9), M_N - 0.6, 0, c=True)
     add("merchant_cart", M_SQ[2] - 1.2, M_S + 1.2, 90, c=True)
+    # торговля на площади, как на референсе: перед прилавками — корзины с фруктами и кувшины, кадки по углам
+    fb, jc, tp, fp = (pick(q, "basket") for q in ("fruit_basket", "jar_cluster", "tub_plant", "flower_pot"))
+    for dx in (-5.6, 5.6):
+        add(fb, cx + dx - 0.7, M_N + 0.5, mrng.uniform(0, 360), c=True)
+        add(jc, cx + dx + 0.8, M_N + 0.6, mrng.uniform(0, 360), c=True)
+        for dz in (-3.6, 3.6):
+            add(tp, cx + dx * 1.18, cz + dz, mrng.uniform(0, 360), c=True)
+    add(fb, M_SQ[2] - 3.0, M_S + 1.6, 20, c=True)          # у торговой телеги
+    add("crate", M_SQ[2] - 3.0, M_S + 2.8, 10, c=True)
+    add(jc, M_SQ[1] + 1.2, M_S + 3.6, 0, c=True)           # у стола с кумысом
+    add(fp, cx + 1.9, cz + 1.7, 0, c=True)                 # цветы у колодца
     proxy("person", cx - 1.6, 0, cz + 2.0, 160)
     proxy("person", cx + 1.4, 0, cz + 2.2, 200)
     # задворки юга: у каждого дома — двор за плетнём (шкуры, дрова, бочки, бельё), у каждого третьего — сакура
