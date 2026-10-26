@@ -23,6 +23,7 @@ var hero_id := ""                  # кем играем в этом мире; �
 var _picker: CharSelect
 var pick_next := false                           # main.gd: нажата «Новая игра», «Продолжить» или «Загрузить»
 var _rng := RandomNumberGenerator.new()   # свой — общий randf() игры не трогаем (повторяемость мира)
+var world_ui: Node                               # planet/world_ui.gd: щелчок по городу — его карточка, «В путь» — enter
 
 
 func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
@@ -32,7 +33,7 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 	loading = ld
 	name = "PaxRpgTravel"
 	_rng.randomize()
-	planet.city_chosen.connect(enter)
+	planet.city_chosen.connect(_chosen)
 	DayNight.clock = m
 	location.exit_requested.connect(leave)
 
@@ -56,6 +57,14 @@ func start(g: PaxGame) -> void:
 func _line(prefix: String, count: int, city_name: String) -> String:
 	var key := "%s_%d" % [prefix, _rng.randi_range(1, count)]
 	return mod.tr_key(key).replace("{city}", city_name)
+
+
+## Город на глобусе выбран: карточка интерфейса карты мира (в путь — с неё), без него — сразу в город.
+func _chosen(city: Dictionary) -> void:
+	if is_instance_valid(world_ui):
+		world_ui.select(city)
+	else:
+		enter(city)
 
 
 func enter(city: Dictionary) -> void:
