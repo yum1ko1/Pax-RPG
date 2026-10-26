@@ -180,6 +180,41 @@ def shockwave(f, tl):
     return f
 
 
+_HZ = {}
+
+
+def haze(f, tl):
+    # белая дымка взрыва висит над полем; оружие вонзается и разгоняет её кольцами от точек удара
+    a0, imp, end, pts = HAZE
+    if not (a0 <= tl < end):
+        return f
+    n = _shock_maps()["n"]
+    if not _HZ:
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        _HZ["d"] = [np.sqrt((xx - x * W) ** 2 + (yy - y * H) ** 2) * (0.82 + 0.36 * n) for x, y in pts]
+        _HZ["top"] = np.clip(1 - yy / H, 0, 1)
+    sh = int((tl - a0) * 3)                                 # дымка медленно ползёт
+    nn = np.roll(n, (-sh, sh * 2), (0, 1))
+    col = np.array([0.98, 0.95, 0.97], np.float32)
+    hz = col[None, None, :] * (0.88 + 0.24 * nn[..., None])
+    if tl < imp:
+        a = 0.95 - 0.30 * (tl - a0) / (imp - a0)
+        al = np.clip(a * (0.80 + 0.40 * nn), 0, 0.98)
+    else:
+        q = (tl - imp) / (end - imp)
+        r = q ** 0.55 * 1.25 * math.hypot(W, H)
+        clear = np.zeros((H, W), np.float32)
+        band = np.zeros((H, W), np.float32)
+        for d in _HZ["d"]:
+            clear = np.maximum(clear, np.clip((r - d) / 240, 0, 1))
+            band = np.maximum(band, np.exp(-((d - r) / (130 + 220 * q)) ** 2))
+        a = 0.68 * (1 - q) ** 0.7
+        al = (a * (1 - clear) * (0.80 + 0.40 * nn)
+              + band * 0.32 * (1 - q) ** 1.4 * np.clip(nn * 1.6 - 0.3, 0, 1) * (0.6 + 0.4 * _HZ["top"]))
+        al = np.clip(al, 0, 0.98)
+    return f * (1 - al[..., None]) + hz * al[..., None]
+
+
 def process(frame, tl_frame, clip, local_i):
     t = tl_frame / FPS
     name, _, _, n, _, _, look, (z0, z1) = clip
@@ -194,6 +229,7 @@ def process(frame, tl_frame, clip, local_i):
     f = 1 - (1 - f) * (1 - bloom(arr, glow))          # экран: свечение не пережигает
     f = f + flash[None, None, :] * (0.35 + 0.65 * f)  # вспышка ярче в светах
     f = shockwave(f, tl_frame)
+    f = haze(f, tl_frame)
     f = f + grain_frame(tl_frame)[..., None] * (0.085 * (1 - np.abs(f - 0.5) * 1.2)).clip(0.02, 1)
     for (a, b, col, mode) in FADES:
         if a <= tl_frame < b:
@@ -230,9 +266,32 @@ def make_c11():
                     "-c:v", "libx264", "-crf", "10", "-preset", "slow", "-pix_fmt", "yuv420p", out], check=True)
 
 
+def make_retimed():
+    # слоу-мо: участки исходника растягиваются интерполяцией с компенсацией движения (minterpolate)
+    for out, (src, segs) in RETIME.items():
+        out = os.path.join(MEDIA, out)
+        if os.path.exists(out):
+            continue
+        g, labels = [], ""
+        for i, (a, b, n) in enumerate(segs):
+            ch = f"[0:v]trim=start_frame={a}:end_frame={b},setpts=PTS-STARTPTS"
+            if n != b - a:
+                k = (n - 1) / (b - a - 1)
+                ch += (f",setpts=PTS*{k:.6f},minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,"
+                       f"tpad=stop=4:stop_mode=clone,trim=end_frame={n},setpts=PTS-STARTPTS")
+            g.append(ch + f"[s{i}]")
+            labels += f"[s{i}]"
+        g.append(f"{labels}concat=n={len(segs)}:v=1:a=0,settb=1/{FPS},setpts=N[v]")
+        subprocess.run([FFMPEG, "-v", "error", "-y", "-i", os.path.join(MEDIA, src), "-filter_complex", ";".join(g),
+                        "-map", "[v]", "-fps_mode", "passthrough", "-c:v", "libx264", "-crf", "10",
+                        "-preset", "slow", "-pix_fmt", "yuv420p", out], check=True)
+        print("retime", out, flush=True)
+
+
 def plates(only=None):
     os.makedirs(PLATES, exist_ok=True)
     make_c11()
+    make_retimed()
     for clip in CLIPS:
         if only and clip[0] not in only:
             continue
@@ -251,6 +310,7 @@ def plates(only=None):
 def stills(times):
     os.makedirs(os.path.join(ROOT, "prev"), exist_ok=True)
     make_c11()
+    make_retimed()
     for t in times:
         fr = int(round(float(t) * FPS))
         clip = clip_at(fr)

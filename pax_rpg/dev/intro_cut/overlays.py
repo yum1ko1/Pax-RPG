@@ -10,22 +10,22 @@ FONTS = os.environ.get("PAX_FONTS", os.path.join(ROOT, "fonts"))
 BAR = 138
 
 SUBS = {  # (кто, с, по, текст)
-    "ru": [("selune", 22.25, 24.40, "Остановись, сестра."),
-           ("iru", 24.45, 26.55, "Небо не вечно…"),
-           ("iru", 26.70, 28.10, "Как и мы."),
-           ("iru", 29.05, 30.95, "Я не исчезну."),
-           ("selune", 31.00, 33.00, "Мир не заплатит…"),
-           ("selune", 33.05, 34.38, "…за твой страх."),
-           ("both", 46.50, 49.20, "Мир не выдержит этой ноши…"),
-           ("both", 50.05, 51.20, "Восстань.")],
-    "en": [("selune", 22.25, 24.40, "Stop, sister."),
-           ("iru", 24.45, 26.55, "The sky is not eternal…"),
-           ("iru", 26.70, 28.10, "Neither are we."),
-           ("iru", 29.05, 30.95, "I will not fade."),
-           ("selune", 31.00, 33.00, "The world will not pay…"),
-           ("selune", 33.05, 34.38, "…for your fear."),
-           ("both", 46.50, 49.20, "The world cannot bear this burden…"),
-           ("both", 50.05, 51.20, "Arise.")],
+    "ru": [("selune", 19.00, 21.30, "Остановись, сестра."),
+           ("iru", 22.00, 24.30, "Небо не вечно…"),
+           ("iru", 26.60, 28.00, "Как и мы."),
+           ("iru", 31.25, 33.60, "Я не исчезну."),
+           ("selune", 33.70, 36.20, "Мир не заплатит…"),
+           ("selune", 36.35, 37.69, "…за твой страх."),
+           ("both", 51.50, 54.30, "Мир не выдержит этой ноши…"),
+           ("both", 56.30, 57.45, "Восстань.")],
+    "en": [("selune", 19.00, 21.30, "Stop, sister."),
+           ("iru", 22.00, 24.30, "The sky is not eternal…"),
+           ("iru", 26.60, 28.00, "Neither are we."),
+           ("iru", 31.25, 33.60, "I will not fade."),
+           ("selune", 33.70, 36.20, "The world will not pay…"),
+           ("selune", 36.35, 37.69, "…for your fear."),
+           ("both", 51.50, 54.30, "The world cannot bear this burden…"),
+           ("both", 56.30, 57.45, "Arise.")],
 }
 NAMES = {"ru": {"iru": "ИРУ", "selune": "СЕЛУНЭ"}, "en": {"iru": "IRU", "selune": "SELUNE"}}
 NAME_COL = {"iru": (222, 192, 255), "selune": (244, 138, 142)}

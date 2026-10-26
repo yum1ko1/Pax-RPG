@@ -37,8 +37,8 @@ VO = {"l1": "*21_24_57_Celune*", "l2": "*21_27_26_Iru*", "l3": "*21_30_13_Iru*",
 
 ST = "aformat=sample_rates=48000:channel_layouts=stereo"
 MO = "aformat=sample_rates=48000:channel_layouts=mono"
-DUCK = "volume='1-0.5*clip((t-21.9)/0.3,0,1)*clip((34.4-t)/0.08,0,1)':eval=frame"   # под диалогом сестёр
-GATE = "volume='1-clip((t-34.40)/0.03,0,1)*clip((34.63-t)/0.01,0,1)':eval=frame"   # 0,23 с тишины перед взрывом
+DUCK = "volume='1-0.5*clip((t-18.7)/0.3,0,1)*clip((37.69-t)/0.08,0,1)':eval=frame"   # под диалогом сестёр
+GATE = "volume='1-clip((t-37.69)/0.03,0,1)*clip((37.917-t)/0.01,0,1)':eval=frame"   # 0,23 с тишины перед взрывом
 VFX = ("highpass=f=110,acompressor=threshold=-30dB:ratio=3:attack=5:release=120:makeup=2,"
        "aecho=1.0:0.9:45|140:0.22|0.10,aecho=1.0:0.95:420|780:0.12|0.07")
 
@@ -64,36 +64,45 @@ def mixdown(parts, inputs, out, extra=""):
 
 
 def music(out):
+    # Темп ~146 BPM. Замедления удлиняют картинку ровно на такт: такт повторяется, шов спрятан под ударами.
     a, b = find("Final Assault.mp3", "*Final_Assault.mp3"), find("Final Assault (1).mp3", "*Final_Assault_1.mp3")
-    parts = [f"[0:a]{ST},atrim=9.65:36.742,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=1.0,afade=t=out:st=27.03:d=0.06",
-             f"[0:a]{ST},atrim=108.5:116.04,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.06,afade=t=out:st=6.9:d=0.6,adelay=27092|27092",
-             f"[0:a]{ST},atrim=131.43:139.05,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.3,afade=t=out:st=7.55:d=0.07,adelay=38675|38675",
-             f"[1:a]{ST},atrim=0:10.04,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.02,afade=t=out:st=8.6:d=1.4,adelay={ms(MENU_AT)}|{ms(MENU_AT)}"]
+    parts = [f"[0:a]{ST},atrim=9.65:34.975,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=1.0,afade=t=out:st=25.30:d=0.025",
+             f"[0:a]{ST},atrim=33.30:36.742,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.025,afade=t=out:st=3.382:d=0.06,"
+             f"adelay=25300|25300",
+             f"[0:a]{ST},atrim=108.5:117.45,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.06,afade=t=out:st=8.90:d=0.05,"
+             f"adelay=28759|28759",
+             f"[0:a]{ST},atrim=131.43:136.875,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.3,afade=t=out:st=5.42:d=0.025,"
+             f"adelay=41967|41967",
+             f"[0:a]{ST},atrim=135.13:139.013,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.025,afade=t=out:st=3.833:d=0.05,"
+             f"adelay=47387|47387",
+             # меню: бочка дропа (23,35 с во втором файле) бьёт ровно в кадр появления меню
+             f"[1:a]{ST},atrim=23.345:33.385,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.004,afade=t=out:st=8.6:d=1.44,"
+             f"adelay={ms(MENU_AT)}|{ms(MENU_AT)}"]
     mixdown(parts, [a, b], out, f"{DUCK},{GATE}")
 
 
-AIR = "apad=pad_dur=1.6,highpass=f=260,aecho=0.8:0.7:160|330:0.38|0.22"
+FAR = "apad=pad_dur=1.6,lowpass=f=1400,highpass=f=90,aecho=0.8:0.7:190|430|780:0.42|0.30|0.18"   # звук вдали
 # (ключ, задержка с, громкость dB, доп. фильтр[, без приглушения под диалогом])
-SFX = [("S02", 2.6, -3, ""), ("N1", 4.2, -4, "afade=t=in:st=0:d=0.3,afade=t=out:st=2.5:d=0.3"),
+SFX = [("S02", 2.6, -3, ""), ("N1", 4.2, -9, "afade=t=in:st=0:d=0.3,afade=t=out:st=2.5:d=0.3," + FAR),
        ("S04", 4.9, -7, "afade=t=in:st=0:d=0.4"), ("S05", 6.95, -2, ""),
        ("S06", 6.75, -10, "afade=t=out:st=4.2:d=0.8"), ("N2", 9.4, -5, "afade=t=in:st=0:d=0.4"),
        ("S07", 11.8, -9, ""), ("S08", 12.9, -3, "afade=t=out:st=1.7:d=0.4"),
        ("N3", 14.9, -1, ""), ("N4", 16.8, -5, ""),
-       ("S11", 22.15, 5, "", True),
-       ("S12", 23.79, -5, "afade=t=out:st=2.8:d=0.5"),
-       ("S13a", 24.55, -3, "atrim=0:0.8,asetpts=PTS-STARTPTS," + AIR, True),
-       ("S13a", 25.35, -4, "atrim=0:0.8,asetpts=PTS-STARTPTS," + AIR, True),
-       ("S13b", 27.09, -3, "atrim=1.55,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.03,afade=t=out:st=0.85:d=0.4", True),
-       ("N5", 27.0, -7, "afade=t=out:st=2.2:d=0.6", True),
-       ("S14", 29.59, 18, "afade=t=in:st=0:d=0.1"), ("S15", 31.09, 6, "afade=t=out:st=2.6:d=0.4"),
-       ("S16", 34.63, -1, "afade=t=out:st=2.6:d=1.4"), ("S17", 35.64, -24, "afade=t=in:st=0:d=0.5,afade=t=out:st=2.0:d=1.4"),
-       ("S18", 39.09, -3, ""), ("S19", 39.84, 0, "afade=t=in:st=0:d=0.2,afade=t=out:st=1.4:d=0.6"), ("S20", 41.14, 0, ""),
-       ("S21", 42.34, -4, "afade=t=out:st=2.4:d=0.6"), ("N6", 42.3, -3, "afade=t=out:st=2.4:d=0.6"),
-       ("S22", 44.44, -4, "afade=t=out:st=1.6:d=0.15"),
-       ("S23", 46.19, 8, "afade=t=out:st=0.4:d=0.8"), ("S21", MENU_AT, -12, "afade=t=out:st=2.0:d=1.0")]
+       ("S11", 22.88, 5, "asetrate=36000,aresample=48000", True),                  # нодати в слоу-мо — ниже и тяжелее
+       ("S12", 25.458, -5, "afade=t=out:st=2.8:d=0.5"),
+       ("S13a", 26.217, -9, "atrim=0:0.8,asetpts=PTS-STARTPTS," + FAR, True),
+       ("S13a", 27.017, -10, "atrim=0:0.8,asetpts=PTS-STARTPTS," + FAR, True),
+       ("S13b", 28.757, -3, "atrim=1.55,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.03,afade=t=out:st=0.85:d=0.4", True),
+       ("N5", 28.667, -7, "afade=t=out:st=2.2:d=0.6", True),
+       ("S14", 31.257, 18, "afade=t=in:st=0:d=0.1"), ("S15", 32.76, 6, "afade=t=out:st=2.6:d=0.4"),
+       ("S16", 37.92, -1, "afade=t=out:st=2.6:d=1.4"), ("S17", 38.932, -24, "afade=t=in:st=0:d=0.5,afade=t=out:st=2.0:d=1.4"),
+       ("S18", 42.382, -3, ""), ("S19", 43.132, 0, "afade=t=in:st=0:d=0.2,afade=t=out:st=1.4:d=0.6"), ("S20", 44.432, 0, ""),
+       ("S21", 45.632, -4, "afade=t=out:st=2.4:d=0.6"), ("N6", 45.592, -3, "afade=t=out:st=2.4:d=0.6"),
+       ("S22", 48.013, -4, "asetrate=29800,aresample=48000,afade=t=out:st=2.58:d=0.24"),   # замах в слоу-мо
+       ("S23", 50.833, 8, "afade=t=out:st=0.4:d=0.8"), ("S21", MENU_AT, -12, "afade=t=out:st=2.0:d=1.0")]
 AMB = [("S01", 0.0, 0, ""), ("S03", 4.6, -8, "afade=t=in:st=0:d=0.3"),
-       ("S10", 15.25, -8, "afade=t=in:st=0:d=0.4,afade=t=out:st=11.3:d=0.5"),
-       ("S10", 39.44, -14, "atrim=2:8.7,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.6,afade=t=out:st=6.1:d=0.6"),
+       ("S10", 15.25, -8, "afade=t=in:st=0:d=0.4,afade=t=out:st=11.3:d=0.7"),
+       ("S10", 42.732, -14, "atrim=2:8.7,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.6,afade=t=out:st=6.1:d=0.6"),
        ("S24", MENU_AT, 4, "atrim=0:10.04,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.5,afade=t=out:st=8.6:d=1.4")]
 
 
@@ -114,21 +123,21 @@ def bank(lst, out, duck=True):
 
 def voices(out):
     f = {k: find(p) for k, p in VO.items()}
-    ins = [f["l1"], f["l2"], f["l3"], f["l4"], f["fi"], f["fs"], f["fi"], f["fs"]]
+    ins = [f["l1"], f["l2"], f["l2"], f["l3"], f["l4"], f["l4"], f["fi"], f["fs"], f["fi"], f["fs"]]
     V = lambda db, t: f"volume={db}dB,alimiter=limit=0.7:level=false,{ST},adelay={ms(t)}|{ms(t)}"
     parts = [
-        f"[0:a]{MO},{VFX},{V(20.5, 22.25)}",
-        f"[1:a]{MO},asplit[x][y];[x]atrim=0.15:2.3,asetpts=PTS-STARTPTS[x2];[y]atrim=3.05:4.36,asetpts=PTS-STARTPTS[y2];"
-        f"[x2][y2]concat=n=2:v=0:a=1,{VFX},{V(13.5, 24.4)}",
-        f"[2:a]{MO},atrim=0.05:3.0,asetpts=PTS-STARTPTS,{VFX},{V(11.5, 29.05)}",
-        f"[3:a]{MO},asplit[vp][vq];[vp]atrim=0.05:2.3,asetpts=PTS-STARTPTS[vp2];[vq]atrim=2.55:4.2,asetpts=PTS-STARTPTS[vq2];"
-        f"[vp2][vq2]concat=n=2:v=0:a=1,atempo=1.1,{VFX},{V(13.5, 31.0)}",
-        # финал на чёрном: фраза (голос Иру перетекает в голос Селунэ), пауза, «Arise» обеими голосами разом — тихо
-        f"[4:a]{MO},atrim=0.2:2.75,asetpts=PTS-STARTPTS,volume='1-0.65*t/2.5':eval=frame[ia2];"
-        f"[5:a]{MO},atrim=0.2:2.65,asetpts=PTS-STARTPTS,volume='0.35+0.65*t/2.4':eval=frame[sa2];"
-        f"[ia2][sa2]amix=inputs=2:normalize=0,{VFX},{V(13, 46.5)}",
-        f"[6:a]{MO},atrim=3.05:3.97,asetpts=PTS-STARTPTS[ib2];[7:a]{MO},atrim=3.3:4.44,asetpts=PTS-STARTPTS[sb2];"
-        f"[ib2][sb2]amix=inputs=2:normalize=0,volume=0.75,{VFX},{V(13, 50.05)}",
+        f"[0:a]{MO},{VFX},{V(20.5, 19.0)}",                                             # «Остановись, сестра.»
+        f"[1:a]{MO},atrim=0.15:2.3,asetpts=PTS-STARTPTS,{VFX},{V(13.5, 21.88)}",          # «Небо не вечно…»
+        f"[2:a]{MO},atrim=3.05:4.36,asetpts=PTS-STARTPTS,{VFX},{V(13.5, 26.40)}",         # «Как и мы.»
+        f"[3:a]{MO},atrim=0.05:3.0,asetpts=PTS-STARTPTS,{VFX},{V(11.5, 30.717)}",         # смех и «Я не исчезну.»
+        f"[4:a]{MO},atrim=0.05:2.3,asetpts=PTS-STARTPTS,{VFX},{V(13.5, 33.667)}",         # «Мир не заплатит…»
+        f"[5:a]{MO},atrim=2.55:4.2,asetpts=PTS-STARTPTS,{VFX},{V(13.5, 36.34)}",          # «…за твой страх.»
+        # финал на чёрном: фраза (голос Иру перетекает в голос Селунэ), долгая пауза, «Arise» обеими голосами разом — тихо
+        f"[6:a]{MO},atrim=0.2:2.75,asetpts=PTS-STARTPTS,volume='1-0.65*t/2.5':eval=frame[ia2];"
+        f"[7:a]{MO},atrim=0.2:2.65,asetpts=PTS-STARTPTS,volume='0.35+0.65*t/2.4':eval=frame[sa2];"
+        f"[ia2][sa2]amix=inputs=2:normalize=0,{VFX},{V(13, 51.5)}",
+        f"[8:a]{MO},atrim=3.05:3.97,asetpts=PTS-STARTPTS[ib2];[9:a]{MO},atrim=3.3:4.44,asetpts=PTS-STARTPTS[sb2];"
+        f"[ib2][sb2]amix=inputs=2:normalize=0,volume=0.75,{VFX},{V(13, 56.30)}",
     ]
     mixdown(parts, ins, out, GATE)
 
@@ -168,13 +177,13 @@ def synth_impacts(out):
         i = int(t0 * SR)
         buf[i:i + m] += (out_ * env * 3.0).astype(np.float32)
 
-    boom(6.95, 0.55); boom(12.45, 0.40); boom(15.22, 0.50, 2.0); boom(22.85, 0.25, 1.0)
-    boom(24.6, 0.12, 1.2, 70, 40); boom(25.4, 0.12, 1.2, 70, 40); boom(27.09, 0.60, 1.6)
-    boom(34.64, 0.95, 3.2, 64, 22); boom(39.29, 0.60, 1.6); boom(42.4, 0.35, 2.4, 46, 24)
-    boom(46.19, 0.80, 1.6); boom(MENU_AT, 0.60, 2.8, 50, 24)
-    riser(26.0, 27.06, 0.22); riser(33.10, 34.40, 0.42, 120, 1400); riser(45.30, 46.17, 0.35, 150, 1200)
+    boom(6.95, 0.55); boom(12.45, 0.40); boom(15.22, 0.50, 2.0); boom(23.679, 0.25, 1.0)
+    boom(26.267, 0.05, 1.2, 70, 40); boom(27.067, 0.05, 1.2, 70, 40); boom(28.757, 0.60, 1.6)
+    boom(37.932, 0.95, 3.2, 64, 22); boom(42.582, 0.60, 1.6); boom(45.692, 0.35, 2.4, 46, 24)
+    boom(50.833, 0.80, 1.6); boom(MENU_AT, 0.60, 2.8, 50, 24)
+    riser(27.667, 28.727, 0.22); riser(36.45, 37.69, 0.42, 120, 1400); riser(49.55, 50.80, 0.35, 150, 1200)
     buf *= 0.6
-    buf[int(34.40 * SR):int(34.63 * SR)] = 0
+    buf[int(37.69 * SR):int(37.917 * SR)] = 0
     st = np.stack([buf, buf], -1)
     st = np.clip(st, -1, 1)
     import wave
