@@ -23,6 +23,7 @@ const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
+const HitVfx := preload("res://mods/pax_rpg/src/location/hit_vfx.gd")
 const Iai := preload("res://mods/pax_rpg/src/location/iai.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
@@ -80,6 +81,7 @@ var _prev_action := ""
 var _quake_cd := 0.0                 # с до готовности «Земного разлома»
 var _quake_waves_done := 0
 var _vfx: Vfx
+var _hitfx: HitVfx                  # удары по маскам и шейдеру эрозии (hit_vfx.gd) — клипы из hero_cfg.hit_vfx
 var _vignette: ColorRect
 var _iai: Iai                         # «Иай: остановка времени» (V)
 var _iai_cd := 0.0
@@ -653,6 +655,9 @@ func clear() -> void:
 		_sult.stop()
 	if _blood != null:
 		_blood.stop()
+	if _hitfx != null:
+		_hitfx.clear()
+		_hitfx = null
 	Goblin.hero_broken = false
 	building = false
 	_build_finished = false
@@ -2215,6 +2220,8 @@ func _physics_body(delta: float) -> void:
 	var tc := Time.get_ticks_usec()
 	_follow_camera(delta)
 	_flash_tick(delta)
+	if _hitfx != null:
+		_hitfx.tick(delta)
 	Prof.add("камера", tc)
 	if is_instance_valid(_arena):
 		_arena.tick()
@@ -2469,7 +2476,12 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 		var to := (gob.global_position - _player.global_position)
 		to.y = 0.0
 		var at := gob.global_position + Vector3(0.0, 1.0, 0.0) - to.normalized() * 0.3
-		_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
+		var hfx := _hit_fx()
+		if hfx != null:
+			hfx.impact(at, to.normalized(), c, 1.0 + 0.15 * step + (0.4 if final else 0.0))
+			_flash(at, c, 4.0, 4.5)
+		else:
+			_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
 		if final:
 			_mana_burst(gob.global_position + Vector3(0.0, 0.9, 0.0), c)
 			_flash_t = _hf("fx_flash_time", 0.22)
@@ -2487,7 +2499,13 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var c := Color(float(col[0]), float(col[1]), float(col[2]))
 	var step := float(hit.get("step", 0))
 	var final := bool(hit.get("final", false))
-	_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
+	var hfx := _hit_fx()
+	if hfx != null:                                  # луч укола из острия — попал удар или нет; попадание — в _combat_fx_hit
+		var d := tip - (_player.global_position + Vector3(0.0, 1.2, 0.0))
+		d.y *= 0.3
+		hfx.thrust(tip, d, c, false, 1.0 + 0.15 * step)
+	else:
+		_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
 	if final:
 		_mana_burst(tip, c)                          # финал серии — чёткий всплеск алой энергии на острие
 	var glow := OmniLight3D.new()                    # миг алого света вокруг острия
@@ -2499,6 +2517,15 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var tw := glow.create_tween()
 	tw.tween_property(glow, "light_energy", 0.0, 0.18)
 	tw.tween_callback(glow.queue_free)
+
+
+## Новые удары (hit_vfx.gd) — для клипов из hero_cfg.hit_vfx; остальные — прежние искры.
+func _hit_fx() -> HitVfx:
+	if _hero == null or not is_instance_valid(_view) or String(_hero.action) not in (hero_cfg.get("hit_vfx", []) as Array):
+		return null
+	if _hitfx == null:
+		_hitfx = HitVfx.new(mod, _view)
+	return _hitfx
 
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.
