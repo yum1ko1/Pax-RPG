@@ -149,6 +149,7 @@ var _city_lights: Array = []
 var _city_smoke: Array = []
 var _city_glass: Array = []
 var _city_paper: Array = []
+var _city_spots: Array = []
 var _env: Environment
 var _sun: DirectionalLight3D
 var _sky_mat: ShaderMaterial
@@ -360,6 +361,7 @@ func build(city: Dictionary) -> void:
 	_city_lights = []
 	_city_glass = []
 	_city_paper = []
+	_city_spots = []
 	city_data = city
 	var layout := Forest.generate(int(city.get("seed", 0)), Quest.get_q(mod)) if str(city.get("id", "")) == "forest" \
 		else _city_layout(str(city.get("id", "")))
@@ -403,6 +405,7 @@ func build(city: Dictionary) -> void:
 		_city_lights = c.lights
 		_city_glass = c.glass
 		_city_paper = c.paper_mats
+		_city_spots = c.sun_spots
 		var st: Array = layout.get("start", [0, 1.2, 0])
 		START = Vector3(float(st[0]), float(st[1]), float(st[2]))
 		var ex: Array = layout.get("exit", [0, 0])
@@ -431,11 +434,13 @@ func build(city: Dictionary) -> void:
 	_daynight.lights = _city_lights
 	_daynight.glass = _city_glass
 	_daynight.paper = _city_paper
+	_daynight.spots = _city_spots
 	_daynight.setup(_env, _sun, _sky_mat, cfg)
 	_view.add_child(_daynight)
 	if not layout.is_empty():
 		_weather = Weather.new()
 		_weather.puddles = not layout.is_empty() and not layout.has("forest")   # лужи — на земле города (ground.gdshader)
+		_weather.daynight = _daynight
 		_view.add_child(_weather)
 		_weather.setup.call_deferred(mod, weather_kind, _env, _sky_mat, _cam, _daynight.day_amount() if _daynight.has_method("day_amount") else 1.0,
 			_city_lights)
@@ -2578,7 +2583,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what := str({"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, ""))
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false

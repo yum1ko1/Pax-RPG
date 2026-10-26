@@ -14,6 +14,9 @@ var sky_mat: ShaderMaterial
 var lights: Array = []             # [OmniLight3D, энергия ночью]
 var glass: Array = []              # материалы окон
 var paper: Array = []              # бумажные фонари — свечение мягче окон
+var spots: Array = []              # комореби под кронами (city.gd → sun_spots): [Decal, центр кроны, радиус, земля y]
+var spot_k := 0.35                 # яркость пятен в полдень (config/location.json → gfx.komorebi; 0 — выкл.)
+var spot_sky := 1.0                # погода (weather.gd): в дождь пятен нет, в облачность — слабее
 const SUN_STEP := 5.0               # градусов: на столько солнце уходит, прежде чем тени пересчитаются
 var _sun_set := false
 var _sun_tw: Tween
@@ -26,6 +29,7 @@ func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dicti
 	sun = s
 	sky_mat = sm
 	hour = world_hour(cfg)
+	spot_k = float((cfg.get("gfx", {}) as Dictionary).get("komorebi", spot_k))
 	day_minutes = maxf(1.0, float(cfg.get("day_minutes", 20.0)))
 	frozen = true                                     # пока игрок в городе, время стоит: тени не перерисовываются
 	apply()
@@ -152,3 +156,36 @@ func apply() -> void:
 		var m := g as BaseMaterial3D
 		if m != null:
 			m.emission_energy_multiplier = lerpf(0.1, 1.3, night)
+	apply_spots()
+
+
+## Комореби: пятна ложатся туда, куда солнце бросает тень кроны (центр кроны вдоль луча до земли), к закату
+## тень и пятна вытягиваются от дерева. Ночью и в дождь декали выключены — не считаются в кластерах.
+func apply_spots() -> void:
+	if spots.is_empty():
+		return
+	var a := (hour - 6.0) / 12.0 * PI
+	var elev := sin(a)
+	var dusk := clampf(1.0 - smoothstep(0.0, 0.3, absf(elev)), 0.0, 1.0)
+	var e := spot_k * smoothstep(0.05, 0.4, elev) * (1.0 - 0.35 * dusk) * spot_sky
+	# то же направление, что у солнца в apply(): луч идёт вдоль -Z света
+	var l := -Basis.from_euler(Vector3(-asin(clampf(elev, 0.06, 1.0)), deg_to_rad(90.0) + a, 0.0)).z
+	var lh := Vector3(l.x, 0.0, l.z)
+	var stretch := clampf(1.0 / maxf(-l.y, 0.01), 1.0, 2.5)   # низкое солнце — пятно длиннее
+	for s: Array in spots:
+		var d := s[0] as Decal
+		if not is_instance_valid(d):
+			continue
+		var on := e > 0.01
+		if d.visible != on:
+			d.visible = on
+		if not on:
+			continue
+		var crown: Vector3 = s[1]
+		var r := float(s[2])
+		var off := lh * ((crown.y - float(s[3])) / maxf(-l.y, 0.01))
+		off = off.limit_length(r * 2.5)
+		d.position = Vector3(crown.x + off.x, float(s[3]) + 1.5, crown.z + off.z)
+		d.rotation = Vector3(0.0, atan2(lh.x, lh.z), 0.0)
+		d.size = Vector3(r * 2.0, 4.0, r * 2.0 * stretch)
+		d.emission_energy = e

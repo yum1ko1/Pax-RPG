@@ -30,6 +30,7 @@ var _shadow: Decal
 var _prints: Array = []
 var _print_tex: Texture2D
 var _drift := Vector2.ZERO
+var daynight                           # daynight.gd: пятна солнца под кронами гаснут в облачность и дождь
 var puddles := false                    # location.gd: земля — ground.gdshader (город), лужи на ней есть
 var _player_pos := Vector3.INF          # location.gd → footprint: где земля у героя (брызги — вокруг него)
 var _env: Environment
@@ -78,6 +79,9 @@ func setup(m: PaxMod, k: String, env: Environment, sky_mat: ShaderMaterial, cam:
 			wet = 0.35
 			overcast = 0.3
 	RenderingServer.global_shader_parameter_set(&"pax_rpg_weather", Vector4(wet, rain, overcast, low_fog))
+	if daynight != null and is_instance_valid(daynight):
+		daynight.spot_sky = 0.0 if rain > 0.0 else clampf(1.0 - overcast * 1.1, 0.0, 1.0)
+		daynight.apply_spots()
 	if sky_mat != null:
 		sky_mat.set_shader_parameter("cloud_cover", lerpf(0.5, 0.18, overcast))   # меньше порог — больше облаков
 	if env != null:

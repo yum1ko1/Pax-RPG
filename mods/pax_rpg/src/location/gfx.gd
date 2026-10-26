@@ -527,6 +527,7 @@ func _lamp_shadows() -> void:
 		lo.set_meta("pax_rpg_sh_want", want)
 	# тень не щёлкает: включается с нулевой силы и разгорается, гаснет плавно и только потом выключается
 	var dt := get_process_delta_time()
+	var dp_from := _f("lamp_dp_from", 35.0)          # м: дальше — двухпараболоидные тени (0 — все кубические)
 	for l: Array in lights:
 		var so := l[0] as OmniLight3D
 		if not is_instance_valid(so):
@@ -539,7 +540,14 @@ func _lamp_shadows() -> void:
 			so.shadow_enabled = false                      # свет ушёл из кадра — гасить тень плавно некому смотреть
 			continue
 		if so.shadow_enabled:
-			var far := clampf((so.global_position.distance_to(hp) - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
+			var dist := so.global_position.distance_to(hp)
+			# И-143: дальние огни — двухпараболоидная тень (2 прохода вместо 6 у кубической); вдали, при мягком крае,
+			# её искажения не видны. Запас ±4 м — режим не переключается туда-сюда на границе
+			var dp := dp_from > 0.0 and dist > dp_from + (-4.0 if so.omni_shadow_mode == OmniLight3D.SHADOW_DUAL_PARABOLOID else 4.0)
+			var mode := OmniLight3D.SHADOW_DUAL_PARABOLOID if dp else OmniLight3D.SHADOW_CUBE
+			if so.omni_shadow_mode != mode:
+				so.omni_shadow_mode = mode
+			var far := clampf((dist - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
 			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
 			if not is_equal_approx(bl, so.shadow_blur):   # присваивание пересчитывает свет — только при смене ступени
 				so.shadow_blur = bl

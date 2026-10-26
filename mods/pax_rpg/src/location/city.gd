@@ -23,6 +23,7 @@ var vfx: Vfx
 var leaves: Array = []
 var lights: Array = []         # [OmniLight3D, энергия ночью] — ими управляет daynight.gd
 var glass: Array = []
+var sun_spots: Array = []      # комореби: [Decal, центр кроны, радиус кроны, земля y] — их ставит по солнцу daynight.gd
 var _dress = null
 var paper_mats: Array = []     # бумажные фонари рынка — своё, мягкое свечение          # материалы окон (ночью светятся)         # CPUParticles3D листьев — ими управляет ветер (wind.gd)
 
@@ -163,6 +164,7 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if k.get_file().begins_with("oak_"):
 			_leaves(groups[k], [Color(0.42, 0.5, 0.2), Color(0.55, 0.5, 0.22), Color(0.36, 0.42, 0.18)], 1.6)   # листья дубов
 		_grime(k, groups[k])
+		_komorebi(k, groups[k])
 		if k.ends_with("banner_clan.glb"):
 			_flags(groups[k])                              # знамя Гхарна — своё полотнище на ветру
 			continue
@@ -1488,10 +1490,85 @@ func _grime(path: String, list: Array) -> void:
 		d.lower_fade = 0.3
 		d.cull_mask = 0xFFFFF & ~(1 << 19)
 		d.modulate = Color(1, 1, 1, 0.75)
-		d.visibility_range_end = 70.0
+		d.distance_fade_enabled = true                  # у Decal нет visibility_range: присваивание роняло _grime
+		d.distance_fade_begin = 55.0                    # на первой декали — грязи у домов не было вовсе
+		d.distance_fade_length = 15.0
 		root.add_child(d)
 		d.global_position = t.origin + Vector3(0, 0.2, 0)
 		d.rotation.y = randf() * TAU
+
+
+## Комореби (И-54): солнечные зайчики сквозь листву — декаль со светящимися пятнами под кроной. Пятна — излучение,
+## без цвета поверхности: на земле, ступенях, лавках в тени кроны — светлые круги. Куда легла тень кроны, насколько
+## ярко (днём, без дождя) и какого цвета (к закату — рыжие) — решает daynight.gd (apply_spots).
+const SPOT_TREES := ["flame_tree", "sakura_great", "sakura_young", "oath_tree", "oak_"]
+static var _spot_tex: Array = []
+
+
+func _komorebi(path: String, list: Array) -> void:
+	var f := path.get_file()
+	if not SPOT_TREES.any(func(k: String) -> bool: return f.begins_with(k)):
+		return
+	if _spot_tex.is_empty():
+		for sd: int in [5, 41, 97]:
+			_spot_tex.append(_spots(sd))
+	var src := Assets.model(mod, path)
+	var box := AABB(Vector3(-3, 0, -3), Vector3(6, 7, 6))
+	if src != null:
+		var parts: Array = []
+		_collect(src, Transform3D.IDENTITY, parts)
+		for i: int in parts.size():
+			var a: AABB = (parts[i][1] as Transform3D) * (parts[i][0] as Mesh).get_aabb()
+			box = a if i == 0 else box.merge(a)
+		src.free()
+	for e: Array in list:
+		var t: Transform3D = e[0]
+		var sc := t.basis.get_scale().x
+		var r := maxf(box.size.x, box.size.z) * 0.5 * sc * 0.85      # крона чуть уже габарита (ветви по краям редкие)
+		var d := Decal.new()
+		d.texture_emission = _spot_tex[int(absf(t.origin.x * 7.0 + t.origin.z * 3.0)) % _spot_tex.size()]
+		d.size = Vector3(r * 2.0, 4.0, r * 2.0)
+		d.emission_energy = 0.0                         # до первого apply_spots — не светится
+		d.normal_fade = 0.5                             # стволы и стены — без растянутых полос
+		d.upper_fade = 0.3
+		d.lower_fade = 0.3
+		d.cull_mask = 0xFFFFF & ~(1 << 19)              # не на героя (gfx.gd RIM_LAYER): пятна не ползут по телу
+		d.distance_fade_enabled = true
+		d.distance_fade_begin = 45.0
+		d.distance_fade_length = 15.0
+		d.visible = false
+		root.add_child(d)
+		d.position = t.origin + Vector3(0, 1.5, 0)
+		var crown := t.origin + Vector3(0, (box.position.y + box.size.y * 0.65) * sc, 0)
+		sun_spots.append([d, crown, r, t.origin.y])
+
+
+## Пятна света: круги-«изображения солнца» сквозь просветы (мелкие и крупные, мягкий край), гуще к середине кроны.
+static func _spots(seed_v: int) -> ImageTexture:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	var sz := 256
+	var img := Image.create(sz, sz, false, Image.FORMAT_RGB8)
+	img.fill(Color.BLACK)
+	var sun := Color(1.0, 0.92, 0.76)                     # тёплый белый: излучение декали не берёт цвет солнца
+	var placed := 0
+	while placed < 170:
+		var p := Vector2(rng.randf(), rng.randf()) * sz
+		var rr := p.distance_to(Vector2(sz, sz) * 0.5) / (sz * 0.5)
+		if rr > 0.95 or rng.randf() > 1.0 - rr * rr:       # к краю кроны просветов меньше
+			continue
+		placed += 1
+		var rad := rng.randf_range(1.8, 3.2) if rng.randf() < 0.8 else rng.randf_range(4.0, 6.5)
+		var br := rng.randf_range(0.4, 0.85) * (1.0 - smoothstep(0.6, 0.95, rr))
+		for y: int in range(maxi(0, int(p.y - rad - 1.0)), mini(sz, int(p.y + rad + 2.0))):
+			for x: int in range(maxi(0, int(p.x - rad - 1.0)), mini(sz, int(p.x + rad + 2.0))):
+				var k := 1.0 - smoothstep(rad * 0.35, rad, Vector2(x + 0.5, y + 0.5).distance_to(p))
+				if k <= 0.0:
+					continue
+				var c := img.get_pixel(x, y) + sun * (k * br)
+				img.set_pixel(x, y, Color(minf(c.r, 1.0), minf(c.g, 1.0), minf(c.b, 1.0)))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## Пятно грязи/мха: рваный край, темнее к центру (основание), прозрачное снаружи.
