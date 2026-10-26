@@ -9,6 +9,7 @@ var frame := 0
 var loc: Node
 var cam := Vector3.ZERO
 var look := Vector3.ZERO
+var vfx: Object
 
 
 func _initialize() -> void:
@@ -31,7 +32,7 @@ func _initialize() -> void:
 
 
 func _brazier(at: Vector3, sim: bool) -> void:
-	var view: Node3D = loc.get("_view")
+	var view: Node = loc.get("_view")
 	var stone := StandardMaterial3D.new()
 	stone.albedo_color = Color(0.2, 0.19, 0.18)
 	stone.roughness = 0.9
@@ -43,7 +44,8 @@ func _brazier(at: Vector3, sim: bool) -> void:
 		mi.mesh = bm
 		mi.position = at + Vector3(0, float(b[1]), 0)
 		view.add_child(mi)
-	var vfx: Object = loc.get("_vfx")
+	if vfx == null:
+		vfx = (load("res://mods/pax_rpg/src/location/vfx.gd") as GDScript).new(mod)
 	var l: OmniLight3D = vfx.call("fire", view, at + Vector3(0, 1.08, 0), 0.75, true, sim)
 	l.light_energy = 2.6
 

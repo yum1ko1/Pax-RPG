@@ -201,8 +201,79 @@ func flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance
 	return mi
 
 
+## Огонь из настоящей симуляции газа (shaders/vfx_fire.gdshader, атлас textures/vfx/sim/brazier_fire*.png):
+## языки, вихри, отрыв пламени и дым над ним — как у живого огня, а не шум на плоскости. Основание — в pos,
+## size ≈ высота языков, м. Кадр симуляции — домен SIM_W × SIM_H м, угли на SIM_BASE от его низа.
+const SIM_FIRE := "textures/vfx/sim/brazier_fire"
+const SIM_W := 1.3
+const SIM_H := 2.6
+const SIM_BASE := 0.14
+const SIM_FLAME := 1.2                                 # высота языков в симуляции, м
+static var _sim_sh: Shader
+
+
+func sim_flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance3D:
+	if not _mats.has("sim_fire"):
+		if _sim_sh == null:
+			_sim_sh = mod.shader("shaders/vfx_fire.gdshader")
+		var m := ShaderMaterial.new()
+		m.shader = _sim_sh
+		m.set_shader_parameter("atlas", mod.texture(SIM_FIRE + ".png"))
+		m.set_shader_parameter("flow_tex", mod.texture(SIM_FIRE + "_flow.png"))
+		_mats["sim_fire"] = m
+		_flame_mat()                                     # шум для дрожи воздуха
+		var hm := ShaderMaterial.new()
+		hm.shader = mod.shader("shaders/vfx_heat.gdshader")
+		hm.set_shader_parameter("noise_tex", _noise)
+		hm.render_priority = -1                          # раньше огня: дрожь берёт кадр без прозрачного и не стирает пламя
+		_mats["heat"] = hm
+	var k := size / SIM_FLAME
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(SIM_W, SIM_H) * k
+	q.center_offset = Vector3(0.0, (SIM_H * 0.5 - SIM_BASE) * k, 0.0)
+	q.material = _mats["sim_fire"]
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = 120.0
+	mi.position = pos
+	parent.add_child(mi)
+	if push != 0.0:
+		mi.set_instance_shader_parameter(&"push", push)
+	var hz := MeshInstance3D.new()                       # горячий воздух над огнём
+	var hq := QuadMesh.new()
+	hq.size = Vector2(SIM_W * 0.8, SIM_H * 0.9) * k
+	hq.center_offset = Vector3(0.0, SIM_H * 0.45 * k, 0.0)
+	hq.material = _mats["heat"]
+	hz.mesh = hq
+	hz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hz.visibility_range_end = 25.0
+	hz.position = pos
+	parent.add_child(hz)
+	return mi
+
+
 ## Огонь из слоёв. size ≈ высота языков, м. Возвращает свет (им управляет daynight как фонарём).
-func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLight3D:
+## sim — пламя из симуляции (sim_flame); false — прежнее: шум на плоскости + флипбук языков.
+func fire(parent: Node, pos: Vector3, size: float, with_smoke := true, sim := true) -> OmniLight3D:
+	if sim:
+		sim_flame(parent, pos, size)
+		with_smoke = false                               # дым над огнём уже в симуляции
+	else:
+		_old_flame(parent, pos, size)
+	_sparks(parent, pos, size)
+	if with_smoke:
+		smoke(parent, pos + Vector3(0, size * 1.1, 0), size * 0.8, Color(0.22, 0.2, 0.22, 0.3), 8, 0.7)
+	var l := Flicker.new()
+	l.light_color = Color(1.0, 0.52, 0.22)
+	l.light_energy = 1.1
+	l.omni_range = 7.0 + size * 3.0
+	l.position = pos + Vector3(0, size * 0.6, 0)
+	parent.add_child(l)
+	return l
+
+
+func _old_flame(parent: Node, pos: Vector3, size: float) -> void:
 	flame(parent, pos - Vector3(0, size * 0.05, 0), size * 1.35)   # тело огня — живое пламя на шумах
 	var fl := _parts(parent, pos, _flip_mat(FIRE, true, 1.6), 7, 0.75)    # отрывающиеся языки поверх тела огня
 	fl.direction = Vector3.UP
@@ -226,6 +297,9 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	fr.add_point(0.15, Color(1, 1, 1, 1))
 	fr.set_color(1, Color(1, 0.6, 0.4, 0.0))
 	fl.color_ramp = fr
+
+
+func _sparks(parent: Node, pos: Vector3, size: float) -> void:
 	var sp := CPUParticles3D.new()                       # искры: уходят вверх, гаснут
 	var sm := QuadMesh.new()                             # искра — штрих по направлению полёта (как у раскалённых
 	sm.size = Vector2(0.014, 0.075)                      # частиц в жизни: глаз видит след), а не точка
@@ -261,15 +335,6 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	sp.position = pos + Vector3(0, size * 0.3, 0)
 	parent.add_child(sp)
-	if with_smoke:
-		smoke(parent, pos + Vector3(0, size * 1.1, 0), size * 0.8, Color(0.22, 0.2, 0.22, 0.3), 8, 0.7)
-	var l := Flicker.new()
-	l.light_color = Color(1.0, 0.52, 0.22)
-	l.light_energy = 1.1
-	l.omni_range = 7.0 + size * 3.0
-	l.position = pos + Vector3(0, size * 0.6, 0)
-	parent.add_child(l)
-	return l
 
 
 ## Ореол у фонаря / кристалла: мягкое свечение вокруг источника, чуть дышит.

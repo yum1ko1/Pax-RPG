@@ -47,7 +47,10 @@ def frame(i):
 
 
 raw = [frame(i) for i in range(L + O)]
-print("кадр", CW, "×", CH, "пик свечения", max(float(r[..., 0].max()) for r in raw))
+pk = float(np.percentile(np.stack([r[..., 0] for r in raw]), 99.97))   # ядро пламени — к 1.0 (масштаб рендера неважен)
+print("кадр", CW, "×", CH, "пик свечения", pk)
+for r in raw:
+    r[..., 0] /= max(pk, 1e-4)
 loop = []
 for i in range(L):
     if i < O:

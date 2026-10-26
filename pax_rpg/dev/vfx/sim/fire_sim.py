@@ -17,7 +17,7 @@ F0, F1 = 1, 170
 F_A, F_B = 81, 160                 # 80 кадров установившегося горения: 64 в петлю + 16 на перехлёст
 W, H = 1.3, 2.6                    # домен, м: огонь в чаше ~0.6 м, языки до ~1.5 м
 RX, RY = 256, 512                  # кадр
-E_K = 0.6                          # масштаб свечения в PNG (линейно, 1.0 = белое)
+E_K = 1.5                          # масштаб свечения в PNG (линейно; make_fire_atlas.py нормирует по пику)
 
 os.makedirs(out, exist_ok=True)
 BLEND = os.path.join(out, "fire.blend")
@@ -52,14 +52,14 @@ def setup():
     ds.vorticity = 0.15
     ds.alpha = 0.3                     # подъём от плотности дыма
     ds.beta = 1.8                      # подъём от жара — языки тянутся вверх и рвутся
-    ds.burning_rate = 0.9
-    ds.flame_smoke = 0.5
+    ds.burning_rate = 0.5             # медленнее горит — длиннее языки
+    ds.flame_smoke = 0.3
     ds.flame_vorticity = 1.0
     ds.flame_ignition = 1.25
     ds.flame_max_temp = 3.0
     ds.use_dissolve_smoke = True
-    ds.use_dissolve_smoke_log = True
-    ds.dissolve_speed = 45
+    ds.use_dissolve_smoke_log = False
+    ds.dissolve_speed = 22                # дым тает за ~0.7 с — над огнём лёгкая струя, а не туман во весь кадр
     ds.time_scale = 0.85
     ds.use_noise = True                # мелкие вихри поверх основного газа (upres ×2) — рваный край пламени
     ds.noise_scale = 2
@@ -74,13 +74,14 @@ def setup():
     mf = src.modifiers.new("fluid", "FLUID")
     mf.fluid_type = "FLOW"
     fs = mf.flow_settings
-    fs.flow_type = "BOTH"
+    fs.flow_type = "FIRE"              # дым — только от горения (flame_smoke), а не из углей
     fs.flow_behavior = "INFLOW"
     fs.flow_source = "MESH"
     fs.surface_distance = 0.5
-    fs.fuel_amount = 1.4
-    fs.temperature = 1.3
-    fs.density = 0.35
+    fs.fuel_amount = 2.0
+    fs.temperature = 1.5
+    fs.use_initial_velocity = True        # газ из углей уже идёт вверх — языки вытягиваются
+    fs.velocity_coord = (0.0, 0.0, 0.9)
     fs.smoke_color = (0.1, 0.09, 0.085)
     tex = bpy.data.textures.new("flick", "CLOUDS")
     tex.noise_scale = 0.09
@@ -140,7 +141,7 @@ def mat_smoke():
     v.inputs["Anisotropy"].default_value = 0.25
     mul = nt.nodes.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
-    mul.inputs[1].default_value = 6.0
+    mul.inputs[1].default_value = 2.5
     nt.links.new(attr(nt, "density").outputs["Fac"], mul.inputs[0])
     nt.links.new(mul.outputs[0], v.inputs["Density"])
     nt.links.new(v.outputs[0], o.inputs["Volume"])
@@ -165,7 +166,8 @@ if mode in ("render", "all"):
             d.use = d.type != "CPU"
         cy.device = "GPU"
     cy.samples = 64
-    cy.use_denoising = False
+    cy.use_denoising = True                # OIDN: объём без «зерна»
+    cy.denoiser = "OPENIMAGEDENOISE"
     cy.volume_step_rate = 0.5
     cy.volume_max_steps = 2048
     cy.max_bounces = 4
@@ -215,7 +217,7 @@ if mode in ("render", "all"):
         r.film_transparent = False
         bg.inputs["Strength"].default_value = 0.0
         sun.hide_render = True
-        cy.samples = 32
+        cy.samples = 48
         r.filepath = os.path.join(fr, "e_%04d.png" % f)
         bpy.ops.render.render(write_still=True)
         if f == F_A:                                   # пусто — газ не подхватился: дальше считать незачем
@@ -230,7 +232,7 @@ if mode in ("render", "all"):
         bg.inputs["Color"].default_value = (0.35, 0.38, 0.45, 1)
         bg.inputs["Strength"].default_value = 0.6
         sun.hide_render = False
-        cy.samples = 64
+        cy.samples = 128
         r.filepath = os.path.join(fr, "s_%04d.png" % f)
         bpy.ops.render.render(write_still=True)
         print("frame", f, flush=True)
