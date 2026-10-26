@@ -1,8 +1,9 @@
 // Небо Юрумы со сменой суток: цвет зенита и горизонта (день — лазурь и розовая мана, закат — алый и золото,
 // ночь — глубокая синь), диск светила (LIGHT0: днём солнце, ночью луна), плывущие облака (fbm), звёзды ночью.
 // daynight.gd задаёт day (0 ночь … 1 день) и dusk (0..1 — насколько сейчас закат/рассвет).
+// Без use_half_res_pass: HALF_RES_COLOR не читается — проход в полразрешения (каждый кадр, весь экран, и ещё один
+// в карте отражений) считал то же небо впустую.
 shader_type sky;
-render_mode use_half_res_pass;
 
 uniform float day = 1.0;
 uniform float dusk = 0.0;
@@ -56,11 +57,13 @@ void sky() {
 		vec2 cp = d.xz / (d.y + 0.12) * 1.6 + mod(vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4), 1000.0);
 		float c = fbm(cp);
 		float m = smoothstep(cloud_cover, cloud_cover + 0.25, c) * smoothstep(0.02, 0.2, h);
-		vec3 lit = mix(vec3(0.16, 0.14, 0.24), vec3(1.0, 0.95, 0.98), day);
-		lit = mix(lit, vec3(1.0, 0.6, 0.5), dusk * 0.8);
-		vec3 shade = mix(vec3(0.08, 0.07, 0.14), vec3(0.7, 0.62, 0.8), day);
-		vec3 cc = mix(shade, lit, smoothstep(0.35, 0.9, fbm(cp * 1.7 + 4.0)));
-		col = mix(col, cc, m * 0.9);
+		if (m > 0.0) {                               // в просветах облака нет — второй fbm (его свет) не нужен
+			vec3 lit = mix(vec3(0.16, 0.14, 0.24), vec3(1.0, 0.95, 0.98), day);
+			lit = mix(lit, vec3(1.0, 0.6, 0.5), dusk * 0.8);
+			vec3 shade = mix(vec3(0.08, 0.07, 0.14), vec3(0.7, 0.62, 0.8), day);
+			vec3 cc = mix(shade, lit, smoothstep(0.35, 0.9, fbm(cp * 1.7 + 4.0)));
+			col = mix(col, cc, m * 0.9);
+		}
 	}
 	// под горизонтом — земля в дымке
 	col = mix(col, mix(ground * (0.25 + 0.75 * day), hor, 0.55), smoothstep(0.0, -0.08, h));
