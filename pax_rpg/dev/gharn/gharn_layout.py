@@ -1436,11 +1436,13 @@ def masters_street():
         add(mrng.choice(["barrel_water", "@bucket_set", "crate"]), xc + 1.9, by + 0.4, mrng.uniform(0, 360), c=True)
         items.append({"laundry": [round(xc - hx + 0.8, 2), round(by + 1.6, 2), round(xc + hx - 0.8, 2), round(by + 1.6, 2)],
                       "seed": int(xc), "p": [xc, 0, by], "c": False})
-        if i % 3 == 0:
+        if i % 2 == 0:
             add("@central/sakura_young", xc + 0.5, by + 5.6, mrng.uniform(0, 360), s=0.8, c=True)
             items[-1]["col"] = [0.5, 3.0, 0.5]
         else:
             add(mrng.choice(["stall_frame", "@hay_wagon", "cart"]), xc, by + 5.0, mrng.choice((0, 180)), c=True)
+    add("ovoo_cairn", 55.0, 80.6, 0, c=True)              # конец переулка у стены: тур с лентами и туг
+    add("tug_banner", 57.0, 80.6, 0, c=True)
     return houses
 
 
