@@ -17,9 +17,9 @@ res = int(argv[2]) if len(argv) > 2 else 96
 dev = argv[3] if len(argv) > 3 else "gpu"
 F0, F1 = 1, 80
 F_A, F_B = 6, 69                    # 64 кадра жизни клуба
-S = 3.0                             # домен — куб S м
+S = 2.4                             # домен — куб S м
 R = 256                             # кадр, px
-DENS_K = 9.0                        # плотность в рендере
+DENS_K = 45.0                       # плотность в рендере: густой клуб сам себя затеняет — видно, откуда свет
 
 os.makedirs(out, exist_ok=True)
 BLEND = os.path.join(out, "smoke.blend")
@@ -51,10 +51,10 @@ def setup():
     ds.use_adaptive_domain = False
     ds.alpha = 0.0                  # без плавучести: подъём — у частицы в игре
     ds.beta = 0.0
-    ds.vorticity = 0.35             # клубится
+    ds.vorticity = 0.6              # клубится
     ds.use_dissolve_smoke = True
     ds.use_dissolve_smoke_log = True
-    ds.dissolve_speed = 70          # к концу жизни клуб почти растаял
+    ds.dissolve_speed = 60          # к концу жизни клуб почти растаял
     ds.time_scale = 0.6
     ds.use_noise = True             # мелкие завитки по краю клуба (upres ×2)
     ds.noise_scale = 2
@@ -63,7 +63,7 @@ def setup():
 
     # струя: шар, в первые кадры выдувает дым наружу, потом уходит из домена
     bpy.context.preferences.edit.keyframe_new_interpolation_type = "CONSTANT"
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.28, location=(0, 0, 1.0), segments=24, ring_count=12)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.34, location=(0, 0, S * 0.42), segments=24, ring_count=12)
     src = bpy.context.object
     src.name = "puff"
     mf = src.modifiers.new("fluid", "FLUID")
@@ -76,8 +76,8 @@ def setup():
     fs.density = 1.0
     fs.smoke_color = (1, 1, 1)
     fs.use_initial_velocity = True
-    fs.velocity_normal = 1.4         # от центра наружу — клуб раздувается
-    fs.velocity_coord = (0.0, 0.0, 0.5)
+    fs.velocity_normal = 2.2         # от центра наружу — клуб раздувается
+    fs.velocity_coord = (0.0, 0.0, 0.35)
     tex = bpy.data.textures.new("lumps", "CLOUDS")
     tex.noise_scale = 0.18
     tex.contrast = 1.8
@@ -85,8 +85,18 @@ def setup():
     fs.noise_texture = tex
     fs.texture_map_type = "AUTO"
     src.keyframe_insert("location", frame=F0)
-    src.location = (0, 0, -10.0)
+    src.keyframe_insert("location", frame=F0 + 4)
+    src.location = (0, 0, -10.0)                    # прыжком за домен: дует только первые кадры
     src.keyframe_insert("location", frame=F0 + 5)
+    act = src.animation_data.action
+    curves = list(getattr(act, "fcurves", []) or [])
+    for layer in getattr(act, "layers", []):        # Blender 5: кривые — в слоях действия
+        for strip in layer.strips:
+            for cb in strip.channelbags:
+                curves += list(cb.fcurves)
+    for fc in curves:
+        for kp in fc.keyframe_points:
+            kp.interpolation = "CONSTANT"
     src.hide_render = True
     return dom
 
@@ -162,7 +172,7 @@ if mode in ("render", "all"):
     cam_d.ortho_scale = S
     cam = bpy.data.objects.new("cam", cam_d)
     sc.collection.objects.link(cam)
-    cam.location = (0, -8, 1.3)                    # клуб — в середине кадра
+    cam.location = (0, -8, S / 2)                  # клуб — в середине кадра
     cam.rotation_euler = (math.radians(90), 0, 0)
     sc.camera = cam
 
