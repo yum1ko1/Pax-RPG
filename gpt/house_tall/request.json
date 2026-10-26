@@ -1,0 +1,17 @@
+[
+ {
+  "time": "2026-10-26 21:12:25",
+  "prompt": "Use your built-in image_gen tool to make exactly 1 separate image from this spec. Follow the spec literally, do not add text, logos or watermarks unless the spec asks. Do not run shell commands or write files. When done, reply with the absolute path of each generated image file, one per line, nothing else.\n\nSPEC:\nCharacter / prop reference sheet for 3D modeling, East Asian fantasy RPG (Yuruma). Single subject, full body, neutral A-pose for characters, front view, even soft studio lighting with no cast shadows, no strong rim light, flat neutral light-grey background, whole subject inside the frame with margin, sharp details, clear material separation (cloth, leather, metal, wood), stylized realism, no text, no labels, no extra objects.\nGame asset reference for image-to-3D: a tall narrow THREE-storey workshop townhouse for the Street of Masters in Gharn, the orc horde capital, made to stand in a continuous row (flat plain side walls, no windows on the sides). Footprint 8 m wide (front) by 8 m deep, about 13 m tall. Ground floor of rough rubble stone with a wide open shopfront: wooden shutters folded up, a deep wooden awning over it. Second and third floors of dark timber framing with red lacquered pillars, a red-railed balcony across the front of the second floor, paper-lattice windows. Steep curved upturned roof of dark clay tiles, bone and tusk ridge ornaments, a stone chimney at the back. Same architecture and materials as the attached reference houses. Front three-quarter view from street level slightly above, whole building visible, isolated, no neighbouring buildings, no people.\nInput images: Image 1: reference for style, shapes and composition; Image 2: reference for style, shapes and composition.\nAspect: portrait 2:3.",
+  "refs": [
+   "C:\\Users\\mbkli\\Desktop\\pax_rpg_work\\gpt\\masters_shot\\masters_shot_1.png",
+   "C:\\Users\\mbkli\\AppData\\Local\\Temp\\gharn_survey\\out\\s_masters_street.png"
+  ],
+  "files": [
+   "C:\\Users\\mbkli\\Desktop\\pax_rpg_work\\gpt\\house_tall\\house_tall_0.png",
+   "C:\\Users\\mbkli\\Desktop\\pax_rpg_work\\gpt\\house_tall\\house_tall_1.png"
+  ],
+  "thread": "01a17968-c23b-7811-8a9d-88106fbd355a",
+  "seconds": 75,
+  "errors": []
+ }
+]
