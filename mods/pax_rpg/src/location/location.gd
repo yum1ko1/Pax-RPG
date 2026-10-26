@@ -2478,7 +2478,9 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 		var at := gob.global_position + Vector3(0.0, 1.0, 0.0) - to.normalized() * 0.3
 		var hfx := _hit_fx()
 		if hfx != null:
-			hfx.impact(at, to.normalized(), c, 1.0 + 0.15 * step + (0.4 if final else 0.0))
+			var on := gob.global_position - to.normalized() * 0.3   # на линии укола: высота — как у копья в руке
+			hfx.impact(Vector3(on.x, lerpf(_spear_hand().y, at.y, 0.4), on.z), to.normalized(), c,
+				1.0 + 0.15 * step + (0.4 if final else 0.0))
 			_flash(at, c, 4.0, 4.5)
 		else:
 			_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
@@ -2500,10 +2502,12 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var step := float(hit.get("step", 0))
 	var final := bool(hit.get("final", false))
 	var hfx := _hit_fx()
-	if hfx != null:                                  # луч укола из острия — попал удар или нет; попадание — в _combat_fx_hit
-		var d := tip - (_player.global_position + Vector3(0.0, 1.2, 0.0))
-		d.y *= 0.3
-		hfx.thrust(tip, d, c, false, 1.0 + 0.15 * step)
+	if hfx != null:                                  # луч укола — по взгляду героя из острия; попадание — в _combat_fx_hit
+		var fwd := -_body_mesh.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized()
+		var hand := _spear_hand()
+		hfx.thrust(hand + fwd * 1.5, fwd, c, false, 1.0 + 0.15 * step)   # остриё — на длину копья перед кистью
 	else:
 		_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
 	if final:
@@ -2526,6 +2530,14 @@ func _hit_fx() -> HitVfx:
 	if _hitfx == null:
 		_hitfx = HitVfx.new(mod, _view)
 	return _hitfx
+
+
+## Кисть с копьём (луч укола и вспышка — на её высоте); без кисти — пояс героя.
+func _spear_hand() -> Vector3:
+	var h: Node3D = _hero._sword_hand if _hero != null else null
+	if is_instance_valid(h) and h.is_inside_tree():
+		return h.global_position
+	return _player.global_position + Vector3(0.0, 0.3, 0.0)
 
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.

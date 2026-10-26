@@ -61,11 +61,11 @@ func thrust(tip: Vector3, dir: Vector3, col: Color, hit := false, heft := 1.0) -
 	if not is_instance_valid(parent) or dir.length() < 0.01:
 		return
 	var d := dir.normalized()
-	var length := 3.4 * clampf(heft, 0.8, 1.5)
-	var width := 0.62 * clampf(heft, 0.8, 1.4)
-	var mi := _node(_mat("thrust", 1, col, 3.2 if hit else 2.4))
+	var length := 2.3 * clampf(heft, 0.8, 1.5)          # хвост — у груди героя, остриё — на полметра дальше копья
+	var width := 0.5 * clampf(heft, 0.8, 1.4)
+	var mi := _node(_mat("thrust", 1, col, 2.2 if hit else 1.7))
 	var b := _basis(d)
-	mi.global_transform = Transform3D(Basis(b.x * length, b.y * width, b.z), tip + d * 0.35 - d * length * 0.5)
+	mi.global_transform = Transform3D(Basis(b.x * length, b.y * width, b.z), tip + d * 0.5 - d * length * 0.5)
 	_live.append({"n": mi, "t": 0.0, "life": 0.3 if hit else 0.24, "kind": "thrust"})
 	_apply(_live[-1])
 
@@ -95,16 +95,22 @@ func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.amount = amount
-	p.lifetime = 0.32
+	p.lifetime = 0.2
 	p.local_coords = false
 	var pm := ParticleProcessMaterial.new()
 	pm.direction = dir
 	pm.spread = 28.0
-	pm.initial_velocity_min = 6.0
-	pm.initial_velocity_max = 14.0
-	pm.gravity = Vector3(0.0, -4.0, 0.0)
-	pm.damping_min = 6.0
-	pm.damping_max = 12.0
+	pm.initial_velocity_min = 7.0
+	pm.initial_velocity_max = 15.0
+	pm.gravity = Vector3(0.0, -2.0, 0.0)
+	pm.damping_min = 2.0
+	pm.damping_max = 5.0
+	var shrink := Curve.new()                         # к концу жизни искра тоньше — гаснет, а не висит штрихом
+	shrink.add_point(Vector2(0.0, 1.0))
+	shrink.add_point(Vector2(1.0, 0.0))
+	var sc := CurveTexture.new()
+	sc.curve = shrink
+	pm.scale_curve = sc
 	p.process_material = pm
 	p.trail_enabled = true
 	p.trail_lifetime = 0.06
@@ -115,7 +121,7 @@ func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.use_particle_trails = true
-	m.albedo_color = Color(lerpf(col.r, 1.0, 0.4) * 5.0, lerpf(col.g, 1.0, 0.25) * 5.0, lerpf(col.b, 1.0, 0.25) * 5.0)
+	m.albedo_color = Color(lerpf(col.r, 1.0, 0.3) * 4.0, lerpf(col.g, 1.0, 0.12) * 4.0, lerpf(col.b, 1.0, 0.12) * 4.0)
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	tm.material = m
 	p.draw_pass_1 = tm

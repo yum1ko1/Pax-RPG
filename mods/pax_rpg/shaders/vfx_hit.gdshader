@@ -5,7 +5,7 @@
 //   mode 0 — billboard (звезда вспышки), 1 — вдоль оси X узла, повёрнут к камере (луч укола, мазок),
 //   2 — как стоит узел (кольцо волны поперёк удара).
 shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
+render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 uniform sampler2D mask_tex : hint_default_black, filter_linear_mipmap, repeat_disable;
 uniform vec3 core : source_color = vec3(1.0, 0.95, 0.92);
@@ -20,10 +20,12 @@ instance uniform float progress = 0.0;
 instance uniform float reveal = 2.0;
 instance uniform float glow = 1.0;
 instance uniform float roll = 0.0;
+varying float side_on;                 // mode 1: 1 — луч виден сбоку, 0 — смотрим вдоль него (там он сжат в черту и гаснет)
 
 void vertex() {
 	vec3 at = MODEL_MATRIX[3].xyz;
 	vec3 cam = INV_VIEW_MATRIX[3].xyz;
+	side_on = 1.0;
 	if (mode == 0) {
 		float sx = length(MODEL_MATRIX[0].xyz);
 		float sy = length(MODEL_MATRIX[1].xyz);
@@ -33,6 +35,7 @@ void vertex() {
 		vec3 ax = MODEL_MATRIX[0].xyz;
 		vec3 to_cam = normalize(cam - at);
 		vec3 side = cross(normalize(ax), to_cam);
+		side_on = smoothstep(0.2, 0.55, length(side));
 		side = length(side) > 0.001 ? normalize(side) : vec3(0.0, 1.0, 0.0);
 		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(vec4(ax, 0.0), vec4(side * length(MODEL_MATRIX[1].xyz), 0.0),
 			vec4(to_cam, 0.0), vec4(at, 1.0));
@@ -53,10 +56,13 @@ void fragment() {
 	float thr = progress * (1.0 + soft);
 	float keep = smoothstep(thr, thr + soft, m.g);
 	float burn = (1.0 - smoothstep(0.0, soft * 1.4, abs(m.g - thr - soft * 0.5))) * step(0.001, progress);
-	float a = shape * keep * vis;
-	float heat = clamp(shape * (1.0 - 0.45 * progress), 0.0, 1.0);
-	vec3 col = mix(edge, mid, smoothstep(0.0, 0.5, heat));
-	col = mix(col, core, smoothstep(0.62, 0.97, heat));
-	ALBEDO = (col * a + rim * burn * shape * vis * rim_k) * energy * glow;
-	ALPHA = clamp(a + burn * shape * vis * 0.5, 0.0, 1.0);
+	float a = shape * keep * vis * side_on;
+	float heat = clamp(shape * shape * (1.0 - 0.5 * progress), 0.0, 1.0);   // в квадрате — белое только в самом ядре
+	vec3 col = mix(edge, mid, smoothstep(0.0, 0.35, heat));
+	col = mix(col, core, smoothstep(0.75, 1.0, heat));
+	// premultiplied: тёмно-алая кромка кроет фон (на ярком небе не выцветает в розовое, как чистое сложение),
+	// белое ядро — HDR сверху и ловит bloom
+	float cover = clamp(a * (1.0 - heat) * 0.85, 0.0, 1.0);
+	ALBEDO = (col * a + rim * burn * shape * vis * side_on * rim_k) * energy * glow;
+	ALPHA = cover;
 }
