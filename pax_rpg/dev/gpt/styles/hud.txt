@@ -1,5 +1,5 @@
-Game HUD UI element for an East Asian fantasy action RPG (Yuruma). Ornamental frame of black lacquer and engraved
-dark bronze with thin gold inlay, subtle cloud and dragon-scale motifs, small red lacquer accents, worn edges.
-Orthographic flat front view, perfectly symmetric where sensible, crisp clean silhouette, no perspective,
-no characters, no text, no numbers, no letters. Empty dark inner channels where bars or icons will go.
-Isolated on a transparent background (or a flat pure #00FF00 chroma green background if transparency is unavailable).
+Game HUD UI element for an East Asian fantasy action RPG (Yuruma). Current HUD theme: crimson and antique gold,
+ornate baroque frame work with carved roses and leaves, engraved dark gold metal with worn highlights, deep crimson
+lacquer or velvet accents, thin black inner channels. Orthographic flat front view, no perspective, symmetric where
+sensible, crisp clean silhouette that reads at small size, no characters, no text, no numbers, no letters, no icons
+inside. Empty dark inner channels or windows where bars, portraits or icons will be placed by the game.
