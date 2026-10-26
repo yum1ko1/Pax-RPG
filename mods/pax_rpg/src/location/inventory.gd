@@ -191,7 +191,10 @@ func close() -> void:
 func _refresh() -> void:
 	_refresh_slots()
 	_refresh_weapons()
-	_rank_pic.texture = ui.tex("rank_%d.png" % _rank())
+	var rank := _rank()
+	_rank_pic.texture = ui.tex("rank_%d.png" % rank)
+	if int(mod.get_setting("rank", 0)) != rank:
+		mod.set_setting("rank", rank)                       # ранг — и на карте мира (planet/world_ui.gd)
 	_rep_pic.texture = ui.tex("rep_%d.png" % InfoTip.tier_of(eq.d["rep_tiers"], _rep_total()))
 	_gold_l.text = Equip.money(int(_st.get("gold", 0)))
 	_lvl_l.text = str(_lvl)

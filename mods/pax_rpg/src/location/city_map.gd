@@ -429,8 +429,7 @@ func _art_rect() -> Rect2:
 func _center_on_hero() -> void:
 	if not _art_on():
 		return
-	var me: Vector2 = st.get("me", Vector2(-6, -8))
-	_view = me.lerp(Vector2(-6, -8), 0.5) if _zoom <= 1.0 else me
+	_view = Vector2(-6, -8) if _zoom <= 1.0 else st.get("me", Vector2(-6, -8))   # весь город; приближено — к герою
 	_clamp_view()
 
 
