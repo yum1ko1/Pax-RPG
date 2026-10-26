@@ -17,7 +17,7 @@ F0, F1 = 1, 170
 F_A, F_B = 81, 160                 # 80 кадров установившегося горения: 64 в петлю + 16 на перехлёст
 W, H = 1.3, 2.6                    # домен, м: огонь в чаше ~0.6 м, языки до ~1.5 м
 RX, RY = 256, 512                  # кадр
-E_K = 3.0                          # масштаб свечения в PNG (линейно; make_fire_atlas.py нормирует по пику)
+E_K = 0.6                          # масштаб свечения в PNG (линейно; make_fire_atlas.py нормирует по пику)
 
 os.makedirs(out, exist_ok=True)
 BLEND = os.path.join(out, "fire.blend")
@@ -121,15 +121,14 @@ def mat_emit():
     o = nt.nodes.new("ShaderNodeOutputMaterial")
     e = nt.nodes.new("ShaderNodeEmission")
     e.inputs["Color"].default_value = (1, 1, 1, 1)
-    # светится тонкая зона горения, а не весь горячий газ: крутой порог по flame — у языков чёткая кромка
-    # (иначе свечение копится по лучу сквозь объём и огонь выходит светящимся туманом)
+    # светится в основном зона горения: яркость — круто по flame (кромка языков тёмная и тонкая, сердцевина яркая),
+    # иначе свечение копится по лучу сквозь объём и огонь выходит светящимся туманом; 16 бит держат весь диапазон
     mr = nt.nodes.new("ShaderNodeMapRange")
-    mr.interpolation_type = "SMOOTHSTEP"
-    mr.inputs["From Min"].default_value = 0.18
-    mr.inputs["From Max"].default_value = 0.75
+    mr.inputs["From Min"].default_value = 0.04
+    mr.inputs["From Max"].default_value = 0.9
     pw = nt.nodes.new("ShaderNodeMath")
     pw.operation = "POWER"
-    pw.inputs[1].default_value = 2.0
+    pw.inputs[1].default_value = 2.6                 # как у раскалённого газа: яркость растёт круче жара
     mul = nt.nodes.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
     mul.inputs[1].default_value = 1.0
