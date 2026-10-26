@@ -1462,6 +1462,9 @@ for pth in paths:
 paths += [[[19, 55.4], [89, 55.4]],                   # Улица Мастеров: прохожие вдоль лавок, у бордюров
           [[89, 59.6], [61, 59.6], [58.6, 61.6], [51.5, 61.6], [49, 59.6], [19, 59.6]]]
 npcs += 4
+shots += [[[12, 2.2, 57.5], [60, 4, 57.5]],              # 13 Улица Мастеров от арки-пайфана
+          [[44, 3.0, 55.0], [56, 2.0, 58.5]],            # 14 площадь колодца
+          [[55, 30, 92], [55, 0, 57]]]                   # 15 Улица Мастеров сверху
 
 CENTER_KEEP = ("central/", "stone_lantern", "tug_banner", "tusk_arch", "oath_tree", "ovoo_cairn", "flame_tree",
                "banner_clan", "bench_long", "spear_rack", "brazier_tusk", "hay_bale", "trough", "war_drum", "bucket_set",
