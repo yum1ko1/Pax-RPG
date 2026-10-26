@@ -11,6 +11,7 @@ signal city_chosen(city: Dictionary)
 
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
+const Heavens3D := preload("res://mods/pax_rpg/src/planet/heavens3d.gd")
 
 const CHECK_EVERY := 1.0           # с. Игра может заново выдать планете материал — проверяем и ставим свой снова
 const CLICK_PX := 18.0             # насколько близко к значку надо щёлкнуть, пикселей
@@ -43,6 +44,10 @@ var _ocean_tex: Texture2D
 var _albedo_tex: Texture2D
 var _loc_cfg: Dictionary = {}         # config/location.json — часы мира (start_hour, day_minutes)
 var _tip: Label                       # подсказка над городом под курсором: часть суток и час в нём
+var _heavens: Heavens3D               # Око Раскола и луны у глобуса
+var _heavens_off := false             # шейдеры неба не загрузились — не пробуем снова
+var _sky_t := 0.0                     # время мира в днях (для лун) — читается раз в полсекунды
+var _sky_wait := 0.0
 
 
 func setup(m: PaxMod) -> void:
@@ -72,6 +77,8 @@ func suspend() -> void:
 	_clouds.clear()
 	_node = null
 	_mat = null
+	if is_instance_valid(_heavens):
+		_heavens.visible = false
 
 
 func start(g: PaxGame) -> void:
@@ -104,8 +111,39 @@ func _process(delta: float) -> void:
 		_map_feed = 0.25
 		_feed_flat_map()
 	_show_markers(enabled and game.focused_body() == game.home_body() and not _flat_map_open())
+	_place_heavens(delta)
 	_update_tip()
 	Trace.tick("planet._process end")
+
+
+## Око Раскола и луны у глобуса — там же, где в небе локаций (heavens3d.gd, sky_clock.gd), освещены солнцем игры
+## (sun_dir материала планеты). Пока герой в локации или планета не наша — спрятаны. Настройка мода heavens = false
+## — выключить.
+func _place_heavens(delta: float) -> void:
+	var on := enabled and is_instance_valid(_node) and is_instance_valid(_mat) and _mat.shader == _shader \
+			and bool(mod.get_setting("heavens", true))
+	if on and _heavens == null and not _heavens_off:
+		var h := Heavens3D.new()
+		if h.setup(mod):
+			_heavens = h
+			add_child(h)                                   # наш узел в мире глобуса, не ребёнок планеты игры
+			_sky_wait = 0.0
+		else:
+			h.free()
+			_heavens_off = true
+	if not is_instance_valid(_heavens):
+		return
+	var sun: Variant = _mat.get_shader_parameter("sun_dir") if on else null
+	_heavens.visible = on and sun is Vector3
+	if not _heavens.visible:
+		return
+	_sky_wait -= delta
+	if _sky_wait <= 0.0:
+		_sky_wait = 0.5
+		_sky_t = DayNight.world_time(_loc_cfg)
+		if _node is VisualInstance3D:
+			_heavens.set_layers((_node as VisualInstance3D).layers)
+	_heavens.place(_node.global_transform, sun, _sky_t)
 
 
 ## Навёл мышь на город — рядом табличка «Утро · 07:40»: какое время суток застанешь, войдя в него.
@@ -348,6 +386,9 @@ func restore() -> void:
 			(mi as MeshInstance3D).layers = int(_clouds[mi])
 	_clouds.clear()
 	_free_markers()
+	if is_instance_valid(_heavens):
+		_heavens.queue_free()
+	_heavens = null
 	if is_instance_valid(_layer):
 		_layer.queue_free()
 	_layer = null
