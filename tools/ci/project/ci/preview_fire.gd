@@ -62,7 +62,7 @@ func _tick() -> void:
 		fwd.y = 0.0
 		fwd = fwd.normalized()
 		var side := fwd.cross(Vector3.UP)
-		var base := pl.global_position + fwd * 4.0 + Vector3(0, -0.95, 0)
+		var base := pl.global_position + fwd * 3.0 - side * 7.0 + Vector3(0, -0.95, 0)   # в стороне от ворот арены
 		if mode == "pair":
 			_brazier(base - side * 1.3, false)
 			_brazier(base + side * 1.3, true)

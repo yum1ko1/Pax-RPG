@@ -55,7 +55,7 @@ def setup():
     ds.burning_rate = 0.55            # медленнее горит — длиннее языки
     ds.flame_smoke = 0.3
     ds.flame_vorticity = 1.5             # вихри в пламени — отдельные языки, а не столб
-    ds.flame_ignition = 1.25
+    ds.flame_ignition = 1.1
     ds.flame_max_temp = 3.0
     ds.use_dissolve_smoke = True
     ds.use_dissolve_smoke_log = False
@@ -84,8 +84,10 @@ def setup():
     fs.velocity_coord = (0.0, 0.0, 0.9)
     fs.smoke_color = (0.1, 0.09, 0.085)
     tex = bpy.data.textures.new("flick", "CLOUDS")
-    tex.noise_scale = 0.055               # мелкие пятна подачи — язычки отдельно
+    tex.noise_scale = 0.07                # пятна подачи: горят отдельные «угли» — отдельные языки, а не сплошной столб
     tex.noise_depth = 2
+    tex.contrast = 2.6
+    tex.intensity = 0.8
     fs.use_texture = True
     fs.noise_texture = tex
     fs.texture_map_type = "AUTO"
