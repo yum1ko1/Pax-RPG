@@ -49,6 +49,7 @@ var _f_sc: Font
 var _f_serif: Font
 var _s := 1.0
 var _w := 1920.0
+var _h := 1080.0                                 # высота экрана в px макета (меньше масштаб — больше места)
 var _sel: Dictionary = {}                        # выбранный город
 var _popup := false
 var _hits: Array = []                            # [Rect2 макета, id]
@@ -91,6 +92,13 @@ func setup(m: PaxMod, tr: Travel) -> void:
 	_root.draw.connect(_draw)
 	add_child(_root)
 	visible = false
+
+
+## Масштаб интерфейса: config/world_ui.json → ui_scale.world, настройка мода ui_scale — поверх.
+func _scale() -> float:
+	var d: Variant = _ui.get("ui_scale", {})
+	var k := float((d as Dictionary).get("world", 1.0)) if d is Dictionary else 1.0
+	return clampf(float(mod.get_setting("ui_scale", k)), 0.4, 1.5)
 
 
 func _font(path: String) -> Font:
@@ -154,8 +162,9 @@ func _process(delta: float) -> void:
 			_hover = ""
 	if visible:
 		var vs := _root.get_viewport_rect().size
-		_s = maxf(vs.y, 1.0) / 1080.0
+		_s = maxf(vs.y, 1.0) / 1080.0 * _scale()
 		_w = vs.x / _s
+		_h = vs.y / _s
 		_root.queue_redraw()                       # небо и часы — дёшево, а состояние меняется отовсюду
 
 
@@ -632,7 +641,7 @@ func _draw_event() -> void:
 		lines = [_tr("pax_rpg_wui_ev_hunt_1"), _tr("pax_rpg_wui_ev_hunt_now") if now else _tr("pax_rpg_wui_ev_hunt_2") % ceili(soon)]
 		cells = 8 if now else clampi(8 - ceili(soon), 0, 8)
 	var md := 150.0
-	var mc := Vector2(22.0 + md * 0.5, 1080.0 - 22.0 - md * 0.5)
+	var mc := Vector2(22.0 + md * 0.5, _h - 22.0 - md * 0.5)
 	var pr := _frame(_cfg, "event", mc.x + md * 0.36, 0.0, 340.0)
 	pr.position.y = mc.y - pr.size.y * 0.5
 	_tex_frame(_ftex.get("event"), pr)
@@ -660,7 +669,7 @@ func _draw_bottom() -> void:
 	var bw := 250.0
 	var gap := 12.0
 	var x0 := (_w - bw * 3.0 - gap * 2.0) * 0.5
-	var y := 1080.0 - 30.0
+	var y := _h - 30.0
 	var specs := [["btn_red", "go", _tr("pax_rpg_wui_travel"), "play", _sel.is_empty()], ["btn_dark", "wait", _tr("pax_rpg_wui_wait"), "glass", false],
 		["btn_dark", "rest", _tr("pax_rpg_wui_rest"), "moon", false]]
 	for i: int in specs.size():
@@ -674,7 +683,7 @@ func _draw_round() -> void:
 	var d := 76.0
 	var specs := [["menu", "menu"], ["hero", "hero"]]
 	for i: int in specs.size():
-		var c := Vector2(_w - 22.0 - d * 0.5 - i * (d + 10.0), 1080.0 - 22.0 - d * 0.5)
+		var c := Vector2(_w - 22.0 - d * 0.5 - i * (d + 10.0), _h - 22.0 - d * 0.5)
 		_round(str(specs[i][1]), c, d)
 	var zc := Vector2(_w - 22.0 - 30.0, 52.0)
 	_round("zoom_in", zc, 58.0)

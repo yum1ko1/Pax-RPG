@@ -42,6 +42,8 @@ var _quest := {}
 var _quest_t := 0
 var _eg := 1.0                        # след здоровья врага / босса
 var _eg_id := -1
+var _h := 1080.0                      # высота экрана в px макета
+var _k := 1.0                         # масштаб HUD (config/world_ui.json → ui_scale.hud)
 
 
 func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
@@ -50,6 +52,9 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	_cfg = (c as Dictionary).get("frames", {}) if c is Dictionary else {}
 	for k: String in _cfg:
 		_ftex[k] = m.texture(str((_cfg[k] as Dictionary).get("tex", "")))
+	var u: Variant = JSON.parse_string(m.read_text("config/world_ui.json"))
+	var us: Variant = (u as Dictionary).get("ui_scale", {}) if u is Dictionary else {}
+	_k = float((us as Dictionary).get("hud", 1.0)) if us is Dictionary else 1.0
 	_f_sc = _font("fonts/cormorant_sc.ttf")
 	_f_serif = _font("fonts/cormorant_garamond.ttf")
 	_cmp2 = Control.new()
@@ -117,7 +122,7 @@ func _hole(key: String, r: Rect2, i: int) -> Rect2:
 
 func _hero_r() -> Rect2:
 	var r := _frame("hero", 26.0, 0.0)
-	r.position.y = 1080.0 - 26.0 - r.size.y
+	r.position.y = _h - 26.0 - r.size.y
 	return r
 
 
@@ -168,7 +173,7 @@ func _skill_layout(n: int) -> Dictionary:
 	for p: String in seq:
 		total += (float(PIECES[p][1]) - float(PIECES[p][0])) * unit
 	var x := (_w - total) * 0.5
-	var y := 1080.0 - 18.0 - h
+	var y := _h - 18.0 - h
 	var out: Array = []
 	for p: String in seq:
 		out.append([p, x])
@@ -190,6 +195,9 @@ func _skill_hole(L: Dictionary, p: String, x: float, i: int) -> Rect2:
 
 func refresh() -> void:
 	super.refresh()
+	_s *= clampf(float(mod.get_setting("ui_scale", _k)), 0.4, 1.5) if mod != null else _k   # мельче макета: места больше
+	_w = size.x / _s
+	_h = size.y / _s
 	var mc := _mini_circle()
 	var r := mc.z * _s
 	_mask.position = Vector2(mc.x * _s - r - 2.0 * _s, mc.y * _s - r - 2.0 * _s)
@@ -724,4 +732,4 @@ func _draw_hint() -> void:
 				y += 22.0
 	var g := str(_g("gate_hint", ""))
 	if g != "":
-		_center(Vector2(_w * 0.5, 1080.0 - 250.0), g, _f_serif, 24, IVORY, 5, 900.0)
+		_center(Vector2(_w * 0.5, _h - 250.0), g, _f_serif, 24, IVORY, 5, 900.0)
