@@ -83,7 +83,9 @@ for i in range(L):
     fl = cv2.calcOpticalFlowFarneback(a, b, None, 0.5, 4, 9, 4, 5, 1.1, 0)
     flows.append(fl)
 mx = max(float(np.percentile(np.abs(f), 99.5)) for f in flows) + 1e-3
-K = 0.5 / mx                                       # пиксели кадра → [-0.5, 0.5]
+FLOW_UV = 0.16                                     # 1.0 в карте = 0.16 ширины кадра (shaders/vfx_fire.gdshader → flow_uv)
+K = 1.0 / (FLOW_UV * CW)                           # пиксели кадра → доли карты
+print("поток: 99.5%% — %.2f px/кадр, предел карты %.2f px" % (mx, 0.5 / K))
 fat = np.zeros((CH * G, CW * G, 3), np.float32)
 for i, fl in enumerate(flows):
     y, x = divmod(i, G)

@@ -49,12 +49,12 @@ def setup():
     ds.cache_type = "ALL"
     ds.cache_frame_start, ds.cache_frame_end = F0, F1
     ds.use_adaptive_domain = False
-    ds.vorticity = 0.15
+    ds.vorticity = 0.25
     ds.alpha = 0.3                     # подъём от плотности дыма
     ds.beta = 1.8                      # подъём от жара — языки тянутся вверх и рвутся
-    ds.burning_rate = 0.5             # медленнее горит — длиннее языки
+    ds.burning_rate = 0.55            # медленнее горит — длиннее языки
     ds.flame_smoke = 0.3
-    ds.flame_vorticity = 1.0
+    ds.flame_vorticity = 1.5             # вихри в пламени — отдельные языки, а не столб
     ds.flame_ignition = 1.25
     ds.flame_max_temp = 3.0
     ds.use_dissolve_smoke = True
@@ -84,7 +84,7 @@ def setup():
     fs.velocity_coord = (0.0, 0.0, 0.9)
     fs.smoke_color = (0.1, 0.09, 0.085)
     tex = bpy.data.textures.new("flick", "CLOUDS")
-    tex.noise_scale = 0.09
+    tex.noise_scale = 0.055               # мелкие пятна подачи — язычки отдельно
     tex.noise_depth = 2
     fs.use_texture = True
     fs.noise_texture = tex
@@ -168,7 +168,7 @@ if mode in ("render", "all"):
     cy.samples = 64
     cy.use_denoising = True                # OIDN: объём без «зерна»
     cy.denoiser = "OPENIMAGEDENOISE"
-    cy.volume_step_rate = 0.5
+    cy.volume_step_rate = 0.3
     cy.volume_max_steps = 2048
     cy.max_bounces = 4
     cy.volume_bounces = 1
@@ -217,7 +217,8 @@ if mode in ("render", "all"):
         r.film_transparent = False
         bg.inputs["Strength"].default_value = 0.0
         sun.hide_render = True
-        cy.samples = 48
+        cy.samples = 96
+        cy.use_denoising = False               # свечение не шумит, а шумодав размыл бы кромку языков
         r.filepath = os.path.join(fr, "e_%04d.png" % f)
         bpy.ops.render.render(write_still=True)
         if f == F_A:                                   # пусто — газ не подхватился: дальше считать незачем
@@ -233,6 +234,7 @@ if mode in ("render", "all"):
         bg.inputs["Strength"].default_value = 0.6
         sun.hide_render = False
         cy.samples = 128
+        cy.use_denoising = True
         r.filepath = os.path.join(fr, "s_%04d.png" % f)
         bpy.ops.render.render(write_still=True)
         print("frame", f, flush=True)
