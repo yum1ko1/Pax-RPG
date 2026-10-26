@@ -1,0 +1,346 @@
+{
+ "_note": "Сгенерировано pax_rpg/dev/gharn/map_data.py.",
+ "zones": [
+  {
+   "r": [
+    -15,
+    14,
+    15,
+    84
+   ],
+   "name": "Аллея Сакур",
+   "col": "#f6b3c6"
+  },
+  {
+   "r": [
+    -30,
+    -30,
+    30,
+    30
+   ],
+   "name": "Площадь Круга · Арена",
+   "col": "#e9d9b8"
+  },
+  {
+   "r": [
+    -26,
+    -72,
+    26,
+    -36
+   ],
+   "name": "Ставка Хаана",
+   "col": "#d9a3a3"
+  },
+  {
+   "r": [
+    -26,
+    -92,
+    26,
+    -74
+   ],
+   "name": "Сад Хаана",
+   "col": "#c8e2b4"
+  },
+  {
+   "r": [
+    -78,
+    -8.5,
+    78,
+    8.5
+   ],
+   "name": "Аллея Знамён",
+   "col": "#f0d0a0"
+  },
+  {
+   "r": [
+    -72,
+    -4,
+    -36,
+    32
+   ],
+   "name": "Базар Добычи",
+   "col": "#ead2a8"
+  },
+  {
+   "r": [
+    -88,
+    34,
+    -20,
+    82
+   ],
+   "name": "Курени Кланов",
+   "col": "#e8e1cc"
+  },
+  {
+   "r": [
+    18,
+    44,
+    90,
+    82
+   ],
+   "name": "Улица Мастеров",
+   "col": "#e7c9b5"
+  },
+  {
+   "r": [
+    -70,
+    -58,
+    -48,
+    -30
+   ],
+   "name": "Счётный двор",
+   "col": "#cfcfcf"
+  },
+  {
+   "r": [
+    -90,
+    -92,
+    -36,
+    -60
+   ],
+   "name": "Курганы Предков",
+   "col": "#d3d0c4"
+  },
+  {
+   "r": [
+    36,
+    -60,
+    62,
+    -36
+   ],
+   "name": "Гоблинский закоулок",
+   "col": "#d9c6e8"
+  },
+  {
+   "r": [
+    54,
+    -76,
+    78,
+    -56
+   ],
+   "name": "Склон шаманов",
+   "col": "#c9a8e0"
+  },
+  {
+   "r": [
+    22,
+    -88,
+    48,
+    -60
+   ],
+   "name": "Волчьи Псарни",
+   "col": "#d8cbb8"
+  },
+  {
+   "r": [
+    40,
+    4,
+    66,
+    34
+   ],
+   "name": "Таверна",
+   "col": "#efd3a2"
+  },
+  {
+   "r": [
+    44,
+    -30,
+    64,
+    -12
+   ],
+   "name": "Гильдия",
+   "col": "#bfd0e6"
+  },
+  {
+   "r": [
+    66,
+    12,
+    86,
+    32
+   ],
+   "name": "Конюшня",
+   "col": "#e3d2b0"
+  },
+  {
+   "r": [
+    23,
+    27,
+    41,
+    40
+   ],
+   "name": "Буйволиный двор",
+   "col": "#dcc9a6"
+  },
+  {
+   "r": [
+    -44,
+    -34,
+    -22,
+    -14
+   ],
+   "name": "Кузнечный двор",
+   "col": "#d6c2b4"
+  }
+ ],
+ "pois": [
+  {
+   "key": "pax_rpg_lm_gate",
+   "x": 0,
+   "z": 80,
+   "glyph": "門",
+   "kind": "gate"
+  },
+  {
+   "key": "pax_rpg_lm_trakt",
+   "x": 0,
+   "z": 52,
+   "glyph": "道",
+   "kind": "road"
+  },
+  {
+   "key": "pax_rpg_lm_circle",
+   "x": 15,
+   "z": 21,
+   "glyph": "円",
+   "kind": "road"
+  },
+  {
+   "key": "pax_rpg_lm_khan",
+   "x": 0,
+   "z": -56,
+   "glyph": "宮",
+   "kind": "power"
+  },
+  {
+   "key": "pax_rpg_lm_arena",
+   "x": 0.0,
+   "z": 0.0,
+   "glyph": "闘",
+   "kind": "fight"
+  },
+  {
+   "key": "pax_rpg_lm_alley",
+   "x": -52,
+   "z": 0,
+   "glyph": "桜",
+   "kind": "road"
+  },
+  {
+   "key": "pax_rpg_lm_fountain",
+   "x": 34,
+   "z": 0,
+   "glyph": "泉",
+   "kind": "nature"
+  },
+  {
+   "key": "pax_rpg_lm_guild",
+   "x": 54,
+   "z": -22,
+   "glyph": "会",
+   "kind": "fight"
+  },
+  {
+   "key": "pax_rpg_lm_tavern",
+   "x": 54,
+   "z": 24,
+   "glyph": "酒",
+   "kind": "rest"
+  },
+  {
+   "key": "pax_rpg_lm_bazaar",
+   "x": -54,
+   "z": 14,
+   "glyph": "市",
+   "kind": "trade"
+  },
+  {
+   "key": "pax_rpg_lm_barracks",
+   "x": -55,
+   "z": -45,
+   "glyph": "兵",
+   "kind": "fight"
+  },
+  {
+   "key": "pax_rpg_lm_shamans",
+   "x": 66,
+   "z": -66,
+   "glyph": "巫",
+   "kind": "power"
+  },
+  {
+   "key": "pax_rpg_lm_buffalo",
+   "x": 32,
+   "z": 33,
+   "glyph": "牛",
+   "kind": "beast"
+  },
+  {
+   "key": "pax_rpg_lm_kurgans",
+   "x": -62,
+   "z": -76,
+   "glyph": "墓",
+   "kind": "power"
+  },
+  {
+   "key": "pax_rpg_lm_garden",
+   "x": 0,
+   "z": -83,
+   "glyph": "庭",
+   "kind": "nature"
+  },
+  {
+   "key": "pax_rpg_lm_kennels",
+   "x": 35,
+   "z": -74,
+   "glyph": "犬",
+   "kind": "beast"
+  },
+  {
+   "key": "pax_rpg_lm_masters",
+   "x": 55,
+   "z": 57,
+   "glyph": "匠",
+   "kind": "craft"
+  },
+  {
+   "key": "pax_rpg_lm_clans",
+   "x": -54,
+   "z": 58,
+   "glyph": "族",
+   "kind": "home"
+  },
+  {
+   "key": "pax_rpg_lm_forge",
+   "x": -32,
+   "z": -24,
+   "glyph": "鍛",
+   "kind": "craft"
+  },
+  {
+   "key": "pax_rpg_lm_stable",
+   "x": 76,
+   "z": 21,
+   "glyph": "馬",
+   "kind": "beast"
+  },
+  {
+   "key": "pax_rpg_lm_goblins",
+   "x": 46,
+   "z": -48,
+   "glyph": "鬼",
+   "kind": "home"
+  }
+ ],
+ "kinds": {
+  "gate": "#7cc8ff",
+  "fight": "#ff3a4a",
+  "trade": "#ffb547",
+  "rest": "#ffd27a",
+  "craft": "#e8916b",
+  "power": "#c98cff",
+  "nature": "#7fdca0",
+  "beast": "#d9b98a",
+  "home": "#e8dcc8",
+  "road": "#ff8cc6"
+ }
+}
