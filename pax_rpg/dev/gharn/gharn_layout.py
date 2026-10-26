@@ -1360,32 +1360,36 @@ def masters_street():
         zf = M_N if side < 0 else M_S
         zw = zf - side * 1.0                              # витрина — на тротуаре у стены
         occ += [(xc + 2.9, zf - side * 1.4, 0.5), (xc + 0.2, zf - side * 0.6, 0.7)]   # вывеска, проход в дверь
-        if craft == "tannery":
-            take("@hide_frame", xc - 1.2, zw, yaw(side), 1.2, force=True, c=True)
+        if i % 3 == 1:
+            occ.append((xc - 0.4, zf - side * 1.3, 0.4))   # зазывала
+        Z = lambda d: zf - side * d                      # d — отступ от линии фасада к улице
+        R = yaw(side)
+        if craft == "tannery":                            # высокая рама со шкурами — без навеса
+            take("@hide_frame", xc - 1.2, zw, R, 1.2, force=True, c=True)
             if i % 2:
-                take("@spear_rack", xc + 2.0, zw - side * 0.1, yaw(side), 0.9, s=0.8, force=True, c=True)
-            take("crate", xc - 3.0, zf - side * 0.5, mrng.uniform(0, 360), 0.4, s=1.0, c=True)
+                take("@spear_rack", xc + 2.0, Z(0.9), R, 0.9, s=0.8, force=True, c=True)
         elif craft == "potter":
-            take("pottery_stand" if _has("props/pottery_stand") else "@market_stall_hide", xc - 1.2, zw, yaw(side),
-                 1.2, force=True, c=True)
-            take("awning", xc - 1.2, zf - side * 1.2, yaw(side), 0.1, force=True, c=False)     # навес над товаром
+            take("pottery_stand" if _has("props/pottery_stand") else "@market_stall_hide", xc - 1.2, zw, R, 1.2,
+                 force=True, c=True)
+            take(pick("jar_cluster", "basket"), xc + 2.0, Z(0.6), R + mrng.uniform(-30, 30), 0.7, force=True, c=True)
         elif craft == "brewer":
             for j in range(3):
-                take("barrel_kumis", xc - 2.2 + j * 0.95, zw + side * 0.1, mrng.uniform(0, 360), 0.45, force=True, c=True)
-            take("table_long", xc + 1.6, zw - side * 0.6, yaw(side) + 90, 0.8, s=0.8, force=True, c=True)
-            take("awning", xc - 1.25, zf - side * 1.2, yaw(side), 0.1, force=True, c=False)
+                take("barrel_kumis", xc - 2.2 + j * 0.95, Z(0.9), mrng.uniform(0, 360), 0.45, force=True, c=True)
+            take("table_long", xc + 1.6, Z(0.4), R + 90, 0.8, s=0.8, force=True, c=True)
         elif craft == "carpenter":
-            take("wood_pile", xc - 1.6, zw, yaw(side), 1.0, force=True, c=True)
-            take("cart", xc + 1.8, zw - side * 0.2, yaw(side), 0.9, s=0.7, force=True, c=True)
-        elif craft == "armorer":
-            if _has("props/shield_stand"):
-                take("shield_stand", xc - 1.4, zf - side * 0.5, yaw(side), 1.0, force=True, c=True)
-            else:
-                take("weapon_rack", xc - 1.4, zf - side * 0.3, yaw(side), 1.0, force=True, c=True)
-            take("@spear_rack", xc + 1.6, zw, yaw(side), 0.9, force=True, c=True)
+            take("wood_pile", xc - 1.6, zw, R, 1.0, force=True, c=True)
+            take("cart", xc + 1.8, Z(0.8), R, 0.9, s=0.7, force=True, c=True)
+        elif craft == "armorer":                          # оружейная лавка: щиты у стены, стол с клинками, копья
+            take(pick("shield_stand", "weapon_rack"), xc - 1.4, Z(0.45), R, 1.0, force=True, c=True)
+            if _has("props/weapon_table"):
+                take("weapon_table", xc - 1.4, Z(1.35), R, 0.9, force=True, c=True)
+            take("@spear_rack", xc + 1.9, Z(0.6), R, 0.9, force=True, c=True)
         else:
-            take(pick("cloth_rack", "@market_stall_hide"), xc - 1.0, zw, yaw(side), 1.1, force=True, c=True)
-            take("basket", xc - 2.8, zf - side * 0.5, 0, 0.35, s=1.0, c=True)
+            take(pick("cloth_rack", "@market_stall_hide"), xc - 1.0, zw, R, 1.1, force=True, c=True)
+            if _has("props/cloth_pile"):
+                take("cloth_pile", xc + 2.1, Z(0.55), R, 0.8, force=True, c=True)
+        if craft not in ("tannery",):                     # красный навес над товаром, как на референсе
+            take("awning", xc - 1.25, Z(1.2), R, 0.1, force=True, c=False)
         items.append({"sign": list(sign), "p": [round(xc + 2.9, 2), 0.0, round(zf - side * 1.4, 2)], "r": yaw(side),
                       "c": True})
         proxy("noren", xc + 0.2, 0.0, zf - side * 0.1, yaw(side), c2=(0, 1, 0, 2, 3, 0, 4)[i % 7])
@@ -1394,14 +1398,30 @@ def masters_street():
                                                           # заглушка окна на линии повисла бы в воздухе
         if i % 2 == 0:
             proxy("smoke", xc + 1.5, 13.4 if tall else 7.2, zf + side * 5.0)
-        # у двери — кадка с кустом, у стены — мешки, корзины, ящики (сколько встанет)
-        for dx in ((1.25, -0.85) if pot else ()):
-            if take(pot, xc + 0.2 + dx, zf - side * 0.45, mrng.uniform(0, 360), 0.4, s=mrng.uniform(0.85, 1.0), c=True):
-                break
-        for j in range(4):
-            dx = mrng.choice((-1, 1)) * mrng.uniform(2.4, hx - 0.4)
-            take(mrng.choice(["basket", "sack_grain", "crate", "barrel_water", "@bucket_set", "barrel_kumis"]), xc + dx,
-                 zf - side * mrng.uniform(0.4, 0.7), mrng.uniform(0, 360), 0.4, s=mrng.uniform(0.75, 0.95), c=True)
+        # у двери — зелень: кадка с кустом, куст в бочке, цветы в горшке
+        greens = [g for g in (pot, pick("tub_plant", None), pick("flower_pot", None)) if g]
+        for dx in ((1.2, -0.75) if greens else ()):
+            take(mrng.choice(greens), xc + 0.2 + dx, Z(0.4), mrng.uniform(0, 360), 0.35, s=mrng.uniform(0.85, 1.0),
+                 c=True)
+        # остальное у стены и перед товаром — мелкий товар и тара, сколько встанет (как на референсе — без пустот)
+        small = [q for q in ("fruit_basket", "jar_cluster", "flower_pot") if _has("props/" + q)] + \
+            ["basket", "sack_grain", "crate", "barrel_water", "@bucket_set", "crate_saerith"]
+        rad_of = {"fruit_basket": 0.5, "jar_cluster": 0.65, "flower_pot": 0.3, "crate": 0.4, "crate_saerith": 0.4,
+                  "basket": 0.3, "sack_grain": 0.3, "barrel_water": 0.4, "@bucket_set": 0.4}
+        wt = {"fruit_basket": 4, "jar_cluster": 3, "flower_pot": 1.5, "basket": 1, "sack_grain": 1, "crate": 1,
+              "barrel_water": 1, "@bucket_set": 0.5, "crate_saerith": 0.5}
+        low = ("fruit_basket", "jar_cluster", "basket", "sack_grain", "flower_pot")
+        for x in [xc - hx + 0.5 + k * 0.7 for k in range(int((2 * hx - 1.0) / 0.7) + 1)]:
+            for d in (0.4, 1.55):
+                pool = [q for q in small if d < 1 or q in low]
+                order = sorted(pool, key=lambda q: -wt[q] * mrng.random())   # чаще — фрукты, кувшины, цветы
+                for q in order:                            # первое, что встанет
+                    if take(q, x + mrng.uniform(-0.15, 0.15), Z(d), mrng.uniform(0, 360), rad_of[q],
+                            s=1.0 if q in ("fruit_basket", "jar_cluster", "flower_pot") else mrng.uniform(0.75, 0.95),
+                            c=True):
+                        break
+        for bx in (xc - hx + 0.5, xc + hx - 0.5):          # полотнища со знаком клана под карнизом, по краям фасада
+            proxy("banner_x", bx, 4.7, Z(0.5), 0, ln=1.5, c2=(0, 1, 3)[(i + int(bx)) % 3])
         # бумажные фонари под карнизом вдоль фасада
         items.append({"lanterns": [round(xc - hx + 0.7, 2), round(zf - side * 0.35, 2), round(xc + hx - 0.7, 2),
                                    round(zf - side * 0.35, 2), 3.3, 0, 0], "seed": int(xc * 7 + side), "p": [xc, 0, zf],
