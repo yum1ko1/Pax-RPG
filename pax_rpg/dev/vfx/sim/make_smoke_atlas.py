@@ -1,5 +1,5 @@
 """Кадры клуба дыма (smoke_sim.py, свет с 6 сторон) → флипбук 8×8 для частиц дыма + карта движения.
-  python make_smoke_atlas.py <папка кадров> <имя> [ширина кадра]
+  python make_smoke_atlas.py <папка кадров> <имя> [ширина кадра] [доля ширины кадра симуляции]
 <имя>_a.png (RGBA): R — свет справа, G — сверху, B — спереди (со стороны камеры), A — плотность;
 <имя>_b.png (RGB):  R — слева, G — снизу, B — сзади. Освещённость — без альфы (сколько света дошло в эту точку).
 <имя>_flow.png (RG): куда сдвигается каждая точка к следующему кадру — шейдер «дотягивает» кадр к следующему.
@@ -13,6 +13,7 @@ from PIL import Image
 
 src, name = sys.argv[1], sys.argv[2]
 CW = int(sys.argv[3]) if len(sys.argv) > 3 else 160
+CROP = float(sys.argv[4]) if len(sys.argv) > 4 else 0.7   # сторона квадрата — доля ширины кадра симуляции
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 OUT = os.path.join(ROOT, "mods", "pax_rpg", "textures", "vfx", "sim")
 os.makedirs(OUT, exist_ok=True)
@@ -44,19 +45,27 @@ for f in frames:
     full.append(np.stack(maps + [al], -1))
 h, w = full[0].shape[:2]
 ys = np.arange(h, dtype=np.float32)
-cy = np.array([float((r[..., 6].sum(1) * ys).sum() / max(r[..., 6].sum(), 1e-6)) for r in full])
+cy = np.array([float(((r[..., 6] ** 2).sum(1) * ys).sum() / max((r[..., 6] ** 2).sum(), 1e-6)) for r in full])  # по густой шапке клуба
 t = np.arange(L)
 cy = np.polyval(np.polyfit(t, cy, 3), t)            # плавная траектория — без дрожи кадра
+n = int(round(w * CROP))
+x0 = (w - n) // 2
+e = np.linspace(0.0, 1.0, n, dtype=np.float32)
+vig = np.clip(np.minimum(e, 1.0 - e) / 0.12, 0.0, 1.0)
+vig = (vig * vig * (3.0 - 2.0 * vig))
+vig = np.minimum(vig[:, None], vig[None, :])        # мягко к краю квадрата: хвост клуба не обрезан ножом
 raw = []
 for r, c in zip(full, cy):
-    y0 = int(round(c - w / 2))
-    pad = np.zeros((w, w, 7), np.float32)
-    a0, a1 = max(y0, 0), min(y0 + w, h)
-    pad[a0 - y0:a1 - y0] = r[a0:a1]
-    raw.append(cv2.resize(pad, (CW, CW), interpolation=cv2.INTER_AREA))
+    y0 = int(round(c - n / 2))
+    pad = np.zeros((n, n, 7), np.float32)
+    a0, a1 = max(y0, 0), min(y0 + n, h)
+    pad[a0 - y0:a1 - y0] = r[a0:a1, x0:x0 + n]
+    pad[..., 6] *= vig
+    raw.append(np.stack([cv2.resize(pad[..., c], (CW, CW), interpolation=cv2.INTER_AREA) for c in range(7)], -1))
 edge = max(float(np.concatenate([r[[0, -1], :, 6].ravel(), r[:, [0, -1], 6].ravel()]).max()) for r in raw)
 print("центр клуба, px: %.0f → %.0f; плотность на краю кадра %.2f" % (cy[0], cy[-1], edge))
-pk = float(np.percentile(np.stack([r[..., :6] for r in raw])[np.stack([r[..., 6] for r in raw]) > 0.05], 99.5))
+# освещённость = свет/плотность; на тонком краю деление раздувает её — норма по 98% там, где дым заметен
+pk = float(np.percentile(np.stack([r[..., :6] for r in raw])[np.stack([r[..., 6] for r in raw]) > 0.15], 98.0))
 print("кадр", CW, "пик света", pk)
 A = np.zeros((CW * G, CW * G, 4), np.float32)
 B = np.zeros((CW * G, CW * G, 3), np.float32)

@@ -5,6 +5,7 @@ var mod: Node
 var out_dir := "/tmp"
 var hour := 13.0
 var old := false
+var flip := -1.0
 var frame := 0
 var loc: Node
 var cam := Vector3.ZERO
@@ -18,6 +19,8 @@ func _initialize() -> void:
 			out_dir = a.trim_prefix("--out=")
 		if a.begins_with("--hour="):
 			hour = float(a.trim_prefix("--hour="))
+		if a == "--flip":
+			flip = 1.0
 		if a == "--old":
 			old = true
 	root.size = Vector2i(1280, 720)
@@ -68,7 +71,7 @@ func _tick() -> void:
 		_box(view, Vector3(0.7, 0.9, 0.7), base + Vector3(-2.6, 0.45, -1.0), Color(0.2, 0.19, 0.18))
 		var l: OmniLight3D = vfx.call("fire", view, base + Vector3(-2.6, 0.99, -1.0), 0.75, true, true)
 		l.light_energy = 2.6
-		cam = base - fwd * 9.0 + side * 1.5 + Vector3(0, 2.6, 0)
+		cam = base + (fwd * 9.0 - side * 1.5) * flip + Vector3(0, 2.6, 0)
 		look = base + Vector3(0, 4.2, 0)
 	if frame >= 30:
 		loc.call("set_hour", hour)

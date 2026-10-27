@@ -13,7 +13,8 @@ uniform sampler2D flow_tex : hint_default_black, filter_linear, repeat_disable;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform vec2 flow_uv = vec2(0.1, 0.1);         // make_smoke_atlas.py: FLOW_UV
 uniform float density = 1.0;
-uniform float light_k = 1.0;
+uniform float light_k = 2.5;                   // карты света нормированы по тонкому краю — плотный клуб в них темнее
+uniform float albedo_k = 2.2;                  // цвет частицы (как у прежнего дыма) → настоящая светлота дыма
 uniform float soft = 0.6;                      // мягкий срез о крыши и землю, м
 varying vec3 v_right;
 varying vec3 v_up;
@@ -53,7 +54,7 @@ void fragment() {
 	m_pos = a.rgb;
 	m_neg = b;
 	float amb = (a.r + a.g + a.b + b.r + b.g + b.b) / 6.0;          // рассеянный свет неба — по средней освещённости
-	ALBEDO = COLOR.rgb * (0.25 + 0.75 * amb);
+	ALBEDO = clamp(COLOR.rgb * albedo_k, 0.0, 1.0) * (0.35 + 0.65 * amb);
 	NORMAL = vec3(0.0, 0.0, 1.0);
 	float d = textureLod(depth_tex, SCREEN_UV, 0.0).r;
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
@@ -72,5 +73,5 @@ void light() {
 	vec3 m = mix(m_neg, m_pos, step(0.0, l));
 	float sixway = dot(w, m);
 	float amb = (m_pos.r + m_pos.g + m_pos.b + m_neg.r + m_neg.g + m_neg.b) / 6.0;
-	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * sixway / max(0.25 + 0.75 * amb, 0.05) * light_k / PI;
+	DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * sixway / max(0.35 + 0.65 * amb, 0.05) * light_k / PI;
 }
