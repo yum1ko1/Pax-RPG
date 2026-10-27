@@ -7,7 +7,10 @@ extends RefCounted
 ##   impact — вспышка-звезда (2–3 кадра, почти весь свет удара — в них), сфера-вспышка, ударный конус вперёд
 ##            по удару (раскрывается и тает), кольцо волны поперёк удара, искры по удару (не вверх);
 ##   landing — приземление спецприёма (прыжок орка, «Сокрушение» рыцаря): вспышка у земли, кольцо по земле, стена
-##            ударной волны (светящийся цилиндр расходится и оседает в землю), корона-воронка пыли, купол воздуха.
+##            ударной волны (светящийся цилиндр расходится и оседает в землю), корона-воронка пыли, купол воздуха;
+##   parry  — парирование: белая звезда, блик-штрих, кольцо, широкий веер светлых искр;
+##   block  — блок: тусклая вспышка, маленькое кольцо-толчок, горсть рыжих искр;
+##   trail  — след клинка на взмахе (промах): серп прорисовывается по ходу удара и тает.
 ## Сетки строятся один раз (единичные, по оси X), материалы общие; живые эффекты тикает один tick() из location.gd.
 
 const SH := "shaders/vfx_hit.gdshader"
@@ -250,6 +253,69 @@ func landing(at: Vector3, col: Color, size := 3.0, dust := Color(0.62, 0.52, 0.4
 		_apply(e)
 
 
+## Парирование — звонкий металл: белая вспышка-звезда (крупнее и короче, чем у попадания), горизонтальный блик-штрих,
+## кольцо поперёк удара, широкий веер светлых искр навстречу удару. at — где встретились клинки, dir — куда шёл удар врага.
+func parry(at: Vector3, dir: Vector3, col: Color) -> void:
+	if not is_instance_valid(parent):
+		return
+	var d := -dir.normalized() if dir.length() > 0.01 else Vector3.BACK
+	var b := _basis(d)
+	var hot := col.lerp(Color(1.0, 0.84, 0.55), 0.65)       # металл: цвет энергии почти выбелен
+	var star := _node(_quad(), _mat("impact", 0, hot, 3.8))
+	star.global_position = at
+	star.set_instance_shader_parameter(&"roll", randf_range(-0.2, 0.2))
+	_live.append({"n": star, "t": 0.0, "life": 0.09, "kind": "star", "s": 1.8})
+	var glint := _node(_quad(), _mat("impact", 0, hot, 3.2))
+	glint.global_position = at
+	_live.append({"n": glint, "t": 0.0, "life": 0.16, "kind": "glint", "s": 3.4})
+	var ring := _node(_quad(), _mat("ring", 2, hot, 2.4))
+	ring.global_transform = Transform3D(Basis(b.z, b.y, b.x), at)
+	_live.append({"n": ring, "t": 0.0, "life": 0.22, "kind": "ring", "s": 1.7, "b": ring.global_transform.basis})
+	var s := b.z                                 # искры брызжут вдоль клинков — веером в стороны, а не в лицо врагу
+	for k: float in [1.0, -1.0]:
+		_sparks(at, (s * k + d * 0.35 + Vector3.UP * 0.25).normalized(), Color(1.0, 0.86, 0.62), 18, 32.0,
+			Vector2(7.0, 16.0), 0.24, 6.0)
+	for e: Dictionary in _live.slice(_live.size() - 3):
+		_apply(e)
+
+
+## Блок — удар принят на клинок: тусклая короткая вспышка, толчок (маленькое кольцо), горсть рыжих искр — падают.
+func block(at: Vector3, dir: Vector3, col: Color) -> void:
+	if not is_instance_valid(parent):
+		return
+	var d := -dir.normalized() if dir.length() > 0.01 else Vector3.BACK
+	var b := _basis(d)
+	var dull := col.lerp(Color(1.0, 0.55, 0.28), 0.55)
+	var star := _node(_quad(), _mat("impact", 0, dull, 1.8))
+	star.global_position = at
+	star.set_instance_shader_parameter(&"roll", randf_range(-0.5, 0.5))
+	_live.append({"n": star, "t": 0.0, "life": 0.07, "kind": "star", "s": 0.8})
+	var ring := _node(_quad(), _mat("ring", 2, dull, 1.1))
+	ring.global_transform = Transform3D(Basis(b.z, b.y, b.x), at)
+	_live.append({"n": ring, "t": 0.0, "life": 0.16, "kind": "ring", "s": 0.9, "b": ring.global_transform.basis})
+	var s := b.z * (1.0 if randf() < 0.5 else -1.0)  # горсть искр соскальзывает с клинка в одну сторону
+	_sparks(at, (s + d * 0.3 + Vector3.UP * 0.5).normalized(), Color(1.0, 0.5, 0.2), 10, 35.0, Vector2(3.0, 7.0),
+		0.3, 12.0)
+	for e: Dictionary in _live.slice(_live.size() - 2):
+		_apply(e)
+
+
+## След клинка (взмах, промах): серп из маски slash прорисовывается по ходу взмаха и тает. at — грудь героя,
+## fwd — куда он бьёт, side — +1 взмах слева направо, −1 справа налево; tilt — наклон серпа, рад; size — длина, м.
+func trail(at: Vector3, fwd: Vector3, col: Color, side := 1.0, tilt := 0.35, reach := 1.2, size := 2.6) -> void:
+	if not is_instance_valid(parent):
+		return
+	var f := Vector3(fwd.x, 0.0, fwd.z)
+	f = f.normalized() if f.length() > 0.01 else Vector3.FORWARD
+	var r := f.cross(Vector3.UP).normalized() * signf(side)
+	var bx := r.rotated(f, tilt * signf(side))
+	var by := Vector3.UP.rotated(f, tilt * signf(side))
+	var arc := _node(_quad(), _mat("slash", 2, col, 2.6))
+	arc.global_transform = Transform3D(Basis(bx * size, by * size * 0.32, f), at + f * reach)
+	_live.append({"n": arc, "t": 0.0, "life": 0.3, "kind": "trail"})
+	_apply(_live[-1])
+
+
 ## Осколки приземления: крупные камни (кувыркаются, падают), раскалённые сколы цвета приёма, мелкая крошка.
 func _shards(at: Vector3, size: float, dust: Color, col: Color) -> void:
 	var k := size / 3.0
@@ -308,19 +374,20 @@ func _chunks(at: Vector3, amount: int, c: Color, box: Vector3, speed: Vector2, s
 
 
 ## Искры по направлению удара: узкий конус вперёд, быстрые, со шлейфом; к концу жизни тоньше — гаснут, а не висят.
-func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
+func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int, spread := 28.0, speed := Vector2(7.0, 15.0),
+		life := 0.2, fall := 2.0) -> void:
 	var p := GPUParticles3D.new()
 	p.one_shot = true
 	p.explosiveness = 0.95
 	p.amount = amount
-	p.lifetime = 0.2
+	p.lifetime = life
 	p.local_coords = false
 	var pm := ParticleProcessMaterial.new()
 	pm.direction = dir
-	pm.spread = 28.0
-	pm.initial_velocity_min = 7.0
-	pm.initial_velocity_max = 15.0
-	pm.gravity = Vector3(0.0, -2.0, 0.0)
+	pm.spread = spread
+	pm.initial_velocity_min = speed.x
+	pm.initial_velocity_max = speed.y
+	pm.gravity = Vector3(0.0, -fall, 0.0)
 	pm.damping_min = 2.0
 	pm.damping_max = 5.0
 	var shrink := Curve.new()
@@ -370,6 +437,15 @@ func _apply(e: Dictionary) -> void:
 			mi.scale = Vector3(s, s, 1.0)
 			mi.set_instance_shader_parameter(&"glow", 2.4 * (1.0 - t) * (1.0 - t))
 			mi.set_instance_shader_parameter(&"progress", t * 0.55)
+		"glint":                                # блик парирования: тонкий штрих поперёк кадра, вытягивается и гаснет
+			var s := float(e.s) * lerpf(0.5, 1.2, _out(t))
+			mi.scale = Vector3(s, s * 0.09, 1.0)
+			mi.set_instance_shader_parameter(&"glow", 2.2 * (1.0 - t) * (1.0 - t))
+			mi.set_instance_shader_parameter(&"progress", t * 0.4)
+		"trail":                                # след клинка: прорисовывается по ходу взмаха, держится, тает
+			mi.set_instance_shader_parameter(&"reveal", clampf(t / 0.3, 0.0, 1.0) * 1.1)
+			mi.set_instance_shader_parameter(&"progress", _out(clampf((t - 0.3) / 0.7, 0.0, 1.0)))
+			mi.set_instance_shader_parameter(&"glow", 1.6 if t < 0.3 else lerpf(1.6, 0.5, (t - 0.3) / 0.7))
 		"orb":                                  # шар света раздувается и рвётся шумом
 			var s := float(e.s) * lerpf(0.3, 1.0, _out(t))
 			mi.scale = Vector3(s, s, s)
