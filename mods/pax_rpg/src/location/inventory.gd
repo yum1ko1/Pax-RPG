@@ -17,6 +17,7 @@ const ItemTip := preload("res://mods/pax_rpg/src/location/inv/item_tip.gd")
 const InfoTip := preload("res://mods/pax_rpg/src/location/inv/info_tip.gd")
 const W := 1536.0
 const H := 1024.0
+const WW := 1820.0                   # ширина картинки фона: 16:9 при высоте H
 const TK := 1.25                     # окна выбора вещи / оружия: пиксели прототипа → единицы макета
 const TIP_K := 1.0                   # подсказки (выше экрана — ещё уменьшаются, см. _tk)
 const PIN_S := 1.2                   # держать курсор на вещи, чтобы закрепить подсказку
@@ -86,7 +87,8 @@ func setup(m: PaxMod) -> void:
 	_frame.size = Vector2(W, H)
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
-	ui.pic(_frame, "stage.jpg", Rect2(0, 0, W, H), false)
+	# макет 3:2, по бокам — дорисованный фон до 16:9 (stage_wide = backdrop + stage со смягчённым краем)
+	ui.pic(_frame, "stage_wide.jpg", Rect2(-(WW - W) * 0.5, 0, WW, H), false)
 	_hero_k = ui.pic(_frame, "hero_katana.jpg", _r(HERO_PANEL), false)
 	_hero_k.modulate.a = 0.0
 	_build_weapons()
