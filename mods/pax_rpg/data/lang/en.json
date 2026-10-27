@@ -376,5 +376,18 @@
 	"pax_rpg_voice_listening": "Listening… (release B)",
 	"pax_rpg_voice_thinking": "Recognizing…",
 	"pax_rpg_voice_silence": "Didn't catch that",
-	"pax_rpg_voice_nobody": "Nobody answered — call a townsperson by name"
+	"pax_rpg_voice_nobody": "Nobody answered — call a townsperson by name",
+	"pax_rpg_intro_skip": "ESC — skip",
+	"pax_rpg_intro_iru": "Iru",
+	"pax_rpg_intro_selune": "Selune",
+	"pax_rpg_intro_card": "Yuruma",
+	"pax_rpg_intro_card_sub": "The last day of the unbroken sky",
+	"pax_rpg_intro_1": "Stop, sister.",
+	"pax_rpg_intro_2": "The sky is not eternal…",
+	"pax_rpg_intro_3": "Neither are we.",
+	"pax_rpg_intro_4": "I will not fade.",
+	"pax_rpg_intro_5": "The world will not pay…",
+	"pax_rpg_intro_6": "…for your fear.",
+	"pax_rpg_intro_7": "The world cannot bear this burden…",
+	"pax_rpg_intro_8": "Arise."
 }

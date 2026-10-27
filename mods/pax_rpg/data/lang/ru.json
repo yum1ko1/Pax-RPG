@@ -376,5 +376,18 @@
 	"pax_rpg_voice_listening": "Слушаю… (отпустите B)",
 	"pax_rpg_voice_thinking": "Распознаю…",
 	"pax_rpg_voice_silence": "Ничего не расслышал",
-	"pax_rpg_voice_nobody": "Никто не откликнулся — назовите жителя по имени"
+	"pax_rpg_voice_nobody": "Никто не откликнулся — назовите жителя по имени",
+	"pax_rpg_intro_skip": "ESC — пропустить",
+	"pax_rpg_intro_iru": "Иру",
+	"pax_rpg_intro_selune": "Селунэ",
+	"pax_rpg_intro_card": "Юрума",
+	"pax_rpg_intro_card_sub": "Последний день целого неба",
+	"pax_rpg_intro_1": "Остановись, сестра.",
+	"pax_rpg_intro_2": "Небо не вечно…",
+	"pax_rpg_intro_3": "Как и мы.",
+	"pax_rpg_intro_4": "Я не исчезну.",
+	"pax_rpg_intro_5": "Мир не заплатит…",
+	"pax_rpg_intro_6": "…за твой страх.",
+	"pax_rpg_intro_7": "Мир не выдержит этой ноши…",
+	"pax_rpg_intro_8": "Восстань."
 }

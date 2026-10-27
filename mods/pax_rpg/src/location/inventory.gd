@@ -1,48 +1,71 @@
 extends Control
-## Инвентарь (TAB), макет «Инвентарь A»: живой герой в центре на фоне лунного диска (своя камера видит только слой героя
-## — gfx.gd RIM_LAYER; мышью — повернуть), слева оружие (Разрубатель — надет; клинок иая; талисман), справа броня
-## 2 × 3 (плащ — надеть / снять щелчком, hero.toggle_slot) и состояние — числа здоровья, концентрации и опыта, которых нет
-## на HUD; слева под оружием — характеристики персонажа (config/hero.json → character.attributes) со знаками-иероглифами. Панели — shaders/ui_panel.gdshader (лак, золотая рамка). Мир на паузе, пока открыт (location.gd).
+## Инвентарь (TAB) — экран из прототипа pax_rpg/reference/inventory/tooltip_prototype (макет 1536 × 1024, масштаб под
+## экран): в центре арт Тянь Лун (копьё / катана — по основному оружию), над ней пассив, под ней круги ранга и
+## репутации; слева окна оружия (основное, второе, медальон смены) с приёмами; справа 8 слотов снаряжения и
+## характеристики. Наведение на вещь — подсказка вещи, держать курсор 1,2 с — она закрепляется (кольцо в углу), тогда
+## статы и бонусы сета раскрывают мини-подсказки. Клик по слоту — выбор вещи, по окну оружия — выбор оружия.
+## Пока только показ: вещи и оружие на бой не влияют (сумка — inv/equip.gd, надетое — настройка inv_equipped).
+## Мир на паузе, пока открыт (location.gd).
 
 signal closed
-signal weapon_equipped(slot: String, id: String)   # окно оружия: надето другое (location.gd — катана на поясе)
+signal weapon_equipped(slot: String, id: String)   # совместимость с location.gd (в этом экране бой не меняется)
 signal stat_added(key: String)       # «+» у характеристики — вложить очко (location.gd → progress.add_stat)
 
-const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
-const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
-const WeaponView := preload("res://mods/pax_rpg/src/location/weapon_view.gd")
-const HERO_LAYER := 1 << 19
-const W := 1920.0
-const H := 1080.0
+const Ui := preload("res://mods/pax_rpg/src/location/inv/ui.gd")
+const Equip := preload("res://mods/pax_rpg/src/location/inv/equip.gd")
+const ItemTip := preload("res://mods/pax_rpg/src/location/inv/item_tip.gd")
+const InfoTip := preload("res://mods/pax_rpg/src/location/inv/info_tip.gd")
+const W := 1536.0
+const H := 1024.0
+const TK := 1.25                     # окна выбора вещи / оружия: пиксели прототипа → единицы макета
+const TIP_K := 1.0                   # подсказки (выше экрана — ещё уменьшаются, см. _tk)
+const PIN_S := 1.2                   # держать курсор на вещи, чтобы закрепить подсказку
+const WSLOTS := [{"name": "Основное оружие", "tag": "ОСНОВНОЕ", "rect": [377, 150, 522, 411], "ui": [370, 321, 556, 418], "sk": [460, 333.5, 515.5, 393]},
+	{"name": "Второе оружие", "tag": "ВТОРОЕ", "rect": [377, 417, 522, 650], "ui": [370, 561, 556, 657], "sk": [460, 574, 515.5, 633.5]}]
+const HERO_PANEL := [548, 138, 938, 928]
+const SWAP_AT := Vector2(413, 414)
+const PAS_RECT := [575, 163, 635, 225]
+const RANK_RECT := [598, 793, 706, 901]
+const REP_RECT := [776, 793, 884, 901]
+const GOLD_PLAQUE := [636, 663, 846, 710]          # плашки золота и уровня (на макете)
+const LVL_PLAQUE := [616, 708, 867, 760]
+const ATTR_Y := [245, 307, 365, 427, 495, 565, 635]
+const ATTR_X := [1330, 1505]
 
 var mod: PaxMod
-var _frame: Control                  # макет 1920 × 1080, масштабируется под экран
-var _bg: Control
-var _pv: SubViewport
-var _cam: Camera3D
-var _player: Node3D
-var _body: Node3D
-var _hero: Object                    # hero.gd (toggle_slot, worn)
-var _yaw := 0.0
-var _drag := false
-var _stats: VBoxContainer
-var _attrs: VBoxContainer
-var _cape: Button
-var _panel_sh: Shader
-var _serif: Font
-var _sans: Font
-var _cjk: Font
-var _t := 0.0
-var _points := 0                     # свободные очки характеристик
-var _main_stat := ""
-var _pivot: Node3D                   # студия превью: шарнир копии героя (мышью — крутить)
-var _copy: Node3D
-var _bg_tex: Texture2D               # textures/inventory_bg.jpg (если есть)
-var _wv: WeaponView                  # окно оружия (щелчок по слоту оружия)
-var _name_l: Label                   # имя героя (у каждого своё: character.name_key)
-var _main_b: Button
-var _iai_b: Button
-var _st: Dictionary = {}                 # главная характеристика героя — ★ у её строки
+var ui := Ui.new()
+var eq := Equip.new()
+var _frame: Control
+var _st: Dictionary = {}
+var _lvl := 1
+var _attrs: Dictionary = {}
+var _points := 0
+var _weapons: Array = ["spear", "katana"]          # [основное, второе]
+var _slot_art: Array = []                          # узлы картинок в слотах снаряжения
+var _hero_k: TextureRect                           # арт с катаной поверх арта с копьём
+var _wicons: Array = []
+var _wsk: Array = []
+var _rank_pic: TextureRect
+var _rep_pic: TextureRect
+var _attr_box: Control
+var _gold_l: Label
+var _lvl_l: Label
+var _layer: Control                                # окна подсказок и выбора — поверх всего, масштаб TK
+# подсказка: одна на экран (вещь или описание)
+var _tip: Control = null
+var _tip_id := ""
+var _tk := TIP_K
+var _hold := 0.0
+var _pinned := false
+var _inside_t := 0.0
+var _mini: Control
+var _mini_key := ""
+var _menu: Control = null
+var _menu_id := ""
+var _menu_tiles: Array = []                        # [{rect, id, cb}]
+var _menu_cap: Label
+var _rel: Dictionary = {}                          # отношения империй (−100…+100)
+var _progress := {"combo": 0, "leg": 0, "night": 0}
 
 
 func setup(m: PaxMod) -> void:
@@ -50,14 +73,12 @@ func setup(m: PaxMod) -> void:
 	name = "PaxRpgInventory"
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # картинки ui.tex — с mip-уровнями: чётко при любом масштабе
 	visible = false
-	_panel_sh = m.shader("shaders/ui_panel.gdshader")
-	_bg_tex = m.texture("textures/inventory_bg.jpg")
-	_serif = Hud._sys(["Cormorant Garamond", "Georgia", "Palatino Linotype", "Times New Roman"], 700)
-	_sans = Hud._sys(["Bahnschrift", "Segoe UI", "Arial"], 400)
-	_cjk = Hud._sys(["Yu Mincho", "MS Mincho", "Noto Serif JP", "Noto Serif CJK JP", "SimSun"], 700)
+	ui.setup(m)
+	eq.load_data(m)
 	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.04, 0.1, 0.96)
+	dim.color = Color(0.02, 0.01, 0.015, 1.0)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
@@ -65,28 +86,52 @@ func setup(m: PaxMod) -> void:
 	_frame.size = Vector2(W, H)
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
-	_bg = Control.new()
-	_bg.size = Vector2(W, H)
-	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bg.draw.connect(_draw_bg)
-	_frame.add_child(_bg)
-	_build_preview()
-	_build_tabs()
-	_build_left()
-	_build_right()
-	_build_hints()
-	_wv = WeaponView.new()
-	_wv.setup(m, _panel_sh, _serif, _sans, _cjk)
-	_wv.equipped.connect(func(slot: String, id: String) -> void:
-		weapon_equipped.emit(slot, id)
-		_refresh_slots())
-	_frame.add_child(_wv)
-	_refresh_slots()
+	ui.pic(_frame, "stage.jpg", Rect2(0, 0, W, H), false)
+	_hero_k = ui.pic(_frame, "hero_katana.jpg", _r(HERO_PANEL), false)
+	_hero_k.modulate.a = 0.0
+	_build_weapons()
+	_build_slots()
+	ui.pic(_frame, "pas_dance.jpg", _r(PAS_RECT), false)
+	_rank_pic = ui.pic(_frame, "rank_0.png", _r(RANK_RECT))
+	_rep_pic = ui.pic(_frame, "rep_2.png", _r(REP_RECT))
+	_gold_l = ui.label(_frame, "0", ui.serif, 22, Color(0.95, 0.84, 0.55), Vector2.ZERO)
+	_lvl_l = ui.label(_frame, "", ui.serif, 22, Ui.TEXT, Vector2.ZERO)
+	_attr_box = Control.new()
+	_attr_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_frame.add_child(_attr_box)
+	_layer = Control.new()
+	_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_frame.add_child(_layer)
+	_mini = Control.new()
+	_mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mini.visible = false
+	_mini.scale = Vector2(TIP_K, TIP_K)
+	_mini.z_index = 20
+	_frame.add_child(_mini)
+	# подсказка внизу слева — как в прототипе: плашка с тонкой золотой рамкой
+	var ht := "Наведите на вещь — подсказка, клик — выбрать другую"
+	var hf := ui.caps(12, 0.1)
+	var hw := ui.text_w(ht, hf, 12) + 18
+	var hb := Control.new()
+	hb.position = Vector2(W * 0.012, H * (1.0 - 0.016) - 26)
+	hb.size = Vector2(hw, 26)
+	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hb.draw.connect(func() -> void:
+		hb.draw_rect(Rect2(Vector2.ZERO, hb.size), Color(0.04, 0.024, 0.027, 0.72))
+		hb.draw_rect(Rect2(Vector2.ZERO, hb.size), Ui.GOLD_DIM, false, 1.0))
+	_frame.add_child(hb)
+	ui.label(hb, ht, hf, 12, Ui.TEXT, Vector2(9, 5))
 	resized.connect(_fit)
 
 
-func _tr(k: String) -> String:
-	return mod.tr_key(k)
+func _center(l: Label, a: Array) -> void:
+	var r := _r(a)
+	l.size = ui.serif.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, l.get_theme_font_size("font_size"))
+	l.position = r.get_center() - l.size * 0.5
+
+
+func _r(a: Array) -> Rect2:
+	return Rect2(float(a[0]), float(a[1]), float(a[2]) - float(a[0]), float(a[3]) - float(a[1]))
 
 
 func _fit() -> void:
@@ -95,503 +140,703 @@ func _fit() -> void:
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
 
 
-## Открыть: кто герой и что показать (st — те же числа, что у HUD: hp_abs, hp_max, conc, level, xp_abs, xp_need;
-## attributes — характеристики персонажа из config/hero.json).
-func open(view: SubViewport, player: Node3D, body: Node3D, hero: Object, st: Dictionary) -> void:
-	_player = player
-	_body = body
-	_hero = hero
-	_yaw = 0.0
-	_ensure_model(str(st.get("model", "models/knight.glb")))
-	if is_instance_valid(_name_l):
-		_name_l.text = _tr(str(st.get("name_key", "pax_rpg_hero_name")))
-	_refresh_slots()
-	_pv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_fill_stats(st)
-	_main_stat = str(st.get("main_stat", ""))
+## Экран закрыт целиком (непрозрачный фон под макетом) — location.gd тогда не рисует 3D-мир под инвентарём.
+func covers_screen() -> bool:
+	return visible
+
+
+## Открыть: st — те же числа, что у HUD (level, attributes, stat_points, gold, main_stat…).
+func open(_view: SubViewport, _player: Node3D, _body: Node3D, _hero: Object, st: Dictionary) -> void:
 	_st = st
-	_wv.close()
+	_lvl = maxi(1, int(st.get("level", 1)))
+	_attrs = (st.get("attributes", {}) as Dictionary).duplicate()
 	_points = int(st.get("stat_points", 0))
-	_fill_attrs(st.get("attributes", {}) as Dictionary)
-	_update_cape()
+	var loot: Variant = mod.get_setting("inv_loot", [])
+	eq.build_bag(_lvl, loot if loot is Array else [])
+	var saved: Variant = mod.get_setting("inv_equipped", [])
+	eq.equipped = []
+	for k: int in eq.slots.size():
+		var id := "samurai-%d" % int((eq.slots[k] as Dictionary)["demo"]) if bool(eq.d.get("test_library", false)) else ""
+		if saved is Array and k < (saved as Array).size() and not eq.find(k, str((saved as Array)[k])).is_empty():
+			id = str((saved as Array)[k])
+		eq.equipped.append(id)
+	var ws: Variant = mod.get_setting("inv_weapons", [])
+	_weapons = (ws as Array).duplicate() if ws is Array and (ws as Array).size() == 2 else ["spear", "katana"]
+	var rel: Variant = mod.get_setting("reputation", {})
+	_rel = rel if rel is Dictionary else {}
+	_close_tip()
+	_close_menu()
+	_refresh()
 	visible = true
 	_fit()
 
 
-## Вся геометрия героя (тело, меч, плащ, надетое) — на слое HERO_LAYER: камера инвентаря видит только его.
-func _hero_layer(root: Node) -> void:
-	if not is_instance_valid(root):
-		return
-	var stack: Array[Node] = [root]
-	while not stack.is_empty():
-		var n: Node = stack.pop_back()
-		stack.append_array(n.get_children())
-		if n is VisualInstance3D:
-			(n as VisualInstance3D).layers |= HERO_LAYER
-
-
-## Иконка оружия (снимок его 3D-модели, weapon_view.gd → icon) в квадрат слота вместо знака.
-func _slot_icon(b: Button, id: String) -> void:
-	if not is_instance_valid(b) or not b.has_meta(&"box"):
-		return
-	var box := b.get_meta(&"box") as Control
-	for c: Node in box.get_children():
-		if c is Label:
-			c.queue_free()                               # иероглиф — убрать
-	var tr := TextureRect.new()
-	tr.texture = _wv.icon(id)
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.size = box.size
-	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(tr)
-
-
-## Слоты оружия слева — по надетому (настройка equipped_weapons): картинка, имя, приёмы. Пересобираются при смене.
-var _weapons: Dictionary = {}
-
-
-func _equipped(slot: String, fallback: String) -> String:
-	var saved: Variant = mod.get_setting("equipped_weapons", {})
-	return str((saved as Dictionary).get(slot, fallback)) if saved is Dictionary else fallback
-
-
-func _refresh_slots() -> void:
-	if _weapons.is_empty():
-		var p: Variant = JSON.parse_string(mod.read_text("config/weapons.json"))
-		_weapons = p if p is Dictionary else {}
-	for slot: String in ["main", "iai"]:
-		var id := _equipped(slot, "cleaver" if slot == "main" else "katana")
-		var w: Dictionary = _weapons.get(id, {}) if _weapons.get(id, {}) is Dictionary else {}
-		var title := _tr(str(w.get("name", ""))) if str(w.get("name", "")) != "" else id
-		var sub := ""
-		for sk: Variant in w.get("skills", []):
-			if sk is Array and (sk as Array).size() > 0:
-				sub += (" · " if sub != "" else "") + _tr(str((sk as Array)[0]))
-		if slot == "main":
-			if is_instance_valid(_main_b):
-				_main_b.queue_free()
-			_main_b = _slot(Rect2(90, 330, 440, 124), str(w.get("glyph", "斬")), Color(1.0, 0.71, 0.28), _tr("pax_rpg_inv_main"),
-				title, sub, true, false)
-			_main_b.pressed.connect(_open_weapon.bind("main"))
-			_slot_icon(_main_b, id)
-		else:
-			if is_instance_valid(_iai_b):
-				_iai_b.queue_free()
-			_iai_b = _slot(Rect2(90, 474, 440, 96), str(w.get("glyph", "居")), Hud.PINK, _tr("pax_rpg_inv_iai"), title, "", false, false)
-			_iai_b.pressed.connect(_open_weapon.bind("iai"))
-			_slot_icon(_iai_b, id)
-
-
-## Окно оружия для слота: модель, урон, масштабирование, способности, выбор внизу.
-func _open_weapon(slot: String) -> void:
-	_wv.open(slot, _st.get("attributes", {}) as Dictionary, float(_st.get("level_mult", 1.0)))
-
-
-## Esc: сначала закрывает окно оружия; true — закрыл (инвентарь остаётся открытым).
 func back() -> bool:
-	if is_instance_valid(_wv) and _wv.visible:
-		_wv.close()
+	if _menu != null:
+		_close_menu()
+		return true
+	if _tip != null and _pinned:
+		_close_tip()
 		return true
 	return false
 
 
 func close() -> void:
+	_close_tip()
+	_close_menu()
 	visible = false
 	closed.emit()
 
 
-func _process(delta: float) -> void:
-	preload("res://mods/pax_rpg/src/trace.gd").tick("inventory._process")
-	if not visible:
-		if _pv.render_target_update_mode != SubViewport.UPDATE_DISABLED:
-			_pv.render_target_update_mode = SubViewport.UPDATE_DISABLED   # закрыт — превью героя не рисуется
+func _refresh() -> void:
+	_refresh_slots()
+	_refresh_weapons()
+	_rank_pic.texture = ui.tex("rank_%d.png" % _rank())
+	_rep_pic.texture = ui.tex("rep_%d.png" % InfoTip.tier_of(eq.d["rep_tiers"], _rep_total()))
+	_gold_l.text = Equip.money(int(_st.get("gold", 0)))
+	_lvl_l.text = str(_lvl)
+	_center(_gold_l, GOLD_PLAQUE)                            # по центру плашек под героем
+	_center(_lvl_l, LVL_PLAQUE)
+	_build_attrs()
+
+
+# ── снаряжение
+func _build_slots() -> void:
+	for k: int in eq.slots.size():
+		var c := Control.new()
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.clip_contents = true
+		var r := _r((eq.slots[k] as Dictionary)["rect"])
+		c.position = r.position
+		c.size = r.size
+		_frame.add_child(c)
+		_slot_art.append(c)
+
+
+func _refresh_slots() -> void:
+	for k: int in eq.slots.size():
+		var c: Control = _slot_art[k]
+		for n: Node in c.get_children():
+			c.remove_child(n)
+			n.queue_free()
+		var it: Dictionary = eq.item_at(k)
+		if it.is_empty():
+			continue
+		var bg := ColorRect.new()
+		bg.color = Color(0.07, 0.04, 0.045)
+		bg.size = c.size
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.add_child(bg)
+		ui.item_icon(c, str((eq.sets[it["set"]] as Dictionary)["sheet"]), eq.cell(str(it["set"]), k, int(it["r"])), Rect2(Vector2.ZERO, c.size))
+		var rc: Color = eq.rc(int(it["r"]))
+		var b := Control.new()
+		b.size = c.size
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.draw.connect(func() -> void: Ui.rarity_border(b, Rect2(Vector2.ZERO, c.size), rc, 0.75))
+		c.add_child(b)
+		if bool(it.get("mana", false)):
+			var mw := 17.0
+			var box := ui.frame(c, "mana_rim.png", [76, 76, 76, 76], mw / 76.0, Rect2(Vector2.ZERO, c.size))
+			(box.get_meta(&"np") as NinePatchRect).draw_center = false
+
+
+# ── оружие
+func _build_weapons() -> void:
+	for w: int in 2:
+		var ws: Dictionary = WSLOTS[w]
+		var r := _r(ws["rect"])
+		ui.pic(_frame, "wpn_bg.jpg", r, false)
+		var ic := ui.pic(_frame, "wpn_spear.png", r.grow_individual(-r.size.x * 0.04, -r.size.y * 0.03, -r.size.x * 0.04, -r.size.y * 0.03))
+		_wicons.append(ic)
+		ui.pic(_frame, "wui_%d.png" % (w + 1), _r(ws["ui"]), false)
+		var sk := ui.pic(_frame, "sk_sunset.jpg", _r(ws["sk"]), false)
+		_wsk.append(sk)
+		ui.label(_frame, str(ws["tag"]), ui.caps(12, 0.12), 12, Ui.GOLD, r.position + Vector2(9, 8), 0.0, HORIZONTAL_ALIGNMENT_LEFT, Color(0, 0, 0, 0.9))
+	var swap := Control.new()
+	swap.position = SWAP_AT - Vector2(16, 16)
+	swap.size = Vector2(32, 32)
+	swap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	swap.draw.connect(func() -> void:
+		var c := Vector2(16, 16)
+		swap.draw_circle(c, 15, Color(0.04, 0.02, 0.03, 0.9))
+		swap.draw_circle(c, 13, Color(0.12, 0.07, 0.05))
+		swap.draw_arc(c, 13, 0, TAU, 32, Color(0.85, 0.7, 0.42), 1.6)
+		var g := Color(0.94, 0.81, 0.54)
+		swap.draw_line(Vector2(12, 8), Vector2(12, 23), g, 2.0)
+		swap.draw_polyline(PackedVector2Array([Vector2(8, 19), Vector2(12, 23), Vector2(16, 19)]), g, 2.0)
+		swap.draw_line(Vector2(20, 24), Vector2(20, 9), g, 2.0)
+		swap.draw_polyline(PackedVector2Array([Vector2(16, 13), Vector2(20, 9), Vector2(24, 13)]), g, 2.0))
+	_frame.add_child(swap)
+
+
+func _skill_of(w: int) -> Array:
+	return (((eq.d["weapons"] as Dictionary)[_weapons[w]] as Dictionary)["skills"] as Array)[w]
+
+
+func _refresh_weapons() -> void:
+	for w: int in 2:
+		var wp: Dictionary = (eq.d["weapons"] as Dictionary)[_weapons[w]]
+		(_wicons[w] as TextureRect).texture = ui.tex(str(wp["icon"]))
+		(_wsk[w] as TextureRect).texture = ui.tex(str(((eq.d["skills"] as Dictionary)[_skill_of(w)[0]] as Dictionary)["icon"]))
+	var tw := create_tween()
+	tw.tween_property(_hero_k, "modulate:a", 1.0 if _weapons[0] == "katana" else 0.0, 0.45)
+
+
+## Одно и то же оружие не может стоять в обоих слотах: выбор оружия из другого слота меняет их местами.
+func _choose_weapon(w: int, key: String) -> void:
+	if _weapons[w] == key:
 		return
-	_t += delta
-	_place_camera()
-	_bg.queue_redraw()
+	if _weapons[1 - w] == key:
+		_weapons[1 - w] = _weapons[w]
+	_weapons[w] = key
+	mod.set_setting("inv_weapons", _weapons.duplicate())
+	for n: Variant in _wicons + _wsk:
+		var t := create_tween()
+		t.tween_property(n, "modulate:a", 0.0, 0.17)
+		t.tween_callback(_refresh_weapons)
+		t.tween_property(n, "modulate:a", 1.0, 0.22)
 
 
-# ---------- герой ----------
-
-func _build_preview() -> void:
-	_pv = SubViewport.new()
-	_pv.size = Vector2i(700, 860)
-	_pv.transparent_bg = true
-	_pv.msaa_3d = Viewport.MSAA_4X
-	_pv.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	add_child(_pv)
-	# своя «студия»: отдельный мир с копией героя (Idle) и тремя светами — не ночной город вокруг, герой не чёрный
-	_pv.own_world_3d = true
-	_cam = Camera3D.new()
-	_cam.fov = 30.0
-	var env := Environment.new()
-	env.background_mode = Environment.BG_CLEAR_COLOR
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.7, 0.68, 0.8)
-	env.ambient_light_energy = 0.5
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.9
-	_cam.environment = env
-	_pv.add_child(_cam)
-	_cam.current = true
-	var key := DirectionalLight3D.new()                  # тёплый ключевой: спереди-сбоку сверху
-	key.light_color = Color(1.0, 0.92, 0.82)
-	key.light_energy = 1.3
-	key.rotation_degrees = Vector3(-35, 30, 0)
-	_pv.add_child(key)
-	var fill := DirectionalLight3D.new()                 # холодный заполняющий с другой стороны
-	fill.light_color = Color(0.7, 0.8, 1.0)
-	fill.light_energy = 0.55
-	fill.rotation_degrees = Vector3(-15, -60, 0)
-	_pv.add_child(fill)
-	var rim := DirectionalLight3D.new()                  # розовый контровой сзади — силуэт на фоне кольца
-	rim.light_color = Color(1.0, 0.6, 0.85)
-	rim.light_energy = 1.5
-	rim.rotation_degrees = Vector3(-20, 180, 0)
-	_pv.add_child(rim)
-	_pivot = Node3D.new()
-	_pv.add_child(_pivot)
-	var hero_rect := TextureRect.new()
-	hero_rect.texture = _pv.get_texture()
-	hero_rect.position = Vector2(620, 84)            # в центре кольца фона (textures/inventory_bg.jpg)
-	hero_rect.size = Vector2(700, 860)
-	hero_rect.mouse_filter = Control.MOUSE_FILTER_STOP
-	hero_rect.gui_input.connect(_on_preview_input)
-	_frame.add_child(hero_rect)
-
-
-## Копия героя для студии (раз за сессию локации): модель героя, клип Idle по кругу.
-var _copy_path := ""
-
-
-func _ensure_model(path: String) -> void:
-	if is_instance_valid(_copy) and _copy_path == path:
-		return
-	if is_instance_valid(_copy):
-		_copy.queue_free()                               # другой герой — другая модель
-	_copy_path = path
-	_copy = Assets.model(mod, path)
-	if _copy == null:
-		return
-	_pivot.add_child(_copy)
-	var ap := _find_player(_copy)
-	if ap != null and ap.has_animation("Idle"):
-		ap.play("Idle")                                  # спокойная стойка — первый кадр Idle (жест «рука к голове» —
-		ap.seek(0.0, true)                               # в середине клипа, по кругу он повторялся без конца)
-		ap.pause()
-	# как у героя (hero.gd): плащ модели снят, меч в руке и «волочащийся» меч спрятаны — остаётся меч за спиной
-	var old_cape := _copy.find_child("Knight_cape", true, false)
-	if old_cape != null:
-		old_cape.free()
-	for nm: String in ["Sword_Hand", "Sword_Drag"]:
-		var n := _copy.find_child(nm, true, false) as Node3D
-		if n != null:
-			n.visible = false
-	var back := _copy.find_child("Sword_Back", true, false) as Node3D   # за спиной — так же, как у героя (hero.gd)
-	var hb: Variant = _hero.get("_sword_back") if _hero != null else null
-	if back != null and hb is Node3D and is_instance_valid(hb):
-		back.transform = (hb as Node3D).transform
-		if back is MeshInstance3D and hb is MeshInstance3D:
-			(back as MeshInstance3D).mesh = (hb as MeshInstance3D).mesh
-
-
-static func _find_player(n: Node) -> AnimationPlayer:
-	if n is AnimationPlayer:
-		return n
-	for c: Node in n.get_children():
-		var f := _find_player(c)
-		if f != null:
-			return f
-	return null
-
-
-func _place_camera() -> void:
-	_pivot.rotation.y = _yaw + 0.35                      # чуть сбоку — видно и лицо, и меч за спиной
-	var center := Vector3(0.0, 0.95, 0.0)
-	_cam.position = center + Vector3(0.0, 0.25, 3.9)
-	_cam.look_at(center, Vector3.UP)
-
-
-func _on_preview_input(e: InputEvent) -> void:
-	if e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		_drag = (e as InputEventMouseButton).pressed
-	elif e is InputEventMouseMotion and _drag:
-		_yaw -= (e as InputEventMouseMotion).relative.x * 0.01
-
-
-## Фон: лунный диск за героем, туманные гряды, лепестки сакуры.
-## Фон (макет «Инвентарь A»): ночная лазурь, светящееся розовое кольцо — герой ровно в его центре, дымка у пола и
-## отражение кольца. Есть textures/inventory_bg.jpg — рисуется он (картинка 16:9, кольцо по центру).
-const RING_C := Vector2(970, 514)              # кольцо фона-картинки; превью героя — по нему (hero_rect)
-const RING_R := 437.0
-
-
-func _draw_bg() -> void:
-	if _bg_tex != null:
-		_bg.draw_texture_rect(_bg_tex, Rect2(0, 0, W, H), false)
-	else:
-		_bg.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(W, 0), Vector2(W, H), Vector2(0, H)]),
-			PackedColorArray([Color(0.06, 0.08, 0.16), Color(0.06, 0.08, 0.16), Color(0.2, 0.22, 0.36), Color(0.2, 0.22, 0.36)]))
-		_bg.draw_circle(RING_C, RING_R * 0.98, Color(0.1, 0.16, 0.3, 0.6))          # свет внутри кольца
-		for k: int in 6:                                                            # ореол кольца
-			_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.55, 0.78, 0.07), 10.0 + k * 9.0, true)
-		_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.7, 0.86, 0.95), 7.0, true)
-		_bg.draw_arc(RING_C, RING_R, 0.0, TAU, 160, Color(1.0, 0.95, 0.98), 2.5, true)
-		var floor_y := RING_C.y + RING_R
-		_bg.draw_rect(Rect2(0, floor_y, W, H - floor_y), Color(0.16, 0.18, 0.3, 0.75))
-		for k: int in 5:                                                            # отражение кольца на полу
-			var w := 520.0 - k * 90.0
-			_bg.draw_set_transform(Vector2(RING_C.x, floor_y + 8.0), 0.0, Vector2(1.0, 0.16))
-			_bg.draw_circle(Vector2.ZERO, w, Color(1.0, 0.6, 0.82, 0.05 + k * 0.03))
-		_bg.draw_set_transform(Vector2.ZERO)
-		for k: int in 3:                                                            # гряды дымки у пола
-			var y := floor_y - 70.0 + k * 30.0
-			var pts := PackedVector2Array()
-			for i: int in 49:
-				var x := i * 40.0
-				pts.append(Vector2(x, y + sin(i * 0.5 + k * 1.3 + _t * 0.3) * 12.0))
-			_bg.draw_polyline(pts, Color(0.62, 0.6, 0.78, 0.16 - k * 0.04), 26.0, true)
-	for i: int in 14:                                   # лепестки
-		var ph := float(i) * 1.7
-		var p := Vector2(fmod(200.0 + i * 131.0 + _t * (12.0 + i), W), fmod(80.0 + i * 77.0 + _t * (18.0 + i * 2.0), H))
-		_bg.draw_circle(p + Vector2(sin(_t + ph) * 8.0, 0.0), 3.0, Color(1.0, 0.6, 0.8, 0.55))
-
-
-# ---------- панели и слоты ----------
-
-func _panel(rect: Rect2, parent: Control, selected := false, empty := false) -> ColorRect:
-	var r := ColorRect.new()
-	r.position = rect.position
-	r.size = rect.size
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _panel_sh != null:
-		var m := ShaderMaterial.new()
-		m.shader = _panel_sh
-		m.set_shader_parameter("px", rect.size)
-		m.set_shader_parameter("selected", 1.0 if selected else 0.0)
-		m.set_shader_parameter("empty", 1.0 if empty else 0.0)
-		r.material = m
-	else:
-		r.color = Hud.INK
-	parent.add_child(r)
-	return r
-
-
-func _label(text: String, pos: Vector2, font: Font, fs: int, color: Color, parent: Control, width := 0.0) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.position = pos
-	if width > 0.0:
-		l.size = Vector2(width, 0.0)
-	l.add_theme_font_override("font", font)
-	l.add_theme_font_size_override("font_size", fs)
-	l.add_theme_color_override("font_color", color)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(l)
-	return l
-
-
-## Слот: кнопка с лаковой панелью, знак (иероглиф) слева или сверху, подписи.
-func _slot(rect: Rect2, glyph: String, glyph_color: Color, kicker: String, title: String, sub: String, selected: bool,
-		empty: bool, vertical := false) -> Button:
-	var b := Button.new()
-	b.flat = true
-	b.focus_mode = Control.FOCUS_NONE
-	b.position = rect.position
-	b.size = rect.size
-	b.tooltip_text = title
-	_frame.add_child(b)
-	_panel(Rect2(Vector2.ZERO, rect.size), b, selected, empty)
-	if vertical:
-		var gl := _label(glyph, Vector2(0, 14), _cjk, 40, glyph_color, b, rect.size.x)
-		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var tl := _label(title, Vector2(0, rect.size.y - 40), _sans, 16, Hud.TEXT if not empty else Hud.DIM, b, rect.size.x)
-		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		return b
-	var gs := rect.size.y - 28.0
-	var box := _panel(Rect2(Vector2(14, 14), Vector2(gs, gs)), b, false, empty)
-	b.set_meta(&"box", box)
-	if glyph != "":
-		var g := _label(glyph, Vector2(0, gs * 0.12), _cjk, int(gs * 0.5), glyph_color, box, gs)
-		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var x := 14.0 + gs + 18.0
-	if kicker != "":
-		_label(kicker, Vector2(x, 16), _sans, 12, Hud.PINK if selected else Hud.DIM, b)
-	_label(title, Vector2(x, 32 if kicker != "" else rect.size.y * 0.5 - 16), _serif, 30 if selected else 24,
-		Hud.TEXT if not empty else Hud.DIM, b)
-	if sub != "":
-		_label(sub, Vector2(x, rect.size.y - 34), _sans, 14, Hud.MUTED, b)
-	return b
-
-
-func _build_tabs() -> void:
-	_panel(Rect2(0, 0, W, 88), _frame)
-	var tabs := ["pax_rpg_inv_equipment", "pax_rpg_inv_bag", "pax_rpg_inv_skills", "pax_rpg_inv_journal", "pax_rpg_inv_map"]
-	var x := 960.0 - (tabs.size() * 190.0) * 0.5
-	for i: int in tabs.size():
-		var l := _label(_tr(str(tabs[i])), Vector2(x + i * 190.0, 24), _serif, 26, Hud.TEXT if i == 0 else Hud.DIM, _frame,
-			190.0)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if i == 0:
-			var u := ColorRect.new()
-			u.color = Hud.PINK
-			u.position = Vector2(x + 45.0, 72)
-			u.size = Vector2(100, 2)
-			_frame.add_child(u)
-	_label("荷", Vector2(60, 16), _cjk, 38, Hud.PINK, _frame)
-
-
-func _build_left() -> void:
-	_name_l = _label(_tr("pax_rpg_hero_name"), Vector2(90, 130), _serif, 40, Hud.TEXT, _frame)
-	_label(_tr("pax_rpg_hero_title").to_upper(), Vector2(92, 182), _sans, 14, Hud.MUTED, _frame)
-	_label(_tr("pax_rpg_inv_weapons").to_upper(), Vector2(90, 300), _sans, 13, Hud.DIM, _frame)
-	_slot(Rect2(90, 590, 440, 96), "", Hud.DIM, "", _tr("pax_rpg_inv_talisman_empty"), "", false, true)
-	_panel(Rect2(90, 706, 440, 298), _frame)
-	_label(_tr("pax_rpg_inv_stats").to_upper(), Vector2(114, 718), _sans, 13, Hud.DIM, _frame)
-	_attrs = VBoxContainer.new()
-	_attrs.position = Vector2(110, 744)
-	_attrs.size = Vector2(400, 252)
-	_attrs.add_theme_constant_override("separation", 6)
-	_frame.add_child(_attrs)
-
-
-func _build_right() -> void:
-	_label(_tr("pax_rpg_inv_armor").to_upper(), Vector2(1390, 130), _sans, 13, Hud.DIM, _frame)
-	var cells := [["兜", "pax_rpg_inv_helm"], ["鎧", "pax_rpg_inv_body"], ["篭", "pax_rpg_inv_gloves"],
-		["脛", "pax_rpg_inv_legs"], ["靴", "pax_rpg_inv_boots"], ["套", "pax_rpg_inv_cape"]]
-	for i: int in cells.size():
-		var col := i % 2
-		var row := i / 2
-		var r := Rect2(1390 + col * 226, 158 + row * 146, 210, 130)
-		var is_cape := i == 5
-		var b := _slot(r, str(cells[i][0]), Hud.PINK if is_cape else Hud.MUTED, "", _tr(str(cells[i][1])), "", false,
-			not is_cape, true)
-		if is_cape:
-			_cape = b
-			b.pressed.connect(func() -> void:
-				if _hero != null and _hero.has_method("toggle_slot"):
-					_hero.call("toggle_slot", "back")
-				_update_cape())
-	_panel(Rect2(1390, 620, 436, 300), _frame)
-	_label(_tr("pax_rpg_inv_status").to_upper(), Vector2(1414, 640), _sans, 13, Hud.DIM, _frame)
-	_stats = VBoxContainer.new()
-	_stats.position = Vector2(1414, 672)
-	_stats.size = Vector2(388, 230)
-	_stats.add_theme_constant_override("separation", 10)
-	_frame.add_child(_stats)
-
-
-## Надет ли плащ — рамка слота светится.
-func _update_cape() -> void:
-	if not is_instance_valid(_cape):
-		return
-	var on := _hero != null and _hero.has_method("worn") and str(_hero.call("worn", "back")) != ""
-	for c: Node in _cape.get_children():
-		if c is ColorRect and (c as ColorRect).material is ShaderMaterial:
-			((c as ColorRect).material as ShaderMaterial).set_shader_parameter("selected", 1.0 if on else 0.0)
-			((c as ColorRect).material as ShaderMaterial).set_shader_parameter("empty", 0.0 if on else 1.0)
-			break
-
-
-func _fill_stats(st: Dictionary) -> void:
-	for c: Node in _stats.get_children():
-		c.queue_free()
-	var rows := [
-		["pax_rpg_hero_hp", "%d / %d" % [int(st.get("hp_abs", 0)), int(st.get("hp_max", 0))], Hud.PINK],
-		["pax_rpg_hud_posture_label", "%d%%" % int(float(st.get("conc", 1.0)) * 100.0), Hud.AMBER],
-		["pax_rpg_hud_level", str(int(st.get("level", 1))), Hud.BLUE],
-		["pax_rpg_inv_xp", "%d / %d" % [int(st.get("xp_abs", 0)), int(st.get("xp_need", 0))], Hud.BLUE],
-		["pax_rpg_inv_damage", _scaling_text(st), Hud.TEXT],
-		["pax_rpg_inv_defense", "—", Hud.TEXT],
-	]
-	if str(st.get("passive", "")) != "":
-		rows.append(["pax_rpg_inv_passive", _tr("pax_rpg_passive_" + str(st.get("passive", ""))), Hud.AMBER])
-	for r: Array in rows:
-		var hb := HBoxContainer.new()
-		var a := Label.new()
-		a.text = _tr(str(r[0]))
-		a.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		a.add_theme_font_override("font", _sans)
-		a.add_theme_font_size_override("font_size", 18)
-		a.add_theme_color_override("font_color", Hud.MUTED)
-		hb.add_child(a)
-		var v := Label.new()
-		v.text = str(r[1])
-		v.add_theme_font_override("font", _sans)
-		v.add_theme_font_size_override("font_size", 18)
-		v.add_theme_color_override("font_color", r[2] as Color)
-		hb.add_child(v)
-		_stats.add_child(hb)
-
-
-## Характеристики: знак (иероглиф в лаковой плашке, как у слотов), название, шкала 0–100 и число.
-## Цвет знака: 0 — голубой (Hud.BLUE), 1 — розовый (Hud.PINK), 2 — янтарный (Hud.AMBER).
-const ATTRS := [["agility", "敏", 0], ["intellect", "智", 0], ["charisma", "魅", 1], ["strength", "力", 2],
-	["smithing", "鍛", 2], ["inlay", "嵌", 1], ["luck", "運", 0]]
-
-
-func _fill_attrs(attrs: Dictionary) -> void:
-	for c: Node in _attrs.get_children():
-		c.queue_free()
-	for a: Array in ATTRS:
-		var key := str(a[0])
-		var tone := int(a[2])
-		var col: Color = Hud.BLUE if tone == 0 else (Hud.PINK if tone == 1 else Hud.AMBER)
-		var val: int = int(attrs.get(key, 0))
-		var row := Control.new()
-		row.custom_minimum_size = Vector2(400, 30)
-		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_attrs.add_child(row)
-		var box := _panel(Rect2(0, 0, 30, 30), row)
-		var g := _label(str(a[1]), Vector2(0, 2), _cjk, 18, col, box, 30.0)
-		g.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var main := key == _main_stat
-		_label(_tr("pax_rpg_attr_" + key) + ("  ★" if main else ""), Vector2(44, 3), _sans, 18,
-			Hud.AMBER if main else Hud.MUTED, row)
-		var track := ColorRect.new()
-		track.color = Hud.INK2
-		track.position = Vector2(220, 13)
-		track.size = Vector2(120, 4)
-		track.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(track)
-		var fill := ColorRect.new()
-		fill.color = col
-		fill.position = track.position
-		fill.size = Vector2(120.0 * clampf(float(val) / 100.0, 0.0, 1.0), 4)
-		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(fill)
-		var v := _label(str(val), Vector2(350, 3), _sans, 18, Hud.TEXT, row, 50.0)
-		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		if _points > 0:                                      # есть очки — «+» вложить
-			var plus := Button.new()
-			plus.text = "+"
-			plus.position = Vector2(406, 0)
-			plus.size = Vector2(30, 30)
-			plus.add_theme_color_override("font_color", Hud.AMBER)
-			plus.pressed.connect(func() -> void: stat_added.emit(key))
-			row.add_child(plus)
+# ── характеристики (правая панель: 7 строк со значками на макете)
+func _build_attrs() -> void:
+	for n: Node in _attr_box.get_children():
+		_attr_box.remove_child(n)
+		n.queue_free()
+	var main := str(_st.get("main_stat", ""))
+	var names: Array = eq.d.get("attributes", [])
+	for i: int in mini(names.size(), ATTR_Y.size()):
+		var key := str(names[i][0])
+		var y := float(ATTR_Y[i])
+		ui.label(_attr_box, str(names[i][1]) + (" ★" if key == main else ""), ui.serif, 15, Color(0.94, 0.81, 0.54) if key == main else Ui.TEXT,
+			Vector2(ATTR_X[0], y - 12))
+		var v := ui.label(_attr_box, str(int(_attrs.get(key, 0))), ui.serif, 20, Color(1.0, 0.95, 0.86), Vector2.ZERO)
+		v.position = Vector2(ATTR_X[1] - v.size.x, y - 14)
+		if _points > 0:
+			var b := Button.new()
+			b.text = "+"
+			b.flat = true
+			b.add_theme_font_override("font", ui.serif)
+			b.add_theme_font_size_override("font_size", 20)
+			b.add_theme_color_override("font_color", Color(0.94, 0.81, 0.54))
+			b.position = Vector2(ATTR_X[1] - 58, y - 16)
+			b.size = Vector2(26, 30)
+			b.pressed.connect(func() -> void: stat_added.emit(key))
+			_attr_box.add_child(b)
 	if _points > 0:
-		var pl := Label.new()
-		pl.text = "◆ %s: %d" % [_tr("pax_rpg_inv_stat_points"), _points]
-		pl.add_theme_color_override("font_color", Hud.AMBER)
-		pl.add_theme_font_override("font", _sans)
-		pl.add_theme_font_size_override("font_size", 16)
-		_attrs.add_child(pl)
+		ui.label(_attr_box, "Свободных очков: %d" % _points, ui.body, 12, Color(0.94, 0.81, 0.54), Vector2(ATTR_X[0] + 40, 651))
 
 
-## «Разрубатель · Сила A · ×1.94» — оружие, буквы масштабирования и итоговый множитель урона.
-func _scaling_text(st: Dictionary) -> String:
-	var parts: Array[String] = []
-	var sc: Dictionary = st.get("scaling", {}) as Dictionary
-	for k: Variant in sc:
-		parts.append("%s %s" % [_tr("pax_rpg_attr_" + str(k)), str(sc[k])])
-	var w := str(st.get("weapon", ""))
-	var head := _tr(w) if w != "" else ""
-	return "%s · %s · ×%.2f" % [head, ", ".join(parts), float(st.get("dmg_mult", 1.0))]
+# ── ранг и репутация
+func _rep_total() -> int:
+	var t := 0
+	var emp: Array = eq.d["empires"]
+	for e: Dictionary in emp:
+		t += int(_rel.get(e["key"], 0))
+	return roundi(float(t) / maxf(1.0, emp.size()))
 
 
-func _build_hints() -> void:
-	_panel(Rect2(0, H - 60, W, 60), _frame)
-	var l := _label(_tr("pax_rpg_inv_hint"), Vector2(0, H - 44), _sans, 16, Hud.MUTED, _frame, W)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+func _rank_state() -> Dictionary:
+	var lo := 5
+	var mana := 0
+	for k: int in eq.slots.size():
+		var it: Dictionary = eq.item_at(k)
+		lo = mini(lo, int(it.get("r", 0)))
+		if int(it.get("r", 0)) == 5 and bool(it.get("mana", false)):
+			mana += 1
+	return {"rar": lo, "mana": mana, "lvl": _lvl, "combo": int(_progress["combo"]), "leg": int(_progress["leg"]), "night": int(_progress["night"])}
+
+
+func _rank() -> int:
+	var st := _rank_state()
+	var ranks: Array = eq.d["ranks"]
+	var cur := 0
+	var probe := InfoTip.new()
+	probe.eq = eq
+	for i: int in range(1, ranks.size()):
+		var ok := true
+		for q: Array in probe.req_rows(ranks[i], st):
+			ok = ok and bool(q[0])
+		if not ok:
+			break
+		cur = i
+	probe.free()
+	return cur
+
+
+# ── наведение и закрепление (по геометрии: окна подсказок курсор не ловят, кроме закреплённого)
+func _sockets() -> Array:
+	var out: Array = []
+	for k: int in eq.slots.size():
+		out.append(["slot:%d" % k, _r((eq.slots[k] as Dictionary)["rect"])])
+	for w: int in 2:
+		out.append(["wsk:%d" % w, _r(WSLOTS[w]["sk"])])
+	out.append(["pas", _r(PAS_RECT)])
+	out.append(["rank", _r(RANK_RECT)])
+	out.append(["rep", _r(REP_RECT)])
+	return out
+
+
+func _socket_at(p: Vector2) -> Array:
+	for s: Array in _sockets():
+		if (s[1] as Rect2).has_point(p):
+			return s
+	return []
+
+
+func _tip_rect() -> Rect2:
+	return Rect2(_tip.position, _tip.size * _tk) if _tip != null else Rect2()
+
+
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	var p := _frame.get_local_mouse_position()
+	if _menu != null:
+		_menu_hover(p)
+		return
+	var s := _socket_at(p)
+	var sid: String = s[0] if not s.is_empty() else ""
+	if _tip != null and _pinned:
+		var inside := _tip_rect().has_point(p) or sid == _tip_id
+		if inside:
+			_inside_t = 0.0
+		else:
+			_inside_t += delta
+			if sid != "" and sid != _tip_id:
+				_open_tip(s)
+				return
+			elif _inside_t > 0.06:
+				_close_tip()
+				return
+		_mini_hover(p)
+		_pulse()
+		return
+	if sid == "":
+		if _tip != null:
+			_inside_t += delta
+			if _inside_t > 0.03:
+				_close_tip()
+		return
+	_inside_t = 0.0
+	if sid != _tip_id:
+		_open_tip(s)
+	_hold += delta
+	_set_arm(clampf(_hold / PIN_S, 0.0, 1.0))
+	if _hold >= PIN_S:
+		_pinned = true
+		_set_pinned(true)
+		_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _set_arm(v: float) -> void:
+	if _tip is ItemTip:
+		(_tip as ItemTip).set_arm(v)
+	elif _tip is InfoTip:
+		(_tip as InfoTip).set_arm(v)
+
+
+func _set_pinned(on: bool) -> void:
+	if _tip is ItemTip:
+		(_tip as ItemTip).set_pinned(on)
+	elif _tip is InfoTip:
+		(_tip as InfoTip).set_pinned(on)
+
+
+func _pulse() -> void:
+	var g: Variant = _tip.get("glow")
+	if g is Control:
+		var t := Time.get_ticks_msec() / 1000.0
+		(g as Control).modulate.a = 0.55 + 0.35 * sin(t * TAU / 2.6)
+
+
+func _open_tip(s: Array) -> void:
+	_close_tip()
+	var sid: String = s[0]
+	var anchor: Rect2 = s[1]
+	_tip_id = sid
+	_hold = 0.0
+	_pinned = false
+	_inside_t = 0.0
+	if sid.begins_with("slot:"):
+		var k := int(sid.substr(5))
+		if eq.item_at(k).is_empty():                         # пустой слот — подсказки нет
+			_tip_id = ""
+			return
+		var tip := ItemTip.new()
+		_layer.add_child(tip)
+		tip.build(ui, eq, eq.item_at(k), k, _lvl, eq.d.get("passive", {}))
+		_tip = tip
+	else:
+		var tip := InfoTip.new()
+		_layer.add_child(tip)
+		tip.on_meta = _on_meta
+		if sid.begins_with("wsk:"):
+			var w := int(sid.substr(4))
+			var sk := _skill_of(w)
+			tip.build_skill(ui, eq, str(sk[0]), str(sk[1]), "%s приём · %s" % ["Второй" if w == 1 else "Основной",
+				((eq.d["weapons"] as Dictionary)[_weapons[w]] as Dictionary)["name"]], _lvl, _hero_attrs())
+		elif sid == "pas":
+			tip.build_passive(ui, eq)
+		elif sid == "rep":
+			tip.build_rep(ui, eq, _rel)
+		else:
+			tip.build_rank(ui, eq, _rank(), _rank_state())
+		_tip = tip
+	_tk = minf(TIP_K, (H - 16.0) / maxf(1.0, _tip.size.y))
+	_tip.scale = Vector2(_tk, _tk)
+	_place(_tip, anchor, _tk)
+	_tip.modulate.a = 0.0
+	var to_y := _tip.position.y
+	_tip.position.y += 6
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_tip, "modulate:a", 1.0, 0.24).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_tip, "position:y", to_y, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+## Окно — вплотную слева от того, на что навели (не влезает — справа), по высоте — в пределах макета.
+func _place(c: Control, anchor: Rect2, k: float) -> void:
+	var sz := c.size * k
+	var x := anchor.position.x - sz.x - 6
+	if x < 8:
+		x = anchor.end.x + 6
+	var y := clampf(anchor.position.y - 8, 8, H - sz.y - 8)
+	c.position = Vector2(x, y)
+
+
+func _close_tip() -> void:
+	if _tip != null:
+		_tip.queue_free()
+	_tip = null
+	_tip_id = ""
+	_pinned = false
+	_hold = 0.0
+	_hide_mini()
+
+
+func _hero_attrs() -> Dictionary:
+	var a := _attrs.duplicate()
+	var syn: Dictionary = (eq.d.get("passive", {}) as Dictionary).get("synergy", {})
+	if _weapons[0] == str(syn.get("weapon", "")):
+		a["agility"] = roundi(float(a.get("agility", 0)) * float(syn.get("agi", 1.0)))
+	return a
+
+
+# ── мини-подсказки (у закреплённой)
+func _mini_hover(p: Vector2) -> void:
+	var local := (p - _tip.position) / _tk
+	var key := ""
+	var data: Array = []
+	if _tip is ItemTip:
+		for l: Dictionary in (_tip as ItemTip).lines:
+			if (l["rect"] as Rect2).has_point(local):
+				key = "%s:%d" % [l["part"], l["j"]]
+				var k := int(_tip_id.substr(5))
+				data = (_tip as ItemTip).mini_text(eq.item_at(k), str(l["part"]), int(l["j"]), eq.d.get("passive", {}))
+				data.append(l["rect"])
+	elif _tip is InfoTip:
+		for h: Dictionary in (_tip as InfoTip).hovers:
+			if (h["rect"] as Rect2).has_point(local):
+				key = "%s:%s" % [h["kind"], h["arg"]]
+				data = _hover_info(str(h["kind"]), int(h["arg"]))
+				data.append(h["rect"])
+	if key == "" and _mini_key.begins_with("meta:"):
+		return                                             # разбор числа держится, пока курсор на числе (meta_hover_ended)
+	if key == _mini_key:
+		return
+	_mini_key = key
+	if key == "":
+		_hide_mini()
+		return
+	_show_mini(data)
+
+
+func _on_meta(kind: String, arg: String, on: bool, _grect: Rect2) -> void:
+	if not _pinned or not (_tip is InfoTip):
+		return
+	if not on:
+		if _mini_key.begins_with("meta:"):
+			_mini_key = ""
+			_hide_mini()
+		return
+	_mini_key = "meta:%s:%s" % [kind, arg]
+	var b: Array = (_tip as InfoTip).breakdown(kind, arg, _lvl, _hero_attrs())
+	var local := (_frame.get_local_mouse_position() - _tip.position) / _tk
+	_show_mini([b[0], b[1], "", Ui.GOLD, "", b[2], Rect2(local - Vector2(4, 10), Vector2(8, 20))])
+
+
+## [заголовок, текст, «здесь», цвет, метка, (строки таблицы), rect строки в окне]
+func _show_mini(data: Array) -> void:
+	for n: Node in _mini.get_children():
+		_mini.remove_child(n)
+		n.queue_free()
+	var w := 270.0
+	var fr := ui.frame(_mini, "frame_mini.png", [28, 28, 28, 28], 0.5, Rect2(0, 0, w, 100))
+	var y := 14.0
+	var tl := ui.label(_mini, str(data[0]).to_upper(), ui.caps(14, 0.1), 14, Ui.TEXT, Vector2(14, y), w - 28)
+	y += tl.size.y + 4
+	if str(data[1]) != "":
+		var dl := ui.label(_mini, str(data[1]), ui.body, 13, Ui.MUTED, Vector2(14, y), w - 28)
+		y += dl.size.y + 4
+	var rows: Array = data[5] if data.size() > 6 and data[5] is Array else []
+	for row: Array in rows:
+		var hl := row.size() > 2 and bool(row[2])
+		var a := ui.label(_mini, str(row[0]), ui.body, 12, Color(0.94, 0.81, 0.54) if hl else Ui.MUTED, Vector2(14, y), w * 0.55)
+		var b := ui.label(_mini, str(row[1]), ui.serif, 12, Color(0.94, 0.81, 0.54) if hl else Ui.TEXT, Vector2.ZERO, w * 0.42, HORIZONTAL_ALIGNMENT_RIGHT)
+		b.position = Vector2(w - 14 - w * 0.42, y)
+		y += maxf(a.size.y, b.size.y) + 2
+	if str(data[2]) != "":
+		var hl2 := ui.label(_mini, str(data[2]), ui.serif, 13, Ui.TEXT, Vector2(14, y + 3), w - 28)
+		y += hl2.size.y + 5
+	if str(data[4]) != "":
+		var tg := ui.label(_mini, str(data[4]), ui.body, 12, data[3], Vector2(14, y + 2), w - 28)
+		y += tg.size.y + 4
+	Ui.frame_resize(fr, Vector2(w, y + 12))
+	_mini.size = Vector2(w, y + 12)
+	var line: Rect2 = data[data.size() - 1]
+	var tr := _tip_rect()
+	var x := tr.position.x - w * TIP_K - 10
+	if x < 4:
+		x = tr.end.x + 10
+	var top := clampf(tr.position.y + line.position.y * _tk - 8, 4, H - _mini.size.y * TIP_K - 4)
+	_mini.position = Vector2(x, top)
+	_mini.visible = true
+
+
+func _hide_mini() -> void:
+	_mini_key = ""
+	if is_instance_valid(_mini):
+		_mini.visible = false
+
+
+func _hover_info(kind: String, i: int) -> Array:
+	if kind == "emp":
+		var e: Dictionary = (eq.d["empires"] as Array)[i]
+		var tiers: Array = eq.d["rep_tiers"]
+		var v := int(_rel.get(e["key"], 0))
+		return [e["name"], "", "", Ui.GOLD, "", [["Столица", e["cap"]], ["Правит", e["rule"]], ["Народы", e["folk"]], ["Не выносят", e["hate"]],
+			["Отношение к вам", "%s · %s" % [InfoTip.sgn(v), (tiers[InfoTip.tier_of(tiers, v)] as Dictionary)["name"]], true]]]
+	if kind == "tier":
+		var tiers2: Array = eq.d["rep_tiers"]
+		var T: Dictionary = tiers2[i]
+		var hi := int((tiers2[i + 1] as Dictionary)["min"]) - 1 if i + 1 < tiers2.size() else 100
+		return [T["name"], str(T["info"]), "", Ui.GOLD, "", [["Отношение", "%s … %s" % [InfoTip.sgn(int(T["min"])), InfoTip.sgn(hi)]]]]
+	var ranks: Array = eq.d["ranks"]
+	var R: Dictionary = ranks[i]
+	var cur := _rank()
+	var rows: Array = []
+	var probe := _tip as InfoTip
+	for q: Array in probe.req_rows(R, _rank_state()):
+		rows.append([("✓ " if q[0] else "✕ ") + str(q[1]), ""])
+	var status := "Пройден" if i < cur else ("Ваш ранг" if i == cur else ("Следующий ранг" if i == cur + 1 else "Впереди"))
+	return ["Ранг %d: %s" % [i, R["name"]], "Со старта, без условий." if rows.is_empty() else "", status + (" · условия всех младших рангов тоже нужны" if i > 0 else ""),
+		Ui.MUTED, "", rows]
+
+
+# ── выбор вещи / оружия
+func _gui_input(e: InputEvent) -> void:
+	if not (e is InputEventMouseButton) or not (e as InputEventMouseButton).pressed or (e as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT:
+		return
+	var p := _frame.get_local_mouse_position()
+	accept_event()
+	if _menu != null:
+		for t: Dictionary in _menu_tiles:
+			if (t["rect"] as Rect2).has_point(p):
+				(t["cb"] as Callable).call()
+				return
+		if not Rect2(_menu.position, _menu.size * TK).has_point(p):
+			_close_menu()
+		return
+	var was_pinned := _pinned
+	if _pinned:
+		_close_tip()
+	if Rect2(SWAP_AT - Vector2(16, 16), Vector2(32, 32)).has_point(p):
+		_choose_weapon(0, _weapons[1])
+		return
+	for k: int in eq.slots.size():
+		if _r((eq.slots[k] as Dictionary)["rect"]).has_point(p):
+			_close_tip()
+			_open_item_menu(k)
+			return
+	for w: int in 2:
+		if _r(WSLOTS[w]["rect"]).has_point(p) or _r(WSLOTS[w]["sk"]).has_point(p):
+			_close_tip()
+			_open_weapon_menu(w)
+			return
+	if not was_pinned:
+		_close_tip()
+
+
+func _close_menu() -> void:
+	if _menu != null:
+		_menu.queue_free()
+	_menu = null
+	_menu_id = ""
+	_menu_tiles = []
+
+
+func _menu_box(title: String, sub: String, w: float) -> Control:
+	_close_menu()
+	_menu = Control.new()
+	_menu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu.scale = Vector2(TK, TK)
+	_menu.z_index = 15
+	_layer.add_child(_menu)
+	_menu.set_meta(&"fr", ui.frame(_menu, "frame_mini.png", [28, 28, 28, 28], 0.5, Rect2(0, 0, w, 100)))
+	ui.label(_menu, title.to_upper(), ui.caps(16, 0.12), 16, Ui.GOLD, Vector2(16, 13))
+	var sl := ui.label(_menu, sub, ui.body, 12, Ui.MUTED, Vector2.ZERO)
+	sl.position = Vector2(w - 16 - sl.size.x, 18)
+	return _menu
+
+
+func _menu_end(y: float, w: float, anchor: Rect2) -> void:
+	var cap_y := y + 6
+	var line := ColorRect.new()
+	line.color = Color(0.79, 0.64, 0.36, 0.2)
+	line.position = Vector2(16, cap_y)
+	line.size = Vector2(w - 32, 1)
+	_menu.add_child(line)
+	_menu_cap = ui.label(_menu, "", ui.serif, 14, Ui.TEXT, Vector2(16, cap_y + 6), w - 32)
+	var h := cap_y + 46
+	Ui.frame_resize(_menu.get_meta(&"fr") as Control, Vector2(w, h))
+	_menu.size = Vector2(w, h)
+	_place(_menu, anchor, TK)
+	_menu.modulate.a = 0.0
+	create_tween().tween_property(_menu, "modulate:a", 1.0, 0.24)
+
+
+func _open_item_menu(k: int) -> void:
+	var slot: Dictionary = eq.slots[k]
+	var w := 336.0
+	_menu_box(str(slot["type"]), "%d в сумке" % (eq.bag[k] as Array).size(), w)
+	_menu_id = "slot:%d" % k
+	var y := 42.0
+	var cols := 6
+	var gap := 6.0
+	var tw := (w - 32 - gap * (cols - 1)) / cols
+	var th := tw * 170.0 / 156.0
+	for key: String in eq.set_keys:
+		var of_set: Array = (eq.bag[k] as Array).filter(func(x: Dictionary) -> bool: return str(x["set"]) == key)
+		if of_set.is_empty():
+			continue                                         # заголовки — только у сетов, вещи которых есть в сумке
+		var S: Dictionary = eq.sets[key]
+		ui.pic(_menu, str(S["emblem"]), Rect2(16, y + 2, 18, 18))
+		ui.label(_menu, str(S["name"]).to_upper(), ui.caps(11, 0.1), 11, Color.html(str(S["color"])), Vector2(40, y + 5))
+		y += 24
+		for mana: bool in [false, true]:
+			if of_set.filter(func(x: Dictionary) -> bool: return bool(x.get("mana", false)) == mana).is_empty():
+				continue
+			if mana:
+				ui.label(_menu, "ПРОПИТАНО МАНОЙ", ui.caps(10, 0.12), 10, Ui.MANA, Vector2(16, y))
+				y += 16
+			var i := 0
+			for it: Dictionary in eq.bag[k]:
+				if str(it["set"]) != key or bool(it.get("mana", false)) != mana:
+					continue
+				var r := Rect2(16 + (i % cols) * (tw + gap), y + floorf(i / float(cols)) * (th + gap), tw, th)
+				_tile(r, it, k)
+				i += 1
+			y += ceilf(i / float(cols)) * (th + gap) + 4
+	if (eq.bag[k] as Array).is_empty():
+		ui.label(_menu, "Сумка пуста — вещи выпадают с врагов", ui.body, 13, Ui.MUTED, Vector2(16, y))
+		y += 24
+	_menu_end(y, w, _r(slot["rect"]))
+	_caption(eq.item_at(k), k)
+
+
+func _tile(r: Rect2, it: Dictionary, k: int) -> void:
+	var bg := ColorRect.new()
+	bg.color = Color(0.07, 0.04, 0.045)
+	bg.position = r.position
+	bg.size = r.size
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu.add_child(bg)
+	ui.item_icon(_menu, str((eq.sets[it["set"]] as Dictionary)["sheet"]), eq.cell(str(it["set"]), k, int(it["r"])), r)
+	var rc: Color = eq.rc(int(it["r"]))
+	var eqd := str(it["id"]) == str(eq.equipped[k])
+	var b := Control.new()
+	b.position = r.position
+	b.size = r.size
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.draw.connect(func() -> void:
+		Ui.rarity_border(b, Rect2(Vector2.ZERO, r.size), rc, 0.6)
+		if eqd:
+			b.draw_rect(Rect2(Vector2(-3, -3), r.size + Vector2(6, 6)), Ui.SET, false, 2.0)
+			b.draw_rect(Rect2(Vector2(r.size.x - 13, 0), Vector2(13, 13)), Ui.SET))
+	_menu.add_child(b)
+	if bool(it.get("mana", false)):
+		var box := ui.frame(_menu, "mana_rim.png", [76, 76, 76, 76], 11.0 / 76.0, r)
+		(box.get_meta(&"np") as NinePatchRect).draw_center = false
+	if eqd:
+		ui.label(_menu, "✓", ui.serif, 11, Color(0.04, 0.09, 0.08), r.position + Vector2(r.size.x - 11, -1))
+	var id := str(it["id"])
+	var mr := Rect2(_menu.position + r.position * TK, r.size * TK)
+	_menu_tiles.append({"rect": mr, "local": r, "item": it, "k": k, "cb": func() -> void:
+		eq.equipped[k] = id
+		mod.set_setting("inv_equipped", eq.equipped.duplicate())
+		_close_menu()
+		_refresh()})
+
+
+func _menu_hover(p: Vector2) -> void:
+	for t: Dictionary in _menu_tiles:
+		var r := Rect2(_menu.position + (t["local"] as Rect2).position * TK, (t["local"] as Rect2).size * TK)
+		t["rect"] = r
+		if r.has_point(p):
+			if t.has("item"):
+				_caption(t["item"], int(t["k"]))
+			elif t.has("weapon"):
+				_wcaption(str(t["weapon"]), int(t["w"]))
+			return
+
+
+func _caption(it: Dictionary, k: int) -> void:
+	if not is_instance_valid(_menu_cap) or it.is_empty():
+		return
+	_menu_cap.text = "%s — %s · %s%s%s" % [it["name"], (eq.sets[it["set"]] as Dictionary)["name"], (eq.rar[int(it["r"])] as Dictionary)["name"],
+		" · пропитано маной" if bool(it.get("mana", false)) else "", " · надето" if str(it["id"]) == str(eq.equipped[k]) else ""]
+	_menu_cap.add_theme_color_override("font_color", eq.rc(int(it["r"])))
+
+
+func _open_weapon_menu(w: int) -> void:
+	var mw := 336.0
+	var W2: Dictionary = eq.d["weapons"]
+	_menu_box(str(WSLOTS[w]["name"]), "%d в сумке" % W2.size(), mw)
+	_menu_id = "wpn:%d" % w
+	var y := 46.0
+	var tw := (mw - 32 - 8) / 2.0
+	var th := tw * 4.0 / 3.0
+	var i := 0
+	for key: String in W2:
+		var r := Rect2(16 + i * (tw + 8), y, tw, th)
+		ui.pic(_menu, "wpn_bg.jpg", r, false)
+		ui.pic(_menu, str((W2[key] as Dictionary)["icon"]), r.grow(-8))
+		var eqd: bool = _weapons[w] == key
+		var other: bool = _weapons[1 - w] == key
+		var b := Control.new()
+		b.position = r.position
+		b.size = r.size
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.draw.connect(func() -> void:
+			b.draw_rect(Rect2(Vector2.ZERO, r.size), Ui.SET if eqd else Ui.GOLD_DIM, false, 2.0 if eqd else 1.0))
+		_menu.add_child(b)
+		if other:
+			ui.label(_menu, "ВТОРОЕ" if w == 0 else "ОСНОВНОЕ", ui.caps(10, 0.08), 10, Ui.GOLD, r.position + Vector2(5, r.size.y - 18), 0.0,
+				HORIZONTAL_ALIGNMENT_LEFT, Color(0, 0, 0, 0.9))
+		var k2 := key
+		_menu_tiles.append({"rect": Rect2(), "local": r, "weapon": key, "w": w, "cb": func() -> void:
+			_close_menu()
+			_choose_weapon(w, k2)})
+		i += 1
+	y += th + 4
+	_menu_end(y, mw, _r(WSLOTS[w]["rect"]))
+	_wcaption(_weapons[w], w)
+
+
+func _wcaption(key: String, w: int) -> void:
+	if not is_instance_valid(_menu_cap):
+		return
+	var wp: Dictionary = (eq.d["weapons"] as Dictionary)[key]
+	var state := "надето" if _weapons[w] == key else ("сейчас %s — поменяются местами" % ("основное" if w == 1 else "второе") if _weapons[1 - w] == key else "")
+	var sk: Array = wp["skills"]
+	_menu_cap.text = "%s — главный атрибут %s%s\nОсновным — «%s», вторым — «%s»" % [wp["name"], wp["attr"], (" · " + state) if state != "" else "", sk[0][1], sk[1][1]]
+	_menu_cap.add_theme_color_override("font_color", Ui.TEXT)

@@ -13,8 +13,9 @@
 	"описание_en": "1st of Peach, year 1047 of the Shattered Sky. Five empires share three continents under a pink sky of mana. The Gharn Horde wars with the Saerith Imperium in the Sherraks jungles, the golems of Haddur fall silent in the mines, and the two moons meet over Lunniel — a year of the Wild Hunt.",
 	"параметры_тел": {"Земля": {"temperature": 0.62, "water": 0.64, "biomass": 0.78, "radiation": 0.0, "atmosphere": 0.95, "urban": 0.02, "magnetic": 0.85}},
 	"лор_системы": [
-		"Юрума — единственный мир под своим солнцем, Хоэном. Две луны: большая Сэна, серебряная, и малая Иру,",
-		"лиловая; когда они сходятся на небе, в Лунниэле выезжает Дикая охота фей. Звёзды видны только сквозь",
+		"Юрума — единственный мир под своим солнцем, Хоэном. Две луны: большая Селунэ, серая, в жилах красной маны,",
+		"и малая Иру, лиловая, пропитанная розовой маной; в них упокоены души богинь-сестёр. Раз в 273 дня обе луны разом",
+		"проходят сквозь Око Раскола — тогда в Лунниэле выезжает Дикая охота фей. Звёзды видны только сквозь",
 		"просветы в облаках маны — дороги к ним нет, и никто её не ищет.",
 		"",
 		"РАСКОЛ НЕБА",
@@ -36,8 +37,9 @@
 		"Всё это — стартовая точка, а не сюжет: дальше мир идёт так, как поведут его игроки и кубик."
 	],
 	"лор_системы_en": [
-		"Yuruma is the only world under its sun, Hoen. Two moons: the great silver Sena and the small lilac Iru;",
-		"when they meet in the sky the Wild Hunt of the fey rides out in Lunniel.",
+		"Yuruma is the only world under its sun, Hoen. Two moons: the great Selune, grey and veined with red mana,",
+		"and the small Iru, lilac and soaked in pink mana; the souls of the sister goddesses rest in them. Once in 273 days",
+		"both moons pass through the Eye of the Rift together, and the Wild Hunt of the fey rides out in Lunniel.",
 		"",
 		"THE SHATTERED SKY",
 		"1047 years ago the planet 'exhaled'. Mana burst from below, the sky cracked and turned pink, magic woke",
@@ -278,7 +280,7 @@
 				"лунные поляны. Правит Королева — её власть держится на договорах с двором фей, заключённых до Раскола.",
 				"",
 				"ЧТО СЕЙЧАС",
-				"Сэна и Иру сходятся: в этом году выезжает Дикая охота. Феи будут похищать людей, а время в их",
+				"Селунэ и Иру сходятся: в этом году выезжает Дикая охота. Феи будут похищать людей, а время в их",
 				"владениях идёт иначе. Двор торгуется за пленников и делает вид, что всё под контролем.",
 				"",
 				"ЧЕГО БОЯТСЯ",

@@ -51,6 +51,7 @@ const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
 const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
+const Loot := preload("res://mods/pax_rpg/src/location/loot/loot.gd")
 const HERO_HP := 100.0
 const HERO_CONC := 100.0
 const BROKEN_TIME := 2.6             # с слома героя (концентрация 0): управление отнято, враг может казнить
@@ -156,6 +157,7 @@ var _daynight: DayNight            # тело доворачивается к ц
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var _inv: Inventory                # инвентарь (TAB)
+var _loot: Loot                    # сферы с врагов и прокрутка вещей (src/location/loot)
 var _wrist: Wrist                  # наручный терминал (TAB / Esc): инвентарь, карта, меню
 const VoiceTalk := preload("res://mods/pax_rpg/src/location/voice_talk.gd")
 var _vtalk: VoiceTalk                   # голосом к жителю по имени (эксперимент, настройка voice_talk)
@@ -243,6 +245,14 @@ func _spawn_goblins(n: int) -> void:
 
 
 ## Орк-чемпион перед героем (консоль rpg_orc — проверка боя).
+## Проверка лута (команда rpg_roll [редкость 0…5]): радужная сфера перед героем → прокрутка.
+func test_roll(r := -1) -> String:
+	if not is_instance_valid(_loot) or not is_instance_valid(_player):
+		return "нет локации"
+	_loot.test(_cam, _player, _prog.level, r)
+	return "roll"
+
+
 func spawn_orc() -> String:
 	if _view == null or not is_instance_valid(_player):
 		return "нет локации"
@@ -491,6 +501,14 @@ func build(city: Dictionary) -> void:
 			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5
 		elif _iai_hits > 0:
 			_conc_gain(0.5))                             # разрезы попали — выдох: концентрация +50 %
+	_loot = Loot.new()                               # под инвентарём: открытый TAB закрывает прокрутку
+	_loot.setup(mod)
+	add_child(_loot)
+	_loot.gold_picked.connect(func(n: int) -> void:
+		_prog.add_gold(n)
+		_gold_flash = 1.0)
+	_loot.xp_picked.connect(func(v: float, at: Vector2) -> void:
+		_orbs.append({"p0": at, "t": 0.0, "delay": 0.0, "v": v, "bend": randf_range(-1.0, 1.0)}))
 	_inv = Inventory.new()
 	_inv.setup(mod)
 	_inv.weapon_equipped.connect(func(slot: String, _id: String) -> void:
@@ -665,7 +683,7 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal]:
+	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _loot, _wrist, _talk, _journal]:
 		if is_instance_valid(n):
 			n.queue_free()
 	Assets.clear_tracking(mod)
@@ -1368,6 +1386,7 @@ func _set_inventory(on: bool) -> void:
 		st["level_mult"] = _prog.damage_mult()
 		st["model"] = str(hero_cfg.get("model", "models/knight.glb"))
 		st["name_key"] = str(_character().get("name_key", "pax_rpg_hero_name"))
+		st["gold"] = _prog.gold
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
@@ -2578,7 +2597,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what: String = {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false
@@ -3395,14 +3414,13 @@ func _hud_tick(delta: float) -> void:
 			# мана не растворяется: шарики перелетают в шкалу опыта (левый верхний угол), опыт — по прилёту
 			var gain := float((hero_cfg.get("progress", {}) as Dictionary).get("xp_per_kill", 35.0))
 			var from := _cam.unproject_position(gob.global_position + Vector3(0.0, 0.8, 0.0))
-			var n := 10
-			for k: int in n:
-				_orbs.append({"p0": from + Vector2(randf_range(-30, 30), randf_range(-30, 30)), "t": 0.0,
-					"delay": k * 0.06, "v": gain / n, "bend": randf_range(-1.0, 1.0)})
 			var coins := roundi(randi_range(6, 14) * _style.reward_mult())   # и немного золота (больше — на высоком стиле)
+			if is_instance_valid(_loot):                     # сферы: золото и опыт — когда герой их подберёт
+				_loot.drop(gob.global_position, _cam, _player, gain, coins, _prog.level)
+			else:
+				_orbs.append({"p0": from, "t": 0.0, "delay": 0.0, "v": gain, "bend": 0.0})
+				_prog.add_gold(coins)
 			gain *= _style.reward_mult()
-			_prog.add_gold(coins)
-			_gold_flash = 1.0
 			_toast = {"text": _t("pax_rpg_hud_got") % [_t("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
 				_t("pax_rpg_gold_got") % coins, "t": 0.0}
 		elif gob.is_alive():

@@ -210,6 +210,10 @@ func _open(t: String) -> void:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if v == "full" else DisplayServer.WINDOW_MODE_WINDOWED))
 			_gcycle("Frame limit", "fps_limit", [["0", "Off"], ["60", "60"], ["144", "144"], ["165", "165"], ["240", "240"]], "0")
 			_gtoggle("V-Sync", "vsync", false)
+			_section("MAIN MENU")
+			_cycle("Menu", [["cinematic", "Cinematic (intro video)"], ["classic", "Classic"]],
+				str(mod.get_setting("menu_bg", "cinematic")), func(v: String) -> void: mod.set_setting("menu_bg", v))
+			_note("Cinematic: the intro plays once at startup (Esc, Space or a click skips it), the menu is the living end shot. The menu switches when you leave Settings.")
 		"CITY":
 			_cycle("Preset", [["custom", "Custom"], ["low", "Low"], ["mid", "Medium"], ["high", "High"], ["ultra", "Ultra"]],
 				"custom", func(v: String) -> void:

@@ -108,13 +108,13 @@
 			}
 		},
 		"attributes": {
-			"agility": 65,
-			"intellect": 35,
+			"agility": 60,
+			"intellect": 30,
 			"charisma": 50,
-			"strength": 35,
-			"smithing": 20,
-			"inlay": 20,
-			"luck": 40
+			"strength": 30,
+			"smithing": 30,
+			"inlay": 40,
+			"luck": 30
 		}
 	},
 	"sword_back_grip": [

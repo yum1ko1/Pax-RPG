@@ -1,0 +1,9 @@
+// Иконка приёма в круглом гнезде: всё, что вне круга, — прозрачно (src/location/inv/info_tip.gd).
+shader_type canvas_item;
+
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	float d = length(UV - vec2(0.5));
+	c.a *= 1.0 - smoothstep(0.47, 0.5, d);
+	COLOR = c;
+}
