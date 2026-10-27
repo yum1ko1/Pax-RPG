@@ -92,6 +92,7 @@ var _quake_icon: Texture2D
 var _lmb_queued := false           # удар (ЛКМ) — до следующего кадра физики
 var _space_down := false
 var _alt_down := false             # уворот — по нажатию Alt, не по удержанию
+var _alt_buf := 0.0                 # с: нажатие уворота ждёт, пока откат удара откроется (dodge_buffer)
 var game: PaxGame                  # задаёт travel.gd: пока мы на локации, время мира стоит
 var test_mode := false             # тестовая арена из главного меню (герой + гоблин), выход — обратно в меню
 var _goblins: Array = []
@@ -1563,6 +1564,9 @@ func _set_inventory(on: bool) -> void:
 
 ## Вернулись в окно игры (Alt+Tab, особенно во время загрузки): мышь — снова камере, фокус — не на поле ввода.
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_EXIT_TREE and _slow_until > 0:
+		_slow_until = 0
+		Engine.time_scale = _slow_prev                   # ушли из локации посреди замедления — время вернуть
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and active and not paused():
 		var f := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
 		if f != null and not (f is LineEdit and f.is_visible_in_tree()):
@@ -2145,7 +2149,15 @@ func _physics_body(delta: float) -> void:
 		move = move.normalized()
 	# уворот (Alt): развернуть героя по вводу (без ввода — куда смотрит) и кувырок; дальше его ведёт root motion
 	var alt := Input.is_physical_key_pressed(KEY_ALT) and not _typing()
-	if alt and not _alt_down and not locked and _hero != null:
+	if alt and not _alt_down:
+		_alt_buf = _hf("dodge_buffer", 0.2)              # нажал чуть раньше, чем откат удара открылся, — не пропадает
+	_alt_buf = maxf(0.0, _alt_buf - delta)
+	# из удара — уворот, как только откат можно прервать (hero.recovery_open: пик взмаха пройден)
+	var can_dodge := _hero != null and (not locked or (not _helpless() and _hero.recovery_open()))
+	if _alt_buf > 0.0 and can_dodge:
+		if locked and not _typing():                     # в ударе ввод WASD не читался — берём клавиши сами
+			input = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+				float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
 		var wish := right * input.x - forward * input.y
 		# в захвате — как в соулсах: лицом к врагу; назад — отскок, вбок — уклон, вперёд — кувырок
 		var dir := ""
@@ -2169,6 +2181,8 @@ func _physics_body(delta: float) -> void:
 			if dir != "":
 				_face_now(ty)
 		if _hero.dodge(on_floor, dir):
+			_alt_buf = 0.0
+			_cs_add("dodges")
 			if is_instance_valid(_sfx):
 				_sfx.cloth(-4.0)
 			if _hero.side_dodge():
@@ -2279,6 +2293,7 @@ func _physics_body(delta: float) -> void:
 			if cy2 != INF:
 				_face_now(cy2)                       # каждый удар серии — во врага в захвате или туда, куда смотрит камера
 			_cam_swing(_hero.action)
+			_cs_add("swings")
 			_chain = _chain + 1 if _chain_t < _hf("chain_window", 0.9) else 1
 			_chain_t = 0.0                                   # отсчёт паузы — от конца удара, а не от начала
 			# наклон взмаха: иногда слева, иногда справа (по стороне врага или наугад); финальный сверху — ровно
@@ -2699,6 +2714,8 @@ func _cam_swing(move: String) -> void:
 ## Несколько врагов одним взмахом — замирание не складывается.
 func _impact_feel(gob: Goblin, heavy: bool, heft := 1.0) -> void:
 	_sfx_once("sounds/impact_%d.wav" % randi_range(1, 3), -7.0 + 3.0 * clampf(heft - 1.0, -1.0, 1.0))   # меч попал
+	if heavy:
+		_sfx_once("sounds/kick_hit.wav", _hf("final_thud_db", -9.0))   # финал серии — ещё и глухо по телу
 	var t := (_hf("hitstop_heavy", 0.14) if heavy else _hf("hitstop", 0.08)) * clampf(heft, 0.6, 1.6)   # F = Δp/Δt
 	if _hero != null:
 		_hero.hitstop(t)
@@ -2892,6 +2909,7 @@ func _strike(hit: Dictionary) -> void:
 			gob.launch(Vector3(0.0, 8.5 if not gob.boss else 3.0, 0.0))
 		_style.hit(_hero.action if _hero != null and _hero.action != "" else "Attack3")
 		_impact_feel(gob, bool(hit.get("knock", false)), _mass_hit(gob, 0.0, bool(hit.get("knock", false))))
+		_after_hit(gob, res)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0),
 			"v": int(hit.damage), "crit": bool(hit.get("knock", false)), "t": 0.0})
 		_combat_fx_hit(gob, hit)
@@ -2930,7 +2948,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 		_foe_line_wait = false
 
 
-func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
+func _mass_hit(gob: Goblin, tip: float, heavy: bool, swing := Vector3.ZERO) -> float:
 	# острие: прошлое положение в первом кадре взмаха бывает старым — скорость не больше 2.2 × ω·r
 	if gob.boss and gob.is_alive():
 		_foe_line(gob, "got_hit")
@@ -2939,7 +2957,13 @@ func _mass_hit(gob: Goblin, tip: float, heavy: bool) -> float:
 	var away := gob.global_position - _player.global_position
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.01 else -_body_mesh.global_transform.basis.z
+	swing.y = 0.0
+	if swing.length() > 0.01:                            # косой взмах уносит и вбок — туда, куда шёл клинок
+		away = (away + swing.normalized() * _hf("swing_push", 0.6)).normalized()
 	if gob.is_alive():
+		gob.flinch(away, _w.heft(p) * (1.5 if heavy else 1.0))
+		if bool(hero_cfg.get("hit_flash", true)):
+			gob.hit_flash(_hf("hit_flash_time", 0.07))
 		var kv := _w.knock(p, me)
 		var flat := Vector2(gob.velocity.x, gob.velocity.z)
 		if heavy:                                           # финальный удар: отлёт тоже по массе (орка — меньше)
@@ -2997,7 +3021,8 @@ func _blade_strike(b: Dictionary) -> void:
 		_style.hit(mv)
 
 		var tip := ((b.b as Vector3) - (b.pb as Vector3)).length() / maxf(get_physics_process_delta_time(), 0.001)
-		_impact_feel(gob, false, _mass_hit(gob, tip, false))
+		_impact_feel(gob, false, _mass_hit(gob, tip, false, (b.b as Vector3) - (b.pb as Vector3)))
+		_after_hit(gob, res)
 		_numbers.append({"pos": gob.global_position + Vector3(randf_range(-0.3, 0.3), 1.3, 0.0), "v": int(dmg),
 			"crit": false, "t": 0.0})
 
@@ -3007,6 +3032,7 @@ func _blade_strike(b: Dictionary) -> void:
 func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
 	match res:
 		"guard":
+			_cs_add("guarded")
 			_spend(base_dmg * _hf("conc_hit_blocked", 0.5) * (1.5 if _conc < _conc_max() / 3.0 else 1.0), gob)
 			_sfx_once("sounds/katana_hit_%d.ogg" % randi_range(0, 3), -5.0)
 			_sparks(gob.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.65, 0.3), 16, 3.5)
@@ -3014,6 +3040,7 @@ func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
 				_hero.hitstop(0.05)
 			return true
 		"parry":
+			_cs_add("parried_me")
 			_parry_sound()
 			_sparks(gob.global_position + Vector3(0.0, 1.1, 0.0), Color(1.0, 0.85, 0.4), 44, 5.5)
 			_shake = 0.25
@@ -3152,6 +3179,160 @@ func _hero_attacking() -> bool:
 	return _hero != null and _hero.action in Hero.ATTACKS
 
 
+# ---------- вес удара (план боя, этап 1) ----------
+
+## После попадания: удар добил — короткое замедление (kill_slow); удар сломал концентрацию врага — дольше (break_slow).
+func _after_hit(gob: Goblin, res: String) -> void:
+	_cs_add("hits")
+	if res == "dead":
+		_cs_add("kills")
+		_slow_mo(_hf("kill_slow", 0.16), _hf("kill_slow_scale", 0.45))
+	elif res == "broken":
+		_break_feel(gob)
+
+
+## Парирование — событие боя: оба замирают (parry_hitstop, враг дольше), мир на миг замедляется (parry_slow с
+## настоящего времени до parry_slow_scale), толчок камеры к герою и сужение кадра. Парированием сломан — как слом.
+func _parry_feel(attacker: Node3D) -> void:
+	var t := _hf("parry_hitstop", 0.14)
+	if _hero != null:
+		_hero.hitstop(t)
+	if attacker is Goblin:
+		(attacker as Goblin).hitstop(t * 1.5)
+		if (attacker as Goblin).can_deathblow():
+			_break_feel(attacker as Goblin)
+			return
+	_slow_mo(_hf("parry_slow", 0.26), _hf("parry_slow_scale", 0.35))
+	_fov_punch = maxf(_fov_punch, _hf("parry_fov", 0.6))
+	_cam_kick_v += Vector3(0.0, -0.3, -1.4)
+
+
+## Концентрация врага на нуле: долгое замирание и замедление — окно Кровожадной атаки читается сразу.
+func _break_feel(gob: Goblin) -> void:
+	if _hero != null:
+		_hero.hitstop(_hf("break_hitstop", 0.2))
+	if is_instance_valid(gob):
+		gob.hitstop(_hf("break_hitstop", 0.2) * 1.5)
+	_slow_mo(_hf("break_slow", 0.45), _hf("break_slow_scale", 0.3))
+	_fov_punch = maxf(_fov_punch, 1.0)
+	_shake = maxf(_shake, 0.2)
+	_shake_amp = maxf(_shake_amp, 0.06)
+
+
+## Замедление мира: Engine.time_scale на sec настоящих секунд (возврат — _slow_tick по часам, не по кадрам игры).
+## Иай и Кровожадная атака ведут время сами — тогда не трогаем.
+var _slow_until := 0
+var _slow_prev := 1.0
+
+
+func _slow_mo(sec: float, scale: float) -> void:
+	if sec <= 0.0 or scale >= 1.0 or (is_instance_valid(_iai) and _iai.active) or (_blood != null and _blood.active()):
+		return
+	if _slow_until == 0:
+		_slow_prev = Engine.time_scale
+	Engine.time_scale = minf(Engine.time_scale, clampf(scale, 0.05, 1.0))
+	_slow_until = maxi(_slow_until, Time.get_ticks_msec() + int(sec * 1000.0))
+
+
+func _slow_tick() -> void:
+	if _slow_until > 0 and Time.get_ticks_msec() >= _slow_until:
+		_slow_until = 0
+		Engine.time_scale = _slow_prev
+
+
+## Указатель угрозы: враг за краем экрана замахивается — у края стрелка в его сторону (оранжевая; удар, который
+## нельзя парировать, — алая). Без автонаводки игрок должен видеть, откуда бьют.
+var _threat_ui: Control
+var _threats: Array = []
+
+
+func _threat_tick() -> void:
+	_threats.clear()
+	if active and not paused() and is_instance_valid(_cam) and bool(hero_cfg.get("threat_marks", true)):
+		var vr := get_viewport().get_visible_rect().size
+		var pad := 40.0
+		for g: Variant in _goblins:
+			if not is_instance_valid(g) or not (g as Goblin).is_alive():
+				continue
+			var gob: Goblin = g
+			var lvl := gob.threat()
+			if lvl == 0:
+				continue
+			var p := gob.global_position + Vector3(0.0, 1.0, 0.0)
+			var behind := _cam.is_position_behind(p)
+			var sp := _cam.unproject_position(p)
+			if not behind and sp.x > pad and sp.x < vr.x - pad and sp.y > pad and sp.y < vr.y - pad:
+				continue                                     # на экране — видно и так
+			var c := vr * 0.5
+			var d := sp - c
+			if behind:
+				d = -d
+			if d.length() < 1.0:
+				d = Vector2(0.0, 1.0)
+			_threats.append([d.normalized(), lvl])
+	if _threats.is_empty() and not is_instance_valid(_threat_ui):
+		return
+	if not is_instance_valid(_threat_ui):
+		_threat_ui = Control.new()
+		_threat_ui.name = "PaxRpgThreats"
+		_threat_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_threat_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_threat_ui.draw.connect(_threat_draw)
+		add_child(_threat_ui)
+	_threat_ui.queue_redraw()
+
+
+func _threat_draw() -> void:
+	var vr := _threat_ui.size
+	var c := vr * 0.5
+	var rx := vr.x * 0.5 - 70.0
+	var ry := vr.y * 0.5 - 70.0
+	var pulse := 0.65 + 0.35 * sin(Time.get_ticks_msec() * 0.018)
+	for t: Array in _threats:
+		var d: Vector2 = t[0]
+		var k := 1.0 / sqrt(pow(d.x / rx, 2.0) + pow(d.y / ry, 2.0))   # точка на эллипсе у края экрана
+		var at := c + d * k
+		var col := Color(1.0, 0.12, 0.1, pulse) if int(t[1]) >= 2 else Color(1.0, 0.6, 0.15, pulse)
+		var side := Vector2(-d.y, d.x)
+		var sz := 26.0 if int(t[1]) >= 2 else 20.0
+		var pts := PackedVector2Array([at + d * sz, at - d * sz * 0.4 + side * sz * 0.75, at - d * sz * 0.4 - side * sz * 0.75])
+		_threat_ui.draw_colored_polygon(pts, col)
+		_threat_ui.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), Color(0.0, 0.0, 0.0, 0.6 * pulse), 2.0, true)
+
+
+## Строка боя в лог (godot.log, «[pax_rpg combat]»): на каждый бой арены — этап, исход, время и счёт действий.
+## По ней сверяем метрики плана боя: доля попаданий, парирования, попытки на босса.
+var _cs := {}
+var _cs_on := false
+var _cs_t0 := 0
+var _cs_lost := false
+
+
+func _cs_add(key: String) -> void:
+	if _cs_on:
+		_cs[key] = int(_cs.get(key, 0)) + 1
+
+
+func _cs_tick() -> void:
+	var on := is_instance_valid(_arena) and _arena.fighting
+	if on == _cs_on:
+		return
+	_cs_on = on
+	if on:
+		_cs = {}
+		_cs_lost = false
+		_cs_t0 = Time.get_ticks_msec()
+		return
+	var res := "lost" if _cs_lost else str(_arena.get("last_result")) if is_instance_valid(_arena) else "left"
+	var sw := int(_cs.get("swings", 0))
+	var line := "[pax_rpg combat] stage=%d result=%s time=%.1f swings=%d hits=%d acc=%d%% kills=%d guarded=%d parried_me=%d parries=%d blocks=%d dodges=%d taken=%d executions=%d hp=%d aim_assist=%s" % [
+		(_arena.stage() + 1) if is_instance_valid(_arena) else 0, res, (Time.get_ticks_msec() - _cs_t0) / 1000.0,
+		sw, int(_cs.get("hits", 0)), int(100.0 * float(_cs.get("hits", 0)) / maxf(float(sw), 1.0)), int(_cs.get("kills", 0)),
+		int(_cs.get("guarded", 0)), int(_cs.get("parried_me", 0)), int(_cs.get("parries", 0)), int(_cs.get("blocks", 0)),
+		int(_cs.get("dodges", 0)), int(_cs.get("taken", 0)), int(_cs.get("executions", 0)), int(_hp), str(_aim_assist())]
+	print(line)
+
+
 func _hero_blocking() -> bool:
 	return _hero != null and _hero.blocking
 
@@ -3264,6 +3445,7 @@ func _try_bloodthirsty() -> bool:
 		_blood = Blood.new()
 		add_child(_blood)
 	_blood.start(self, _hero, best, hit_at)
+	_cs_add("executions")
 	return true
 
 
@@ -3317,6 +3499,8 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 	if _hero != null and facing and not unblockable and _hero.parry_window():
 		_hero.parry_anim()                           # отбил: клип Parry, блок остаётся
 		_style.hit("Parry")
+		_cs_add("parries")
+		_parry_feel(attacker)
 		_parry_sound(attacker != null and str(attacker.get("_atk")) == "Kick")   # пинок — глухой шлепок, не звон стали
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
 		_shake = maxf(_shake, 0.12)
@@ -3330,6 +3514,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		var guard := 1.0 - _block_reduce()               # пассивка героя (Чёрный рыцарь — «Железная стена»)
 		var tired := 1.5 if _conc < _conc_max() / 3.0 else 1.0   # устал — блок держит хуже
 		_since_hit = 0.0
+		_cs_add("blocks")
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
 		_hero.block_hit(heavy)                          # отдача: сдвиг назад — root motion клипа
 		if attacker is Goblin:
@@ -3338,6 +3523,7 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		return
 	_hp = maxf(0.0, _hp - damage)
 	_style.hurt()
+	_cs_add("taken")
 	if attacker != null and str(attacker.get("_atk")) == "Kick":
 		_sfx_once("sounds/kick_hit.wav", 0.0)              # пинок врага — удар в живот, а не по стали
 	else:
@@ -3363,6 +3549,7 @@ func _hero_down_check(attacker: Node3D) -> void:
 	if _hp <= 0.0 and attacker != null and is_instance_valid(attacker) and attacker.has_method("cheer"):
 		attacker.call("cheer")                       # орк ликует над павшим героем
 	if _hp <= 0.0 and is_instance_valid(_arena) and _arena.fighting:
+		_cs_lost = true
 		_hp = 1.0
 		_broken_t = 0.0
 		_arena.leave(true)
@@ -3678,6 +3865,9 @@ var _tab_was := false
 
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("location._process")
+	_slow_tick()
+	_threat_tick()
+	_cs_tick()
 	if is_instance_valid(_vtalk):
 		_vtalk.tick(active and not _typing() and not (is_instance_valid(_pause) and _pause.visible))
 	# TAB — ещё и опросом: если событие клавиши перехватил кто-то из игры раньше _input, инвентарь всё равно откроется

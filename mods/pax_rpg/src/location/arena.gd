@@ -38,6 +38,7 @@ const FLAT_OUT := 27.0                       # куда выходит геро�
 var _depth := DEPTH
 var _flat := false
 var fighting := false
+var last_result := ""                        # чем кончился последний бой: won / lost / left (строка боя в лог)
 var _root: Node3D                             # трибуны со зрителями, решётки
 var _crowd: Node3D
 var _gates: Node3D
@@ -79,6 +80,13 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	_fade_label.add_theme_font_size_override("font_size", 34)
 	_fade_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.92, 0.0))
 	_fade.add_child(_fade_label)
+
+
+## Затемнение с подписью этапа живёт в интерфейсе локации (ui), а не под ареной: уходит вместе с ареной — раньше
+## каждый вход в город оставлял на локации ещё один невидимый ColorRect с Label.
+func _exit_tree() -> void:
+	if is_instance_valid(_fade):
+		_fade.queue_free()
 
 
 ## Выбранный этап (0…4).
@@ -162,6 +170,7 @@ func start() -> void:
 
 
 func _win() -> void:
+	last_result = "won"
 	fighting = false
 	_foes.clear()
 	var i := stage()
@@ -178,6 +187,7 @@ func _win() -> void:
 func leave(lost := false) -> void:
 	if _busy or (not fighting and _root.get_child_count() == 0):
 		return
+	last_result = "lost" if lost else "left"
 	var out := func() -> void:
 		for f: Variant in _foes:
 			if is_instance_valid(f):
