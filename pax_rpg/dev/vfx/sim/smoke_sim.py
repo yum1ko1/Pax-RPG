@@ -64,10 +64,11 @@ def setup():
         setattr(ds, "use_collision_border_" + b, False)
     ds.use_noise = True             # мелкие завитки по краю клуба (upres ×2)
     ds.noise_scale = 2
-    ds.noise_strength = 1.6
+    ds.noise_strength = 1.0
     ds.noise_pos_scale = 2.5
 
-    # выдох трубы: диск, в первые кадры дует дымом вверх (вихревое кольцо), потом уходит из домена
+    # выдох трубы: диск с дымом в первые кадры сам летит вверх (газ получает скорость диска — «начальная скорость»
+    # потока у Mantaflow почти не толкает), за ним заворачивается вихревое кольцо; потом уходит из домена
     bpy.context.preferences.edit.keyframe_new_interpolation_type = "CONSTANT"
     bpy.ops.mesh.primitive_cylinder_add(radius=0.3, depth=0.3, location=(0, 0, 0.45), vertices=48)
     src = bpy.context.object
@@ -85,6 +86,7 @@ def setup():
     fs.temperature = 1.5
     fs.velocity_normal = 0.4
     fs.velocity_coord = (0.0, 0.0, 2.6)
+    fs.velocity_factor = 1.0
     tex = bpy.data.textures.new("lumps", "CLOUDS")
     tex.noise_scale = 0.12             # подача пятнами — клуб неровный с самого начала
     tex.contrast = 2.2
@@ -92,6 +94,7 @@ def setup():
     fs.noise_texture = tex
     fs.texture_map_type = "AUTO"
     src.keyframe_insert("location", frame=F0)
+    src.location = (0, 0, 0.45 + 0.6)               # 3 м/с вверх
     src.keyframe_insert("location", frame=F0 + 6)
     src.location = (0, 0, -10.0)                    # прыжком за домен: дует только первые кадры
     src.keyframe_insert("location", frame=F0 + 7)
@@ -104,6 +107,7 @@ def setup():
     for fc in curves:
         for kp in fc.keyframe_points:
             kp.interpolation = "CONSTANT"
+        fc.keyframe_points[0].interpolation = "LINEAR"   # первые кадры диск летит, потом прыжком за домен
     src.hide_render = True
     return dom
 
