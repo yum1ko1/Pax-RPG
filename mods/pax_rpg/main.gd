@@ -33,6 +33,16 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
+	# Вселенная — одна Юрумовская система (звёзды и галактики убраны данными: data/galaxy*.patch.json): модули игры
+	# выключены — галактика не открывается при отдалении (src/planet/no_galaxy.gd), тайн чужих звёзд нет. Других планет
+	# тоже нет (data/bodies.patch.json) — выключен и космос: спутники, мегаструктуры, линии снабжения, перелёты. Камера
+	# держится за Юруму и при отдалении не уходит в вид системы (src/planet/home_camera.gd).
+	# Действует со следующей партии (службы создаются при старте мира).
+	for r: String in [Pax.replace_service("galaxy_view", path("src/planet/no_galaxy.gd")),
+			Pax.replace_service("camera_navigation", path("src/planet/home_camera.gd")), Pax.disable_system("secrets"),
+			Pax.disable_system("space")]:
+		if r != "":
+			log_info("[pax_rpg] universe: " + r)
 	# Временное меню (по просьбе автора): «Продолжить», «Новая игра», «Загрузить», «Мультиплеер», «Настройки», «Выход».
 	# Тестовая арена — в коде (команда rpg_arena), в меню вернём, когда понадобится. Мультиплеер — сеть игры
 	# (её лобби и серверы); в городе герои игроков видят друг друга (src/location/net_sync.gd).
