@@ -590,6 +590,9 @@ func build(city: Dictionary) -> void:
 	_shop_view = ShopView.new()
 	_shop_view.setup(mod)
 	_shop_view.closed.connect(_close_shop)
+	_shop_view.talk_requested.connect(func() -> void:
+		_shop_view.close()
+		_start_talk())
 	_shop_view.sound.connect(_sfx_once)
 	add_child(_shop_view)
 	_journal = Journal.new()

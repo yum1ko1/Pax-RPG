@@ -9,6 +9,7 @@ extends Control
 ## Макет 1536 × 1024 (как у инвентаря и сцены), масштаб под экран. Мир на паузе.
 
 signal closed
+signal talk_requested                                # «Поговорить» — к разговору с этим торговцем (location.gd)
 signal sound(path: String, db: float)            # location.gd → _sfx_once
 
 const Ui := preload("res://mods/pax_rpg/src/location/inv/ui.gd")
@@ -176,6 +177,8 @@ func _build_left() -> void:
 	_box(_frame, Rect2(pr.position.x, pr.end.y - 90, pr.size.x, 90), func(ci: Control) -> void:   # низ портрета уходит в тень
 		for i: int in 30:
 			ci.draw_rect(Rect2(0, i * 3.0, ci.size.x, 3.0), Color(0.02, 0.01, 0.01, i / 30.0 * 0.95)))
+	var talk := _button(_frame, mod.tr_key("pax_rpg_shop_talk"), Rect2(LEFT.get_center().x - 90, pr.end.y - 46, 180, 34), 12, true)
+	talk.pressed.connect(func() -> void: talk_requested.emit())    # низ портрета: лавка → разговор (там «Лавка» — назад)
 	var y := pr.end.y + 4.0
 	_name_l = ui.label(_frame, "", ui.caps(17, 0.12), 17, TEXT, Vector2(LEFT.position.x + 10, y), LEFT.size.x - 20, HORIZONTAL_ALIGNMENT_CENTER)
 	_role_l = ui.label(_frame, mod.tr_key("pax_rpg_npc_role_trader").to_upper(), ui.caps(10, 0.14), 10, Ui.GOLD,
