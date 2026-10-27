@@ -3938,7 +3938,11 @@ func _input(event: InputEvent) -> void:
 		if key.physical_keycode in KEYS or key.keycode in KEYS:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_talk_npc) and not _near_gate:
-			_start_talk()                            # житель рядом — разговор
+			if bool(_talk_npc.get("shop")) or str(_talk_npc.get("role")) == "trader":
+				if not (is_instance_valid(_arena) and _arena.fighting):
+					_open_shop()                         # торговец базара — сразу лавка, без разговора
+			else:
+				_start_talk()                            # житель рядом — разговор
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
