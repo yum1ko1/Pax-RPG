@@ -1,0 +1,4 @@
+Reference sheet for 3D modeling (character, vehicle or prop) for a grounded modern military game. Single subject,
+whole subject inside the frame with margin, characters in neutral A-pose, front view, even soft studio lighting with
+no cast shadows, flat neutral light-grey background, clear material separation (fabric, plastic, metal, rubber,
+concrete), realistic proportions, no text, no labels, no extra objects.

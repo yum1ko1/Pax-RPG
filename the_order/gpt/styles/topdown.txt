@@ -1,0 +1,4 @@
+Top-down orthographic level plan of a modern city block in the style of Washington, D.C., viewed straight from above
+as a readable map for level design: wide avenues, narrow side streets and alleys, building footprints with flat roofs,
+parks with round tree canopies, plazas, parking lots, a metro entrance. Strong contrast between walkable and drivable
+surfaces (light asphalt and pavement) and buildings (dark roofs). No perspective tilt, no text, no labels, no compass.
