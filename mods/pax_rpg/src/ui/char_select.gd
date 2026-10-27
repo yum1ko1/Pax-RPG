@@ -6,6 +6,7 @@ extends CanvasLayer
 signal picked(id: String)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const W := 1920.0
 const H := 1080.0
 const SLOTS := 3                     # карточек на экране: 1 герой + будущие (портреты есть, подписи — позже)
@@ -122,7 +123,7 @@ func _hero_card(r: Rect2, ch: Dictionary) -> void:
 	var p := _panel(r, true, false)
 	var id := str(ch.get("id", "black_knight"))
 	var portrait := str(ch.get("portrait", "textures/hero_portrait.png"))
-	var tex := mod.texture(portrait) if portrait != "" else null
+	var tex := Assets.tex(mod, portrait) if portrait != "" else null
 	if tex != null:
 		var tr := TextureRect.new()
 		tr.texture = tex
@@ -174,7 +175,7 @@ func _hero_card(r: Rect2, ch: Dictionary) -> void:
 ## Будущий герой: портрет во всю карточку, подпись — позже; выбрать пока нельзя («Скоро»).
 func _portrait_card(r: Rect2, tex_path: String) -> void:
 	var p := _panel(r, false, false)
-	var tex := mod.texture(tex_path)
+	var tex := Assets.tex(mod, tex_path)
 	if tex != null:
 		var tr := TextureRect.new()
 		tr.texture = tex

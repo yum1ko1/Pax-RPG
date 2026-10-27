@@ -6,6 +6,8 @@ extends RefCounted
 const SMOKE := "textures/vfx/smoke_8x8.png"
 const FIRE := "textures/vfx/fire_8x8.png"
 const GLOW := "textures/vfx/glow.png"
+const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 
 var mod: PaxMod
 var _mats := {}
@@ -29,7 +31,7 @@ func _flip_mat(tex: String, additive: bool, energy: float) -> StandardMaterial3D
 	m.particles_anim_v_frames = 8
 	m.particles_anim_loop = false
 	m.vertex_color_use_as_albedo = true
-	m.albedo_texture = mod.texture(tex)
+	m.albedo_texture = Assets.tex(mod, tex)          # флипбуки дыма и огня — .dds рядом (BC7), если есть
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	m.proximity_fade_enabled = true                      # мягкие частицы: без резкого среза о стены и землю
@@ -201,44 +203,73 @@ func flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance
 	return mi
 
 
+## Огонь из настоящей симуляции газа (shaders/vfx_fire.gdshader, атлас textures/vfx/sim/brazier_fire*.png):
+## языки, вихри, отрыв пламени и дым над ним — как у живого огня, а не шум на плоскости. Основание — в pos,
+## size ≈ высота языков, м. Кадр симуляции — домен SIM_W × SIM_H м, угли на SIM_BASE от его низа.
+const SIM_FIRE := "textures/vfx/sim/brazier_fire"
+const SIM_W := 1.3
+const SIM_H := 2.6
+const SIM_BASE := 0.14
+const SIM_FLAME := 1.0                                 # высота языков в симуляции, м (угли в ней — круг r 0.3 м)
+static var _sim_sh: Shader
+## Дрожь воздуха над огнём (shaders/vfx_heat.gdshader) пока выключена: копия экрана берётся до прозрачного,
+## и дрожь вырезает в нём дыру — дым соседней трубы, другой огонь, стекло за жаровней.
+const HEAT_HAZE := false
+
+
+func sim_flame(parent: Node, pos: Vector3, size: float, push := 0.0) -> MeshInstance3D:
+	if not _mats.has("sim_fire"):
+		if _sim_sh == null:
+			_sim_sh = mod.shader("shaders/vfx_fire.gdshader")
+		var m := ShaderMaterial.new()
+		m.shader = _sim_sh
+		m.set_shader_parameter("atlas", mod.texture(SIM_FIRE + ".png"))
+		m.set_shader_parameter("flow_tex", mod.texture(SIM_FIRE + "_flow.png"))
+		_mats["sim_fire"] = m
+		_flame_mat()                                     # шум для дрожи воздуха
+		var hm := ShaderMaterial.new()
+		hm.shader = mod.shader("shaders/vfx_heat.gdshader")
+		hm.set_shader_parameter("noise_tex", _noise)
+		hm.render_priority = -1                          # раньше огня: дрожь берёт кадр без прозрачного и не стирает пламя
+		_mats["heat"] = hm
+	var k := size / SIM_FLAME
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(SIM_W, SIM_H) * k
+	q.center_offset = Vector3(0.0, (SIM_H * 0.5 - SIM_BASE) * k, 0.0)
+	q.material = _mats["sim_fire"]
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = 120.0
+	mi.position = pos
+	parent.add_child(mi)
+	if push != 0.0:
+		mi.set_instance_shader_parameter(&"push", push)
+	if not HEAT_HAZE:
+		return mi
+	var hz := MeshInstance3D.new()                       # горячий воздух над огнём
+	var hq := QuadMesh.new()
+	hq.size = Vector2(SIM_W * 0.8, SIM_H * 0.9) * k
+	hq.center_offset = Vector3(0.0, SIM_H * 0.45 * k, 0.0)
+	hq.material = _mats["heat"]
+	hz.mesh = hq
+	hz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hz.visibility_range_end = 25.0
+	hz.position = pos
+	parent.add_child(hz)
+	return mi
+
+
 ## Огонь из слоёв. size ≈ высота языков, м. Возвращает свет (им управляет daynight как фонарём).
-func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLight3D:
-	flame(parent, pos - Vector3(0, size * 0.05, 0), size * 1.35)   # тело огня — живое пламя на шумах
-	var fl := _parts(parent, pos, _flip_mat(FIRE, true, 1.6), 7, 0.75)    # отрывающиеся языки поверх тела огня
-	fl.direction = Vector3.UP
-	fl.spread = 6.0
-	fl.initial_velocity_min = size * 0.4
-	fl.initial_velocity_max = size * 0.8
-	fl.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	fl.emission_sphere_radius = size * 0.15
-	fl.gravity = Vector3(0, 0.6, 0)
-	fl.angle_min = -8.0
-	fl.angle_max = 8.0
-	fl.scale_amount_min = size * 0.7
-	fl.scale_amount_max = size * 1.1
-	var shrink := Curve.new()
-	shrink.add_point(Vector2(0, 0.7))
-	shrink.add_point(Vector2(0.3, 1.0))
-	shrink.add_point(Vector2(1, 0.3))
-	fl.scale_amount_curve = shrink
-	var fr := Gradient.new()
-	fr.set_color(0, Color(1, 1, 1, 0.0))
-	fr.add_point(0.15, Color(1, 1, 1, 1))
-	fr.set_color(1, Color(1, 0.6, 0.4, 0.0))
-	fl.color_ramp = fr
+## sim — пламя из симуляции (sim_flame); false — прежнее: шум на плоскости + флипбук языков.
+func fire(parent: Node, pos: Vector3, size: float, with_smoke := true, sim := true) -> OmniLight3D:
+	if sim:
+		sim_flame(parent, pos, size)
+		with_smoke = false                               # дым над огнём уже в симуляции
+	else:
+		_old_flame(parent, pos, size)
 	var sp := CPUParticles3D.new()                       # искры: уходят вверх, гаснут
-	var sm := QuadMesh.new()                             # искра — штрих по направлению полёта (как у раскалённых
-	sm.size = Vector2(0.014, 0.075)                      # частиц в жизни: глаз видит след), а не точка
-	var smat := StandardMaterial3D.new()
-	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	smat.albedo_color = Color(3.0, 1.4, 0.4)
-	smat.vertex_color_use_as_albedo = true
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	smat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	smat.billboard_keep_scale = true
-	sm.material = smat
-	sp.mesh = sm
+	sp.mesh = _spark_mesh()
 	sp.particle_flag_align_y = true
 	sp.amount = 10
 	sp.lifetime = 1.6
@@ -264,12 +295,59 @@ func fire(parent: Node, pos: Vector3, size: float, with_smoke := true) -> OmniLi
 	if with_smoke:
 		smoke(parent, pos + Vector3(0, size * 1.1, 0), size * 0.8, Color(0.22, 0.2, 0.22, 0.3), 8, 0.7)
 	var l := Flicker.new()
+	l.sparks = sp
 	l.light_color = Color(1.0, 0.52, 0.22)
 	l.light_energy = 1.1
 	l.omni_range = 7.0 + size * 3.0
 	l.position = pos + Vector3(0, size * 0.6, 0)
 	parent.add_child(l)
 	return l
+
+
+
+func _old_flame(parent: Node, pos: Vector3, size: float) -> void:
+	flame(parent, pos - Vector3(0, size * 0.05, 0), size * 1.35)   # тело огня — живое пламя на шумах
+	var fl := _parts(parent, pos, _flip_mat(FIRE, true, 1.6), 7, 0.75)    # отрывающиеся языки поверх тела огня
+	fl.direction = Vector3.UP
+	fl.spread = 6.0
+	fl.initial_velocity_min = size * 0.4
+	fl.initial_velocity_max = size * 0.8
+	fl.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	fl.emission_sphere_radius = size * 0.15
+	fl.gravity = Vector3(0, 0.6, 0)
+	fl.angle_min = -8.0
+	fl.angle_max = 8.0
+	fl.scale_amount_min = size * 0.7
+	fl.scale_amount_max = size * 1.1
+	var shrink := Curve.new()
+	shrink.add_point(Vector2(0, 0.7))
+	shrink.add_point(Vector2(0.3, 1.0))
+	shrink.add_point(Vector2(1, 0.3))
+	fl.scale_amount_curve = shrink
+	var fr := Gradient.new()
+	fr.set_color(0, Color(1, 1, 1, 0.0))
+	fr.add_point(0.15, Color(1, 1, 1, 1))
+	fr.set_color(1, Color(1, 0.6, 0.4, 0.0))
+	fl.color_ramp = fr
+
+## Искра — штрих по направлению полёта (как у раскалённых частиц в жизни: глаз видит след), а не точка.
+## Сетка и материал — одни на все огни (были свои у каждого).
+func _spark_mesh() -> QuadMesh:
+	if _mats.has("spark"):
+		return _mats["spark"]
+	var sm := QuadMesh.new()
+	sm.size = Vector2(0.014, 0.075)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.albedo_color = Color(3.0, 1.4, 0.4)
+	smat.vertex_color_use_as_albedo = true
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	smat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	smat.billboard_keep_scale = true
+	sm.material = smat
+	_mats["spark"] = sm
+	return sm
 
 
 ## Ореол у фонаря / кристалла: мягкое свечение вокруг источника, чуть дышит.
@@ -294,9 +372,12 @@ func halo(parent: Node, pos: Vector3, color: Color, size: float, energy := 1.2) 
 ## в больших движках); дальше FAR м от камеры мерцание не считается — его там не разглядеть.
 class Flicker extends OmniLight3D:
 	const FAR := 60.0
+	const SPARKS_FAR := 66.0         # искры (CPUParticles3D, дальность показа 60 м) дальше — уже не рисуются, но
+	                                 # процессор считал их и слал буфер в сервер рендера каждый кадр; скрытые — стоят
 	static var all: Array = []
 	static var _driver: Flicker
 	var base := -1.0
+	var sparks: CPUParticles3D       # искры этого огня (vfx.fire)
 	var _t := randf() * 100.0
 
 	func _enter_tree() -> void:
@@ -321,6 +402,7 @@ class Flicker extends OmniLight3D:
 		if _driver != self:
 			set_process(false)
 			return
+		var t0 := Time.get_ticks_usec()
 		var cam := get_viewport().get_camera_3d()
 		var cp := cam.global_position if cam != null else Vector3.ZERO
 		for v: Variant in all:
@@ -330,11 +412,22 @@ class Flicker extends OmniLight3D:
 			if f.base < 0.0:
 				f.base = f.light_energy
 			f._t += delta
-			if cam != null and f.global_position.distance_squared_to(cp) > FAR * FAR:
+			var d2 := f.global_position.distance_squared_to(cp) if cam != null else 0.0
+			if f.sparks != null:
+				if not is_instance_valid(f.sparks):
+					f.sparks = null
+				elif (d2 > SPARKS_FAR * SPARKS_FAR) == f.sparks.visible:
+					f.sparks.visible = d2 <= SPARKS_FAR * SPARKS_FAR
+			# выключенный огонь (днём daynight гасит все: base 0, узел скрыт) — энергию не трогаем: раньше каждый
+			# кадр ~100 записей нуля в сервер рендера; включат — следующий кадр выставит её от base
+			if not f.visible:
+				continue
+			if d2 > FAR * FAR:
 				continue
 			var t := f._t
 			var n := sin(t * 13.0) * 0.5 + sin(t * 7.3 + 1.7) * 0.3 + sin(t * 23.0 + 0.4) * 0.2
 			f.light_energy = f.base * (0.85 + 0.15 * n)
+		Prof.add("огни (мерцание)", t0)
 
 
 ## Ореол — billboard как у StandardMaterial (без масштаба узла: прежнее «дыхание» через scale billboard и так

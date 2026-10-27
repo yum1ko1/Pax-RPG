@@ -101,6 +101,9 @@ func apply_theme(id: String) -> void:
 	if is_instance_valid(_deco):
 		_deco_key = Vector2.ZERO
 		_deco.queue_redraw()
+	if is_instance_valid(_cmp):
+		_cmp_sig = 0                                     # цвета компаса — из темы
+		_cmp.queue_redraw()
 var st: Dictionary = {}             # состояние кадра (location.gd)
 var portrait: Texture2D             # портрет врага
 var hero_portrait: Texture2D        # портрет героя (textures/hero_portrait.png — pax_rpg/dev/blender/knight/portrait.py)
@@ -131,6 +134,12 @@ func setup(m: PaxMod, enemy_portrait: Texture2D) -> void:
 	_deco.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
+	_cmp = Control.new()
+	_cmp.show_behind_parent = true                        # после оправы, до основного HUD — порядок как был
+	_cmp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cmp.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_cmp.draw.connect(_draw_cmp)
+	add_child(_cmp)
 	_mask = Control.new()
 	_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_mask.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
@@ -165,10 +174,25 @@ func refresh() -> void:
 	_map.size = _mask.size
 	# весь HUD (≈200 команд рисования и текста) — только когда изменилось состояние или размер экрана; раньше —
 	# каждый кадр. Дышащая монета — свой слой (_coin), он дёшев и рисуется каждый кадр.
+	# в отпечаток основного HUD не входит то, что меняется при ходьбе и повороте камеры (компас — свой слой _cmp,
+	# миникарта — _map), и сама миникарта: map_rects — сотни коробок города, меняется только при постройке
+	var held := {}
+	for k: String in _MOVING:
+		if st.has(k):
+			held[k] = st[k]
+			st.erase(k)
 	var sig := st.hash() ^ hash(Vector3(size.x, size.y, _s))
+	for k: String in held:
+		st[k] = held[k]
+	if held.get("map_rects") is Array:
+		sig ^= (held["map_rects"] as Array).size()
 	if sig != _sig:
 		_sig = sig
 		queue_redraw()
+	var csig := hash([held.get("yaw", 0.0), held.get("targets", []), st.get("place", ""), size, _s])
+	if csig != _cmp_sig:
+		_cmp_sig = csig
+		_cmp.queue_redraw()
 	if is_instance_valid(_coin):
 		_coin.queue_redraw()
 	_live_tick()
@@ -197,6 +221,22 @@ func refresh() -> void:
 
 var _sig := 0                        # отпечаток состояния, с которым HUD нарисован последний раз
 var _coin: Control
+var _cmp: Control                    # компас и подписи у миникарты — меняются с каждым поворотом камеры и шагом
+var _cmp_sig := 0
+const _MOVING := ["me", "yaw", "body_yaw", "targets", "enemies", "map_rects"]   # не входят в отпечаток основного HUD
+
+
+## Компас и север у миникарты — свой слой за HUD (там же, где они были в порядке рисования: над оправой, под
+## остальным): при движении мыши и ходьбе перерисовывается он один, а не весь HUD (~200 команд и текст).
+func _draw_cmp() -> void:
+	if st.is_empty():
+		return
+	_ci = _cmp
+	_txt_k = 1.0
+	_cmp.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
+	_draw_compass()
+	_draw_map_frame()
+	_ci = self
 
 
 func _draw_coin() -> void:
@@ -241,8 +281,18 @@ func _g(k: String, d: Variant = 0.0) -> Variant:
 	return st.get(k, d)
 
 
+var _tr_cache := {}
+
+
+## Перевод строки — один раз за игру (раньше ~15 поисков по словарю языка на каждую перерисовку HUD).
 func _tr(k: String) -> String:
-	return mod.tr_key(k) if mod != null else k
+	if mod == null:
+		return k
+	var v: Variant = _tr_cache.get(k)
+	if v == null:
+		v = mod.tr_key(k)
+		_tr_cache[k] = v
+	return str(v)
 
 
 # ---------- рисование ----------
@@ -259,8 +309,6 @@ func _draw() -> void:
 	_draw_skills()
 	_txt_k = 1.0
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s, _s))
-	_draw_compass()
-	_draw_map_frame()
 	_draw_quest()
 	_draw_enemy()
 	_draw_marks()
@@ -715,7 +763,7 @@ func _draw_compass() -> void:
 	var line_y := 52.0
 	for i: int in 24:
 		var a := float(i) / 24.0
-		draw_rect(Rect2(cx - 300 + 600 * a, line_y, 600.0 / 24.0, 1), Color(c_text, 0.7 * sin(a * PI)))
+		_ci.draw_rect(Rect2(cx - 300 + 600 * a, line_y, 600.0 / 24.0, 1), Color(c_text, 0.7 * sin(a * PI)))
 	var marks := [["С", 0.0], ["СЗ", 45.0], ["З", 90.0], ["ЮЗ", 135.0], ["Ю", 180.0], ["ЮВ", -135.0], ["В", -90.0],
 		["СВ", -45.0]]
 	for m: Array in marks:
@@ -736,13 +784,13 @@ func _draw_compass() -> void:
 		var x := cx - rel / (PI * 0.5) * 300.0
 		var col: Color = td.color
 		if bool(td.get("ring", false)):
-			draw_arc(Vector2(x, line_y), 6.0, 0.0, TAU, 20, col, 2.0, true)
+			_ci.draw_arc(Vector2(x, line_y), 6.0, 0.0, TAU, 20, col, 2.0, true)
 		else:
-			draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
+			_ci.draw_colored_polygon(_diamond(Vector2(x, line_y), 8.0), col)
 		var ly := line_y + (38.0 if bool(td.get("ring", false)) else 22.0)   # ворота — ниже, не налезают на врага
 		_center(Vector2(x, ly), "%d м" % int(td.dist), sans, 13, col, 3)
-	draw_colored_polygon(PackedVector2Array([Vector2(cx - 7, 70), Vector2(cx + 7, 70), Vector2(cx, 60)]), c_gold)   # указатель
-	draw_rect(Rect2(cx - 1, 40, 2, 22), c_gold_hi)
+	_ci.draw_colored_polygon(PackedVector2Array([Vector2(cx - 7, 70), Vector2(cx + 7, 70), Vector2(cx, 60)]), c_gold)   # указатель
+	_ci.draw_rect(Rect2(cx - 1, 40, 2, 22), c_gold_hi)
 
 
 func _draw_map_frame() -> void:
@@ -1183,6 +1231,7 @@ var _lay := {}                         # ключ → что рисовать с
 var _bar_sh: Shader
 var _foe_id := -1
 var _foe_e: Dictionary = {}
+var _bar_par := {}                     # ключ → [fill/ghost/low/broken, alpha, aspect], уже отданные шейдеру полосы
 
 
 func _ht(name_: String) -> Texture2D:
@@ -1278,31 +1327,50 @@ func _place(key: String, frame_key: String, tex_name: String, r: Rect2, slot: Ar
 	var a := smoothstep(0.0, 1.0, float(b.a))
 	var sr := Rect2(r.position + r.size * Vector2(float(slot[0]), float(slot[1])), r.size * Vector2(float(slot[2]), float(slot[3])))
 	var n := _bar_node(key, cols, centered, vertical)
-	n.position = (sr.position - Vector2(2, 2)) * _s
-	n.size = (sr.size + Vector2(4, 4)) * _s
-	n.visible = a > 0.01
+	var shown := a > 0.01
+	# узлы и шейдер — только при изменении: каждое присваивание — вызов в сервер рендера (материал полосы
+	# перезаливался каждый кадр, даже у скрытой полосы)
+	var np := (sr.position - Vector2(2, 2)) * _s
+	if n.position != np:
+		n.position = np
+	var ns := (sr.size + Vector2(4, 4)) * _s
+	if n.size != ns:
+		n.size = ns
+	if n.visible != shown:
+		n.visible = shown
 	var m := n.material as ShaderMaterial
-	if m != null:
-		m.set_shader_parameter("fill", float(b.v))
-		m.set_shader_parameter("ghost", float(b.ghost))
-		m.set_shader_parameter("low", 1.0 if low else 0.0)
-		m.set_shader_parameter("broken", 1.0 if broken else 0.0)
-		m.set_shader_parameter("alpha", a)
-		m.set_shader_parameter("aspect", maxf(sr.size.x, sr.size.y) / maxf(minf(sr.size.x, sr.size.y), 1.0))
+	if m != null and shown:                                   # скрытой полосе параметры не нужны — выставятся при показе
+		var pv := Vector4(float(b.v), float(b.ghost), 1.0 if low else 0.0, 1.0 if broken else 0.0)
+		var asp := maxf(sr.size.x, sr.size.y) / maxf(minf(sr.size.x, sr.size.y), 1.0)
+		var last: Variant = _bar_par.get(key)
+		if not (last is Array) or (last as Array)[0] != pv or float((last as Array)[1]) != a or float((last as Array)[2]) != asp:
+			_bar_par[key] = [pv, a, asp]
+			m.set_shader_parameter("fill", pv.x)
+			m.set_shader_parameter("ghost", pv.y)
+			m.set_shader_parameter("low", pv.z)
+			m.set_shader_parameter("broken", pv.w)
+			m.set_shader_parameter("alpha", a)
+			m.set_shader_parameter("aspect", asp)
 	if frame_key != "":
 		var f := _frame_node(frame_key, tex_name)
-		f.position = r.position * _s
-		f.size = r.size * _s
-		f.visible = a > 0.01
-		f.modulate.a = a
+		var fp := r.position * _s
+		if f.position != fp:
+			f.position = fp
+		var fs := r.size * _s
+		if f.size != fs:
+			f.size = fs
+		if f.visible != shown:
+			f.visible = shown
+		if f.modulate.a != a:
+			f.modulate.a = a
 	_lay[key] = {"rect": sr, "vertical": vertical, "centered": centered, "low": low, "broken": broken, "a": a, "b": b}
 
 
 func _hide(keys: Array) -> void:
 	for k: String in keys:
-		if _bar_nodes.has(k):
+		if _bar_nodes.has(k) and (_bar_nodes[k] as Control).visible:
 			(_bar_nodes[k] as Control).visible = false
-		if _frame_nodes.has(k):
+		if _frame_nodes.has(k) and (_frame_nodes[k] as Control).visible:
 			(_frame_nodes[k] as Control).visible = false
 		_lay.erase(k)
 
@@ -1357,7 +1425,18 @@ func _live_tick() -> void:
 		_place("foe_hp", "foe", "enemy_frame", er, FOE_HP, HP_COLS, false, true, fh, false, false)
 		_place("foe_conc", "", "", er, FOE_CONC, CONC_COLS, true, true, fc, float(fc.v) < 1.0 / 3.0, bool(e.get("broken", false)))
 		_lay["foe_frame"] = {"rect": er}
-	_over.queue_redraw()
+	# верхний слой — только когда на нём что-то есть (и один раз после — стереть): вне боя полоса героя скрыта,
+	# а пустой слой перерисовывался каждый кадр
+	var busy := _lay.has("boss_hp") or _lay.has("foe_frame")
+	for k: String in ["hero", "boss_conc", "foe_conc"]:
+		if _lay.has(k) and float((_lay[k] as Dictionary).get("a", 0.0)) > 0.01:
+			busy = true
+	if busy or _over_busy:
+		_over.queue_redraw()
+	_over_busy = busy
+
+
+var _over_busy := true
 
 
 ## Верхний слой: тумблеры и шевроны у краёв концентрации, метка центра, слом; аватар врага в медальоне, имена,
