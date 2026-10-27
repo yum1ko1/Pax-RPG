@@ -411,7 +411,8 @@ func _draw_hero() -> void:
 	var pc := pr.get_center()
 	var prad := minf(pr.size.x, pr.size.y) * 0.5 + 2.0
 	_disc(pc, prad, WELL)
-	var pp := str(_hero_cfg().get("portrait", ""))
+	var ch_id := str(mod.get_setting("character", ""))
+	var pp := str((_ui.get("portraits", {}) as Dictionary).get(ch_id, _hero_cfg().get("portrait", "")))   # арт-аватар героя
 	var portrait := _t(pp) if pp != "" else null
 	_disc(pc, prad, Color.WHITE, portrait if portrait != null else _t("textures/hero_portrait.png"))
 	var lvl := maxi(1, int(p.get("level", 1)))
@@ -436,23 +437,18 @@ func _draw_hero() -> void:
 		nm = _tr("pax_rpg_hero_name")
 	_ctext(r.position + r.size * Vector2(0.5195, 0.279), nm.to_upper(), _f_sc, 21, IVORY, 0.27 * r.size.x)
 	_ctext(r.position + r.size * Vector2(0.3055, 0.809), str(lvl), _f_sc, 27, IVORY, 44.0)
-	_text(Vector2(b1.position.x + 8.0, b1.get_center().y + 5.0), _tr("pax_rpg_wui_hp"), _f_serif, 15, IVORY)
-	_text(Vector2(b2.position.x + 8.0, b2.get_center().y + 5.0), _tr("pax_rpg_wui_renown"), _f_serif, 15, IVORY)
-	_text(Vector2(b2.end.x - 8.0 - 80.0, b2.get_center().y + 5.0), ("+" if fame > 0 else "") + str(fame), _f_sc, 16, IVORY,
-		HORIZONTAL_ALIGNMENT_RIGHT, 80.0)
 	# ранг и золото — строка под рамкой
 	var rank := clampi(int(mod.get_setting("rank", 0)), 0, 6)
 	var y := r.end.y + 4.0
-	var x := r.position.x + r.size.x * 0.38
+	var x := r.position.x + r.size.x * 0.3
 	var rt := _t("textures/inventory/rank_%d.png" % rank)
 	if rt != null:
-		_root.draw_texture_rect(rt, Rect2(x, y - 2.0, 28.0, 28.0), false)
-	_text(Vector2(x + 32.0, y + 19.0), "%s: %s" % [_tr("pax_rpg_wui_rank"), _tr("pax_rpg_rank_%d" % rank)], _f_sc, 18, IVORY_DIM,
-		HORIZONTAL_ALIGNMENT_LEFT, 180.0)
-	var gx := x + 215.0
-	_disc(Vector2(gx + 10.0, y + 12.0), 9.0, AMBER)
-	_disc(Vector2(gx + 10.0, y + 12.0), 5.0, AMBER.darkened(0.35))
-	_text(Vector2(gx + 26.0, y + 19.0), _thousands(int(p.get("gold", 0))), _f_sc, 19, IVORY, HORIZONTAL_ALIGNMENT_LEFT, 110.0)
+		_root.draw_texture_rect(rt, Rect2(x, y - 3.0, 36.0, 36.0), false)
+	_text(Vector2(x + 40.0, y + 23.0), _tr("pax_rpg_rank_%d" % rank), _f_sc, 25, IVORY, HORIZONTAL_ALIGNMENT_LEFT, 200.0)
+	var gx := x + 250.0
+	_disc(Vector2(gx + 12.0, y + 15.0), 12.0, AMBER)
+	_disc(Vector2(gx + 12.0, y + 15.0), 7.0, AMBER.darkened(0.35))
+	_text(Vector2(gx + 32.0, y + 24.0), _thousands(int(p.get("gold", 0))), _f_sc, 26, IVORY, HORIZONTAL_ALIGNMENT_LEFT, 130.0)
 
 
 ## Слава в мире — средняя репутация с империями (как «отношение» в инвентаре), −100…100.
@@ -484,7 +480,7 @@ func _tier(v: int) -> int:
 # ---------- задание ----------
 
 func _draw_quest() -> void:
-	var r := _frame(_hud2, "quest", 22.0, 252.0, 400.0)
+	var r := _frame(_hud2, "quest", 22.0, 262.0, 470.0)
 	_tex_frame(_hud2_tex.get("quest"), r)
 	var q := Quest.get_q(mod)
 	var x := r.position.x + 38.0
@@ -499,19 +495,19 @@ func _draw_quest() -> void:
 	else:
 		rows.append([_tr("pax_rpg_wui_quest_none"), true])
 		rows.append([_tr("pax_rpg_wui_quest_hint"), false])
-	_text(Vector2(x, r.position.y + r.size.y * 0.2 + 8.0), _tr("pax_rpg_hud_quest"), _f_sc, 22, IVORY, HORIZONTAL_ALIGNMENT_LEFT, w - 120.0)
+	_text(Vector2(x, r.position.y + r.size.y * 0.2 + 8.0), _tr("pax_rpg_hud_quest"), _f_sc, 30, IVORY, HORIZONTAL_ALIGNMENT_LEFT, w - 120.0)
 	var y := r.position.y + r.size.y * 0.47
 	for rv: Variant in rows:
 		var row: Array = rv
 		var on := bool(row[1])
 		var dc := Vector2(x + 12.0, y)
 		if on:
-			_root.draw_colored_polygon(_diamond(dc, 4.0), IVORY)
+			_root.draw_colored_polygon(_diamond(dc, 6.0), IVORY)
 		else:
-			var lp := _diamond(dc, 4.0)
+			var lp := _diamond(dc, 6.0)
 			lp.append(lp[0])
 			_root.draw_polyline(lp, IVORY_DIM, 1.0, true)
-		_text(Vector2(x + 26.0, y + 7.0), str(row[0]), _f_serif, 19, IVORY if on else IVORY_DIM, HORIZONTAL_ALIGNMENT_LEFT, w - 28.0)
+		_text(Vector2(x + 30.0, y + 9.0), str(row[0]), _f_serif, 27, IVORY if on else IVORY_DIM, HORIZONTAL_ALIGNMENT_LEFT, w - 32.0)
 		y += r.size.y * 0.19
 
 

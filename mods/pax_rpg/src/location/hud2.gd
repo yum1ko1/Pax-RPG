@@ -75,6 +75,10 @@ func _font(path: String) -> Font:
 func apply_theme(id: String) -> void:
 	super.apply_theme(id)
 	_char = id
+	var u: Variant = JSON.parse_string(mod.read_text("config/world_ui.json")) if mod != null else null
+	var pp := str(((u as Dictionary).get("portraits", {}) as Dictionary).get(id, "")) if u is Dictionary else ""
+	if pp != "" and mod.texture(pp) != null:
+		hero_portrait = mod.texture(pp)                   # арт-аватар героя (тот же, что на карте мира)
 
 
 ## Город с запечённой картой (config/<город>_map.json → art): миникарта рисует её, а не коробки построек.
