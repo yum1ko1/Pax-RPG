@@ -2,16 +2,16 @@
 	"$schema": "../../docs/modding/schemas/mod.schema.json",
 	"id": "pax_rpg",
 	"name": {
-		"en": "Pax RPG 0.4.28Y",
-		"ru": "Pax RPG 0.4.28Y"
+		"en": "Pax RPG 0.4.42Y",
+		"ru": "Pax RPG 0.4.42Y"
 	},
-	"version": "0.4.29Y",
+	"version": "0.4.42Y",
 	"api": 1,
 	"game_version": ">=0.28.0",
 	"authors": ["Babichev Maxim"],
 	"description": {
-		"en": "Prototype of an RPG in Pax Universe: the planet Yuruma instead of Earth, cities on the globe; a click on a city loads its location — a platform where a simple demon swordsman walks with WASD and draws his katana with F; the gate leads back to the world map. Scenario «Yuruma»: year 1047 of the Shattered Sky, five empires, own map of 420 provinces.",
-		"ru": "Прототип RPG в Pax Universe: планета Юрума вместо Земли, города на глобусе; щелчок по городу загружает его локацию — платформу, где простой демон-мечник ходит на WASD и достаёт катану на F; ворота возвращают на карту мира. Сценарий «Юрума»: 1047 год Эры Расколотого Неба, пять империй, своя карта из 420 провинций."
+		"en": "Prototype of an RPG in Pax Universe: the planet Yuruma instead of Earth, cities on the globe; a click on a city loads its location вЂ” a platform where a simple demon swordsman walks with WASD and draws his katana with F; the gate leads back to the world map. Scenario В«YurumaВ»: year 1047 of the Shattered Sky, five empires, own map of 420 provinces.",
+		"ru": "РџСЂРѕС‚РѕС‚РёРї RPG РІ Pax Universe: РїР»Р°РЅРµС‚Р° Р®СЂСѓРјР° РІРјРµСЃС‚Рѕ Р—РµРјР»Рё, РіРѕСЂРѕРґР° РЅР° РіР»РѕР±СѓСЃРµ; С‰РµР»С‡РѕРє РїРѕ РіРѕСЂРѕРґСѓ Р·Р°РіСЂСѓР¶Р°РµС‚ РµРіРѕ Р»РѕРєР°С†РёСЋ вЂ” РїР»Р°С‚С„РѕСЂРјСѓ, РіРґРµ РїСЂРѕСЃС‚РѕР№ РґРµРјРѕРЅ-РјРµС‡РЅРёРє С…РѕРґРёС‚ РЅР° WASD Рё РґРѕСЃС‚Р°С‘С‚ РєР°С‚Р°РЅСѓ РЅР° F; РІРѕСЂРѕС‚Р° РІРѕР·РІСЂР°С‰Р°СЋС‚ РЅР° РєР°СЂС‚Сѓ РјРёСЂР°. РЎС†РµРЅР°СЂРёР№ В«Р®СЂСѓРјР°В»: 1047 РіРѕРґ Р­СЂС‹ Р Р°СЃРєРѕР»РѕС‚РѕРіРѕ РќРµР±Р°, РїСЏС‚СЊ РёРјРїРµСЂРёР№, СЃРІРѕСЏ РєР°СЂС‚Р° РёР· 420 РїСЂРѕРІРёРЅС†РёР№."
 	},
 	"tags": ["rpg", "3d"],
 	"depends": [],

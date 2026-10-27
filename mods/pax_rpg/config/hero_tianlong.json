@@ -108,13 +108,13 @@
 			}
 		},
 		"attributes": {
-			"agility": 60,
-			"intellect": 30,
+			"agility": 65,
+			"intellect": 35,
 			"charisma": 50,
-			"strength": 30,
-			"smithing": 30,
-			"inlay": 40,
-			"luck": 30
+			"strength": 35,
+			"smithing": 20,
+			"inlay": 20,
+			"luck": 40
 		}
 	},
 	"sword_back_grip": [
@@ -193,6 +193,9 @@
 	"combo_end_resume": 0.5,
 	"_note_hits": "hit_times — моменты ударов клипа, с (кадры автора / 30: Attack1 16, Attack2 35, Attack3 15·25·35): каждый — отдельный удар по площади перед героем. combo_cancel — с какой доли клипа переход к следующему удару (после его последнего удара). mana_fx — алая мана при попадании (настройки → «Боевые эффекты»).",
 	"mana_fx": true,
+	"hit_vfx": [
+		"Attack1"
+	],
 	"mana_color": [
 		1.0,
 		0.08,
