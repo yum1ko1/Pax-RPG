@@ -19,10 +19,11 @@ const Goblin := preload("res://mods/pax_rpg/src/location/goblin.gd")
 const Orc := preload("res://mods/pax_rpg/src/location/orc.gd")
 const SpearUlt := preload("res://mods/pax_rpg/src/location/spear_ult.gd")
 const Blood := preload("res://mods/pax_rpg/src/location/blood.gd")
-const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Hud := preload("res://mods/pax_rpg/src/location/hud2.gd")   # HUD v2 (рамки инвентаря) поверх hud.gd
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")
 const Arena := preload("res://mods/pax_rpg/src/location/arena.gd")
 const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
+const HitVfx := preload("res://mods/pax_rpg/src/location/hit_vfx.gd")
 const Iai := preload("res://mods/pax_rpg/src/location/iai.gd")
 const City := preload("res://mods/pax_rpg/src/location/city.gd")
 const Landscape := preload("res://mods/pax_rpg/src/location/landscape.gd")
@@ -51,6 +52,9 @@ const Gfx := preload("res://mods/pax_rpg/src/location/gfx.gd")
 const Grass := preload("res://mods/pax_rpg/src/location/grass.gd")
 const Rift := preload("res://mods/pax_rpg/src/location/rift.gd")
 const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
+const Loot := preload("res://mods/pax_rpg/src/location/loot/loot.gd")
+const Shop := preload("res://mods/pax_rpg/src/location/shop.gd")
+const ShopView := preload("res://mods/pax_rpg/src/location/shop_view.gd")
 const HERO_HP := 100.0
 const HERO_CONC := 100.0
 const BROKEN_TIME := 2.6             # с слома героя (концентрация 0): управление отнято, враг может казнить
@@ -80,6 +84,7 @@ var _prev_action := ""
 var _quake_cd := 0.0                 # с до готовности «Земного разлома»
 var _quake_waves_done := 0
 var _vfx: Vfx
+var _hitfx: HitVfx                  # удары по маскам и шейдеру эрозии (hit_vfx.gd) — клипы из hero_cfg.hit_vfx
 var _vignette: ColorRect
 var _iai: Iai                         # «Иай: остановка времени» (V)
 var _iai_cd := 0.0
@@ -99,6 +104,7 @@ var _stagger := 0.0                # с, сломанная стойка — у�
 var _lock: Node3D                  # захваченный враг (Q): камера держит его, герой стоит к нему лицом
 var _lock_mark: MeshInstance3D
 var _rmb := false
+var _cam_mouse := 0                 # мс: когда игрок последний раз крутил камеру мышью (автоповорот ждёт)
 var _cam_lock := 0.0               # 0 — свободная камера, 1 — за плечом при захвате (плавно между)
 var _lock_point := Vector3.ZERO
 var _kills := 0
@@ -156,15 +162,19 @@ var _daynight: DayNight            # тело доворачивается к ц
 var _gfx: Gfx                       # качество картинки (gfx.gd, config/location.json → gfx)
 var _shoulder := 1.0               # плечо камеры в захвате: 1 — правое, −1 — левое (Z)
 var _inv: Inventory                # инвентарь (TAB)
+var _loot: Loot                    # сферы с врагов и прокрутка вещей (src/location/loot)
 var _wrist: Wrist                  # наручный терминал (TAB / Esc): инвентарь, карта, меню
 const VoiceTalk := preload("res://mods/pax_rpg/src/location/voice_talk.gd")
 var _vtalk: VoiceTalk                   # голосом к жителю по имени (эксперимент, настройка voice_talk)
 var _talk: Talk                    # разговор с жителем (E рядом) — через нейросеть игры
+var _title: Node                   # титр города (city_title.gd) — сам уходит, доиграв; при выходе из города — сразу
 var _talk_npc: Node                # ближайший житель в 2.5 м (ему — подсказка «E · имя»)
 var _npcs: Array = []
 var _talk_t := 0.0
 var city_data: Dictionary = {}     # что за место построено (config/cities.json; лес задания — {"id": "forest", "seed"})
 var _journal: Journal              # журнал заданий (J)
+var _shop: Shop                    # лавка торговца и рулетка (товар дня, гаранты — сохраняются)
+var _shop_view: ShopView           # окно лавки (разговор с торговцем → «Лавка»)
 var _gold_flash := 0.0
 var _style := Style.new()           # шкала стиля (D … SSS): очки за попадания, множит награду
 var _weather: Weather
@@ -197,6 +207,50 @@ func setup(m: PaxMod) -> void:
 	_net = NetSync.new()                                   # сетевая игра: герои других игроков в том же городе
 	_net.setup(m, net_pose, hero_cfg_of)
 	add_child(_net)
+	for last: bool in [false, true]:                       # замер такта физики (rpg_perf): начало и конец прохода узлов
+		var tp := TickProbe.new()
+		tp.last = last
+		tp.process_physics_priority = 2000000000 if last else -2000000000
+		tp.process_priority = -2000000000
+		add_child(tp)
+
+
+## Замер такта физики для rpg_perf (пока Prof копит; иначе — пустой вызов): первый узел дерева по
+## process_physics_priority — начало, последний — конец всех _physics_process (мод и игра, деревья анимаций в такте
+## физики). Таймер физики, заведённый последним, срабатывает после очереди отложенных вызовов того же такта (поза
+## скелетов, модификаторы — IK стоп, поворот головы). Первый _process кадра, где прошёл ровно один такт, — после
+## шага сервера физики и уведомлений о трансформах: «хвост» такта и такт целиком (≈, с началом кадра).
+class TickProbe extends Node:
+	const P := preload("res://mods/pax_rpg/src/location/prof.gd")
+	static var t0 := 0                   # начало прохода узлов такта
+	static var t_end := 0                # после отложенных вызовов такта
+	var last := false
+	var _pf := -1
+
+	func _physics_process(_delta: float) -> void:
+		if not P.on:
+			return
+		if not last:
+			t0 = Time.get_ticks_usec()
+			return
+		P.add("такт: все _physics_process", t0)
+		P.peak("такт: все _physics_process", t0)
+		get_tree().create_timer(0.0, true, true).timeout.connect(_after)
+
+	func _after() -> void:
+		t_end = Time.get_ticks_usec()
+		P.add("такт: с отложенными (скелеты)", t0)
+		P.peak("такт: с отложенными (скелеты)", t0)
+
+	func _process(_delta: float) -> void:
+		if last or not P.on:
+			return
+		var pf := Engine.get_physics_frames()
+		if pf == _pf + 1 and t_end > t0:
+			P.add("такт: шаг сервера и уведомления (≈)", t_end)
+			P.peak("такт: шаг сервера и уведомления (≈)", t_end)
+			P.peak("такт целиком (≈)", t0)
+		_pf = pf
 
 
 func _f(key: String, fallback: float) -> float:
@@ -243,6 +297,14 @@ func _spawn_goblins(n: int) -> void:
 
 
 ## Орк-чемпион перед героем (консоль rpg_orc — проверка боя).
+## Проверка лута (команда rpg_roll [редкость 0…5]): радужная сфера перед героем → прокрутка.
+func test_roll(r := -1) -> String:
+	if not is_instance_valid(_loot) or not is_instance_valid(_player):
+		return "нет локации"
+	_loot.test(_cam, _player, _prog.level, r)
+	return "roll"
+
+
 func spawn_orc() -> String:
 	if _view == null or not is_instance_valid(_player):
 		return "нет локации"
@@ -335,6 +397,7 @@ func build(city: Dictionary) -> void:
 		_prog = Progress.new()
 		_prog.setup(mod, hero_cfg.get("progress", {}))
 	_orbs.clear()
+	_yaw0 = INF                                      # крен в повороте — с нуля, не от героя прошлого города
 	test_mode = false
 	_hp = _hp_max()
 	_city_name = mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
@@ -491,6 +554,14 @@ func build(city: Dictionary) -> void:
 			_iai_cd = _hf("iai_cooldown", 90.0) * 0.5
 		elif _iai_hits > 0:
 			_conc_gain(0.5))                             # разрезы попали — выдох: концентрация +50 %
+	_loot = Loot.new()                               # под инвентарём: открытый TAB закрывает прокрутку
+	_loot.setup(mod)
+	add_child(_loot)
+	_loot.gold_picked.connect(func(n: int) -> void:
+		_prog.add_gold(n)
+		_gold_flash = 1.0)
+	_loot.xp_picked.connect(func(v: float, at: Vector2) -> void:
+		_orbs.append({"p0": at, "t": 0.0, "delay": 0.0, "v": v, "bend": randf_range(-1.0, 1.0)}))
 	_inv = Inventory.new()
 	_inv.setup(mod)
 	_inv.weapon_equipped.connect(func(slot: String, _id: String) -> void:
@@ -515,6 +586,15 @@ func build(city: Dictionary) -> void:
 		_prog.add_gold(coins)
 		_gold_flash = 1.0
 		_toast = {"text": mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0})
+	_talk.shop_requested.connect(_open_shop)
+	_shop_view = ShopView.new()
+	_shop_view.setup(mod)
+	_shop_view.closed.connect(_close_shop)
+	_shop_view.talk_requested.connect(func() -> void:
+		_shop_view.close()
+		_start_talk())
+	_shop_view.sound.connect(_sfx_once)
+	add_child(_shop_view)
 	_journal = Journal.new()
 	_journal.setup(mod, _hud)
 	add_child(_journal)
@@ -525,6 +605,7 @@ func build(city: Dictionary) -> void:
 	_city_map = CityMap.new()
 	_city_map.setup(mod)
 	_city_map.set_city(layout)
+	_hud.set_city(layout)                             # миникарта — запечённый план города (если есть)
 	add_child(_city_map)
 	_help = HelpPanel.new()
 	_help.setup(mod)
@@ -564,12 +645,13 @@ func build(city: Dictionary) -> void:
 		if _daynight != null:
 			ct.sub = DayNight.label(mod, _daynight.hour)   # под названием — время суток (в городе оно стоит)
 		add_child(ct)
-		ct.play(3.4)                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
+		ct.play(3.4)
+		_title = ct                                   # после экрана загрузки (он раскрывается ~3 с после готовности)
 	_zoom = 0.0
 	_zoom_want = 0.0
 	_yaw = 0.0
 	_near_gate = false
-	_flask = int(_hf("flask_charges", 3.0))
+	_flask = _flask_max()
 	_hp_ghost = 1.0
 	_numbers.clear()
 	_toast = {}
@@ -612,6 +694,35 @@ func _game_3d(on: bool) -> void:
 	var root := get_tree().root
 	if root != null:
 		root.disable_3d = not on
+	_game_2d(on)
+
+
+## То же с 2D: окна и панели игры и главное меню (слои окна ниже нашего, 100) закрыты непрозрачным 3D-видом, но рисовались
+## каждый кадр — полноэкранный шейдер фона меню, панель слоёв карты, которую игра открывает по TAB (+0.5 мс видеокарты).
+## Пока герой в городе, они спрятаны; новые, что игра откроет под нами, прячутся раз в 0.5 с (_under_t); на выходе
+## возвращаются только те, что спрятали мы. Слои выше нашего (консоль, экран загрузки) не трогаем — их видно.
+var _hidden_2d: Array = []
+var _under_t := 0.0
+
+
+func _game_2d(on: bool) -> void:
+	if on:
+		for n: Variant in _hidden_2d:
+			if is_instance_valid(n):
+				(n as CanvasLayer).visible = true
+		_hidden_2d.clear()
+		return
+	_hide_under()
+
+
+func _hide_under() -> void:
+	var root := get_tree().root
+	for n: Node in root.find_children("*", "CanvasLayer", true, false):
+		var cl := n as CanvasLayer
+		if cl == self or not cl.visible or cl.layer >= layer or cl.get_viewport() != root or is_ancestor_of(cl):
+			continue
+		cl.visible = false
+		_hidden_2d.append(cl)
 
 
 ## Всё построено и трава встала — локацию можно показывать.
@@ -653,6 +764,9 @@ func clear() -> void:
 		_sult.stop()
 	if _blood != null:
 		_blood.stop()
+	if _hitfx != null:
+		_hitfx.clear()
+		_hitfx = null
 	Goblin.hero_broken = false
 	building = false
 	_build_finished = false
@@ -665,11 +779,20 @@ func clear() -> void:
 	active = false
 	visible = false
 	_turning = false
-	for n: Node in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _wrist, _talk, _journal]:
+	# голос к жителям (_vtalk) тоже: раньше каждый вход в город добавлял новый, а прежний оставался подписанным
+	# на распознавание речи игры — фраза приходила дважды
+	# титр города (_title) — тоже: ушли из города до конца заставки — она доигрывала под картой мира (со звуком)
+	# список без типа: Array[Node] из литерала проверяет каждый узел, а уже удалённый (титр уходит сам) роняет
+	# релизную сборку игры ещё до is_instance_valid — вылет при входе во второй город
+	for n: Variant in [_box, _hud, _pause, _sfx, _help, _music, _city_map, _arena, _vignette, _iai, _inv, _loot, _wrist, _talk, _journal,
+			_vtalk, _title, _shop_view]:
 		if is_instance_valid(n):
-			n.queue_free()
+			(n as Node).queue_free()
+	_title = null
 	Assets.clear_tracking(mod)
 	_goblins.clear()
+	_npcs.clear()                                    # жители прошлых городов (освобождённые узлы) — раньше копились
+	_talk_npc = null
 	test_mode = false
 	_lock = null
 	_box = null
@@ -781,6 +904,8 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 
 ## Торговцы за прилавками — живые жители (с ними можно говорить, E), а не модели планировки: стоят на месте
 ## (маршрут из одной точки), лицом к покупателю, ремесло — торговец.
+## У каждого прилавка лавка (вывеска «⚖ Лавка» над головой, в разговоре кнопка «Лавка», shop_view.gd) со своим товаром
+## дня; первый — лавочник Базара Добычи (роль trader, своё имя).
 var _merchants: Array = []
 
 
@@ -802,8 +927,11 @@ func _spawn_merchants() -> void:
 		var d: Dictionary = _merchants[i]
 		var p: Array = d.get("p", [0, 0, 0])
 		var npc := Npc.new()
-		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, "merchant")
+		var role := "trader" if i == 0 else "merchant"           # первый прилавок — лавка с товаром дня и рулеткой
+		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, role)
 		npc.rotation.y = deg_to_rad(float(d.get("r", 0.0)))
+		npc.set("shop", true)
+		npc.set_sign("⚖ " + mod.tr_key("pax_rpg_shop_title"))
 		npc.set("npc_index", n0 + i)
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n0 + i, int(npc.get("relation"))))
 		_view.add_child(npc)
@@ -1149,6 +1277,11 @@ func _hf(key: String, fallback: float) -> float:
 	return float(hero_cfg.get(key, cfg.get(key, fallback)))
 
 
+## Заряды эликсира: у героя свои (flask_charges) плюс фляги из лавки и рулетки (progress.flask_bonus).
+func _flask_max() -> int:
+	return int(_hf("flask_charges", 3.0)) + (_prog.flask_bonus if _prog != null else 0)
+
+
 # ---------- управление ----------
 
 ## Пауза (Esc): мир локации замирает, мышь свободна, поверх — меню.
@@ -1202,7 +1335,8 @@ func _dmg_mult() -> float:
 
 func paused() -> bool:
 	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible) \
-		or (is_instance_valid(_journal) and _journal.visible)
+		or (is_instance_valid(_journal) and _journal.visible) or (is_instance_valid(_city_map) and _city_map.visible) \
+		or (is_instance_valid(_shop_view) and _shop_view.visible)
 
 
 ## Житель, давший задание, — с меткой ❖ над головой (в его городе).
@@ -1213,6 +1347,14 @@ func _mark_giver() -> void:
 			var me := not q.is_empty() and str(q.get("city", "")) == str(city_data.get("id", "")) \
 				and int(q.get("npc", -1)) == int((n as Node).get("npc_index"))
 			(n as Node).call("set_giver", me)
+
+
+## Карта города (M): мир на паузе, мышь — карте (масштаб, перетаскивание, метка); закрыть — M или Esc.
+func _set_city_map(on: bool) -> void:
+	if not is_instance_valid(_city_map):
+		return
+	_city_map.set_open(on)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if _city_map.visible else (Input.MOUSE_MODE_CAPTURED if not paused() else Input.mouse_mode)
 
 
 func _set_journal(on: bool) -> void:
@@ -1300,6 +1442,45 @@ func _end_talk() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
+## Лавка торговца: разговор закрывается, окно лавки — тоже отдельное (3D не рисуется, HUD спрятан), мир на паузе.
+func _open_shop() -> void:
+	if not is_instance_valid(_shop_view) or _prog == null:
+		return
+	var who := str(_talk_npc.get("npc_name")) if is_instance_valid(_talk_npc) else ""
+	var stall := ""                                   # лавочник — прилавок города, другие торговцы — каждый свой
+	if is_instance_valid(_talk_npc) and str(_talk_npc.get("role")) != "trader":
+		stall = str(_talk_npc.get("npc_index"))
+	if is_instance_valid(_talk) and _talk.visible:
+		_talk.close()
+	if _shop == null:
+		_shop = Shop.new()
+		_shop.setup(mod, _prog)
+		_shop.granted.connect(_shop_granted)
+	_shop.set_city(str(city_data.get("id", "")), stall)  # у торговца каждого города свой прилавок
+	_talk_focus(true)
+	_shop_view.open(_shop, who, str(_talk_npc.get("trade")) if is_instance_valid(_talk_npc) else "")
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_rmb = false
+	_lmb_queued = false
+
+
+func _close_shop() -> void:
+	_talk_focus(false)
+	if not paused():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Награда лавки или рулетки (золото, очки и фляги shop.gd уже начислил): эликсир — полные заряды, опыт — шариками
+## Свой товар лавки выдан (тыква-фляга — progress.gd уже прибавил заряд): эликсир — полные заряды, новая фляга —
+## сразу полная. Вещи лавка кладёт в сумку сама (inv_loot).
+func _shop_granted(effect: String, _amount: int) -> void:
+	match effect:
+		"refill":
+			_flask = _flask_max()
+		"flask":
+			_flask = mini(_flask + 1, _flask_max())
+
+
 ## Клавиши — сначала локации: _input идёт с конца дерева, а узлы мира игры созданы позже мода и раньше ловили Esc —
 ## под локацией открывалось меню паузы игры, и после выхода из города игрок оказывался в нём. Последний ребёнок корня
 ## получает ввод первым.
@@ -1340,8 +1521,7 @@ func _on_wrist(id: String) -> void:
 		"inventory":
 			_set_inventory(true)
 		"map":
-			if is_instance_valid(_city_map):
-				_city_map.toggle()
+			_set_city_map(true)
 		"menu":
 			_set_paused(true)
 		"leave":
@@ -1368,6 +1548,7 @@ func _set_inventory(on: bool) -> void:
 		st["level_mult"] = _prog.damage_mult()
 		st["model"] = str(hero_cfg.get("model", "models/knight.glb"))
 		st["name_key"] = str(_character().get("name_key", "pax_rpg_hero_name"))
+		st["gold"] = _prog.gold
 		_inv.open(_view, _player, _body_mesh, _hero, st)
 	else:
 		_inv.visible = false
@@ -1420,6 +1601,12 @@ func _physics_process(delta: float) -> void:
 	for g: Variant in _goblins:                          # павшие на арене — удалены; новый массив — только если кто-то исчез
 		if not is_instance_valid(g):
 			_goblins = _goblins.filter(func(x: Variant) -> bool: return is_instance_valid(x))
+			var seen := {}                         # отметки павших — только живущих узлов: в долгом бою волнами
+			for x: Variant in _goblins:            # словарь рос на каждого врага
+				var xid := (x as Object).get_instance_id()
+				if _dead_seen.has(xid):
+					seen[xid] = _dead_seen[xid]
+			_dead_seen = seen
 			break
 	_quake_cd = maxf(0.0, _quake_cd - delta)
 	_ult_cd = maxf(0.0, _ult_cd - delta)
@@ -1431,6 +1618,7 @@ func _physics_process(delta: float) -> void:
 	_iai_cd = maxf(0.0, _iai_cd - delta)
 	_physics_body(delta)
 	Prof.add("локация физика", t0)
+	Prof.peak("локация физика", t0)
 
 
 ## «Земной разлом» (T): тратит концентрацию героя (риск — переполнится, стойка сломана), перезарядка quake_cooldown;
@@ -1448,10 +1636,13 @@ func _mana_burst(at: Vector3, c: Color) -> void:
 	if _vfx == null:
 		_vfx = Vfx.new(mod)
 	var p := CPUParticles3D.new()
-	var q := QuadMesh.new()
-	q.size = Vector2(0.22, 0.22)
-	q.material = _vfx._glow_mat(c, 1.8)
-	p.mesh = q
+	var qk := "mq%s" % c
+	if not _fx_res.has(qk):
+		var q := QuadMesh.new()
+		q.size = Vector2(0.22, 0.22)
+		q.material = _vfx._glow_mat(c, 1.8)
+		_fx_res[qk] = q
+	p.mesh = _fx_res[qk]
 	p.one_shot = true
 	p.explosiveness = 0.85
 	p.amount = 34
@@ -1468,11 +1659,13 @@ func _mana_burst(at: Vector3, c: Color) -> void:
 	p.damping_max = 2.5
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.3
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(1, 1, 1, 1))
-	ramp.add_point(0.4, Color(1, 0.8, 1, 0.8))
-	ramp.set_color(1, Color(1, 0.6, 1, 0))
-	p.color_ramp = ramp
+	if not _fx_res.has("mramp"):
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 1))
+		ramp.add_point(0.4, Color(1, 0.8, 1, 0.8))
+		ramp.set_color(1, Color(1, 0.6, 1, 0))
+		_fx_res["mramp"] = ramp
+	p.color_ramp = _fx_res["mramp"]
 	_view.add_child(p)
 	p.global_position = at
 	p.emitting = true
@@ -1579,6 +1772,11 @@ func _ult_wave(i: int) -> void:
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	var at := _player.global_position + fwd * (1.8 if i == 1 else 2.4)
 	var rings: Array = [[3.0, 30.0], [5.0, 22.0]] if i == 1 else [[3.5, 60.0], [6.5, 45.0], [9.5, 35.0]]
+	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка у земли (hit_vfx.gd)
+		var col: Array = hero_cfg.get("mana_color", hero_cfg.get("trail_color", [0.8, 0.45, 1.0]))
+		var cc := Color(float(col[0]), float(col[1]), float(col[2]))
+		_landing_fx().landing(at - Vector3(0.0, 0.9, 0.0), cc, 3.0 if i == 1 else 5.0)
+		_screen_hit(at - Vector3(0.0, 0.9, 0.0), cc, 0.6 if i == 1 else 1.0)
 	for k: int in rings.size():
 		var r: Array = rings[k]
 		var tw := get_tree().create_timer(0.12 * k)
@@ -1745,21 +1943,23 @@ func _on_world_days(_g: Variant, _from: Variant, days: Variant) -> void:
 func _slash_wave() -> void:
 	var fwd := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 	var node := MeshInstance3D.new()
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var n := 24
-	for i: int in n:                                      # дуга 150° перед героем: толще в середине, тонко к краям
-		var a0 := deg_to_rad(-75.0 + 150.0 * i / n)
-		var a1 := deg_to_rad(-75.0 + 150.0 * (i + 1) / n)
-		var w0 := 0.28 * sin(PI * float(i) / n) + 0.02
-		var w1 := 0.28 * sin(PI * float(i + 1) / n) + 0.02
-		var p0 := Vector3(sin(a0), 0.0, -cos(a0)) * 1.6
-		var p1 := Vector3(sin(a1), 0.0, -cos(a1)) * 1.6
-		var q0 := Vector3(sin(a0), 0.0, -cos(a0)) * (1.6 - w0)
-		var q1 := Vector3(sin(a1), 0.0, -cos(a1)) * (1.6 - w1)
-		for v: Vector3 in [p0, p1, q1, p0, q1, q0]:
-			st.add_vertex(v)
-	node.mesh = st.commit()
+	if not _fx_res.has("arc"):                            # серп — одна сетка на все волны (материал — свой: гаснет)
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var n := 24
+		for i: int in n:                                  # дуга 150° перед героем: толще в середине, тонко к краям
+			var a0 := deg_to_rad(-75.0 + 150.0 * i / n)
+			var a1 := deg_to_rad(-75.0 + 150.0 * (i + 1) / n)
+			var w0 := 0.28 * sin(PI * float(i) / n) + 0.02
+			var w1 := 0.28 * sin(PI * float(i + 1) / n) + 0.02
+			var p0 := Vector3(sin(a0), 0.0, -cos(a0)) * 1.6
+			var p1 := Vector3(sin(a1), 0.0, -cos(a1)) * 1.6
+			var q0 := Vector3(sin(a0), 0.0, -cos(a0)) * (1.6 - w0)
+			var q1 := Vector3(sin(a1), 0.0, -cos(a1)) * (1.6 - w1)
+			for v: Vector3 in [p0, p1, q1, p0, q1, q0]:
+				st.add_vertex(v)
+		_fx_res["arc"] = st.commit()
+	node.mesh = _fx_res["arc"]
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1812,7 +2012,11 @@ func _orc_slam(at: Vector3) -> void:
 	if not is_instance_valid(_view):
 		return
 	var c := Vector3(at.x, at.y, at.z)
+	var d0 := c.distance_to(_player.global_position)
 	Rift.crack(mod, _view, c, 3.2, 4.0)
+	if bool(mod.get_setting("combat_fx", true)):          # волна, корона пыли, вспышка (hit_vfx.gd)
+		_landing_fx().landing(c, Color(1.0, 0.42, 0.1), 3.2)
+		_screen_hit(c, Color(1.0, 0.45, 0.15), clampf(1.4 - d0 / 14.0, 0.3, 1.0))
 	for k: int in 3:                                      # растёт кольцами
 		var ra := 0.6 + k * 0.8
 		var t := get_tree().create_timer(0.07 * k)
@@ -1857,18 +2061,20 @@ func _quake_debris(c: Vector3, r: float) -> void:
 	p.angular_velocity_max = 360.0
 	p.scale_amount_min = 0.4
 	p.scale_amount_max = 1.3
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.11, 0.08, 0.1)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.36, 0.28, 0.21)
-	mat.roughness = 1.0
-	mat.vertex_color_use_as_albedo = true
-	bm.material = mat
-	p.mesh = bm
-	var g := Gradient.new()                                # комья земли и серые камешки вперемешку
-	g.set_color(0, Color(0.42, 0.33, 0.25))
-	g.set_color(1, Color(0.55, 0.52, 0.5))
-	p.color_initial_ramp = g
+	if not _fx_res.has("deb"):                             # сетка, материал и цвета комьев — одни на все волны
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.11, 0.08, 0.1)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.36, 0.28, 0.21)
+		mat.roughness = 1.0
+		mat.vertex_color_use_as_albedo = true
+		bm.material = mat
+		var g := Gradient.new()                            # комья земли и серые камешки вперемешку
+		g.set_color(0, Color(0.42, 0.33, 0.25))
+		g.set_color(1, Color(0.55, 0.52, 0.5))
+		_fx_res["deb"] = [bm, g]
+	p.mesh = (_fx_res["deb"] as Array)[0]
+	p.color_initial_ramp = (_fx_res["deb"] as Array)[1]
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_view.add_child(p)
 	p.global_position = c + Vector3(0, 0.15, 0)
@@ -1877,6 +2083,7 @@ func _quake_debris(c: Vector3, r: float) -> void:
 
 
 func _physics_body(delta: float) -> void:
+	var tp := Time.get_ticks_usec()                      # метки частей такта (rpg_perf prof); без замера — пустые вызовы
 	var on_floor := _player.is_on_floor()
 	# F и пробел опрашиваем здесь, а не в _input: игра может забрать нажатие раньше нас
 	var f := (Input.is_physical_key_pressed(KEY_F) or Input.is_key_pressed(KEY_F)) and not _typing()
@@ -1911,7 +2118,7 @@ func _physics_body(delta: float) -> void:
 				if absf(side) > deg_to_rad(_hf("swing_side_angle", 12.0)):
 					_hero.swing_side = -1 if side > 0.0 else 1
 			if cy != INF and (_hero.action == "" or _hero.action in Hero.ATTACKS):
-				_face_now(cy)                        # удар — во врага в захвате, иначе по ходу (WASD); без ввода — куда стоит
+				_face_now(cy)                        # удар — во врага в захвате, иначе туда, куда смотрит камера
 			var fw := Input.is_physical_key_pressed(KEY_W)
 			var bk := Input.is_physical_key_pressed(KEY_S)
 			var done_sp := false
@@ -2046,23 +2253,31 @@ func _physics_body(delta: float) -> void:
 			if off < deg_to_rad(_hf("head_limit", 70.0) * _hf("look_release", 1.0)):
 				look = _lock.global_position + Vector3(0.0, _hf("look_height", 0.95), 0.0)
 		_hero.look_at_point(look, delta)
-	# магнит ударов: каждый удар комбо доворачивает к врагу, шаг удара не проносит сквозь него
+	# в захвате каждый удар комбо доворачивает к врагу; без захвата — удар идёт за камерой (куда смотрит игрок),
+	# автонаводки нет. Шаг удара не проносит сквозь врага прямо перед героем (pull — без поворота к нему)
 	var mag: Goblin = _attack_target() if _hero_attacking() else null
 	if mag != null:
 		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, _yaw_to(mag), minf(1.0, delta * _hf("magnet_turn", 14.0)))
+	elif _hero_attacking() and _lock == null:
+		_body_mesh.rotation.y = lerp_angle(_body_mesh.rotation.y, _yaw, minf(1.0, delta * _hf("aim_track_turn", 6.0)))
+	var pull: Goblin = mag if mag != null else (_front_foe() if _hero_attacking() else null)
 	if _hero != null:
 		var by := _body_mesh.rotation.y
 		var bf := Vector3(-sin(by), 0.0, -cos(by))
 		var br := Vector3(cos(by), 0.0, -sin(by))
 		_hero.move_dir = Vector2(0.0, 1.0) if free_walk else Vector2(move.dot(br), move.dot(bf))
+	Prof.add("физ: ввод и поворот", tp)
+	tp = Time.get_ticks_usec()
 	if _hero != null:
 		var th := Time.get_ticks_usec()
 		var r: Dictionary = _hero.tick(delta, moving, speed * move.length(), running, on_floor)
 		Prof.add("герой (с плащом)", th)
+		Prof.peak("герой (с плащом)", th)
+		tp = Time.get_ticks_usec()
 		if _hero.action != _prev_action and (_hero.action.begins_with("Attack") or _hero.action in Hero.SPECIALS):
 			var cy2 := _combo_yaw()
 			if cy2 != INF:
-				_face_now(cy2)                       # каждый удар серии — во врага в захвате или по ходу (WASD)
+				_face_now(cy2)                       # каждый удар серии — во врага в захвате или туда, куда смотрит камера
 			_cam_swing(_hero.action)
 			_chain = _chain + 1 if _chain_t < _hf("chain_window", 0.9) else 1
 			_chain_t = 0.0                                   # отсчёт паузы — от конца удара, а не от начала
@@ -2097,7 +2312,8 @@ func _physics_body(delta: float) -> void:
 			_hero.slash_wave = false
 			_slash_wave()
 		_tilt = lerpf(_tilt, _tilt_want, 1.0 - exp(-delta * 16.0))
-		if _hero.model != null:
+		# тот же наклон (стоит, вне удара) — не пишем: каждая запись гнала пересчёт трансформов по всей модели героя
+		if _hero.model != null and absf(_hero.model.rotation.z - _tilt) > 1e-6:
 			_hero.model.rotation.z = _tilt
 		_quake_step()
 		if _sult != null and _sult.active():
@@ -2130,8 +2346,8 @@ func _physics_body(delta: float) -> void:
 			var w := _body_mesh.global_transform.basis.orthonormalized() * Basis(Vector3.UP, PI) * step
 			vel.x = w.x / delta
 			vel.z = w.z / delta
-		if mag != null:
-			vel = _magnet_pull(vel, mag, delta)
+		if pull != null:
+			vel = _magnet_pull(vel, pull, delta)
 	if _hero != null and _hero.lunge_t > 0.0:          # «Выпад» — рывок к врагу
 		var f3 := Vector3(-sin(_body_mesh.rotation.y), 0.0, -cos(_body_mesh.rotation.y))
 		vel.x = f3.x * _hf("lunge_speed", 11.0)
@@ -2164,9 +2380,11 @@ func _physics_body(delta: float) -> void:
 		_recoil = Weight.spring(_recoil, delta, _w.f("recoil_k", 60.0), _w.f("recoil_damp", 9.0))
 	_player.velocity = vel
 	var was := _player.global_position
+	Prof.add("физ: бой и способности", tp)
 	var tm := Time.get_ticks_usec()
 	_player.move_and_slide()
 	Prof.add("движение героя", tm)
+	tp = Time.get_ticks_usec()
 	if is_instance_valid(_sfx):
 		var d := _player.global_position - was
 		d.y = 0.0
@@ -2201,21 +2419,30 @@ func _physics_body(delta: float) -> void:
 				_step_left = not _step_left
 				_weather.footprint(_player.global_position, _body_mesh.rotation.y, _step_left)
 				_dust(_player.global_position, _sfx.soft, running)
+	Prof.add("физ: шаги и следы", tp)
+	tp = Time.get_ticks_usec()
 	_ground_contact(delta)
 	if _hero != null:
 		_hero.cape_wind(_player.velocity)
 	if _lock != null:
 		var d := _lock.global_position - _player.global_position
 		_yaw = lerp_angle(_yaw, atan2(-d.x, -d.z), minf(1.0, delta * 6.0))
+	else:
+		_auto_yaw(delta)
 	if is_instance_valid(_lock_mark):
 		_lock_mark.visible = false                   # прицел захвата рисует HUD
 	if _player.position.y < FALL_Y:
 		_player.position = START
 		_player.velocity = Vector3.ZERO
+	Prof.add("физ: контакт и захват", tp)
 	var tc := Time.get_ticks_usec()
 	_follow_camera(delta)
 	_flash_tick(delta)
+	if _hitfx != null:
+		_hitfx.tick(delta)
+	_screen_hit_tick(delta)
 	Prof.add("камера", tc)
+	tp = Time.get_ticks_usec()
 	if is_instance_valid(_arena):
 		_arena.tick()
 	_quest_pickup()
@@ -2223,6 +2450,7 @@ func _physics_body(delta: float) -> void:
 	if near != _near_gate:
 		_near_gate = near
 		_update_hud()
+	Prof.add("физ: арена и ворота", tp)
 
 
 ## Отладка (консоль rpg_probe): всё видимое в радиусе 2 м от героя — имя, родитель, высота над ступнями.
@@ -2280,6 +2508,27 @@ func cine(n: int) -> String:
 	return "camera: shot %d/%d" % [n, _shots.size()]
 
 
+## Камера за спиной: на бегу вперёд и наискосок она плавно заходит за героя и смотрит по ходу движения. Вбок и на
+## камеру — не крутится (иначе шаг вбок водил бы героя по кругу: движение считается от взгляда камеры). Крутил мышью —
+## автоповорот ждёт camera_auto_wait с. camera_auto — скорость (0 — выкл.).
+func _auto_yaw(delta: float) -> void:
+	var rate := _f("camera_auto", 1.4)
+	if rate <= 0.0 or not is_instance_valid(_player) or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		return
+	if _hero_attacking():
+		return                                       # удар идёт за камерой — камера не тянется за шагом удара
+	if Time.get_ticks_msec() - _cam_mouse < int(_f("camera_auto_wait", 1.0) * 1000.0):
+		return
+	var v := Vector2(_player.velocity.x, _player.velocity.z)
+	var sp := v.length()
+	if sp < 0.5:
+		return
+	var off := angle_difference(_yaw, atan2(-v.x, -v.y))
+	var w := maxf(0.0, cos(off))                     # вперёд — 1, наискосок — меньше, вбок и назад — 0
+	var run := clampf(sp / maxf(_f("run_speed", 5.0), 0.1), 0.0, 1.0)
+	_yaw += off * (1.0 - exp(-delta * rate * w * run))
+
+
 func _follow_camera(delta := 0.0) -> void:
 	if is_instance_valid(_iai) and _iai.cam_override:
 		return                                       # камерой правит «Иай»
@@ -2306,8 +2555,8 @@ func _follow_camera(delta := 0.0) -> void:
 	if delta > 0.0:
 		_zoom = lerpf(_zoom, _zoom_want, 1.0 - exp(-delta * _f("zoom_smooth", 3.0)))
 	var z := smoothstep(0.0, 1.0, _zoom)
-	var ch := lerpf(_f("camera_height", 3.5), _f("lock_camera_height", 1.75) - 0.9, z)
-	var cd := lerpf(_f("camera_distance", 7.0), _f("lock_camera_distance", 3.2), z)
+	var ch := lerpf(_f("camera_height", 2.4), _f("camera_near_height", 1.6) - 0.9, z)
+	var cd := lerpf(_f("camera_distance", 5.0), _f("camera_near_distance", 2.6), z)
 	var free_pos := target + Vector3(0.0, ch, cd).rotated(Vector3.UP, _yaw)
 	var look := target
 	var pos := free_pos
@@ -2352,7 +2601,9 @@ func _follow_camera(delta := 0.0) -> void:
 		var e := smoothstep(0.0, 1.0, _combo_cam)
 		pos = look + (pos - look) * (1.0 - _hf("cam_combo_push", 0.12) * e)
 		_fov_punch = maxf(0.0, _fov_punch - delta / 0.28)
-		_cam.fov = _cam_fov0() - _hf("cam_final_fov", 5.0) * sin(_fov_punch * PI * 0.5)
+		var fov := _cam_fov0() - _hf("cam_final_fov", 5.0) * sin(_fov_punch * PI * 0.5)
+		if absf(_cam.fov - fov) > 1e-6:                  # без толчка — тот же угол: камеру в сервер рендера не шлём
+			_cam.fov = fov
 	if _sult != null and _sult.active():             # кат-сцена ульты копья — своя камера
 		var cc: Array = _sult.camera()
 		pos = cc[0]
@@ -2383,6 +2634,8 @@ func _cam_fov0() -> float:
 ## встаёт перед препятствием. Подлетает к стене сразу, отходит обратно плавно (без рывков у углов).
 var _cam_pull := 1.0                # доля пути от головы до камеры, что свободна (сглажена)
 var _cam_shape: SphereShape3D
+var _cam_q: PhysicsShapeQueryParameters3D
+var _cam_q_rid := RID()
 
 
 func _cam_collide(pos: Vector3, delta: float) -> Vector3:
@@ -2395,12 +2648,17 @@ func _cam_collide(pos: Vector3, delta: float) -> Vector3:
 	if _cam_shape == null:
 		_cam_shape = SphereShape3D.new()
 		_cam_shape.radius = 0.3
-	var q := PhysicsShapeQueryParameters3D.new()
-	q.shape = _cam_shape
+	if _cam_q == null:                                   # один запрос на всё время, а не новый объект каждый такт
+		_cam_q = PhysicsShapeQueryParameters3D.new()
+		_cam_q.shape = _cam_shape
+		_cam_q.collision_mask = 1
+	var prid := _player.get_rid()
+	if prid != _cam_q_rid:                               # новый герой (новая стройка) — исключаем его
+		_cam_q_rid = prid
+		_cam_q.exclude = [prid]
+	var q := _cam_q
 	q.transform = Transform3D(Basis(), head)
 	q.motion = motion
-	q.collision_mask = 1
-	q.exclude = [_player.get_rid()]
 	var r := _player.get_world_3d().direct_space_state.cast_motion(q)
 	var free := clampf(float(r[0]) if r.size() > 0 else 1.0, 0.0, 1.0)
 	if free < _cam_pull:
@@ -2469,7 +2727,14 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 		var to := (gob.global_position - _player.global_position)
 		to.y = 0.0
 		var at := gob.global_position + Vector3(0.0, 1.0, 0.0) - to.normalized() * 0.3
-		_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
+		var hfx := _hit_fx()
+		if hfx != null:
+			var on := gob.global_position - to.normalized() * 0.3   # на линии укола: высота — как у копья в руке
+			hfx.impact(Vector3(on.x, lerpf(_spear_hand().y, at.y, 0.4), on.z), to.normalized(), c,
+				1.0 + 0.15 * step + (0.4 if final else 0.0))
+			_flash(at, c, 4.0, 4.5)
+		else:
+			_sparks(at, c, int(10 + 6 * step + (12 if final else 0)), 5.0 + step)
 		if final:
 			_mana_burst(gob.global_position + Vector3(0.0, 0.9, 0.0), c)
 			_flash_t = _hf("fx_flash_time", 0.22)
@@ -2487,7 +2752,15 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var c := Color(float(col[0]), float(col[1]), float(col[2]))
 	var step := float(hit.get("step", 0))
 	var final := bool(hit.get("final", false))
-	_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
+	var hfx := _hit_fx()
+	if hfx != null:                                  # луч укола — по взгляду героя из острия; попадание — в _combat_fx_hit
+		var fwd := -_body_mesh.global_transform.basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized()
+		var hand := _spear_hand()
+		hfx.thrust(hand + fwd * 1.5, fwd, c, false, 1.0 + 0.15 * step)   # остриё — на длину копья перед кистью
+	else:
+		_sparks(tip, c, int(8 + 4 * step) + (30 if final else 0), 3.5 + step + (4.0 if final else 0.0))
 	if final:
 		_mana_burst(tip, c)                          # финал серии — чёткий всплеск алой энергии на острие
 	var glow := OmniLight3D.new()                    # миг алого света вокруг острия
@@ -2499,6 +2772,67 @@ func _combat_fx_swing(hit: Dictionary) -> void:
 	var tw := glow.create_tween()
 	tw.tween_property(glow, "light_energy", 0.0, 0.18)
 	tw.tween_callback(glow.queue_free)
+
+
+## Новые удары (hit_vfx.gd) — для клипов из hero_cfg.hit_vfx; остальные — прежние искры.
+func _hit_fx() -> HitVfx:
+	if _hero == null or not is_instance_valid(_view) or String(_hero.action) not in (hero_cfg.get("hit_vfx", []) as Array):
+		return null
+	if _hitfx == null:
+		_hitfx = HitVfx.new(mod, _view)
+	return _hitfx
+
+
+## «Кадр-удар» приземления (шейдер слоя камеры lens.gdshader → hit*): радиальное размытие к точке удара, расслоение
+## цвета, кольцо преломления по экрану, контраст и свет в цвет приёма, миг белого; камера на миг уже кадр.
+var _shit_t := -1.0
+var _shit_power := 0.0
+var _shit_at := Vector3.ZERO
+
+
+func _screen_hit(at: Vector3, col: Color, power: float) -> void:
+	if not bool(mod.get_setting("combat_cam", true)) or _gfx == null or _gfx.lens_mat == null:
+		return
+	_shit_power = maxf(power, _shit_power if _shit_t >= 0.0 else 0.0)   # второй удар «Сокрушения» — не слабее первого
+	_shit_t = 0.0
+	_shit_at = at
+	_gfx.lens_mat.set_shader_parameter("hit_tint", col)
+	_fov_punch = maxf(_fov_punch, 0.8 * power)
+
+
+func _screen_hit_tick(delta: float) -> void:
+	if _shit_t < 0.0 or _gfx == null or _gfx.lens_mat == null:
+		return
+	_shit_t += delta
+	var m := _gfx.lens_mat
+	if _shit_t > 0.7:
+		_shit_t = -1.0
+		_shit_power = 0.0
+		m.set_shader_parameter("hit", 0.0)
+		m.set_shader_parameter("hit_wave", -1.0)
+		m.set_shader_parameter("hit_flash", 0.0)
+		return
+	var t := _shit_t
+	m.set_shader_parameter("hit", _shit_power * minf(1.0, t / 0.03) * exp(-t * 6.0))
+	m.set_shader_parameter("hit_wave", 0.02 + t * 1.6)
+	m.set_shader_parameter("hit_flash", _shit_power * 0.45 * exp(-t * 28.0))
+	if is_instance_valid(_cam) and _view is SubViewport:
+		m.set_shader_parameter("hit_center", _cam.unproject_position(_shit_at) / Vector2((_view as SubViewport).size))
+
+
+## Эффекты приземлений — те же, что у новых ударов (один на локацию).
+func _landing_fx() -> HitVfx:
+	if _hitfx == null:
+		_hitfx = HitVfx.new(mod, _view)
+	return _hitfx
+
+
+## Кисть с копьём (луч укола и вспышка — на её высоте); без кисти — пояс героя.
+func _spear_hand() -> Vector3:
+	var h: Node3D = _hero._sword_hand if _hero != null else null
+	if is_instance_valid(h) and h.is_inside_tree():
+		return h.global_position
+	return _player.global_position + Vector3(0.0, 0.3, 0.0)
 
 
 ## Алый блик по краям экрана (финал серии): над 3D, под интерфейсом; гаснет за fx_flash_time.
@@ -2578,7 +2912,7 @@ func _foe_line(gob: Goblin, event: String) -> void:
 	_foe_line_cd = _hf("foe_line_every", 18.0)
 	_foe_line_wait = true
 	var hp_part := "почти цел" if gob.hp > gob.max_hp * 0.6 else ("ранен" if gob.hp > gob.max_hp * 0.25 else "едва стоит")
-	var what := {"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, "")
+	var what := str({"hit_hero": "ты только что ударил героя топором", "got_hit": "герой только что ранил тебя мечом"}.get(event, ""))
 	var prompt := "Ты — орк-чемпион на арене Гхарна, грубый и гордый, сражаешься с Чёрным рыцарем. Сейчас: %s; ты %s. " % [what, hp_part] 		+ "Скажи рыцарю одну короткую фразу (3–10 слов) по-русски: насмешка, угроза или ярость. Без кавычек и пояснений. " 		+ "Ответ — только JSON: {\"line\": \"фраза\"}"
 	var got := func(a: Dictionary) -> void:
 		_foe_line_wait = false
@@ -2694,12 +3028,15 @@ func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
 # ---------- бой как в Sekiro ----------
 
 ## Куда целиться: в захваченного врага, иначе — туда, куда смотрит камера.
-## Куда бить: в захваченного врага; без захвата — в сторону движения (WASD от камеры); без ввода — INF (как стоит).
+## Куда бить: в захваченного врага (Q); без захвата — туда, куда смотрит камера: автонаводки нет, промах — промах.
+## aim_assist: true в hero*.json — старый магнит (по ходу WASD, ближайший враг в конусе magnet_angle).
 func _combo_yaw() -> float:
 	if _lock != null and is_instance_valid(_lock):
 		return _aim_yaw()
 	if _typing():
 		return INF
+	if not _aim_assist():
+		return _yaw
 	var x := float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
 	var y := float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
 	var base := _body_mesh.rotation.y                     # без ввода — куда стоит
@@ -2761,6 +3098,8 @@ func _magnet_pull(vel: Vector3, mag: Goblin, delta: float) -> Vector3:
 func _attack_target() -> Goblin:
 	if _lock != null and is_instance_valid(_lock) and (_lock as Goblin).is_alive():
 		return _lock as Goblin
+	if not _aim_assist():
+		return null
 	var best: Goblin = null
 	var bd := _hf("magnet_range", 5.0)
 	var cone := deg_to_rad(_hf("magnet_angle", 75.0))
@@ -2773,6 +3112,28 @@ func _attack_target() -> Goblin:
 			continue
 		var d := gob.global_position.distance_to(_player.global_position)
 		if d < bd and (d < _hf("magnet_close", 3.0) or absf(angle_difference(ref, _yaw_to(gob))) < cone):
+			bd = d
+			best = gob
+	return best
+
+
+func _aim_assist() -> bool:
+	return bool(hero_cfg.get("aim_assist", cfg.get("aim_assist", false)))
+
+
+## Враг прямо перед героем (в front_foe_angle от лица, ближе reach + 1.5 м) — чтобы шаг удара не пронёс сквозь него.
+## Героя к нему не поворачивает.
+func _front_foe() -> Goblin:
+	var fy := _body_mesh.rotation.y
+	var best: Goblin = null
+	var bd := _hero.attack_reach() + 1.5 if _hero != null else 3.0
+	var cone := deg_to_rad(_hf("front_foe_angle", 35.0))
+	for g: Variant in _goblins:
+		if not is_instance_valid(g) or not (g as Goblin).is_alive():
+			continue
+		var gob: Goblin = g
+		var d := gob.global_position.distance_to(_player.global_position)
+		if d < bd and absf(angle_difference(fy, _yaw_to(gob))) < cone:
 			bd = d
 			best = gob
 	return best
@@ -3010,7 +3371,7 @@ func _hero_down_check(attacker: Node3D) -> void:
 		_hp_ghost = 1.0
 		_conc = _conc_max()
 		_broken_t = 0.0
-		_flask = int(_hf("flask_charges", 3.0))
+		_flask = _flask_max()
 		_player.position = START
 		_player.velocity = Vector3.ZERO
 	_update_hud()
@@ -3127,7 +3488,12 @@ func _apply_volfog(v: float) -> void:
 
 ## LUT 17³ (цветокоррекция сцены): тени уходят в холодную бирюзу, света — в тёплое золото, мягкая S-кривая.
 ## Делаем в коде — без файлов и без потерь при сжатии.
+static var _lut: ImageTexture3D
+
+
 static func _grade_lut() -> ImageTexture3D:
+	if _lut != null:
+		return _lut                                  # одна на сессию (раньше новая текстура на каждый вход в город)
 	var n := 17
 	var layers: Array[Image] = []
 	var lilac := Vector3(0.9, 0.97, 1.08)            # тени — в холодную бирюзу поверхности Юрумы (контраст тёплым огням)
@@ -3145,9 +3511,9 @@ static func _grade_lut() -> ImageTexture3D:
 				c += (c - Vector3.ONE * 0.5) * 0.06
 				img.set_pixel(r, g, Color(clampf(c.x, 0, 1), clampf(c.y, 0, 1), clampf(c.z, 0, 1)))
 		layers.append(img)
-	var t := ImageTexture3D.new()
-	t.create(Image.FORMAT_RGB8, n, n, n, false, layers)
-	return t
+	_lut = ImageTexture3D.new()
+	_lut.create(Image.FORMAT_RGB8, n, n, n, false, layers)
+	return _lut
 
 
 ## Виньетка: мягко темнит и чуть сиренит края кадра (поверх 3D, под HUD).
@@ -3182,33 +3548,53 @@ func _sparks(at: Vector3, color: Color, amount: int, speed: float) -> void:
 	p.amount = amount
 	p.lifetime = 0.35
 	p.local_coords = false
-	var pm := ParticleProcessMaterial.new()
-	pm.direction = Vector3.UP
-	pm.spread = 70.0
-	pm.initial_velocity_min = speed * 0.5
-	pm.initial_velocity_max = speed
-	pm.gravity = Vector3(0.0, -9.0, 0.0)
-	pm.damping_min = 1.0
-	pm.damping_max = 3.0
-	p.process_material = pm
+	p.process_material = _spark_pm(speed)
 	p.trail_enabled = true
 	p.trail_lifetime = 0.07
-	var tm := RibbonTrailMesh.new()
-	tm.shape = RibbonTrailMesh.SHAPE_CROSS
-	tm.size = 0.014
-	tm.sections = 3
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.use_particle_trails = true
-	m.albedo_color = Color(color.r * 4.0, color.g * 4.0, color.b * 4.0)   # HDR — ловит bloom
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	tm.material = m
-	p.draw_pass_1 = tm
+	p.draw_pass_1 = _spark_trail(color)
 	_view.add_child(p)
 	p.global_position = at
 	p.emitting = true
 	p.finished.connect(p.queue_free)
 	_flash(at, color, 2.6, 4.0)
+
+
+## Ресурсы боевых эффектов — общие на одинаковые параметры: раньше каждая искра, всплеск маны и облачко пыли
+## заводили свои материал процесса, сетку шлейфа, материал и градиент (новые RID и наборы uniform на сервере рендера
+## посреди боя). Ключей немного — цвета и скорости заданы в коде.
+var _fx_res := {}
+
+
+func _spark_pm(speed: float) -> ParticleProcessMaterial:
+	var key := "pm%s" % speed
+	if not _fx_res.has(key):
+		var pm := ParticleProcessMaterial.new()
+		pm.direction = Vector3.UP
+		pm.spread = 70.0
+		pm.initial_velocity_min = speed * 0.5
+		pm.initial_velocity_max = speed
+		pm.gravity = Vector3(0.0, -9.0, 0.0)
+		pm.damping_min = 1.0
+		pm.damping_max = 3.0
+		_fx_res[key] = pm
+	return _fx_res[key]
+
+
+func _spark_trail(color: Color) -> RibbonTrailMesh:
+	var key := "tr%s" % color
+	if not _fx_res.has(key):
+		var tm := RibbonTrailMesh.new()
+		tm.shape = RibbonTrailMesh.SHAPE_CROSS
+		tm.size = 0.014
+		tm.sections = 3
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.use_particle_trails = true
+		m.albedo_color = Color(color.r * 4.0, color.g * 4.0, color.b * 4.0)   # HDR — ловит bloom
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		tm.material = m
+		_fx_res[key] = tm
+	return _fx_res[key]
 
 
 ## Вспышка света от удара, искр, разреза: короткий огонёк без тени — освещает лицо, клинок и землю вокруг.
@@ -3251,20 +3637,20 @@ func _weapon_skills(act: String) -> Array:
 	var out: Array = []
 	match _weapon_skill("main"):
 		"spear_ult":
-			out.append({"k": "槍", "key": "G", "label": mod.tr_key("pax_rpg_ult_spear_name"), "on": act == "Ultimate",
+			out.append({"k": "槍", "key": "G", "label": _t("pax_rpg_ult_spear_name"), "on": act == "Ultimate",
 				"color": Color(1.0, 0.22, 0.18), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0),
 				"cd_s": ceili(_ult_cd), "ready": _ult_cd <= 0.0})
 		"crush":
-			out.append({"k": "砕", "key": "G", "label": mod.tr_key("pax_rpg_hud_ult"), "on": act == "Ultimate",
+			out.append({"k": "砕", "key": "G", "label": _t("pax_rpg_hud_ult"), "on": act == "Ultimate",
 				"color": Color(1.0, 0.45, 0.25), "icon": _icon_tex("ult"), "cd": _ult_cd / _hf("ult_cooldown", 45.0), "cd_s": ceili(_ult_cd),
 				"ready": _ult_cd <= 0.0 and (act == "Ultimate" or (_hero != null and _hero.is_running()))})   # серый — не бежит
 	match _weapon_skill("iai"):
 		"rift":
-			out.append({"k": "震", "key": "V", "label": mod.tr_key("pax_rpg_hud_quake"), "on": act == "Quake",
+			out.append({"k": "震", "key": "V", "label": _t("pax_rpg_hud_quake"), "on": act == "Quake",
 				"color": Color(1.0, 0.71, 0.28), "icon": _quake_tex(), "cd": _quake_cd / _hf("quake_cooldown", 30.0),
 				"cd_s": ceili(_quake_cd), "ready": _quake_cd <= 0.0})
 		"iai":
-			out.append({"k": "居", "key": "V", "label": mod.tr_key("pax_rpg_hud_iai"), "on": act == "Iai",
+			out.append({"k": "居", "key": "V", "label": _t("pax_rpg_hud_iai"), "on": act == "Iai",
 				"color": Color(0.75, 0.6, 1.0), "icon": _icon_tex("iai"), "cd": _iai_cd / _hf("iai_cooldown", 90.0), "cd_s": ceili(_iai_cd),
 				"ready": _iai_cd <= 0.0})
 	return out
@@ -3316,6 +3702,31 @@ func _process(delta: float) -> void:
 		var t0 := Time.get_ticks_usec()
 		_hud_tick(delta)
 		Prof.add("HUD", t0)
+	_inv_cover_tick()
+	if active and not building:
+		_under_t -= delta
+		if _under_t <= 0.0:
+			_under_t = 0.5
+			_hide_under()
+
+
+var _inv_hides_view := false
+
+
+## Открытый инвентарь закрывает экран целиком (непрозрачный фон 1920×1080 во весь экран 16:9): город под ним не
+## виден ни пикселем, а 3D-вид рисовался каждый кадр (мир на паузе, видеокарта считала кадр целиком). Пока закрыт —
+## вид стоит; на другом соотношении сторон по краям сквозь затемнение 4 % виден город — тогда рисуется, как раньше.
+func _inv_cover_tick() -> void:
+	var want := active and is_instance_valid(_inv) and _inv.visible and is_instance_valid(_view) and _inv.covers_screen()
+	if want == _inv_hides_view:
+		return
+	_inv_hides_view = want
+	if not is_instance_valid(_view):
+		return
+	if want:
+		_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	elif not (is_instance_valid(_talk) and _talk.visible):   # разговор держит вид выключенным сам (_talk_focus)
+		_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
 
 ## Состояние HUD на кадр: герой, компас, миникарта, враг, цифры урона, мана и опыт за повергнутых.
@@ -3395,14 +3806,13 @@ func _hud_tick(delta: float) -> void:
 			# мана не растворяется: шарики перелетают в шкалу опыта (левый верхний угол), опыт — по прилёту
 			var gain := float((hero_cfg.get("progress", {}) as Dictionary).get("xp_per_kill", 35.0))
 			var from := _cam.unproject_position(gob.global_position + Vector3(0.0, 0.8, 0.0))
-			var n := 10
-			for k: int in n:
-				_orbs.append({"p0": from + Vector2(randf_range(-30, 30), randf_range(-30, 30)), "t": 0.0,
-					"delay": k * 0.06, "v": gain / n, "bend": randf_range(-1.0, 1.0)})
 			var coins := roundi(randi_range(6, 14) * _style.reward_mult())   # и немного золота (больше — на высоком стиле)
+			if is_instance_valid(_loot):                     # сферы: золото и опыт — когда герой их подберёт
+				_loot.drop(gob.global_position, _cam, _player, gain, coins, _prog.level)
+			else:
+				_orbs.append({"p0": from, "t": 0.0, "delay": 0.0, "v": gain, "bend": 0.0})
+				_prog.add_gold(coins)
 			gain *= _style.reward_mult()
-			_prog.add_gold(coins)
-			_gold_flash = 1.0
 			_toast = {"text": _t("pax_rpg_hud_got") % [_t("pax_rpg_hud_mana_item"), int(gain)] + "  ·  " +
 				_t("pax_rpg_gold_got") % coins, "t": 0.0}
 		elif gob.is_alive():
@@ -3414,13 +3824,14 @@ func _hud_tick(delta: float) -> void:
 	elif _since_hit > 0.6:
 		_hp_ghost = move_toward(_hp_ghost, hp, delta * 0.6)
 	_hint_t = maxf(0.0, _hint_t - delta)
-	var fighting := _hud_enemy() != null or _lock != null or (is_instance_valid(_arena) and _arena.fighting) or _broken_t > 0.0
+	var e := _hud_enemy()                            # ближний враг в бою — один поиск на кадр (раньше два)
+	var fighting := e != null or _lock != null or (is_instance_valid(_arena) and _arena.fighting) or _broken_t > 0.0
 	var st := {"hp": hp, "hp_ghost": _hp_ghost, "hp_abs": _hp, "hp_max": _hp_max(), "conc": _conc / _conc_max(),
 		"conc_on": fighting, "conc_broken": _broken_t > 0.0, "conc_low": _conc < _conc_max() / 3.0,
 		"level": _prog.level, "xp": _prog.frac(), "xp_abs": _prog.xp, "xp_need": _prog.need(),
 		"skill_points": _prog.skill_points, "gold": _prog.gold, "gold_flash": _gold_flash,
 		"style": {"letter": _style.letter(), "rank": _style.rank(), "frac": _style.frac(), "flash": _style.flash,
-			"title": _t("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": int(_hf("flask_charges", 3.0)),
+			"title": _t("pax_rpg_style_" + _style.letter().to_lower()) if _style.letter() != "" else ""}, "orbs": _orb_points(), "lvl_flash": _lvl_flash, "flask": _flask, "flask_max": _flask_max(),
 		"yaw": _yaw, "body_yaw": _body_mesh.rotation.y if _body_mesh != null else _yaw, "kills": _kills,
 		"me": Vector2(_player.global_position.x, _player.global_position.z), "map_rects": _map_rects,
 		"gate": Vector2(_gate_pos.x, _gate_pos.z), "near_gate": _near_gate, "place": _city_name,
@@ -3443,7 +3854,6 @@ func _hud_tick(delta: float) -> void:
 		"color": Color(0.47, 0.84, 1.0), "ring": true})
 	st["targets"] = targets
 	st["enemies"] = enemies
-	var e := _hud_enemy()
 	if e != null:
 		st["enemy"] = {"name": _t(e.display_key), "hp": e.hp / e.max_hp,
 			"conc": e.conc / e.conc_max, "broken": e.can_deathblow(), "boss": e.boss, "phase": e.phase,
@@ -3511,6 +3921,12 @@ func _input(event: InputEvent) -> void:
 			if is_instance_valid(_journal) and _journal.visible and (pk == KEY_ESCAPE or pk == KEY_J):
 				_set_journal(false)
 				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_city_map) and _city_map.visible and (pk == KEY_ESCAPE or pk == KEY_M):
+				_set_city_map(false)
+				get_viewport().set_input_as_handled()
+			elif is_instance_valid(_shop_view) and _shop_view.visible and pk == KEY_ESCAPE:
+				_shop_view.close()
+				get_viewport().set_input_as_handled()
 			elif is_instance_valid(_talk) and _talk.visible and pk == KEY_ESCAPE:
 				_talk.close()
 				get_viewport().set_input_as_handled()
@@ -3549,6 +3965,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock == null:
 			_yaw -= (event as InputEventMouseMotion).relative.x * _f("turn_speed", 0.004) * _sens
+			_cam_mouse = Time.get_ticks_msec()
 		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _lock != null:
 			_lock_flick((event as InputEventMouseMotion).relative)
 		return
@@ -3557,7 +3974,11 @@ func _input(event: InputEvent) -> void:
 		if key.physical_keycode in KEYS or key.keycode in KEYS:
 			get_viewport().set_input_as_handled()   # горячие клавиши игры молчат, пока герой ходит
 		if key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_talk_npc) and not _near_gate:
-			_start_talk()                            # житель рядом — разговор
+			if bool(_talk_npc.get("shop")) or str(_talk_npc.get("role")) == "trader":
+				if not (is_instance_valid(_arena) and _arena.fighting):
+					_open_shop()                         # торговец базара — сразу лавка, без разговора
+			else:
+				_start_talk()                            # житель рядом — разговор
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
 			exit_requested.emit()
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and is_instance_valid(_arena) \
@@ -3584,7 +4005,7 @@ func _input(event: InputEvent) -> void:
 		if key.pressed and not key.echo and key.physical_keycode == KEY_J:
 			_set_journal(true)                       # журнал заданий
 		if key.pressed and not key.echo and key.physical_keycode == KEY_M and is_instance_valid(_city_map):
-			_city_map.toggle()                       # карта города
+			_set_city_map(true)                      # карта города (мир на паузе, мышь — карте)
 		if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE and is_instance_valid(_city_map) \
 				and _city_map.visible:
 			_city_map.visible = false
@@ -3600,6 +4021,9 @@ func _input(event: InputEvent) -> void:
 			_hero.toggle_slot("back")                # снять / надеть плащ
 		if key.pressed and not key.echo and (key.physical_keycode == KEY_F or key.keycode == KEY_F):
 			_f_queued = true
+
+
+var _yaw0 := INF                      # поворот тела в прошлом такте (было — мета узла: запись словаря каждый такт)
 
 
 ## Контакт с землёй: мягкое тёмное пятно под ногами (Decal, сверху вниз) — тает, когда герой в воздухе; и крен
@@ -3622,28 +4046,34 @@ func _ground_contact(delta: float) -> void:
 		_contact.lower_fade = 0.6
 		_view.add_child(_contact)
 	var h := 0.9 if _hero == null else float(hero_cfg.get("capsule_height", 1.8)) * 0.5
-	_contact.global_position = _player.global_position - Vector3(0.0, h - 0.4, 0.0)
+	# стоит — пятно, его прозрачность и крен те же: не пишем (каждая запись — пересчёт трансформа / вызов рендера)
+	var cp := _player.global_position - Vector3(0.0, h - 0.4, 0.0)
+	if _contact.global_position != cp:
+		_contact.global_position = cp
 	var air := 0.0 if _player.is_on_floor() else 1.0
-	_contact.modulate.a = lerpf(_contact.modulate.a, 0.55 * (1.0 - air), 1.0 - exp(-delta * 10.0))
+	var ca := lerpf(_contact.modulate.a, 0.55 * (1.0 - air), 1.0 - exp(-delta * 10.0))
+	if absf(ca - _contact.modulate.a) > 1e-6:
+		_contact.modulate.a = ca
 	var hs := Vector2(_player.velocity.x, _player.velocity.z).length()
 	var yaw := _body_mesh.rotation.y
-	var turn := wrapf(yaw - float(get_meta("pax_rpg_yaw0", yaw)), -PI, PI) / delta     # рад/с
-	set_meta("pax_rpg_yaw0", yaw)
+	var turn := wrapf(yaw - (yaw if _yaw0 == INF else _yaw0), -PI, PI) / delta     # рад/с
+	_yaw0 = yaw
 	var busy := _hero != null and _hero.action != ""
 	var want := 0.0 if busy or not _player.is_on_floor() else clampf(-turn * hs * _hf("lean", 0.012), -0.12, 0.12)
 	_lean = lerpf(_lean, want, 1.0 - exp(-delta * 6.0))
-	_body_mesh.rotation.z = _lean
+	if absf(_body_mesh.rotation.z - _lean) > 1e-6:
+		_body_mesh.rotation.z = _lean
 
 
 ## Пыль из-под ног: на земле и песке — заметное облачко, на камне — едва видное; на бегу — больше.
 func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	if not bool(mod.get_setting("combat_fx", true)) and not soft:
 		return
-	var p := CPUParticles3D.new()
-	p.one_shot = true
-	p.explosiveness = 0.9
 	if not soft and not running:
 		return                                       # по камню шагом — без пыли (дёшево смотрелось)
+	var p := CPUParticles3D.new()                    # (раньше узел создавался до этой проверки и на камне шагом утекал)
+	p.one_shot = true
+	p.explosiveness = 0.9
 	p.amount = (6 if running else 3) if soft else 2
 	p.lifetime = 1.1
 	p.direction = Vector3(0.0, 1.0, 0.0)
@@ -3655,23 +4085,28 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	p.damping_max = 2.5
 	p.scale_amount_min = 0.08
 	p.scale_amount_max = 0.18
-	var sm := SphereMesh.new()
-	sm.radius = 0.5
-	sm.height = 1.0
-	sm.radial_segments = 6
-	sm.rings = 3
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	sm.material = mat
-	p.mesh = sm
-	var ramp := Gradient.new()
-	var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
-	ramp.set_color(0, Color(c, 0.0))
-	ramp.add_point(0.15, Color(c, 0.09 if soft else 0.04))   # едва заметно
-	ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
-	p.color_ramp = ramp
+	if not _fx_res.has("dmesh"):
+		var sm := SphereMesh.new()
+		sm.radius = 0.5
+		sm.height = 1.0
+		sm.radial_segments = 6
+		sm.rings = 3
+		var mat := StandardMaterial3D.new()
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.vertex_color_use_as_albedo = true
+		sm.material = mat
+		_fx_res["dmesh"] = sm
+	p.mesh = _fx_res["dmesh"]
+	var rk := "dramp%s" % soft
+	if not _fx_res.has(rk):
+		var ramp := Gradient.new()
+		var c := Color(0.62, 0.55, 0.5) if soft else Color(0.6, 0.58, 0.6)
+		ramp.set_color(0, Color(c, 0.0))
+		ramp.add_point(0.15, Color(c, 0.09 if soft else 0.04))   # едва заметно
+		ramp.set_color(ramp.get_point_count() - 1, Color(c, 0.0))
+		_fx_res[rk] = ramp
+	p.color_ramp = _fx_res[rk]
 	var h := float(hero_cfg.get("capsule_height", 1.8)) * 0.5
 	_view.add_child(p)
 	p.global_position = at - Vector3(0.0, h - 0.05, 0.0)
