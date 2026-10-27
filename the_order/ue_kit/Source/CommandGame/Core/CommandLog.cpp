@@ -1,0 +1,8 @@
+﻿#include "Core/CommandLog.h"
+
+DEFINE_LOG_CATEGORY(LogOrder);
+DEFINE_LOG_CATEGORY(LogOfficerAI);
+DEFINE_LOG_CATEGORY(LogLLM);
+DEFINE_LOG_CATEGORY(LogDestructionPool);
+DEFINE_LOG_CATEGORY(LogRagdollPool);
+DEFINE_LOG_CATEGORY(LogMission);

@@ -1,0 +1,20 @@
+# Unreal
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+.vs/
+.vscode/
+.idea/
+compile_commands.json
+.cache/
+# Модели не в репозиторий (2.5 ГБ): лежат в Saved/Models
+*.gguf
