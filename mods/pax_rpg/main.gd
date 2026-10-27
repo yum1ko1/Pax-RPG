@@ -7,6 +7,7 @@ const Planet := preload("res://mods/pax_rpg/src/planet/planet.gd")
 const Location := preload("res://mods/pax_rpg/src/location/location.gd")
 const Loading := preload("res://mods/pax_rpg/src/travel/loading.gd")
 const Travel := preload("res://mods/pax_rpg/src/travel/travel.gd")
+const WorldUi := preload("res://mods/pax_rpg/src/planet/world_ui.gd")
 const ProfS := preload("res://mods/pax_rpg/src/location/prof.gd")
 const Trace := preload("res://mods/pax_rpg/src/trace.gd")
 const MainMenu := preload("res://mods/pax_rpg/src/ui/main_menu.gd")
@@ -16,6 +17,7 @@ var planet: Planet
 var location: Location
 var loading: Loading
 var travel: Travel
+var world_ui: WorldUi
 var _autostart_city := ""
 var _mm: MainMenu
 
@@ -33,6 +35,16 @@ func _mod_loaded() -> void:
 	travel = Travel.new()
 	travel.setup(self, planet, location, loading)
 	add_child(travel)
+	# Карта мира — свой интерфейс (макет A5); окна и кнопки игры, Оракул (ИИ-советник) — спрятаны: world_ui прячет
+	# слой HUD игры, пока идёт партия, кнопки окон — ещё и hide_ui (на случай, если слой соберут заново).
+	world_ui = WorldUi.new()
+	world_ui.setup(self, travel)
+	world_ui.menu_node = func() -> Variant: return _menu()
+	add_child(world_ui)
+	travel.world_ui = world_ui
+	for code: String in ["orders", "projects", "laws", "power", "facility", "mining", "course", "science", "planets", "links",
+			"inbox", "state", "map", "galaxy", "rewind"]:
+		Pax.hide_ui(code)
 	# Временное меню (по просьбе автора): «Продолжить», «Новая игра», «Загрузить», «Мультиплеер», «Настройки», «Выход».
 	# Тестовая арена — в коде (команда rpg_arena), в меню вернём, когда понадобится. Мультиплеер — сеть игры
 	# (её лобби и серверы); в городе герои игроков видят друг друга (src/location/net_sync.gd).
@@ -49,12 +61,14 @@ func _mod_loaded() -> void:
 		["pax_rpg_menu_continue", _menu_continue], ["pax_rpg_menu_new", _rpg_new_game, true],
 		["pax_rpg_menu_load", Callable()], ["pax_rpg_menu_char", func() -> void: travel.pick_from_menu()], ["pax_rpg_menu_mp", _menu_screen.bind("_network_screen"), true],
 		["pax_rpg_menu_settings", _menu_screen.bind("_settings_screen"), true], ["pax_rpg_menu_exit", _menu_screen.bind("_to_launcher")]])
+	world_ui.main_menu = mm
 	mm.slots = _slots
 	mm.open_slot = _open_slot
 	add_child(mm)
 	Pax.register_command("rpg_arena", _arena_command, "rpg_arena — открыть тестовую арену Pax RPG")
 	Pax.register_command("rpg_probe", _probe_command, "rpg_probe — что видно вокруг героя (отладка)")
 	Pax.register_command("rpg_orc", _orc_command, "rpg_orc — орк-чемпион перед героем (тест боя)")
+	Pax.register_command("rpg_roll", _roll_command, "rpg_roll [0–5] — радужная сфера и прокрутка вещи (тест лута)")
 	Pax.register_command("rpg_city", _city_command, "rpg_city <id> — открыть город (напр. gharn)")
 	Pax.register_command("rpg_cam", _cam_command, "rpg_cam N — ракурс превью города (0 — обычная камера)")
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
@@ -237,6 +251,10 @@ func _arena_command(_args: PackedStringArray) -> String:
 
 func _probe_command(_args: PackedStringArray) -> String:
 	return location.probe()
+
+
+func _roll_command(args: PackedStringArray) -> String:
+	return location.test_roll(int(args[0]) if args.size() > 0 else -1)
 
 
 func _orc_command(_args: PackedStringArray) -> String:

@@ -1,0 +1,147 @@
+extends RefCounted
+## Небо Юрумы: где Хоэн, луны Селунэ и Иру и Око Раскола в момент времени мира. Одна модель на всё: небо локаций
+## (shaders/sky.gdshader через location/daynight.gd), Око и луны на глобусе (planet/heavens3d.gd), полоса неба
+## на карте мира.
+##
+## t — время мира в днях от начала игры (день + час/24, DayNight.world_time). Пространство «неподвижное»: Хоэн по +X,
+## ось Юрумы — Y, планета радиуса 1 поворачивается на spin(час) — Гхарн в полдень смотрит на Хоэн, восход в 6:00,
+## закат в 18:00 (как в daynight.gd). Луны ходят по кругам в плоскости экватора: Иру ближе (21 день), Селунэ
+## дальше (13 дней). Око висит неподвижно между их орбитами, высоко в небе Гхарна к 16:40, и наклонено на 45° от
+## пути лун: плоскость кольца режет плоскость орбит по косой, которая проходит орбиту Иру впереди центра, а орбиту
+## Селунэ позади. Каждая луна проходит сквозь Око раз за свой круг, а раз в 273 дня (13 × 21) — обе разом: Иру
+## впереди, Селунэ за ней (схождение, год Дикой охоты фей). Первое — на 41-й день мира в 16:40.
+##
+## Направления «в небе» — от наблюдателя: x — восток, y — вверх, z — юг (так стоят локации: север — -Z).
+## Длины — в радиусах Юрумы.
+
+const GHARN_LAT := 0.1                # где стоит Гхарн (config/cities.json)
+const GHARN_LON := 51.9
+const EYE_DIST := 5.4                 # центр Ока от центра Юрумы
+const EYE_R := 1.0                    # радиус кольца
+const EYE_FACE := 0.785398            # 45°: насколько кольцо повёрнуто от пути лун к Юруме
+const EYE_HIGH_HOUR := 16.0 + 40.0 / 60.0   # в этот час Око над Гхарном в зените
+const CONJ_DAY := 40.0 + 16.0 / 24.0 + 40.0 / 1440.0   # первое схождение
+const CONJ_PERIOD := 273.0
+## Луны: радиус орбиты, круг в днях, радиус самой луны.
+const MOONS := {
+	"selune": {"orbit": 5.7, "period": 13.0, "size": 0.24},
+	"iru": {"orbit": 5.1, "period": 21.0, "size": 0.2},
+}
+const SUN := Vector3(1.0, 0.0, 0.0)
+
+
+## Поворот Юрумы вокруг оси в этот час.
+static func spin(hour: float) -> float:
+	return PI * 0.5 - (hour - 12.0) / 24.0 * TAU - deg_to_rad(GHARN_LON)
+
+
+## Точка на поверхности по широте и долготе — в осях самой планеты (как planet.gd dir_of).
+static func dir_of(lat_deg: float, lon_deg: float) -> Vector3:
+	var la := deg_to_rad(lat_deg)
+	var lo := deg_to_rad(lon_deg)
+	return Vector3(cos(la) * sin(lo), sin(la), cos(la) * cos(lo))
+
+
+## Наблюдатель в этот час: точка на поверхности и его восток, верх, север — в неподвижном пространстве.
+static func observer(hour: float, lat := GHARN_LAT, lon := GHARN_LON) -> Basis:
+	var p := dir_of(lat, lon).rotated(Vector3.UP, spin(hour))
+	var east := p.cross(Vector3.UP).normalized()
+	var north := east.cross(p).normalized()
+	return Basis(east, p, north)
+
+
+## Направление в небе наблюдателя (x восток, y вверх, z юг) для направления в пространстве.
+static func to_sky(v: Vector3, ob: Basis) -> Vector3:
+	return Vector3(v.dot(ob.x), v.dot(ob.y), -v.dot(ob.z))
+
+
+# ---------- Око ----------
+
+static func _eye_dir() -> Vector3:
+	var p := observer(EYE_HIGH_HOUR).y
+	return Vector3(p.x, 0.0, p.z).normalized()
+
+
+static func eye_center() -> Vector3:
+	return _eye_dir() * EYE_DIST
+
+
+## Ось кольца.
+static func eye_normal() -> Vector3:
+	var d := _eye_dir()
+	var tangent := Vector3.UP.cross(d).normalized()
+	return (tangent * cos(EYE_FACE) + d * sin(EYE_FACE)).normalized()
+
+
+# ---------- луны ----------
+
+## Где орбита радиуса r пересекает плоскость Ока (угол от направления на Око): r·sin(θ + φ) = d·sin φ.
+static func _cross_angle(r: float) -> float:
+	return asin(EYE_DIST * sin(EYE_FACE) / r) - EYE_FACE
+
+
+## Положение луны в пространстве (id — "selune" или "iru").
+static func moon_pos(id: String, t: float) -> Vector3:
+	var m: Dictionary = MOONS.get(id, MOONS["selune"])
+	var r := float(m.orbit)
+	var period := float(m.period)
+	var th := TAU * (t - CONJ_DAY) / period + _cross_angle(r)
+	var d := _eye_dir()
+	var tangent := Vector3.UP.cross(d).normalized()
+	return (d * cos(th) + tangent * sin(th)) * r
+
+
+## Освещённая доля диска луны, как её видно с Юрумы: 0 — новолуние, 1 — полнолуние.
+static func moon_phase(id: String, t: float) -> float:
+	return (1.0 - SUN.dot(moon_pos(id, t).normalized())) * 0.5
+
+
+## Растёт ли луна (освещённая доля прибывает).
+static func moon_waxing(id: String, t: float) -> bool:
+	return moon_phase(id, t + 0.05) > moon_phase(id, t)
+
+
+# ---------- в небе наблюдателя ----------
+
+static func sun_sky(t: float, lat := GHARN_LAT, lon := GHARN_LON) -> Vector3:
+	return to_sky(SUN, observer(_hour(t), lat, lon))
+
+
+static func moon_sky(id: String, t: float, lat := GHARN_LAT, lon := GHARN_LON) -> Vector3:
+	var ob := observer(_hour(t), lat, lon)
+	return to_sky((moon_pos(id, t) - ob.y).normalized(), ob)
+
+
+static func eye_sky(t: float, lat := GHARN_LAT, lon := GHARN_LON) -> Vector3:
+	var ob := observer(_hour(t), lat, lon)
+	return to_sky((eye_center() - ob.y).normalized(), ob)
+
+
+## Всё небо наблюдателя разом — для шейдера неба: положения от наблюдателя (не единичные: радиусы планеты).
+static func sky_state(t: float, lat := GHARN_LAT, lon := GHARN_LON) -> Dictionary:
+	var ob := observer(_hour(t), lat, lon)
+	return {
+		"sun": to_sky(SUN, ob),
+		"eye_c": to_sky(eye_center() - ob.y, ob),
+		"eye_n": to_sky(eye_normal(), ob),
+		"selune": to_sky(moon_pos("selune", t) - ob.y, ob),
+		"iru": to_sky(moon_pos("iru", t) - ob.y, ob),
+	}
+
+
+# ---------- схождение ----------
+
+## Дней до ближайшего схождения (0, если оно сейчас — в пределах суток).
+static func next_conjunction(t: float) -> float:
+	var k := ceilf((t - CONJ_DAY - 0.5) / CONJ_PERIOD)
+	return maxf(0.0, CONJ_DAY + k * CONJ_PERIOD - t)
+
+
+## Идёт ли схождение: обе луны в Оке (полсуток до и после).
+static func in_conjunction(t: float) -> bool:
+	var d := fposmod(t - CONJ_DAY, CONJ_PERIOD)
+	return d < 0.5 or d > CONJ_PERIOD - 0.5
+
+
+static func _hour(t: float) -> float:
+	return fposmod(t, 1.0) * 24.0

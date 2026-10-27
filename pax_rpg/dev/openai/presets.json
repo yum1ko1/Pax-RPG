@@ -1,0 +1,47 @@
+{
+  "styles": {
+    "yuruma": {
+      "about": "общий стиль Юрумы: азиатское фэнтези, мана, стилизованный реализм",
+      "text": "East Asian fantasy game art of the planet Yuruma, year 1047 of the Era of the Shattered Sky: five rival empires, oni and demon races with curved horns, hanfu-inspired clothing, hakama trousers and sash belts, red lacquer, dark timber and black iron, curved upturned roofs, glowing pink and cyan mana. Stylized realism, painterly, rich detail.",
+      "avoid": "european medieval castle, gothic, modern objects, text, watermark, logo"
+    },
+    "gharn": {
+      "about": "Гхарн — столица орды орков и гоблинов (из заметки «Гхарн — промпты концепт-арта»)",
+      "text": "East Asian fantasy game concept art, capital city of an orc and goblin war horde, Mongolian steppe khanate merged with a Tibetan dzong fortress and a Chinese frontier garrison, built heavy and rough by orcs: dark timber log buildings on rough rubble-stone plinths, curved upturned East Asian roofs, red lacquered pillars with peeling paint, black iron bands and rivets, white and grey felt yurts with painted red doors, horsetail tug standards, bone and tusk trophies, red war banners with an original emblem of a single curved black fang (not any existing game logo), colorful goblin patchwork cloth and glowing pink mana prayer flags. Equatorial highland plateau above a turquoise jungle, pink mana sky with pink clouds, warm sunlight. Stylized realism, painterly, rich detail, crowded and lived-in, no empty spaces, readable game-level layout, cinematic lighting.",
+      "avoid": "european medieval castle, gothic, modern buildings, cars, empty streets, text, watermark, blurry"
+    },
+    "hud": {
+      "about": "интерфейс: барочные рамки с розами, багрянец и старое золото (HUD 0.4.15Y)",
+      "text": "Game HUD element, ornate baroque frame with carved roses, crimson and antique gold palette, polished metal and enamel, crisp clean edges, readable at small size, flat front view.",
+      "avoid": "text, letters, numbers, watermark, perspective, background scenery"
+    }
+  },
+  "kinds": {
+    "concept": {
+      "about": "кадр концепт-арта, широкий",
+      "text": "Cinematic wide establishing shot.",
+      "size": "1536x1024"
+    },
+    "character": {
+      "about": "лист персонажа: спереди, сбоку, сзади — для Meshy Image to 3D и Blender",
+      "text": "Full-body character reference sheet for 3D modeling: the same character shown front, side and back, side by side, strict A-pose with arms 45 degrees from the body, open hands with separated fingers, perfectly symmetrical, feet on the same ground line, plain neutral light-grey background, even soft studio lighting, no cast shadows, clean silhouette, no text, no labels.",
+      "size": "1536x1024"
+    },
+    "object": {
+      "about": "один предмет в 3/4 на нейтральном фоне — для Image to 3D",
+      "text": "Single isolated object reference for 3D modeling, three-quarter view, entire object visible and centered, plain neutral light-grey background, even soft studio lighting, clean silhouette, no hands, no stand, no pedestal, no text.",
+      "size": "1024x1024"
+    },
+    "icon": {
+      "about": "иконка предмета/навыка для интерфейса, прозрачный фон",
+      "text": "Game inventory icon, single centered subject, bold readable silhouette, slight three-quarter view, soft rim light, transparent background, no text.",
+      "size": "1024x1024",
+      "background": "transparent"
+    },
+    "texture": {
+      "about": "бесшовная текстура, вид сверху",
+      "text": "Seamless tileable texture, flat orthographic top-down view, even diffuse lighting, no shadows, no perspective, no objects cut at the edges.",
+      "size": "1024x1024"
+    }
+  }
+}
