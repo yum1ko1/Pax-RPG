@@ -39,6 +39,8 @@ static func model(mod: PaxMod, path: String) -> Node3D:
 			_textures(mod, path, m)
 		var t2 := Time.get_ticks_msec()
 		_lods(m)
+		if SHADOW_PROXY.has(path):
+			_shadow_proxy(m)
 		var t3 := Time.get_ticks_msec()
 		if t3 - t0 > 150:                               # журнал загрузки: что из моделей долгое
 			print("[pax_rpg] load: model %s — glb %d, textures %d, lod %d ms" % [path.get_file(), t1 - t0, t2 - t1, t3 - t2])
@@ -150,6 +152,56 @@ static func _swap(mod: PaxMod, s: Dictionary, hi: bool) -> void:
 	s.hi_on = hi
 
 
+## Отдельная картинка мода: если рядом лежит <name>.dds (BC7/BC5 — pax_rpg/dev/assets/tex_bc7.gd), берём его — в
+## видеопамяти вчетверо меньше несжатой, mip — те же, что строила игра (или их нет — как у картинки); иначе — как раньше,
+## mod.texture. Одна текстура на путь, пока её кто-то держит (слабая ссылка: кэш не держит видеопамять сам).
+static var _dds_tex := {}            # путь → WeakRef на ImageTexture из .dds
+static var _no_dds := {}             # пути, у которых .dds нет (файл не читаем повторно)
+
+
+static func tex(mod: PaxMod, path: String) -> Texture2D:
+	if path == "" or _no_dds.has(path):
+		return mod.texture(path)
+	var w: WeakRef = _dds_tex.get(path)
+	if w != null:
+		var t := w.get_ref() as Texture2D
+		if t != null:
+			return t
+	var img := _dds(mod, path.get_basename() + ".dds")
+	if img == null:
+		_no_dds[path] = true
+		return mod.texture(path)
+	var it := ImageTexture.create_from_image(img)
+	_dds_tex[path] = weakref(it)
+	return it
+
+
+## Текстура из DDS, общая для всех моделей с тем же содержимым файла (ключ — MD5 байтов). Слабая ссылка: держат её
+## материалы моделей (кэш образцов), не этот словарь.
+static var _shared_tex := {}
+
+
+static func _shared(mod: PaxMod, rel: String) -> ImageTexture:
+	var b := mod.read_bytes(rel)
+	if b.is_empty():
+		return null
+	var hc := HashingContext.new()
+	hc.start(HashingContext.HASH_MD5)
+	hc.update(b)
+	var key := hc.finish().hex_encode()
+	var w: WeakRef = _shared_tex.get(key)
+	if w != null:
+		var t := w.get_ref() as ImageTexture
+		if t != null:
+			return t
+	var img := Image.new()
+	if img.load_dds_from_buffer(b) != OK:
+		return null
+	var it := ImageTexture.create_from_image(img)
+	_shared_tex[key] = weakref(it)
+	return it
+
+
 static func _dds(mod: PaxMod, rel: String) -> Image:
 	var b := mod.read_bytes(rel)
 	if b.is_empty():
@@ -159,9 +211,30 @@ static func _dds(mod: PaxMod, rel: String) -> Image:
 
 
 ## Картинки glb (их уже нет — 1×1) → DDS из <name>.tex/: тот же обход, что у bake_textures.gd.
+## Номер t<N>.dds, записанный в заглушку картинки glb (pax_rpg/dev/assets/mark_glb.py: пиксель 1×1 = (N, 90, 165)); -1 —
+## заглушка без номера (тогда номер — по обходу). Загрузчик игры обходит и делит картинки не так, как Godot при сжатии:
+## у героя из 10 картинок номера съезжали, и в цвет и металл попадали чужие карты (жёлтый блеск).
+static func _mark(t: Texture2D) -> int:
+	if t.get_width() != 1 or t.get_height() != 1:
+		return -1
+	var img := t.get_image()
+	if img == null or img.is_compressed():
+		return -1
+	var c := img.get_pixel(0, 0)
+	if absi(c.g8 - 90) > 1 or absi(c.b8 - 165) > 1:
+		return -1
+	return c.r8
+
+
 static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 	var dir := path.get_basename() + ".tex/"
-	var seen: Array = []
+	var seen: Array = []                                 # картинки по порядку обхода — номер в .tex/t<N>.dds
+	var done: Array = []                                 # уже заменённые
+	var repl := {}                                       # картинка glb → общая текстура из DDS
+	var sb := mod.read_bytes(dir + "slots.json")
+	var parsed: Variant = JSON.parse_string(sb.get_string_from_utf8()) if not sb.is_empty() else null
+	var slots: Dictionary = parsed if parsed is Dictionary else {}   # материал → слот → t<N> (tex_map.gd)
+	var by_n := {}                                       # t<N> → текстура этой модели
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
 		var inst := mi as MeshInstance3D
 		if inst.mesh == null:
@@ -172,6 +245,12 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				mat = inst.mesh.surface_get_material(si)
 			if not (mat is BaseMaterial3D):
 				continue
+			# запасной номер (заглушка без номера) — по обходу до _pbr, как в bake_textures.gd: _pbr снимает карту
+			# шероховатости у неметаллов, и номера следующих картинок съехали бы
+			for slot: int in SLOTS:
+				var t0: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
+				if t0 != null and not seen.has(t0):
+					seen.append(t0)
 			_pbr(mat as BaseMaterial3D)
 			if DETAIL.any(func(k: String) -> bool: return path.contains(k)):
 				_detail(mod, mat as BaseMaterial3D)
@@ -180,15 +259,36 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 				bm3.subsurf_scatter_enabled = true
 				bm3.subsurf_scatter_strength = 0.25
 				bm3.subsurf_scatter_skin_mode = true
+			var ms: Dictionary = slots.get(mat.resource_name, {})
 			for slot: int in SLOTS:
 				var t: Texture2D = (mat as BaseMaterial3D).get_texture(slot)
-				if t == null or seen.has(t):
+				if t != null and ms.has(str(slot)):
+					# номер — по имени материала и слоту (slots.json): загрузчик игры раскладывает картинки glb
+					# по-своему (у героя меч получал картинку глаза), имя материала и слот у него те же
+					var tn := _tex_n(mod, path, dir, int(ms[str(slot)]), by_n)
+					if tn != null:
+						(mat as BaseMaterial3D).set_texture(slot, tn)
 					continue
-				seen.append(t)
-				var n := seen.size() - 1
+				if t != null and repl.has(t):
+					(mat as BaseMaterial3D).set_texture(slot, repl[t])   # та же картинка у другой поверхности модели
+					continue
+				if t == null or done.has(t):
+					continue
+				done.append(t)
+				var n := _mark(t)
+				if n < 0:
+					n = seen.find(t)
 				var hi := dir + "t%d.dds" % n
 				var lo := dir + "t%d_lo.dds" % n
 				var has_lo := not mod.read_bytes(lo).is_empty()
+				if not has_lo:
+					# без стриминга (лёгкой копии нет): одинаковый DDS у разных моделей — одна текстура в видеопамяти
+					# (у семи дубов одни и те же кора, листва и нормали 4096²: было по копии на каждый)
+					var sh := _shared(mod, hi)
+					if sh != null:
+						repl[t] = sh
+						(mat as BaseMaterial3D).set_texture(slot, sh)
+					continue                                   # нет файла — остаётся как в glb
 				var img := _dds(mod, lo if has_lo else hi)
 				if img == null:
 					continue                                   # не упакована — остаётся как в glb
@@ -205,6 +305,28 @@ static func _textures(mod: PaxMod, path: String, m: Node3D) -> void:
 					idx.append(_streams.size())
 					_by_path[path] = idx
 					_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+
+
+## Текстура t<N>.dds модели — одна на модель (by_n): без лёгкой копии — общая по содержимому (_shared), с копией
+## _lo — своя, со стримингом (вблизи — полная).
+static func _tex_n(mod: PaxMod, path: String, dir: String, n: int, by_n: Dictionary) -> Texture2D:
+	if by_n.has(n):
+		return by_n[n]
+	var hi := dir + "t%d.dds" % n
+	var lo := dir + "t%d_lo.dds" % n
+	var t: Texture2D = null
+	if mod.read_bytes(lo).is_empty():
+		t = _shared(mod, hi)
+	else:
+		var img := _dds(mod, lo)
+		if img != null:
+			t = ImageTexture.create_from_image(img)
+			var idx: Array = _by_path.get(path, [])
+			idx.append(_streams.size())
+			_by_path[path] = idx
+			_streams.append({"tex": t, "hi": hi, "lo": lo, "pts": [], "nodes": [], "hi_on": false})
+	by_n[n] = t
+	return t
 
 
 ## Большие постройки Meshy: вся модель — на одном атласе 2048, и вблизи стена из 2–3 пикселей на сантиметр
@@ -258,6 +380,8 @@ static func _pbr(m: BaseMaterial3D) -> void:
 const SKIN_LOD := true
 const STATIC_LOD := false             # постройки 10–40k треугольников — дёшево и без LOD (было: грани и пятна вблизи)
 static func _lods(m: Node3D) -> void:
+	if _lod_ok == 0:
+		_lod_ok = 1 if _lod_works() else -1
 	if _lod_ok < 0:
 		return
 	for mi: Node in m.find_children("*", "MeshInstance3D", true, false):
@@ -277,10 +401,111 @@ static func _lods(m: Node3D) -> void:
 		var im := ImporterMesh.new()
 		for si: int in am.get_surface_count():
 			im.add_surface(am.surface_get_primitive_type(si), am.surface_get_arrays(si), [], {},
-				am.surface_get_material(si), am.surface_get_name(si))
+				am.surface_get_material(si), am.surface_get_name(si),
+				am.surface_get_format(si) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 		im.generate_lods(25.0, 60.0, [])
-		if im.get_surface_count() == 0 or im.get_surface_lod_count(0) == 0:
-			_lod_ok = -1                                     # упрощения сеток в этой сборке нет — не пробовать
-			return
-		_lod_ok = 1
-		inst.mesh = im.get_mesh()
+		var any := false
+		for si: int in im.get_surface_count():
+			any = any or im.get_surface_lod_count(si) > 0
+		# сетку, которая не упростилась (швы UV Meshy на каждой вершине), оставляем как есть. Раньше такая сетка
+		# первой поверхностью выключала LOD у всех моделей до конца игры (_lod_ok = -1)
+		if any:
+			inst.mesh = im.get_mesh()
+
+
+## Есть ли в этой сборке упрощение сеток (meshoptimizer): шар 64×32 упрощается всегда.
+static func _lod_works() -> bool:
+	var im := ImporterMesh.new()
+	im.add_surface(Mesh.PRIMITIVE_TRIANGLES, SphereMesh.new().get_mesh_arrays())
+	im.generate_lods(25.0, 60.0, [])
+	return im.get_surface_count() > 0 and im.get_surface_lod_count(0) > 0
+
+
+## Тень лёгкой на вид, но тяжёлой модели (катана с ножнами на поясе героя — 87k треугольников, 18 сеток): она в
+## каждом каскаде солнца и в 6 гранях тени каждого огня рядом с героем (тень огня у героя перерисовывается каждый кадр).
+## Тень даёт одна копия: все сетки модели одной, вершины сварены по месту (швы UV и нормалей тени не нужны), у неё LOD
+## движка — его погрешность меньше пикселя с камеры (выбирает по расстоянию до камеры и в проходах теней). Сами
+## сетки тень не отбрасывают, видны как были. Копия — дочерний узел модели: прячется и двигается вместе с ней.
+const SHADOW_PROXY := ["models/weapons/katana.glb", "models/weapons/katana_saya.glb", "models/weapons/katana_sheathed.glb"]
+static var _proxy_mat: StandardMaterial3D
+
+
+static func _shadow_proxy(m: Node3D) -> void:
+	if _lod_ok < 0:
+		return
+	var verts := PackedVector3Array()
+	var idx := PackedInt32Array()
+	var at := {}                                         # место вершины → номер (сварка)
+	var parts: Array = []                                # в осях корня модели: копия — его дочерний узел
+	if m is MeshInstance3D and (m as MeshInstance3D).mesh != null:
+		parts.append([m, Transform3D.IDENTITY])
+	for c: Node in m.get_children():
+		_mesh_nodes(c, Transform3D.IDENTITY, parts)
+	if parts.is_empty():
+		return
+	for pr: Array in parts:
+		var inst: MeshInstance3D = pr[0]
+		var xf: Transform3D = pr[1]
+		for si: int in inst.mesh.get_surface_count():
+			if inst.mesh.surface_get_primitive_type(si) != Mesh.PRIMITIVE_TRIANGLES:
+				return                                   # не треугольники — без копии, как было
+			var arr := inst.mesh.surface_get_arrays(si)
+			var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var ix: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+			var remap := PackedInt32Array()
+			remap.resize(vs.size())
+			for i: int in vs.size():
+				var p := xf * vs[i]
+				var k: int = at.get(p, -1)
+				if k < 0:
+					k = verts.size()
+					at[p] = k
+					verts.append(p)
+				remap[i] = k
+			if ix.is_empty():
+				for i: int in vs.size():
+					idx.append(remap[i])
+			else:
+				for i: int in ix:
+					idx.append(remap[i])
+	var nrm := PackedVector3Array()                      # гладкие нормали — LOD бережёт форму по ним
+	nrm.resize(verts.size())
+	for t: int in range(0, idx.size() - 2, 3):
+		var fn := (verts[idx[t + 1]] - verts[idx[t]]).cross(verts[idx[t + 2]] - verts[idx[t]])
+		nrm[idx[t]] += fn
+		nrm[idx[t + 1]] += fn
+		nrm[idx[t + 2]] += fn
+	for i: int in nrm.size():
+		nrm[i] = nrm[i].normalized() if nrm[i].length_squared() > 0.0 else Vector3.UP
+	if _proxy_mat == null:
+		_proxy_mat = StandardMaterial3D.new()
+		_proxy_mat.cull_mode = BaseMaterial3D.CULL_DISABLED   # как у сеток модели (Meshy/Blender — двусторонние)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = nrm
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var im := ImporterMesh.new()
+	im.add_surface(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, _proxy_mat, "shadow")
+	im.generate_lods(60.0, 60.0, [])
+	if im.get_surface_count() == 0 or im.get_surface_lod_count(0) == 0:
+		return                                           # не упростилась — пусть тень дают сами сетки
+	var px := MeshInstance3D.new()
+	px.name = "ShadowLod"
+	px.mesh = im.get_mesh()
+	px.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	px.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	m.add_child(px)
+	for pr: Array in parts:
+		(pr[0] as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Сетки модели (не скинованные) и их место в осях модели — модель ещё вне дерева, по локальным преобразованиям.
+static func _mesh_nodes(n: Node, xf: Transform3D, out: Array) -> void:
+	var here := xf
+	if n is Node3D:
+		here = xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and (n as MeshInstance3D).skin == null:
+		out.append([n, here])
+	for c: Node in n.get_children():
+		_mesh_nodes(c, here, out)
