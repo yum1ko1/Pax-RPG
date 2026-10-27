@@ -3,6 +3,8 @@
 <имя>_a.png (RGBA): R — свет справа, G — сверху, B — спереди (со стороны камеры), A — плотность;
 <имя>_b.png (RGB):  R — слева, G — снизу, B — сзади. Освещённость — без альфы (сколько света дошло в эту точку).
 <имя>_flow.png (RG): куда сдвигается каждая точка к следующему кадру — шейдер «дотягивает» кадр к следующему.
+Клуб в симуляции всплывает — кадр вырезается квадратом во всю ширину по плавной траектории его центра
+(подъём в игре даёт сама частица, а в атласе клуб стоит на месте и только клубится и растёт).
 Результат — mods/pax_rpg/textures/vfx/sim/."""
 import os, sys, glob
 import numpy as np
@@ -31,7 +33,7 @@ frames = sorted(set(os.path.basename(p)[4:8] for p in glob.glob(os.path.join(src
 assert len(frames) >= L, len(frames)
 frames = frames[:L]
 lum_w = np.array([0.2126, 0.7152, 0.0722], np.float32)
-raw = []                                           # [кадр] → (6 карт света, альфа)
+full = []                                          # [кадр] → (6 карт света, альфа), кадр симуляции целиком
 for f in frames:
     maps, al = [], None
     for d in DIRS:
@@ -39,8 +41,21 @@ for f in frames:
         a = s[..., 3]
         al = a if al is None else np.maximum(al, a)
         maps.append(np.where(a > 1e-3, (s[..., :3] @ lum_w) / np.maximum(a, 1e-3), 0.0))
-    st = np.stack(maps + [al], -1)
-    raw.append(cv2.resize(st, (CW, CW), interpolation=cv2.INTER_AREA))
+    full.append(np.stack(maps + [al], -1))
+h, w = full[0].shape[:2]
+ys = np.arange(h, dtype=np.float32)
+cy = np.array([float((r[..., 6].sum(1) * ys).sum() / max(r[..., 6].sum(), 1e-6)) for r in full])
+t = np.arange(L)
+cy = np.polyval(np.polyfit(t, cy, 3), t)            # плавная траектория — без дрожи кадра
+raw = []
+for r, c in zip(full, cy):
+    y0 = int(round(c - w / 2))
+    pad = np.zeros((w, w, 7), np.float32)
+    a0, a1 = max(y0, 0), min(y0 + w, h)
+    pad[a0 - y0:a1 - y0] = r[a0:a1]
+    raw.append(cv2.resize(pad, (CW, CW), interpolation=cv2.INTER_AREA))
+edge = max(float(np.concatenate([r[[0, -1], :, 6].ravel(), r[:, [0, -1], 6].ravel()]).max()) for r in raw)
+print("центр клуба, px: %.0f → %.0f; плотность на краю кадра %.2f" % (cy[0], cy[-1], edge))
 pk = float(np.percentile(np.stack([r[..., :6] for r in raw])[np.stack([r[..., 6] for r in raw]) > 0.05], 99.5))
 print("кадр", CW, "пик света", pk)
 A = np.zeros((CW * G, CW * G, 4), np.float32)

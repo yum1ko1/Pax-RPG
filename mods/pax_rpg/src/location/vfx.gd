@@ -89,9 +89,29 @@ func _parts(parent: Node, pos: Vector3, mat: Material, amount: int, life: float)
 	return p
 
 
+## Клуб дыма из симуляции газа (shaders/vfx_smoke.gdshader, textures/vfx/sim/smoke_puff_*): клубится, растёт,
+## тает за жизнь частицы; освещён «с 6 сторон» — солнце, луна и огни сцены светят на него каждый со своей стороны.
+const SIM_SMOKE := "textures/vfx/sim/smoke_puff"
+const SIM_SMOKE_ON := true
+
+
+func _smoke_mat() -> Material:
+	if not SIM_SMOKE_ON:
+		return _flip_mat(SMOKE, false, 1.0)
+	if _mats.has("sim_smoke"):
+		return _mats["sim_smoke"]
+	var m := ShaderMaterial.new()
+	m.shader = mod.shader("shaders/vfx_smoke.gdshader")
+	m.set_shader_parameter("atlas_a", mod.texture(SIM_SMOKE + "_a.png"))
+	m.set_shader_parameter("atlas_b", mod.texture(SIM_SMOKE + "_b.png"))
+	m.set_shader_parameter("flow_tex", mod.texture(SIM_SMOKE + "_flow.png"))
+	_mats["sim_smoke"] = m
+	return m
+
+
 ## Дым: клубы с объёмом, тёмные у источника, светлеют и тают вверху; ветер сносит.
 func smoke(parent: Node, pos: Vector3, size: float, col: Color, amount: int, rise := 0.55) -> CPUParticles3D:
-	var p := _parts(parent, pos, _flip_mat(SMOKE, false, 1.0), amount, 5.5)
+	var p := _parts(parent, pos, _smoke_mat(), amount, 5.5)
 	p.direction = Vector3.UP
 	p.spread = 10.0
 	p.initial_velocity_min = rise * 0.6
