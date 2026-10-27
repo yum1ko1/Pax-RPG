@@ -20,6 +20,7 @@ const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Shop := preload("res://mods/pax_rpg/src/location/shop.gd")
 const W := 1536.0
 const H := 1024.0
+const WW := 1820.0                               # stage_wide.jpg — тот же макет на 16:9 (pax_rpg/dev/inventory/build_stage_wide.py)
 # окна сцены (px stage.jpg, замер по тёмным внутренним областям)
 const LEFT := Rect2(28, 271, 284, 565)           # торговец
 const MAIN := Rect2(351, 271, 1154, 573)         # товар / рулетка
@@ -76,7 +77,9 @@ func setup(m: PaxMod) -> void:
 	_frame.size = Vector2(W, H)
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
-	if _has("textures/shop/stage.jpg"):
+	if _has("textures/shop/stage_wide.jpg"):                      # 16:9: по бокам макета — общий фон инвентаря (backdrop.jpg)
+		ui.pic(_frame, "textures/shop/stage_wide.jpg", Rect2(-(WW - W) * 0.5, 0, WW, H), false)
+	elif _has("textures/shop/stage.jpg"):
 		ui.pic(_frame, "textures/shop/stage.jpg", Rect2(0, 0, W, H), false)
 	else:                                                         # без сцены — те же окна простыми рамками
 		for r: Rect2 in [LEFT, MAIN, TAB_GOODS, TAB_WHEEL]:
