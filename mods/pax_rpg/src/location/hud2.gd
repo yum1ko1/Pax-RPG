@@ -8,12 +8,14 @@ extends "res://mods/pax_rpg/src/location/hud.gd"
 
 const IVORY := Color(0.957, 0.894, 0.784)
 const IVORY_DIM := Color(0.78, 0.69, 0.55)
-const CRIMSON2 := Color(0.78, 0.09, 0.16)
-const CRIMSON_HI := Color(1.0, 0.36, 0.36)
-const GHOST2 := Color(0.94, 0.59, 0.59)
-const AMBER2 := Color(0.91, 0.66, 0.19)
-const XP_COL := Color(0.47, 0.67, 0.9)
-const WELL := Color(0.055, 0.03, 0.04, 0.92)
+## Цвета — в тон городу днём (лак ворот, песок, дымка), а не ночному GPT-макету: красный приглушён, подложка —
+## тёмный орех и чуть прозрачна (рамки так же тонирует pax_rpg/dev/hud2/tone_hud2.py).
+const CRIMSON2 := Color(0.7, 0.17, 0.17)
+const CRIMSON_HI := Color(0.93, 0.42, 0.36)
+const GHOST2 := Color(0.88, 0.62, 0.55)
+const AMBER2 := Color(0.86, 0.66, 0.3)
+const XP_COL := Color(0.55, 0.68, 0.8)
+const WELL := Color(0.15, 0.095, 0.08, 0.82)
 const MINI_M := 45.0
 const CityMap := preload("res://mods/pax_rpg/src/location/city_map.gd")                  # м мира от центра миникарты до края круга
 

@@ -96,6 +96,7 @@ func load_model(mod: PaxMod, c: Dictionary) -> Node3D:
 		old_cape.get_parent().remove_child(old_cape)
 		old_cape.free()
 	_tone_eyes()
+	_tone_body()
 	_sword_back = model.find_child("Sword_Back", true, false) as Node3D
 	_sword_hand = model.find_child("Sword_Hand", true, false) as Node3D
 	_sword_drag = model.find_child("Sword_Drag", true, false) as Node3D
@@ -129,6 +130,33 @@ func _tone_eyes() -> void:
 				m.emission_enabled = m.emission_energy_multiplier > 0.0
 			m.clearcoat = minf(m.clearcoat, 0.3)
 			mi.set_surface_override_material(si, m)
+
+
+## Тело в тон миру (look_* в config/hero*.json; нет — как в модели). Постройки и жители матовые (Assets._pbr:
+## шероховатость от 0.85, слабый блик), а у героя карта шероховатости давала лак латекса и сапог — самое блестящее
+## пятно в кадре. look_rough — шероховатость вместо карты, look_specular — доля блика, look_tint — множитель цвета
+## (чисто-белые волосы и алый — чуть пыльнее, как всё в городе). Глаза — своё (_tone_eyes).
+func _tone_body() -> void:
+	if not cfg.has("look_rough") and not cfg.has("look_tint"):
+		return
+	var lt: Array = cfg.get("look_tint", [1.0, 1.0, 1.0])
+	var tint := Color(float(lt[0]), float(lt[1]), float(lt[2]))
+	var done: Array = []
+	for n: Node in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or mi.name.begins_with("Eye"):
+			continue
+		for si: int in mi.mesh.get_surface_count():
+			var m := mi.get_active_material(si) as BaseMaterial3D
+			if m == null or done.has(m) or m.resource_name.begins_with("M_Eye"):
+				continue
+			done.append(m)                                       # материал общий с копиями модели — правим один раз
+			if cfg.has("look_rough"):
+				m.roughness_texture = null
+				m.roughness = _f("look_rough", 0.75)
+				m.metallic_specular = _f("look_specular", 0.3)
+				m.clearcoat_enabled = false
+			m.albedo_color = m.albedo_color * tint
 
 
 ## Меч крупнее (sword_scale) и на спине — по диагонали, как у Гатса: рукоять над правым плечом, клинок к левому бедру,
