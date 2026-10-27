@@ -41,6 +41,7 @@ var ui: Ui                          # шрифты и кэш картинок
 var cfg: Dictionary = {}
 var anchor := Vector2(1560, 910)     # центр полосы, px макета
 var hero_lvl := 1
+var grant := true                    # класть выпавшее в сумку на остановке (лавка кладёт сама, сразу при оплате)
 var K := 0.7                         # масштаб прокрутки (config/loot.json → roll_scale): полоса, вещи, катана, кольцо
 var _items: Array = []              # {id, set, k, r, mana, blot, rot}
 var _win := 0
@@ -132,14 +133,19 @@ func busy() -> bool:
 	return not _items.is_empty()
 
 
-## Начать: force_r ≥ 0 — редкость выигрыша (для проверки), иначе по весам rarity_w.
-func start(force_r := -1) -> void:
+## Начать: force_r ≥ 0 — редкость выигрыша (для проверки), иначе по весам rarity_w; forced — готовая вещь выигрыша
+## {id, set, k, r, mana} (Колесо Судьбы в лавке: редкость с гарантами считает shop.gd).
+func start(force_r := -1, forced: Dictionary = {}) -> void:
 	var n := int(cfg.get("items", 36))
 	_win = clampi(int(cfg.get("win_at", 30)), 3, n - 3)
 	_spin = float(cfg.get("spin_time", 3.6))
 	_items = []
 	for i: int in n:
 		_items.append(_random_item(force_r if i == _win else -1))
+	if not forced.is_empty():
+		var it: Dictionary = _items[_win]
+		for key: String in ["id", "set", "k", "r", "mana"]:
+			it[key] = forced[key]
 	_off0 = 2.0 * CELL
 	_off1 = _win * CELL                                            # встаёт ровно на выпавшей вещи
 	_t = 0.0
@@ -226,10 +232,11 @@ func _process(delta: float) -> void:
 		_revealed = true
 		var it := winner()
 		_play("loot_reveal_epic.ogg" if _big else "loot_reveal.ogg", -3.0 if _big else -12.0)
-		var loot: Variant = mod.get_setting("inv_loot", [])
-		var list: Array = (loot as Array).duplicate() if loot is Array else []
-		list.append(str(it["id"]))
-		mod.set_setting("inv_loot", list)
+		if grant:
+			var loot: Variant = mod.get_setting("inv_loot", [])
+			var list: Array = (loot as Array).duplicate() if loot is Array else []
+			list.append(str(it["id"]))
+			mod.set_setting("inv_loot", list)
 	if _big and _move_at < 0.0 and _t >= reveal + 0.8:       # своя очередь — вещь уходит влево-вверх, потом окно
 		if not gate.has(self):
 			gate.append(self)

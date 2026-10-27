@@ -12,8 +12,7 @@ var xp := 0.0                      # опыт внутри текущего ур
 var skill_points := 0
 var gold := 0                      # золотые монеты (враги, задания; HUD — слева вверху)
 var stats_added: Dictionary = {}   # очки характеристик, вложенные игроком: ключ характеристики → сколько
-var bonus_points := 0              # очки характеристик сверх уровней (лавка, рулетка — shop.gd)
-var flask_bonus := 0               # заряды эликсира сверх героя (фляга из лавки или рулетки)
+var flask_bonus := 0               # заряды эликсира сверх героя (тыква-фляга из лавки — shop.gd)
 var cfg: Dictionary = {}
 
 
@@ -26,7 +25,6 @@ func setup(m: PaxMod, c: Dictionary) -> void:
 		xp = float((saved as Dictionary).get("xp", 0.0))
 		skill_points = int((saved as Dictionary).get("skill_points", 0))
 		gold = int((saved as Dictionary).get("gold", 0))
-		bonus_points = int((saved as Dictionary).get("bonus_points", 0))
 		flask_bonus = int((saved as Dictionary).get("flask_bonus", 0))
 		var sa: Variant = (saved as Dictionary).get("stats_added", {})
 		stats_added = sa if sa is Dictionary else {}
@@ -62,16 +60,11 @@ func add_xp(v: float) -> int:
 
 func _save() -> void:
 	mod.set_setting("progress", {"level": level, "xp": xp, "skill_points": skill_points, "stats_added": stats_added,
-		"gold": gold, "bonus_points": bonus_points, "flask_bonus": flask_bonus})
+		"gold": gold, "flask_bonus": flask_bonus})
 
 
 func add_gold(v: int) -> void:
 	gold = maxi(0, gold + v)
-	_save()
-
-
-func add_bonus_point() -> void:
-	bonus_points += 1
 	_save()
 
 
@@ -82,13 +75,12 @@ func add_flask() -> void:
 
 # ---------- очки характеристик и масштабирование урона ----------
 
-## Свободные очки характеристик: одно за каждый stat_every-й уровень (10, 20, …) и купленные / выигранные (bonus_points)
-## минус уже вложенные.
+## Свободные очки характеристик: одно за каждый stat_every-й уровень (10, 20, …) минус уже вложенные.
 func stat_points() -> int:
 	var spent := 0
 	for k: Variant in stats_added:
 		spent += int(stats_added[k])
-	return maxi(0, level / int(_f("stat_every", 10.0)) + bonus_points - spent)
+	return maxi(0, level / int(_f("stat_every", 10.0)) - spent)
 
 
 func add_stat(key: String) -> bool:
