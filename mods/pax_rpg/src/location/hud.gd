@@ -1187,8 +1187,9 @@ static func coin(ci: CanvasItem, c: Vector2, r: float, t: float, flash := 0.0) -
 		var sx := lerpf(-r, r, sweep)
 		var hw := r * 0.18
 		var yy := sqrt(maxf(0.0, r * r - sx * sx)) * 0.92
-		ci.draw_colored_polygon(PackedVector2Array([c + Vector2(sx - hw, -yy), c + Vector2(sx + hw * 0.4, -yy),
-			c + Vector2(sx + hw, yy), c + Vector2(sx - hw * 0.4, yy)]), Color(1.0, 0.97, 0.9, 0.28))
+		if yy > 0.5:                                         # у края монеты блик вырождается в линию — не рисовать
+			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(sx - hw, -yy), c + Vector2(sx + hw * 0.4, -yy),
+				c + Vector2(sx + hw, yy), c + Vector2(sx - hw * 0.4, yy)]), Color(1.0, 0.97, 0.9, 0.28))
 
 
 func _draw_hint() -> void:
