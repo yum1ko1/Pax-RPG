@@ -12,6 +12,7 @@ signal city_chosen(city: Dictionary)
 const DayNight := preload("res://mods/pax_rpg/src/location/daynight.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const Heavens3D := preload("res://mods/pax_rpg/src/planet/heavens3d.gd")
+const SpaceLock := preload("res://mods/pax_rpg/src/planet/space_lock.gd")
 
 const CHECK_EVERY := 1.0           # с. Игра может заново выдать планете материал — проверяем и ставим свой снова
 const CLICK_PX := 18.0             # насколько близко к значку надо щёлкнуть, пикселей
@@ -65,6 +66,7 @@ func setup(m: PaxMod) -> void:
 	_loc_cfg = lp if lp is Dictionary else {}
 	if _shader == null or _surface == null:
 		m.log_error("Pax RPG: shaders/yuruma.gdshader or textures/yuruma_surface.png did not load")
+	SpaceLock.apply(m)                    # других звёзд и галактик нет: их модули игры выключены
 
 
 ## Игрок нажал «Продолжить» / «Загрузить» / «Новая игра»: игра сейчас разберёт мир и соберёт новый (в своих
