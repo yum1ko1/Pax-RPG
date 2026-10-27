@@ -97,7 +97,7 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_give_btn.visible = false
 	_give_btn.pressed.connect(_hand_over)
 	_panel.add_child(_give_btn)
-	_shop_btn = Button.new()                            # «Лавка» — только у торговца (роль trader)
+	_shop_btn = Button.new()                            # «Лавка» — у торговцев базара (npc.shop, лавочник trader)
 	_shop_btn.position = Vector2(W - 28 - 180, 20)
 	_shop_btn.size = Vector2(180, 36)
 	_shop_btn.focus_mode = Control.FOCUS_NONE
@@ -397,7 +397,7 @@ func _update_give() -> void:
 	var q := Quest.get_q(mod)
 	var on := _is_giver() and str(q.get("state", "")) == "found"
 	_give_btn.visible = on
-	_shop_btn.visible = is_instance_valid(_npc) and str(_npc.get("role")) == "trader"
+	_shop_btn.visible = is_instance_valid(_npc) and (str(_npc.get("role")) == "trader" or bool(_npc.get("shop")))
 	_give_btn.position.x = W - 28 - 230 - (190.0 if _shop_btn.visible else 0.0)   # рядом с «Лавкой», не под ней
 	if on:
 		_give_btn.text = mod.tr_key("pax_rpg_talk_give") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))

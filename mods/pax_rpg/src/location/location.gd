@@ -901,7 +901,8 @@ func _solid(size: Vector3, pos: Vector3, color: Color) -> StaticBody3D:
 
 ## Торговцы за прилавками — живые жители (с ними можно говорить, E), а не модели планировки: стоят на месте
 ## (маршрут из одной точки), лицом к покупателю, ремесло — торговец.
-## Первый прилавок — лавочник (роль trader, вывеска над головой): в разговоре кнопка «Лавка» (shop_view.gd).
+## У каждого прилавка лавка (вывеска «⚖ Лавка» над головой, в разговоре кнопка «Лавка», shop_view.gd) со своим товаром
+## дня; первый — лавочник Базара Добычи (роль trader, своё имя).
 var _merchants: Array = []
 
 
@@ -926,8 +927,8 @@ func _spawn_merchants() -> void:
 		var role := "trader" if i == 0 else "merchant"           # первый прилавок — лавка с товаром дня и рулеткой
 		npc.setup(mod, PackedVector3Array([Vector3(float(p[0]), 0.1, float(p[2]))]), 0, int(d.get("seed", i)) * 31 + 7, role)
 		npc.rotation.y = deg_to_rad(float(d.get("r", 0.0)))
-		if role == "trader":
-			npc.set_sign("⚖ " + mod.tr_key("pax_rpg_shop_title"))
+		npc.set("shop", true)
+		npc.set_sign("⚖ " + mod.tr_key("pax_rpg_shop_title"))
 		npc.set("npc_index", n0 + i)
 		npc.set("relation", Quest.relation(mod, str(city_data.get("id", "")), n0 + i, int(npc.get("relation"))))
 		_view.add_child(npc)
@@ -1443,15 +1444,18 @@ func _open_shop() -> void:
 	if not is_instance_valid(_shop_view) or _prog == null:
 		return
 	var who := str(_talk_npc.get("npc_name")) if is_instance_valid(_talk_npc) else ""
+	var stall := ""                                   # лавочник — прилавок города, другие торговцы — каждый свой
+	if is_instance_valid(_talk_npc) and str(_talk_npc.get("role")) != "trader":
+		stall = str(_talk_npc.get("npc_index"))
 	if is_instance_valid(_talk) and _talk.visible:
 		_talk.close()
 	if _shop == null:
 		_shop = Shop.new()
 		_shop.setup(mod, _prog)
 		_shop.granted.connect(_shop_granted)
-	_shop.set_city(str(city_data.get("id", "")))         # у торговца каждого города свой прилавок
+	_shop.set_city(str(city_data.get("id", "")), stall)  # у торговца каждого города свой прилавок
 	_talk_focus(true)
-	_shop_view.open(_shop, who)
+	_shop_view.open(_shop, who, str(_talk_npc.get("trade")) if is_instance_valid(_talk_npc) else "")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_rmb = false
 	_lmb_queued = false

@@ -132,7 +132,8 @@ func _fit() -> void:
 	_roll.K = s / u * 0.95
 
 
-func open(s: Shop, who: String) -> void:
+## who — имя торговца, role — его ремесло под именем ("" — лавочник Базара Добычи).
+func open(s: Shop, who: String, role := "") -> void:
 	shop = s
 	shop.refresh()
 	_roll.eq = shop.eq
@@ -140,6 +141,7 @@ func open(s: Shop, who: String) -> void:
 	_msg_t = 0.0
 	_msg_l.text = ""
 	_name_l.text = who.to_upper()
+	_role_l.text = (role if role != "" else mod.tr_key("pax_rpg_npc_role_trader")).to_upper()
 	visible = true
 	_fit()
 	_show_tab(true)

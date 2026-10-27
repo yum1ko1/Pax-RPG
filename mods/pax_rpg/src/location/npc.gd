@@ -37,6 +37,7 @@ var worry := ""                     # что заботит сегодня
 var race := "goblin"
 var temper := ""
 var relation := 50
+var shop := false                   # торгует за прилавком базара: в разговоре кнопка «Лавка» (свой товар дня)
 var npc_index := -1                 # номер жителя в городе (задания и отношения — по нему, quest.gd)
 var talking := false
 var _prompt: Label3D

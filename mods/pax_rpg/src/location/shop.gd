@@ -18,7 +18,8 @@ var prog: Progress                   # золото, уровень, заряд�
 var eq := Equip.new()                # снаряжение: редкости, слоты, сеты, вещь по id
 var cfg: Dictionary = {}
 var day := -1                        # номер суток магазина (смена — в reset_hour)
-var city := ""                       # город торговца (у каждого свой прилавок)
+var city := ""                       # город торговца
+var stall := ""                      # чей прилавок: город (лавочник) или город/номер торговца — у каждого свой товар
 var goods: Array = []                # прилавок: [{"kind": "item"|"good", "id", "price", "left", "r"}]
 var pity_epic := 0                   # прокрутов без эпического и выше
 var pity_legend := 0                 # прокрутов без легендарного и выше
@@ -84,9 +85,11 @@ func secs_to_reset() -> int:
 	return int(86400.0 - fmod(_clock(), 86400.0))
 
 
-## Торговец какого города (location.gd — id города): его прилавок.
-func set_city(c: String) -> void:
+## Торговец какого города (location.gd — id города) и какой из его торговцев (s — номер жителя, "" — лавочник): его
+## прилавок. Город за всю игру (per_city) считается общим на всех его торговцев.
+func set_city(c: String, s := "") -> void:
 	city = c
+	stall = c if s == "" else c + "/" + s
 	refresh()
 
 
@@ -98,7 +101,7 @@ func refresh() -> void:
 		_sold = {}
 		_stall = {}
 		_save()
-	if not _stall.has(city):
+	if not _stall.has(stall):
 		_roll_stall()
 	_build_goods()
 
@@ -107,7 +110,7 @@ func refresh() -> void:
 ## (с chance — не каждый день; что уже не продать — не выкладывается).
 func _roll_stall() -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([day, Names.run_seed(mod), city])
+	rng.seed = hash([day, Names.run_seed(mod), stall])
 	var items: Array = []
 	var taken: Dictionary = {}
 	var sets: Array = cfg.get("item_sets", ["samurai"])
@@ -120,7 +123,7 @@ func _roll_stall() -> void:
 				break
 			k = rng.randi_range(0, eq.slots.size() - 1)
 		taken["%d:%s" % [k, key]] = true
-		items.append("%d:%s-%d#shop%d_%d_%d" % [k, key, r, day, absi(hash(city)) % 100000, i])
+		items.append("%d:%s-%d#shop%d_%d_%d" % [k, key, r, day, absi(hash(stall)) % 100000, i])
 	var own: Array = []
 	for id: Variant in cfg.get("goods", {}):
 		var g := good(str(id))
@@ -130,7 +133,7 @@ func _roll_stall() -> void:
 		if _capped(str(id)) or _city_limited(str(id)):
 			continue
 		own.append(str(id))
-	_stall[city] = {"items": items, "goods": own}
+	_stall[stall] = {"items": items, "goods": own}
 	_save()
 
 
@@ -149,8 +152,8 @@ static func _pick_w(w: Array, rng: RandomNumberGenerator) -> int:
 ## Карточки прилавка: вещи (цена — как у вещи × markup) и свои товары (рост цены за купленные).
 func _build_goods() -> void:
 	goods.clear()
-	var st: Dictionary = _stall.get(city, {})
-	var sold: Dictionary = _sold.get(city, {})
+	var st: Dictionary = _stall.get(stall, {})
+	var sold: Dictionary = _sold.get(stall, {})
 	for id: Variant in st.get("items", []):
 		var it := item(str(id))
 		if it.is_empty():
@@ -212,9 +215,9 @@ func buy(i: int) -> bool:
 	var it: Dictionary = goods[i]
 	var id := str(it.id)
 	prog.add_gold(-int(it.price))
-	var sold: Dictionary = _sold.get(city, {})
+	var sold: Dictionary = _sold.get(stall, {})
 	sold[id] = int(sold.get(id, 0)) + 1
-	_sold[city] = sold
+	_sold[stall] = sold
 	if str(it.kind) == "item":
 		_to_bag([id])
 	else:
