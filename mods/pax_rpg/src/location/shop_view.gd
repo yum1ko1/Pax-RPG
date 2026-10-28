@@ -59,6 +59,7 @@ var _gate: Array = []                             # очередь окна ха
 var _hot: Array = []                              # [Rect2 в px макета, id вещи] — наведение → подсказка
 var _tip: ItemTip
 var _tip_id := ""
+var _os := -1.0                                    # прежний oversampling окна (Ui.sharp_text)
 
 
 func setup(m: PaxMod) -> void:
@@ -111,6 +112,9 @@ func setup(m: PaxMod) -> void:
 	_roll.visible = false
 	add_child(_roll)
 	resized.connect(_fit)
+	visibility_changed.connect(func() -> void:
+		if not visible:
+			_os = Ui.sharp_text(_frame, false, _os))
 
 
 func _has(path: String) -> bool:
@@ -129,6 +133,8 @@ func _fit() -> void:
 	var s := minf(size.x / W, size.y / H)
 	_frame.scale = Vector2(s, s)
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
+	if visible:
+		_os = Ui.sharp_text(_frame, true, _os)              # текст макета — в пикселях экрана, без мыла
 	# лента — в своих px (высота экрана = 1080): центр окна товара чуть выше середины, масштаб — как у макета
 	var u := maxf(size.y / 1080.0, 0.001)
 	var c := _frame.position + Vector2(MAIN.get_center().x, MAIN.position.y + 215.0) * s

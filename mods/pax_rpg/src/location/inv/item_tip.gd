@@ -19,6 +19,9 @@ var color := Color.WHITE             # цвет подсветки (редкос
 var _frame: Control
 var _mana_fx: Array = []
 var _t := 0.0
+var _glows: Array = []               # полосы свечения усиленных статов — «дышат» (прототип: glow 3,6 с)
+var _stars: Array = []               # звёзды усиленных статов — мерцают (twinkle 3,6 с)
+var _waves: Array = []               # узлы строк статов по порядку — проявляются волной сверху вниз
 ## Показ роллов (лут, src/location/loot/roll.gd): усиленные и пропитанные маной статы сначала с базовым числом,
 ## затем по очереди «прокручиваются» и встают на итог — со свечением и звездой. on_roll(i, landed, mana) — для звука:
 ## в начале прокрутки стата и когда он встал.
@@ -39,6 +42,9 @@ func build(u: Ui, e: RefCounted, it: Dictionary, k: int, hero_lvl: int, passive:
 	lines = []
 	_mana_fx = []
 	_rolls = []
+	_glows = []
+	_stars = []
+	_waves = []
 	var r := int(it["r"])
 	var rc: Color = eq.rc(r)
 	var mana := bool(it.get("mana", false))
@@ -140,6 +146,26 @@ func build(u: Ui, e: RefCounted, it: Dictionary, k: int, hero_lvl: int, passive:
 	seal.modulate.a = 0.0
 	if mana:
 		_mana_corners(h)
+	_wave()
+
+
+## Строки статов проявляются вместе с окном лёгкой волной: сдвиг 6 px слева, по 12 мс на строку (как в прототипе).
+func _wave() -> void:
+	if not is_inside_tree():
+		return
+	for i: int in _waves.size():
+		var tw := create_tween().set_parallel()
+		for n: Variant in _waves[i]:
+			var c := n as CanvasItem
+			if not (c is Control):
+				continue
+			var ctl := c as Control
+			var x := ctl.position.x
+			ctl.modulate.a = 0.0
+			ctl.position.x = x - 6.0
+			var d := minf(i, 16) * 0.012 + 0.02
+			tw.tween_property(ctl, "modulate:a", 1.0, 0.3).set_delay(d).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.tween_property(ctl, "position:x", x, 0.3).set_delay(d).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 ## Рамка — перекрашенная копия золотой (шейдер: яркость рамки × цвет редкости / маны).
@@ -255,6 +281,7 @@ func _cap(text: String, pos: Vector2) -> float:
 func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 	var main := part == "main"
 	var h := 26.0 if main else 24.0
+	var first := get_child_count()
 	var boost := bool(e.get("boost", false))
 	var mana := bool(e.get("mana", false))
 	var rc: Color = eq.rc(r)
@@ -264,6 +291,7 @@ func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 		var g := ui.pic(self, ["glow_epic.png", "glow_leg.png", "glow_myth.png"][clampi(r - 3, 0, 2)], Rect2(pos + Vector2(0, h - 10), Vector2(w, 14)), false)
 		g.modulate.a = 0.9
 		fx.append(g)
+		_glows.append(g)
 		fx.append(_draw_ctl(Rect2(pos, Vector2(w, h)), func(ci: Control) -> void:
 			ci.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), Color(rc.r, rc.g, rc.b, 0.10))))
 	if mana:
@@ -298,12 +326,16 @@ func _line(e: Dictionary, pos: Vector2, r: int, part: String, j: int) -> float:
 	if mana:
 		fx.append(ui.pic(self, "mana_gem.png", Rect2(Vector2(mx - (14 if boost else 0), pos.y + h * 0.5 - 8), Vector2(12, 16))))
 	if boost:
-		fx.append(ui.pic(self, ["star_epic.png", "star_leg.png", "star_myth.png"][clampi(r - 3, 0, 2)], Rect2(Vector2(mx, pos.y + h * 0.5 - 7), Vector2(14, 14))))
+		var star := ui.pic(self, ["star_epic.png", "star_leg.png", "star_myth.png"][clampi(r - 3, 0, 2)], Rect2(Vector2(mx, pos.y + h * 0.5 - 7), Vector2(14, 14)))
+		star.pivot_offset = Vector2(7, 7)
+		fx.append(star)
+		_stars.append(star)
 	if boost or mana:                                       # база — до усиления (×boost редкости, ×мана)
 		var m := (float((eq.rar[r] as Dictionary)["boost"]) if boost else 1.0) \
 			* (float((eq.d.get("mana", {}) as Dictionary).get("mult", 5)) if mana else 1.0)
 		_rolls.append({"label": vl, "fx": fx, "key": key, "base": float(e["v"]) / maxf(m, 0.01), "final": float(e["v"]), "mana": mana})
 	lines.append({"rect": Rect2(pos, Vector2(w, h)), "part": part, "j": j})
+	_waves.append(get_children().slice(first))
 	return pos.y + h + 5
 
 
@@ -483,3 +515,11 @@ func _process(delta: float) -> void:
 	for n: Variant in _mana_fx:
 		if is_instance_valid(n):
 			(n as CanvasItem).modulate.a = a
+	var ph := 0.5 - 0.5 * cos(_t * TAU / 3.6)                  # 0 → 1 → 0 за 3,6 с
+	for g: Variant in _glows:
+		if is_instance_valid(g):
+			(g as CanvasItem).self_modulate.a = 0.65 + 0.35 * ph
+	for st: Variant in _stars:
+		if is_instance_valid(st):
+			(st as Control).scale = Vector2.ONE * lerpf(0.85, 1.1, ph)
+			(st as CanvasItem).self_modulate.a = lerpf(0.8, 1.0, ph)

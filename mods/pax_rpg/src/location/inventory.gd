@@ -21,6 +21,7 @@ const WW := 1820.0                   # ширина картинки фона: 1
 const TK := 1.25                     # окна выбора вещи / оружия: пиксели прототипа → единицы макета
 const TIP_K := 1.0                   # подсказки (выше экрана — ещё уменьшаются, см. _tk)
 const PIN_S := 1.2                   # держать курсор на вещи, чтобы закрепить подсказку
+const HOVER_C := Color(1.0, 0.925, 0.78)          # светлое золото наведения (прототип: rgba(255, 236, 200))
 const WSLOTS := [{"name": "Основное оружие", "tag": "ОСНОВНОЕ", "rect": [377, 150, 522, 411], "ui": [370, 321, 556, 418], "sk": [460, 333.5, 515.5, 393]},
 	{"name": "Второе оружие", "tag": "ВТОРОЕ", "rect": [377, 417, 522, 650], "ui": [370, 561, 556, 657], "sk": [460, 574, 515.5, 633.5]}]
 const HERO_PANEL := [548, 138, 938, 928]
@@ -52,6 +53,14 @@ var _attr_box: Control
 var _gold_l: Label
 var _lvl_l: Label
 var _layer: Control                                # окна подсказок и выбора — поверх всего, масштаб TK
+var _hov: Control                                  # подсветка того, на что навели (слот, окно оружия, медальон)
+var _hov_r := Rect2()
+var _hov_round := false
+var _row_hl: Control = null                        # подсветка строки в закреплённой подсказке
+var _menu_hl: Control = null                       # подсветка вещи в окне выбора
+var _menu_hl_r := Rect2()
+var _menu_hl_c := Color.WHITE
+var _os := -1.0                                    # прежний oversampling окна (Ui.sharp_text), −1 — не меняли
 # подсказка: одна на экран (вещь или описание)
 var _tip: Control = null
 var _tip_id := ""
@@ -101,6 +110,15 @@ func setup(m: PaxMod) -> void:
 	_attr_box = Control.new()
 	_attr_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_frame.add_child(_attr_box)
+	_hov = Control.new()
+	_hov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hov.visible = false
+	_hov.draw.connect(func() -> void:
+		if _hov_round:
+			Ui.hover_ring(_hov, _hov_r, HOVER_C)
+		else:
+			Ui.hover_glow(_hov, _hov_r, HOVER_C, 0.05))
+	_frame.add_child(_hov)
 	_layer = Control.new()
 	_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_frame.add_child(_layer)
@@ -124,6 +142,9 @@ func setup(m: PaxMod) -> void:
 	_frame.add_child(hb)
 	ui.label(hb, ht, hf, 12, Ui.TEXT, Vector2(9, 5))
 	resized.connect(_fit)
+	visibility_changed.connect(func() -> void:
+		if not visible:
+			_os = Ui.sharp_text(_frame, false, _os))
 
 
 func _center(l: Label, a: Array) -> void:
@@ -140,6 +161,8 @@ func _fit() -> void:
 	var s := minf(size.x / W, size.y / H)
 	_frame.scale = Vector2(s, s)
 	_frame.position = (size - Vector2(W, H) * s) * 0.5
+	if visible:
+		_os = Ui.sharp_text(_frame, true, _os)
 
 
 ## Экран закрыт целиком (непрозрачный фон под макетом) — location.gd тогда не рисует 3D-мир под инвентарём.
@@ -397,10 +420,12 @@ func _process(delta: float) -> void:
 		return
 	var p := _frame.get_local_mouse_position()
 	if _menu != null:
+		_set_hover(Rect2(), false)
 		_menu_hover(p)
 		return
 	var s := _socket_at(p)
 	var sid: String = s[0] if not s.is_empty() else ""
+	_hover_at(p, s)
 	if _tip != null and _pinned:
 		var inside := _tip_rect().has_point(p) or sid == _tip_id
 		if inside:
@@ -431,6 +456,38 @@ func _process(delta: float) -> void:
 		_pinned = true
 		_set_pinned(true)
 		_tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Что под курсором — обвести: слот снаряжения и окно оружия — рамкой со свечением, медальоны — кольцом.
+## Курсор в закреплённой подсказке — без обводки под ней.
+func _hover_at(p: Vector2, s: Array) -> void:
+	if _tip != null and _pinned and _tip_rect().has_point(p):
+		_set_hover(Rect2(), false)
+		return
+	if not s.is_empty():
+		var sid: String = s[0]
+		if sid.begins_with("slot:"):
+			_set_hover(s[1], false)
+		else:
+			_set_hover((s[1] as Rect2).grow(-2.0), true)
+		return
+	for w: int in 2:
+		if _r(WSLOTS[w]["rect"]).has_point(p):
+			_set_hover(_r(WSLOTS[w]["rect"]), false)
+			return
+	if Rect2(SWAP_AT - Vector2(16, 16), Vector2(32, 32)).has_point(p):
+		_set_hover(Rect2(SWAP_AT - Vector2(15, 15), Vector2(30, 30)), true)
+		return
+	_set_hover(Rect2(), false)
+
+
+func _set_hover(r: Rect2, round_: bool) -> void:
+	if r == _hov_r and round_ == _hov_round:
+		return
+	_hov_r = r
+	_hov_round = round_
+	_hov.visible = r.has_area()
+	_hov.queue_redraw()
 
 
 func _set_arm(v: float) -> void:
@@ -552,7 +609,28 @@ func _mini_hover(p: Vector2) -> void:
 	if key == "":
 		_hide_mini()
 		return
+	_row_light(data[data.size() - 1])
 	_show_mini(data)
+
+
+## Строка подсказки, на которую навели, подсвечена (прототип: .tt.pinned li:hover) — видно, к чему мини-подсказка.
+func _row_light(r: Rect2) -> void:
+	if _tip == null:
+		return
+	if not is_instance_valid(_row_hl) or _row_hl.get_parent() != _tip:
+		_row_hl = Control.new()
+		_row_hl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_row_hl.draw.connect(func() -> void:
+			var rr := Rect2(Vector2.ZERO, _row_hl.size)
+			_row_hl.draw_rect(rr, Color(0.79, 0.64, 0.36, 0.16))
+			_row_hl.draw_rect(rr.grow(-0.5), Color(0.94, 0.81, 0.54, 0.45), false, 1.0)
+			_row_hl.draw_rect(Rect2(0, 0, 2, rr.size.y), Color(0.94, 0.81, 0.54, 0.9)))
+		_tip.add_child(_row_hl)
+		_tip.move_child(_row_hl, mini(2, _tip.get_child_count() - 1))   # над фоном окна, под текстом
+	_row_hl.position = r.position + Vector2(-4, -1)
+	_row_hl.size = r.size + Vector2(8, 2)
+	_row_hl.visible = true
+	_row_hl.queue_redraw()
 
 
 func _on_meta(kind: String, arg: String, on: bool, _grect: Rect2) -> void:
@@ -609,6 +687,8 @@ func _show_mini(data: Array) -> void:
 
 func _hide_mini() -> void:
 	_mini_key = ""
+	if is_instance_valid(_row_hl):
+		_row_hl.visible = false
 	if is_instance_valid(_mini):
 		_mini.visible = false
 
@@ -677,6 +757,7 @@ func _close_menu() -> void:
 	_menu = null
 	_menu_id = ""
 	_menu_tiles = []
+	_menu_hl_r = Rect2()
 
 
 func _menu_box(title: String, sub: String, w: float) -> Control:
@@ -789,9 +870,29 @@ func _menu_hover(p: Vector2) -> void:
 		if r.has_point(p):
 			if t.has("item"):
 				_caption(t["item"], int(t["k"]))
+				_menu_light(t["local"], eq.rc(int((t["item"] as Dictionary)["r"])))
 			elif t.has("weapon"):
 				_wcaption(str(t["weapon"]), int(t["w"]))
+				_menu_light(t["local"], HOVER_C)
 			return
+	_menu_light(Rect2(), HOVER_C)
+
+
+## Вещь под курсором в окне выбора — рамка и свечение цветом редкости (прототип: .mi:hover).
+func _menu_light(r: Rect2, c: Color) -> void:
+	if _menu == null or (r == _menu_hl_r and c == _menu_hl_c and is_instance_valid(_menu_hl)):
+		return
+	_menu_hl_r = r
+	_menu_hl_c = c
+	if not is_instance_valid(_menu_hl) or _menu_hl.get_parent() != _menu:
+		_menu_hl = Control.new()
+		_menu_hl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_menu_hl.draw.connect(func() -> void:
+			if _menu_hl_r.has_area():
+				Ui.hover_glow(_menu_hl, _menu_hl_r.grow(1.0), _menu_hl_c, 0.08))
+		_menu.add_child(_menu_hl)
+	_menu.move_child(_menu_hl, _menu.get_child_count() - 1)
+	_menu_hl.queue_redraw()
 
 
 func _caption(it: Dictionary, k: int) -> void:
