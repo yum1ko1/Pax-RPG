@@ -99,7 +99,7 @@ func _f(key: String, fallback: float) -> float:
 
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
-const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen", "cam_blur",
+const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen",
 	"flare", "auto_exposure", "grass_density", "shaders", "shadow_q"]
 var _ovr := {}
 var _env: Environment
@@ -546,7 +546,7 @@ static func _reaches_view(ol: OmniLight3D, frustum: Array[Plane]) -> bool:
 
 
 func _lamp_shadows() -> void:
-	var n := int(_f("lamp_shadows_n", 40))
+	var n := int(_f("lamp_shadows_n", 16))
 	if lights.is_empty() or not is_instance_valid(cam):
 		return
 	if not _fogs_made:

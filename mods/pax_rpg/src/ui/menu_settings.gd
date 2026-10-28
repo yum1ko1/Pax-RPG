@@ -233,7 +233,7 @@ func _open(t: String) -> void:
 			_gtoggle("Indirect light (SSIL)", "ssil", true)
 			_gtoggle("Ambient occlusion", "ssao", true)
 			_gtoggle("Reflections", "ssr", true)
-			_gslider("Lamp shadows (nearest lights; farther ones get softer, never vanish)", "lamp_shadows_n", 40.0, 0.0, 40.0, 4.0, false)
+			_gslider("Lamp shadows (nearest lights; farther ones get softer, never vanish)", "lamp_shadows_n", 16.0, 0.0, 40.0, 4.0, false)
 			_gcycle("Shadow quality", "shadow_q", [["0", "Low"], ["1", "Medium"], ["2", "High"]], "2")
 			_slider("Volumetric fog", float(mod.get_setting("vol_fog", 0.5)), 0.0, 1.0, 0.01, true, func(v: float) -> void:
 				mod.set_setting("vol_fog", v))
@@ -241,7 +241,6 @@ func _open(t: String) -> void:
 			_gslider("Shaders «Yuruma Ultra» (sun rays, cinematic colour, soft bloom)", "shaders", 1.0, 0.0, 1.0, 0.01, true)
 			_gslider("Glow", "glow", 0.55, 0.0, 1.0, 0.01, true)
 			_gslider("Sharpen", "lens_sharpen", 0.3, 0.0, 1.0, 0.01, true)
-			_gslider("Motion blur", "cam_blur", 0.35, 0.0, 1.0, 0.01, true)
 			_gtoggle("Lens flare", "flare", true)
 			_gtoggle("Auto exposure", "auto_exposure", true)
 			_gslider("Grass density", "grass_density", 6.0, 0.0, 10.0, 1.0, false)

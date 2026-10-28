@@ -48,7 +48,10 @@ void vertex() {
 		float k = (1.0 - smoothstep(0.3, 1.1, pd)) * step(abs(wp.y - pax_rpg_player.y), 1.6);
 		off.xz += normalize(away + vec2(1e-4)) * k * push * h;
 	}
-	VERTEX += inverse(mat3(MODEL_MATRIX)) * off;
+	// в оси модели: у копий только поворот и масштаб (без сдвига) — ось / квадрат её длины вместо inverse() 3×3
+	// в каждой вершине каждого прохода (цвет, глубина, 4 каскада солнца, кубы огней); так же в grass.gdshader
+	vec3 a0 = MODEL_MATRIX[0].xyz, a1 = MODEL_MATRIX[1].xyz, a2 = MODEL_MATRIX[2].xyz;
+	VERTEX += vec3(dot(a0, off) / dot(a0, a0), dot(a1, off) / dot(a1, a1), dot(a2, off) / dot(a2, a2));
 }
 
 void fragment() {

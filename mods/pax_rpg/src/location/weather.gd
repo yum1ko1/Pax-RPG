@@ -118,23 +118,45 @@ func _to_gpu() -> void:
 
 # ---------- тени облаков ----------
 
-func _make_cloud_shadows() -> void:
-	if overcast <= 0.05 and kind == "clear":
-		overcast = 0.25                                    # и в ясный день — редкие облака
-	var img := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+## Карта теней облаков: шум считает движок одним вызовом (get_image), порог — таблицей на 256 значений; раньше
+## 65 536 вызовов get_noise_2d и set_pixel из GDScript — до 0.1 с на главном потоке при каждой загрузке города.
+## Одинаковая погода — одна и та же карта (кэш по покрытию).
+static var _cloud_cache := {}
+
+
+static func _cloud_tex(cover: float) -> ImageTexture:
+	var key := snappedf(cover, 0.01)
+	if _cloud_cache.has(key):
+		return _cloud_cache[key]
 	var n := FastNoiseLite.new()
 	n.seed = 77
 	n.frequency = 0.012
 	n.fractal_octaves = 4
-	var cover := lerpf(0.25, 0.65, overcast)
-	for y: int in 256:
-		for x: int in 256:
-			var v := n.get_noise_2d(x, y) * 0.5 + 0.5
-			var a := smoothstep(1.0 - cover, 1.0 - cover + 0.25, v) * 0.55
-			img.set_pixel(x, y, Color(0.0, 0.0, 0.02, a))
+	var src := n.get_image(256, 256, false, false, false)   # без нормировки: шум [-1, 1] → [0, 255], как noise*0.5+0.5
+	if src.get_format() != Image.FORMAT_L8:
+		src.convert(Image.FORMAT_L8)
+	var lut := PackedByteArray()
+	lut.resize(256)
+	for i: int in 256:
+		lut[i] = int(round(smoothstep(1.0 - key, 1.0 - key + 0.25, i / 255.0) * 0.55 * 255.0))
+	var d := src.get_data()
+	var px := PackedByteArray()
+	px.resize(d.size() * 4)
+	for i: int in d.size():
+		px[i * 4 + 2] = 5                                     # чуть синевы в тени, как было (0.02)
+		px[i * 4 + 3] = lut[d[i]]
+	var img := Image.create_from_data(256, 256, false, Image.FORMAT_RGBA8, px)
 	img.generate_mipmaps()
+	var t := ImageTexture.create_from_image(img)
+	_cloud_cache[key] = t
+	return t
+
+
+func _make_cloud_shadows() -> void:
+	if overcast <= 0.05 and kind == "clear":
+		overcast = 0.25                                    # и в ясный день — редкие облака
 	_shadow = Decal.new()
-	_shadow.texture_albedo = ImageTexture.create_from_image(img)
+	_shadow.texture_albedo = _cloud_tex(lerpf(0.25, 0.65, overcast))
 	_shadow.size = Vector3(420.0, 120.0, 420.0)
 	_shadow.albedo_mix = 1.0
 	_shadow.normal_fade = 0.6                              # на стенах гаснет — только земля и крыши

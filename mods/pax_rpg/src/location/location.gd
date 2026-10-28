@@ -457,7 +457,9 @@ func build(city: Dictionary) -> void:
 		_map_rects.append_array(c.rects)
 		_grass = Grass.new()                           # сплошная трава с ветром: считается в потоке
 		var gcfg: Dictionary = (cfg.get("gfx", {}) as Dictionary).duplicate()
-		gcfg["grass_density"] = float(mod.get_setting("gfx_grass_density", gcfg.get("grass_density", 6.0)))
+		for gk: String in ["grass_density", "grass_distance", "grass_far"]:   # свои у игрока (пресеты «Графики»)
+			if mod.get_setting("gfx_" + gk, null) != null:
+				gcfg[gk] = float(mod.get_setting("gfx_" + gk, 0.0))
 		_grass.start(mod, _view, layout, c.rects, gcfg, _check_ready.bind(gen))
 		_mark("grass started")
 		# постоянные частицы города (огни, дым, листва, брызги фонтана) — на видеокарту (vfx.gd → to_gpu)
@@ -762,6 +764,40 @@ func _warmup() -> void:
 	Rift.warm(mod, _view, at - Vector3(0.0, 1.0, 0.0))   # «Разлом»: трещины, шипы, их шейдеры — сейчас, а не рывком в бою
 	if is_instance_valid(_iai):
 		_iai.warmup(at)
+	# удары и приземления (vfx_hit, vfx_vol, частицы осколков и искр со шлейфом), растворение тела в ману, мана из
+	# тела, брызги гоблина — каждый впервые компилировался на первом попадании, первой смерти, первом прыжке орка
+	var hf := _landing_fx()
+	hf.landing(at - Vector3(0.0, 1.0, 0.0), Color(1.0, 0.42, 0.1), 0.6)
+	hf.impact(at, Vector3.FORWARD, Color(1.0, 0.3, 0.2))
+	hf.thrust(at, Vector3.FORWARD, Color(1.0, 0.3, 0.2))
+	var tmp: Array[Node] = []
+	var sh: Shader = mod.shader(Goblin.BodyFx.SHADER)
+	if sh != null:
+		var body := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.3, 0.3, 0.3)
+		body.mesh = bm
+		var fm := Goblin.BodyFx._fx_mat(sh, null)
+		fm.set_shader_parameter("dissolve", 0.5)
+		body.material_override = fm
+		_view.add_child(body)
+		body.global_position = at
+		tmp.append(body)
+	Goblin.BodyFx.mana_puff(_view, at, 0.05)
+	for glow: bool in [false, true]:
+		var bp := CPUParticles3D.new()
+		bp.one_shot = true
+		bp.amount = 2
+		bp.lifetime = 0.2
+		bp.mesh = Goblin._burst_mesh(Color(0.55, 0.05, 0.05) if not glow else Color(1.0, 0.35, 0.2), 0.05, glow)
+		_view.add_child(bp)
+		bp.global_position = at
+		bp.emitting = true
+		tmp.append(bp)
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		for n: Node in tmp:
+			if is_instance_valid(n):
+				n.queue_free())
 
 func clear() -> void:
 	_build_gen += 1                                  # недостроенный город бросает стройку

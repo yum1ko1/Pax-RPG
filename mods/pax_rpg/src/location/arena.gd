@@ -245,6 +245,10 @@ func _fill_crowd(on: bool) -> void:
 			idle = ap.get_animation(ap.get_animation_list()[0]).duplicate()
 			idle.loop_mode = Animation.LOOP_LINEAR
 		anim_src.free()
+	var lib: AnimationLibrary = null                   # одна библиотека на всех зрителей, а не своя у каждого
+	if idle != null:
+		lib = AnimationLibrary.new()
+		lib.add_animation("idle", idle)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1047
 	var tiers: Array = FLAT_SEATS if _flat else [[15.3, 0.05], [16.4, 0.05]]   # трибуны (старая яма — обод у забора)
@@ -266,16 +270,15 @@ func _fill_crowd(on: bool) -> void:
 				g.rotation.y = a + PI                      # лицом к яме
 				_crowd.add_child(g)
 				var ap2 := _find_anim(g)
-				if ap2 != null and idle != null:
-					var lib := AnimationLibrary.new()
-					lib.add_animation("idle", idle)
+				if ap2 != null and lib != null:
 					if ap2.has_animation_library(""):
 						ap2.remove_animation_library("")
 					ap2.add_animation_library("", lib)
 					ap2.play("idle")
 					ap2.speed_scale = rng.randf_range(0.8, 1.25)
 					ap2.seek(rng.randf_range(0.0, 2.0), true)
-				(_crowd as Crowd).fans.append([g, g.position.y, rng.randf() * TAU])
+					ap2.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # Crowd двигает сам
+				(_crowd as Crowd).fans.append([g, g.position.y, rng.randf() * TAU, ap2 if lib != null else null])
 			a += step * rng.randf_range(0.8, 1.2)
 	src.free()
 
@@ -464,20 +467,27 @@ static func _find_anim(n: Node) -> AnimationPlayer:
 	return null
 
 
-## Толпа: зрители подпрыгивают — каждый в своём ритме.
+## Толпа: зрители подпрыгивают — каждый в своём ритме. Анимация (скелет и скин) — у трети зрителей за кадр по кругу,
+## с тройным шагом: ~55 скинов каждый кадр стоили несколько мс, а для покачивания на месте 20 Гц хватает.
 class Crowd extends Node3D:
 	var fans: Array = []
 	var _t := 0.0
+	var _phase := 0
 
 	func _process(delta: float) -> void:
 		_t += delta
 		var cam := get_viewport().get_camera_3d()          # толпу дальше 70 м не качаем — подскок 12 см не виден
 		if cam != null and cam.global_position.distance_squared_to(global_position) > 4900.0:
 			return
-		for f: Array in fans:
+		_phase = (_phase + 1) % 3
+		for i: int in fans.size():
+			var f: Array = fans[i]
 			var n: Node3D = f[0]
-			if is_instance_valid(n):
-				n.position.y = float(f[1]) + maxf(0.0, sin(_t * 5.0 + float(f[2]))) * 0.12
+			if not is_instance_valid(n):
+				continue
+			n.position.y = float(f[1]) + maxf(0.0, sin(_t * 5.0 + float(f[2]))) * 0.12
+			if i % 3 == _phase and f[3] != null:
+				(f[3] as AnimationPlayer).advance(delta * 3.0)
 
 
 ## Огонёк в каменном фонаре (сердцевина фонаря сплошная — огонь выдвинут к камере, как в городе).

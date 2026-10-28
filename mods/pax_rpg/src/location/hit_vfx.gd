@@ -266,6 +266,38 @@ func _chunks(at: Vector3, amount: int, c: Color, box: Vector3, speed: Vector2, s
 	p.amount = maxi(4, amount)
 	p.lifetime = life
 	p.local_coords = false
+	p.process_material = _chunk_pm(speed, spread)
+	p.draw_pass_1 = _chunk_mesh(box, c, hot)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(p)
+	p.global_position = at + Vector3(0.0, 0.15, 0.0)
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+## Ресурсы частиц — один раз на набор параметров, а не на каждый эффект: новый материал процесса, CurveTexture и
+## материал сетки на каждое приземление (4 комплекта) — это новые буферы и текстура на сервере рендера посреди боя.
+static var _shrink_end: CurveTexture         # к концу — меньше: падают и пропадают, а не проваливаются в землю
+static var _shrink_lin: CurveTexture
+var _pms := {}
+var _draw := {}
+
+
+static func _curve_tex(pts: Array) -> CurveTexture:
+	var cv := Curve.new()
+	for pt: Vector2 in pts:
+		cv.add_point(pt)
+	var t := CurveTexture.new()
+	t.curve = cv
+	return t
+
+
+func _chunk_pm(speed: Vector2, spread: float) -> ParticleProcessMaterial:
+	var key := "c%s%s" % [speed, spread]
+	if _pms.has(key):
+		return _pms[key]
+	if _shrink_end == null:
+		_shrink_end = _curve_tex([Vector2(0.0, 1.0), Vector2(0.75, 1.0), Vector2(1.0, 0.0)])
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	pm.emission_sphere_radius = 0.5
@@ -281,14 +313,15 @@ func _chunks(at: Vector3, amount: int, c: Color, box: Vector3, speed: Vector2, s
 	pm.angular_velocity_max = 540.0
 	pm.scale_min = 0.5
 	pm.scale_max = 1.7
-	var shrink := Curve.new()                    # к концу — меньше: падают и пропадают, а не проваливаются в землю
-	shrink.add_point(Vector2(0.0, 1.0))
-	shrink.add_point(Vector2(0.75, 1.0))
-	shrink.add_point(Vector2(1.0, 0.0))
-	var sc := CurveTexture.new()
-	sc.curve = shrink
-	pm.scale_curve = sc
-	p.process_material = pm
+	pm.scale_curve = _shrink_end
+	_pms[key] = pm
+	return pm
+
+
+func _chunk_mesh(box: Vector3, c: Color, hot: bool) -> BoxMesh:
+	var key := "c%s%s%s" % [box, c, hot]
+	if _draw.has(key):
+		return _draw[key]
 	var m := BoxMesh.new()
 	m.size = box
 	var mat := StandardMaterial3D.new()
@@ -299,15 +332,12 @@ func _chunks(at: Vector3, amount: int, c: Color, box: Vector3, speed: Vector2, s
 		mat.albedo_color = c
 		mat.roughness = 1.0
 	m.material = mat
-	p.draw_pass_1 = m
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(p)
-	p.global_position = at + Vector3(0.0, 0.15, 0.0)
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+	_draw[key] = m
+	return m
 
 
 ## Искры по направлению удара: узкий конус вперёд, быстрые, со шлейфом; к концу жизни тоньше — гаснут, а не висят.
+## Направление у каждого удара своё — материал процесса свой, а кривая, лента и её материал общие (по цвету).
 func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	var p := GPUParticles3D.new()
 	p.one_shot = true
@@ -315,6 +345,8 @@ func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	p.amount = amount
 	p.lifetime = 0.2
 	p.local_coords = false
+	if _shrink_lin == null:
+		_shrink_lin = _curve_tex([Vector2(0.0, 1.0), Vector2(1.0, 0.0)])
 	var pm := ParticleProcessMaterial.new()
 	pm.direction = dir
 	pm.spread = 28.0
@@ -323,15 +355,21 @@ func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	pm.gravity = Vector3(0.0, -2.0, 0.0)
 	pm.damping_min = 2.0
 	pm.damping_max = 5.0
-	var shrink := Curve.new()
-	shrink.add_point(Vector2(0.0, 1.0))
-	shrink.add_point(Vector2(1.0, 0.0))
-	var sc := CurveTexture.new()
-	sc.curve = shrink
-	pm.scale_curve = sc
+	pm.scale_curve = _shrink_lin
 	p.process_material = pm
 	p.trail_enabled = true
 	p.trail_lifetime = 0.06
+	p.draw_pass_1 = _spark_trail(col)
+	parent.add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+func _spark_trail(col: Color) -> RibbonTrailMesh:
+	var key := "s%s" % col
+	if _draw.has(key):
+		return _draw[key]
 	var tm := RibbonTrailMesh.new()
 	tm.shape = RibbonTrailMesh.SHAPE_CROSS
 	tm.size = 0.018
@@ -342,11 +380,8 @@ func _sparks(at: Vector3, dir: Vector3, col: Color, amount: int) -> void:
 	m.albedo_color = Color(lerpf(col.r, 1.0, 0.3) * 4.0, lerpf(col.g, 1.0, 0.12) * 4.0, lerpf(col.b, 1.0, 0.12) * 4.0)
 	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	tm.material = m
-	p.draw_pass_1 = tm
-	parent.add_child(p)
-	p.global_position = at
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+	_draw[key] = tm
+	return tm
 
 
 static func _out(x: float) -> float:
