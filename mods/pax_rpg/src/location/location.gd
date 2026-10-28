@@ -939,6 +939,20 @@ func teleport(x: float, z: float, deg := NAN) -> String:
 	return "tp: %.1f, %.1f" % [x, z]
 
 
+## rpg_tp <место>: к жителю-службе (smith, shop, arena, seer) или месту карты (forge, bazaar, oath… — ключ без pax_rpg_lm_),
+## в 2.5 м южнее, лицом к нему (в консоли не набираются минус и точка — числа не годятся).
+func teleport_to(what: String) -> String:
+	_svc_t = 0.0
+	for sv: Variant in _hub_services(0.0):
+		if str((sv as Dictionary).kind) == what:
+			var p: Vector2 = (sv as Dictionary).pos
+			return teleport(p.x, p.y + 2.5, 0.0)
+	for lm: Variant in (_city_map.landmarks if is_instance_valid(_city_map) else []):
+		if str((lm as Array)[0]) == "pax_rpg_lm_" + what:
+			return teleport(float((lm as Array)[1]), float((lm as Array)[2]) + 2.5, 0.0)
+	return "no place: " + what
+
+
 ## Консоль F8: rpg_time <час> — поставить время суток (для скриншотов).
 func set_hour(h: float) -> String:
 	if _daynight == null or not is_instance_valid(_daynight):

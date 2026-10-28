@@ -85,7 +85,7 @@ func _mod_loaded() -> void:
 	Pax.register_command("rpg_perf", _perf_command, "rpg_perf [off|on <particles|omni|shadows|landscape>] — FPS, отрисовка, счёт тяжёлых узлов")
 	Pax.register_command("rpg_weather", _weather_command, "rpg_weather <clear|cloudy|fog|rain|storm|auto> — погода в локации (перестраивает её)")
 	Pax.register_command("rpg_time", _time_command, "rpg_time H — время суток в локации (0–24)")
-	Pax.register_command("rpg_tp", _tp_command, "rpg_tp X Z [deg] — перенести героя в точку города (проверка мест)")
+	Pax.register_command("rpg_tp", _tp_command, "rpg_tp X Z [deg] | rpg_tp <место> — перенести героя в точку города (проверка мест)")
 	Pax.register_command("rpg_gfx", _gfx_command, "rpg_gfx <sdfgi_rays 8..128|ssil_half 0/1|ssao_half 0/1|occlusion 0/1|hide_hud 0/1> — качество рендера на лету (сравнение A/B)")
 	# Для разработки: pax_rpg/dev/arena.ps1 ставит настройку autostart_arena — арена откроется сразу после запуска.
 	# Флаг одноразовый: следующий обычный запуск идёт как всегда.
@@ -324,8 +324,10 @@ func _time_command(args: PackedStringArray) -> String:
 
 
 func _tp_command(args: PackedStringArray) -> String:
-	if args.size() < 2 or location == null or not is_instance_valid(location):
-		return "rpg_tp X Z [deg]"
+	if args.size() < 1 or location == null or not is_instance_valid(location):
+		return "rpg_tp X Z [deg] | rpg_tp <место: forge, bazaar, oath… или smith, shop, arena, seer>"
+	if args.size() == 1:
+		return location.teleport_to(args[0])
 	return location.teleport(float(args[0]), float(args[1]), float(args[2]) if args.size() > 2 else NAN)
 
 
