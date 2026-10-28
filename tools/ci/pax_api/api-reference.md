@@ -76,6 +76,12 @@ Data caches were cleared by the console command `reload`. Re-read your JSON here
 
 ### PaxMod — Constants
 
+#### `GameProfile`
+
+```gdscript
+const GameProfile = preload("res://src/platform/Profile.gd")
+```
+
 #### `ModDatabaseScript`
 
 ```gdscript
@@ -832,13 +838,61 @@ func has_character(name: String) -> bool
 
 Is there already a person with this name (met or added)?
 
+#### `colony_people`
+
+```gdscript
+func colony_people(body: String) -> float
+```
+
+People living on a body (Earth — the country's people, other bodies — the colony).
+
+#### `colony_trust`
+
+```gdscript
+func colony_trust(body: String) -> float
+```
+
+Trust of a body's people 0…1.
+
+#### `set_colony_trust`
+
+```gdscript
+func set_colony_trust(body: String, value: float)
+```
+
+Set the trust of a body's people 0…1 (written right after the world's step if the world is busy).
+
+#### `when_world_free`
+
+```gdscript
+func when_world_free(work: Callable)
+```
+
+Run work now, or right after the world's step if it is computed in its own thread now (Pax.world_busy()).
+
+#### `faction_level`
+
+```gdscript
+func faction_level(name: String) -> float
+```
+
+Development level of a country (0…10+; the player's own country included). -1 — no such country.
+
+#### `provinces_version`
+
+```gdscript
+func provinces_version(body: String) -> int
+```
+
+Changes whenever any region of the body changes owner (a fingerprint of who owns what). Compare with the last value you saw to know the map changed; or listen to Pax.provinces_changed(body, regions).
+
 #### `factions`
 
 ```gdscript
 func factions() -> Array
 ```
 
-All factions (live array of dictionaries: name, type, colour, ours, capital, description…).
+All factions (live array of dictionaries: name, type, colour, ours, capital, level, description…). The level of any country — faction_level(name).
 
 #### `player_faction`
 
@@ -992,13 +1046,19 @@ func add_window(button_text: String, content: Control, min_size: Vector2 = Vecto
 
 Add a window above the bottom bar, opened/closed by its own bottom button, hidden when another game window opens. `content` — any Control you built. Returns the window panel.
 
+#### `top_bar_slot`
+
+```gdscript
+func top_bar_slot() -> HBoxContainer
+```
+
+CanvasLayer of the game HUD — add any Control on top of the game. The free place on the right of the top bar (before the wallet and the date) for a mod's small icons — alerts, counters. Add your Control to it; it lines up in a row. null before the HUD is built.
+
 #### `hud_layer`
 
 ```gdscript
 func hud_layer() -> CanvasLayer
 ```
-
-CanvasLayer of the game HUD — add any Control on top of the game.
 
 #### `scene_root`
 
@@ -1126,7 +1186,37 @@ signal log_added(mod_id: String, text: String, level: String)
 
 Any mod log line (for tools).
 
+#### `world_free`
+
+```gdscript
+signal world_free
+```
+
+The world's step in its own thread has ended: safe to write into the world (see world_busy()).
+
+#### `world_stepped`
+
+```gdscript
+signal world_stepped(game: PaxGame, from_day: int, days: int)
+```
+
+A step of the world is done (after days_passed): from_day and how many days.
+
+#### `provinces_changed`
+
+```gdscript
+signal provinces_changed(body: String, regions: Array)
+```
+
+Regions of a body changed owners (body name, region ids).
+
 ### Pax — Constants
+
+#### `GameProfile`
+
+```gdscript
+const GameProfile = preload("res://src/platform/Profile.gd")
+```
 
 #### `DiscordPresenceScript`
 
@@ -1135,6 +1225,24 @@ const DiscordPresenceScript = preload("res://src/platform/discord/DiscordPresenc
 ```
 
 Pax — the modding API singleton (autoload). Available everywhere as `Pax`. • Signals — subscribe from any script:  Pax.days_passed.connect(func(game, from_day, days): …) • Data with mods applied — Pax.json("res://data/bodies.json"), Pax.texture(…), Pax.model(…) • The running game — Pax.game (PaxGame, null in the launcher) • Dev console — F8 in game or launcher; add commands with Pax.register_command(…) Guide: docs/modding/en/README.md
+
+#### `AgentServerScript`
+
+```gdscript
+const AgentServerScript = preload("res://src/agent/AgentServer.gd")
+```
+
+#### `AgentConfigScript`
+
+```gdscript
+const AgentConfigScript = preload("res://src/agent/AgentConfig.gd")
+```
+
+#### `AgentToolsScript`
+
+```gdscript
+const AgentToolsScript = preload("res://src/agent/AgentTools.gd")
+```
 
 #### `ProtectedScript`
 
@@ -1259,7 +1367,7 @@ Hooks: the game asks mods at key moments. A handler receives ONE Dictionary and 
 #### `HOOKS_CANCEL`
 
 ```gdscript
-const HOOKS_CANCEL := ["order_parsed", "war_declared", "ai_request", "secret_reveal"]
+const HOOKS_CANCEL := ["order_parsed", "war_declared", "ai_request", "secret_reveal", "moment_recorded"]
 ```
 
 Hooks that can be cancelled with d["cancel"] = true.
@@ -1368,6 +1476,14 @@ var perf
 
 Performance for mods: FPS/CPU/GPU panel, stats, distance LOD and impostors, MultiMesh, occluders (see PaxPerf).
 
+#### `platform`
+
+```gdscript
+var platform
+```
+
+Platform for forks: info() about the fork, the player, play(), our windows, switch_game() (see PaxPlatform).
+
 #### `net`
 
 ```gdscript
@@ -1384,6 +1500,20 @@ var map_editor
 
 Map editor building blocks (vector borders, topology, dimensions, map features) — see PaxMapEditor.
 
+#### `studio`
+
+```gdscript
+var studio
+```
+
+The Studio: your moment kinds, recorded tracks, replay layers, video shots and templates — see PaxStudio.
+
+#### `agent`
+
+```gdscript
+var agent: Node
+```
+
 #### `terminals`
 
 ```gdscript
@@ -1391,6 +1521,28 @@ var terminals
 ```
 
 ### Pax — Methods
+
+#### `world_busy`
+
+```gdscript
+func world_busy() -> bool
+```
+
+True while the world is computed in its own thread: do not write into it now — wait for world_free (or use game.when_world_free(callable)).
+
+#### `agent_bridge`
+
+```gdscript
+func agent_bridge(on: bool)
+```
+
+#### `agent_tool`
+
+```gdscript
+func agent_tool(name: String, description: String, schema: Dictionary, handler: Callable)
+```
+
+Add a tool for AI agents connected over MCP (the agent bridge). `handler` gets the arguments Dictionary and returns a String (or {"text": String, "error": bool}); it may be a coroutine. `schema` is a JSON Schema object for the arguments. Tools of a mod go away when it unloads.
 
 #### `enable_mods`
 
