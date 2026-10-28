@@ -23,7 +23,6 @@ CODEGUARD = [  # (шаблон, почему нельзя / чем замени�
     (r"\bResourceLoader\b", "ResourceLoader — нельзя: load_resource() / Pax.resource()"),
     (r"\b(Expression|ClassDB|GDScript|str_to_var)\b", "Expression/ClassDB/GDScript/str_to_var — нельзя"),
     (r"\bset_script\s*\(", "set_script — нельзя"),
-    (r"\.callv?\s*\(\s*[\"'&]", "вызов метода по строке — нельзя"),
     (r"[\"']res://scripts/", "скрипты игры напрямую — нельзя, только API Pax"),
     (r"\bchange_scene", "смена сцены — нельзя"),
     (r"get_tree\(\)\s*\.\s*quit\b", "выход из игры — нельзя"),

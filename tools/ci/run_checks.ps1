@@ -4,7 +4,7 @@
 #   3. прогон арены (бот жмёт клавиши) — ошибки выполнения; с -Shot — окно на 10 с и скриншот out\arena.png.
 #   .\run_checks.ps1 [-ModDir <папка мода>] [-NoSmoke] [-Shot]
 # Godot скачивается один раз в %LOCALAPPDATA%\pax_rpg_ci. Код выхода 1 — есть ошибки.
-param([string]$ModDir = '', [switch]$NoSmoke, [switch]$Shot, [string]$Version = '4.5.1-stable')
+param([string]$ModDir = '', [switch]$NoSmoke, [switch]$Shot, [string]$Version = '4.7.2-stable')
 $ErrorActionPreference = 'Continue'
 $env:PYTHONIOENCODING = 'utf-8'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8

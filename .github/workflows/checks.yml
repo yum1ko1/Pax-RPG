@@ -16,7 +16,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/godot
-          key: godot-4.5.1-stable-linux
+          key: godot-4.7.2-stable-linux
 
       - name: Экран и шрифты для скриншота
         run: |

@@ -11,7 +11,7 @@ CI="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$CI/../.." && pwd)"
 PROJ="$CI/project"
 OUT="$CI/out"
-VER="${GODOT_VERSION:-4.5.1-stable}"
+VER="${GODOT_VERSION:-4.7.2-stable}"
 GODOT="${GODOT:-}"
 if [ -z "$GODOT" ]; then
   CACHE="$ROOT/.cache/godot"
@@ -26,6 +26,8 @@ fi
 rm -rf "$OUT" && mkdir -p "$OUT"
 fail=0
 # ошибки выполнения и компиляции в выводе Godot; «GDScript backtrace» — любая ошибка движка, вызванная кодом мода
+# (Godot 4.7 печатает backtrace и под WARNING — например, «Compatibility не умеет следы частиц»: их блоки не считаем)
+errors_only() { awk '/^WARNING:/ {skip=1; next} /^[^ \t]/ {skip=0} !skip' "$1"; }
 PAT='SCRIPT ERROR|Parse Error|Compile Error|Failed to load script|Invalid call|Invalid access|Invalid assignment|Invalid operands|Nonexistent function|Attempt to call|GDScript backtrace|smoke: FAIL|check: FAIL'
 
 echo "== 1. статические проверки"
@@ -41,7 +43,7 @@ python3 "$CI/gen_stubs.py" "$CI/pax_api/api-reference.md" "$PROJ/stubs" "$CI/stu
 "$GODOT" --headless --path "$PROJ" --import > "$OUT/import.log" 2>&1
 "$GODOT" --headless --path "$PROJ" -s res://ci/check_scripts.gd > "$OUT/compile.log" 2>&1
 grep -E "check:|SCRIPT ERROR|Parse Error|res://mods" "$OUT/compile.log" | grep -v "check: ok" || true
-if grep -qE "$PAT" "$OUT/compile.log"; then fail=1; fi
+if errors_only "$OUT/compile.log" | grep -qE "$PAT"; then fail=1; fi
 
 if [ "${NO_SMOKE:-0}" != "1" ]; then
   echo "== 3. прогон арены"
@@ -52,7 +54,7 @@ if [ "${NO_SMOKE:-0}" != "1" ]; then
     "$GODOT" --headless --path "$PROJ" --fixed-fps 60 -s res://ci/smoke.gd > "$OUT/smoke.log" 2>&1
   fi
   grep -E -B2 -A4 "smoke:|SCRIPT ERROR|GDScript backtrace" "$OUT/smoke.log" | head -60
-  if grep -qE "$PAT" "$OUT/smoke.log" || ! grep -q "smoke: ok" "$OUT/smoke.log"; then fail=1; fi
+  if errors_only "$OUT/smoke.log" | grep -qE "$PAT" || ! grep -q "smoke: ok" "$OUT/smoke.log"; then fail=1; fi
 fi
 
 if [ "$fail" = 0 ]; then echo "== ИТОГ: всё чисто"; else echo "== ИТОГ: есть ошибки (логи — $OUT)"; fi

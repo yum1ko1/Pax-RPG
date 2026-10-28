@@ -21,6 +21,7 @@ const CITY_END := 1100              # потом — город Гхарн: пр
 var frame := 0
 var mod: Node
 var out_dir := ""
+var _open_arena: Callable
 
 
 func _initialize() -> void:
@@ -38,17 +39,20 @@ func _initialize() -> void:
 	root.add_child(mod)
 	mod.call("_mod_loaded")
 	var pax := root.get_node_or_null("Pax")
-	var items: Dictionary = pax.get("menu_items") if pax != null else {}
-	if not items.has("pax_rpg_test"):
-		print("smoke: FAIL нет пункта меню pax_rpg_test")
+	# Арена открывается командой консоли rpg_arena (пункт меню «Тест: арена» убран из меню в 0.4.x).
+	var commands: Dictionary = pax.get("commands") if pax != null else {}
+	if not commands.has("rpg_arena"):
+		print("smoke: FAIL нет команды rpg_arena")
 		quit(1)
 		return
-	(items["pax_rpg_test"] as Callable).call()
+	_open_arena = commands["rpg_arena"] as Callable   # на первом кадре: мод уже в дереве (get_tree() не null)
 	process_frame.connect(_tick)
 
 
 func _tick() -> void:
 	frame += 1
+	if frame == 1:
+		_open_arena.call(PackedStringArray())
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	for step: Array in SCRIPT:
 		if int(step[0]) == frame:
