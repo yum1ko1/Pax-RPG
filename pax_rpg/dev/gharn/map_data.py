@@ -27,7 +27,14 @@ for key, x, z in lay["landmarks"]:
     pois.append({"key": key, "x": x, "z": z, "glyph": g, "kind": kind})
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/map_data.py.",
         "zones": [{"r": [x0, z0, x1, z1], "name": n, "col": c} for x0, z0, x1, z1, n, c in ZONES],
-        "pois": pois, "kinds": KIND_COL}
+        "pois": pois, "kinds": KIND_COL,
+        # запечённая карта (pax_rpg/dev/map/bake_gharn_map.py): арт с подписями улиц, ±132 м; значки мест — glyphs.png
+        "art": {"map_ru": "textures/map/gharn_map_ru.jpg", "map_en": "textures/map/gharn_map_en.jpg",
+                "mini_ru": "textures/map/gharn_mini_ru.jpg", "mini_en": "textures/map/gharn_mini_en.jpg",
+                "rect": [-132, -132, 264, 264], "glyphs": "textures/map/glyphs.png", "glyph_cols": 5,
+                "markers": {"pax_rpg_lm_gate": 0, "pax_rpg_lm_khan": 1, "pax_rpg_lm_arena": 2, "pax_rpg_lm_guild": 4,
+                            "pax_rpg_lm_tavern": 5, "pax_rpg_lm_bazaar": 6, "pax_rpg_lm_shamans": 8, "pax_rpg_lm_forge": 15},
+                "big": ["pax_rpg_lm_gate", "pax_rpg_lm_khan", "pax_rpg_lm_arena"]}}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn_map.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(out, len(pois), "pois", len(ZONES), "zones")

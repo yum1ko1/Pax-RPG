@@ -1,0 +1,24 @@
+[Script Info]
+Title: Pax RPG — Битва при Расколе
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Iru,PaxSub,50,&H00FFE6F0,&H00FFFFFF,&H00000000,&H5A000000,0,-1,0,0,100,100,2,0,4,14,0,2,160,160,64,0
+Style: Selune,PaxSub,50,&H00F2EEEA,&H00FFFFFF,&H00000000,&H5A000000,0,-1,0,0,100,100,2,0,4,14,0,2,160,160,64,0
+Style: Both,PaxSub,50,&H00DDEBF2,&H00FFFFFF,&H00000000,&H5A000000,0,-1,0,0,100,100,3,0,4,14,0,2,160,160,64,0
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:22.25,0:00:24.60,Selune,,0,0,0,,{\fad(300,350)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H007E78E6&}SELUNE\N{\r}{\fad(300,350)\blur3}Stop, sister.
+Dialogue: 0,0:00:24.45,0:00:26.55,Iru,,0,0,0,,{\fad(300,300)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H00FFB0D2&}IRU\N{\r}{\fad(300,300)\blur3}The sky is not eternal…
+Dialogue: 0,0:00:26.70,0:00:28.00,Iru,,0,0,0,,{\fad(250,300)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H00FFB0D2&}IRU\N{\r}{\fad(250,300)\blur3}Neither are we.
+Dialogue: 0,0:00:28.05,0:00:30.60,Iru,,0,0,0,,{\fad(300,350)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H00FFB0D2&}IRU\N{\r}{\fad(300,350)\blur3}I will not fade.
+Dialogue: 0,0:00:30.65,0:00:32.70,Selune,,0,0,0,,{\fad(300,250)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H007E78E6&}SELUNE\N{\r}{\fad(300,250)\blur3}The world will not pay…
+Dialogue: 0,0:00:32.75,0:00:34.00,Selune,,0,0,0,,{\fad(200,150)\blur3}{\fnPaxName\fs30\fsp6\i0\c&H007E78E6&}SELUNE\N{\r}{\fad(200,150)\blur3}…for your fear.
+Dialogue: 0,0:00:46.40,0:00:48.95,Both,,0,0,0,,{\fad(600,500)\blur3}The world cannot bear this burden…
+Dialogue: 0,0:00:49.25,0:00:51.20,Both,,0,0,0,,{\fad(500,900)\blur3}Ascend.

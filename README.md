@@ -18,6 +18,7 @@
 | `mods/pax_rpg/presets/Юрума/` | сценарий мира |
 | `pax_rpg/dev/blender/knight/` | сборка рыцаря в Blender: `build_greatsword.py` → `assemble_knight.py` → `refine_knight.py`, проверка `check_knight2.py` |
 | `pax_rpg/dev/meshy/` | клиент Meshy API (`meshy_api.py`, ключ — из переменной `MESHY_API_KEY`, в вывод не попадает) |
+| `pax_rpg/dev/openai/` | MCP-мост `pax-images` к картинкам OpenAI: Claude сам генерирует референсы (концепты, листы под Meshy, иконки) — через подписку ChatGPT (Codex CLI) или ключ API; подключение — `install_openai_mcp.py` |
 | `pax_rpg/dev/audio/` | синтез звуков: взмах меча, удар о землю |
 | `pax_rpg/dev/` | генераторы планеты и сценария (`yuruma_planet.py`, `yuruma_scenario.py`), установка пресета |
 | `pax_rpg/scenario/`, `pax_rpg/reference/`, `pax_rpg/docs/` | исходник сценария, карты Юрумы, заметки и промпты |
