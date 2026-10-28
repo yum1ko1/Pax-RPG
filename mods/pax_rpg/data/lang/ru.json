@@ -27,6 +27,7 @@
 	"pax_rpg_map_pin": "Метка",
 	"pax_rpg_map_dist": "≈ %d м от вас",
 	"pax_rpg_conc_broken": "Концентрация сломлена! Враг готов казнить",
+	"pax_rpg_guard_broken": "Защита пробита — против ветерана парируй или уклоняйся",
 	"pax_rpg_conc_enemy_broken": "Враг сломлен — ЛКМ: Кровожадная атака",
 	"pax_rpg_hero_executed": "Кровожадная атака врага — треть здоровья",
 	"pax_rpg_bloodthirsty": "Кровожадная атака",
