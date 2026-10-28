@@ -38,6 +38,18 @@ const STALK_SPEED := 1.4      # подкрадывается
 const ATTACK_HIT_AT := 0.5    # доля клипа атаки — миг удара
 const ATTACK_SPEED := 1.5
 const DAMAGE := 12.0
+## Три атаки (план боя, этап 2): у каждой свой замах, ритм и предупреждение — парирование снова требует внимания.
+##   quick — тычок: короткий замах, быстрый удар, слабее; блик белый;
+##   heavy — рубящий с задержкой: длинный замах, удар медленнее (не поймать «по привычке»), сильнее, блок дороже;
+##          вспышка оранжевая;
+##   leap — прыжок: неблокируемый и непарируемый (危 над головой и свой звук), от него только уворот.
+const GOB_ATTACKS := {
+	"quick": {"windup": 0.3, "speed": 1.25, "dmg": 0.75, "kind": "", "col": Color(0.75, 0.9, 1.0)},
+	"heavy": {"windup": 0.7, "speed": 0.75, "dmg": 1.35, "kind": "heavy", "col": Color(1.0, 0.5, 0.1)},
+	"leap": {"windup": 0.6, "speed": 1.0, "dmg": 1.5, "kind": "perilous", "col": Color(1.0, 0.1, 0.08)},
+}
+const LEAP_UP := 4.2           # м/с вверх в начале прыжка
+const LEAP_FWD := 5.5          # м/с вперёд, пока не ударил
 const HURT_TIME := 0.45
 const DEFLECTED_TIME := 0.9
 const BROKEN_TIME := 2.6      # с на коленях после слома — окно Кровожадной атаки
@@ -51,6 +63,7 @@ const DOWN_TIME := 0.7        # с, лежит после падения
 const GETUP_SKIP := 0.27      # с начала клипа вставания (Meshy начинает стоя) — с кадра, где лежит на боку
 const STUN_MAX := 1.3         # с, дольше под ударами не стоит — уходит
 const GRAVITY := 20.0
+const FLINCH := 0.16          # рад: наклон корпуса от удара (лёгкий удар, гоблин 45 кг); тяжелее — меньше
 const MANA := Color(0.75, 0.45, 1.0)
 
 static var _attacker: Node = null   # у кого жетон атаки
@@ -74,6 +87,9 @@ var respawns := true
 # характер — у каждого свой (setup): как часто ставит блок, связывает удары в серию, как терпелив
 var _guard_chance := 0.25
 var _combo_chance := 0.4
+var _atk_kind := ""            # атака гоблина (GOB_ATTACKS); "" — прежний один удар (так у наследников — орка)
+var _warn: Label3D             # 危 над головой — перед прыжком
+var _warn_snd: AudioStreamPlayer3D
 var _combo_n := 0
 var _riposte := false          # на арене — нет: павший уходит насовсем
 var _target: Node3D
@@ -100,6 +116,12 @@ var voiced := true                   # свои звуки гоблина (ор�
 var _bark_t := randf_range(4.0, 9.0)  # с до следующего боевого выкрика
 var _hurt_cd := 0.0
 var _voice: AudioStreamPlayer
+var flinch_pitch := true             # наклон вперёд/назад от удара (орк сам ведёт наклон корпуса — у него только вбок)
+var _fl := Vector2.ZERO              # наклон от удара: x — вдоль лица (рад), y — вбок
+var _fl_on := Vector2.ZERO           # сколько из него уже наложено на модель
+var _flash_t := 0.0
+var _flashed: Array = []
+static var _flash_mat: StandardMaterial3D
 static var _streams := {}
 
 
@@ -386,6 +408,9 @@ func deathblow() -> void:
 
 
 func _die() -> void:
+	_fl = Vector2.ZERO
+	_flinch_apply()
+	_flash_off()
 	dead = true
 	_release_token()
 	_mark.visible = false
@@ -512,10 +537,28 @@ func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, 
 	if glow:
 		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 		p.emission_sphere_radius = 0.4
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	p.scale_amount_curve = curve
+	if _burst_curve == null:
+		_burst_curve = Curve.new()
+		_burst_curve.add_point(Vector2(0.0, 1.0))
+		_burst_curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = _burst_curve
+	p.mesh = _burst_mesh(color, size, glow)
+	get_parent().add_child(p)
+	p.global_position = at
+	p.emitting = true
+	p.finished.connect(p.queue_free)
+
+
+## Сетки и материалы брызг — общие на одинаковые (цвет, размер, свечение): раньше каждый удар создавал свою сферу и
+## материал — новые ресурсы на сервере рендера в разгар боя. Видов немного (цвета в коде), кэш не растёт.
+static var _burst_curve: Curve
+static var _burst_meshes := {}
+
+
+static func _burst_mesh(color: Color, size: float, glow: bool) -> SphereMesh:
+	var key := "%s|%s|%s" % [color, size, glow]
+	if _burst_meshes.has(key):
+		return _burst_meshes[key]
 	var q := SphereMesh.new()
 	q.radius = size
 	q.height = size * 2.0
@@ -529,17 +572,61 @@ func _burst(at: Vector3, dir: Vector3, color: Color, amount: int, speed: float, 
 		m.emission = color
 		m.emission_energy_multiplier = 3.0
 	q.material = m
-	p.mesh = q
-	get_parent().add_child(p)
-	p.global_position = at
-	p.emitting = true
-	p.finished.connect(p.queue_free)
+	_burst_meshes[key] = q
+	return q
 
 
 ## Предупреждение перед выпадом: вспышка над оружием (как красный иероглиф опасности в Sekiro — здесь мана).
+## Цвет — по атаке: белый блик — обычный удар, оранжевый — тяжёлый, алый с 危 и звуком — неблокируемый прыжок.
 func _telegraph() -> void:
-	_burst(global_position + Vector3(0.0, 1.25, 0.0), Vector3.UP, Color(1.0, 0.35, 0.2), 14, 0.6, 0.0, 0.45, 0.05,
-		true)
+	var a: Dictionary = GOB_ATTACKS.get(_atk_kind, {})
+	var col: Color = a.get("col", Color(1.0, 0.35, 0.2))
+	var n := {"quick": 8, "heavy": 20, "leap": 24}.get(_atk_kind, 14) as int
+	_burst(global_position + Vector3(0.0, 1.25, 0.0), Vector3.UP, col, n, 0.6, 0.0, 0.45, 0.05, true)
+	if _atk_kind == "leap":
+		_warn_show(true)
+		if _warn_snd == null and mod != null:
+			var st: AudioStream = mod.sound("sounds/iai_tsuba.wav")    # короткий звон гарды — «опасно», не звук удара
+			if st != null:
+				_warn_snd = AudioStreamPlayer3D.new()
+				_warn_snd.stream = st
+				_warn_snd.bus = "PaxRpgSfx"
+				_warn_snd.unit_size = 12.0
+				_warn_snd.pitch_scale = 0.8
+				_warn_snd.position = Vector3(0, 1.6, 0)
+				add_child(_warn_snd)
+		if _warn_snd != null:
+			_warn_snd.play()
+
+
+func _warn_show(on: bool) -> void:
+	if not on and _warn == null:
+		return
+	if _warn == null:
+		_warn = Label3D.new()
+		_warn.text = "危"
+		_warn.font_size = 120
+		_warn.modulate = Color(1.0, 0.15, 0.1)
+		_warn.outline_size = 20
+		_warn.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_warn.no_depth_test = true
+		_warn.position = Vector3(0.0, 2.3, 0.0)
+		add_child(_warn)
+	_warn.visible = on
+
+
+## Выбрать атаку перед замахом. Сломленного героя — быстрым ударом; ветеран прыгает чаще.
+func _pick_attack() -> void:
+	if hero_broken:
+		_atk_kind = "quick"
+		return
+	var leap := 0.25 if veteran else 0.15
+	var r := randf()
+	_atk_kind = "leap" if r < leap else ("heavy" if r < leap + 0.4 else "quick")
+
+
+func _atk_speed() -> float:
+	return ATTACK_SPEED * float((GOB_ATTACKS.get(_atk_kind, {}) as Dictionary).get("speed", 1.0))
 
 
 # ---------- состояния ----------
@@ -567,6 +654,8 @@ func _set_state(s: String) -> void:
 		if s != "recover":
 			_release_token()
 	_mark.visible = s == "broken"
+	if _warn != null and _warn.visible and not (s in ["windup", "attack"] and _atk_kind == "leap"):
+		_warn_show(false)
 	match s:
 		"idle":
 			_play("idle")
@@ -579,7 +668,9 @@ func _set_state(s: String) -> void:
 		"attack":
 			_play("attack", true)
 			if _anim != null:
-				_anim.speed_scale = ATTACK_SPEED * (0.85 if low_conc() else 1.0)   # устал — бьёт медленнее
+				_anim.speed_scale = _atk_speed() * (0.85 if low_conc() else 1.0)   # устал — бьёт медленнее
+			if _atk_kind == "leap" and is_on_floor():
+				velocity.y = LEAP_UP                        # прыжок: подлетает и рушится сверху
 		"hurt":
 			_play("hit", true)
 		"deflected":
@@ -670,6 +761,72 @@ func cine_release(v: Vector3) -> void:
 	_set_state("knockdown")
 
 
+## Вздрог от удара: корпус наклоняется туда, куда уносит удар (away — в мире), и в замирании так и стоит, потом
+## выпрямляется. power — вес удара (location.gd → _mass_hit); тяжёлого бойца качает меньше.
+func flinch(away: Vector3, power: float) -> void:
+	if _model == null or dead:
+		return
+	var f := _model.global_transform.basis.z
+	var r := _model.global_transform.basis.x
+	f.y = 0.0
+	r.y = 0.0
+	var k := FLINCH * clampf(power, 0.5, 2.0) * clampf(45.0 / maxf(mass, 1.0), 0.35, 1.0)
+	_fl = Vector2(away.dot(f.normalized()) if flinch_pitch else 0.0, -away.dot(r.normalized())) * k
+	_flinch_apply()
+
+
+func _flinch_apply() -> void:
+	if _model == null:
+		return
+	var d := _fl - _fl_on                         # прибавкой: свои повороты модели (лицо, наклон орка) не трогаем
+	_model.rotation.x += d.x
+	_model.rotation.z += d.y
+	_fl_on = _fl
+
+
+## Вспышка попадания: тело на миг светлеет (наложенный материал на все меши модели).
+func hit_flash(t: float) -> void:
+	if _model == null or dead or t <= 0.0:
+		return
+	if _flash_mat == null:
+		_flash_mat = StandardMaterial3D.new()
+		_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_flash_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_flash_mat.albedo_color = Color(1.0, 0.92, 0.85, 0.55)
+	if _flashed.is_empty():
+		for mi: Node in _model.find_children("*", "MeshInstance3D", true, false):
+			if (mi as MeshInstance3D).material_overlay == null:
+				(mi as MeshInstance3D).material_overlay = _flash_mat
+				_flashed.append(mi)
+	_flash_t = t
+
+
+func _flash_tick(delta: float) -> void:
+	if _flash_t <= 0.0:
+		return
+	_flash_t -= delta
+	if _flash_t <= 0.0:
+		_flash_off()
+
+
+func _flash_off() -> void:
+	_flash_t = 0.0
+	for mi: Variant in _flashed:
+		if is_instance_valid(mi) and (mi as MeshInstance3D).material_overlay == _flash_mat:
+			(mi as MeshInstance3D).material_overlay = null
+	_flashed.clear()
+
+
+## Угроза для указателя у края экрана (location.gd): 0 — нет, 1 — замахивается, 2 — удар, который не парировать.
+func threat() -> int:
+	if dead:
+		return 0
+	if _state == "windup" or (_state == "attack" and not _struck):
+		return 2 if _atk_kind == "leap" else 1
+	return 0
+
+
 func hitstop(t: float) -> void:
 	_hitstop = maxf(_hitstop, t)
 	if _anim != null:
@@ -684,11 +841,15 @@ func _physics_process(delta: float) -> void:
 		if _bark_t <= 0.0:
 			_bark_t = randf_range(5.0, 11.0)
 			_say("bark", 3)
+	_flash_tick(delta)
 	if _hitstop > 0.0:
 		_hitstop -= delta
 		if _hitstop <= 0.0 and _anim != null:
 			_anim.active = true
 		return
+	if not dead:
+		_fl = _fl.lerp(Vector2.ZERO, minf(1.0, delta * 9.0))   # корпус выпрямляется
+		_flinch_apply()
 	if cine:
 		return
 	var t0 := Time.get_ticks_usec()
@@ -768,6 +929,7 @@ func _phys(delta: float) -> void:
 						_wait = randf_range(0.8, 1.6)    # герой в блоке — подождать, пусть раскроется
 					elif _take_token():
 						_feint = randf() < 0.25 and not hero_broken
+						_pick_attack()
 						_set_state("stalk")
 					else:
 						_wait = randf_range(0.5, 1.2)
@@ -792,6 +954,7 @@ func _phys(delta: float) -> void:
 			if _state_t > 0.35:
 				if _riposte and dist <= STRIKE_DIST + 0.6:
 					_riposte = false
+					_atk_kind = "quick"
 					_attack_begin()                      # ответ без замаха — надо ловить
 				else:
 					_set_state("circle")
@@ -801,6 +964,7 @@ func _phys(delta: float) -> void:
 			if _state_t > 0.32:
 				_riposte = false
 				if dist <= ATTACK_RANGE + 1.4:
+					_atk_kind = "quick"
 					_attack_begin()
 				else:
 					_set_state("circle")
@@ -823,8 +987,10 @@ func _phys(delta: float) -> void:
 				_attack_begin()
 		"attack":
 			_face(dir, delta * 0.4)
-			var hit_at := _clip_len("attack") / ATTACK_SPEED * ATTACK_HIT_AT
-			if _state_t < hit_at * 0.7 and dist > 1.2:
+			var hit_at := _clip_len("attack") / _atk_speed() * ATTACK_HIT_AT
+			if _atk_kind == "leap" and _state_t < hit_at and dist > 0.9:
+				flat = dir * LEAP_FWD                    # летит на героя
+			elif _state_t < hit_at * 0.7 and dist > 1.2:
 				flat = dir * 2.0                         # шаг с ударом
 			if not _whooshed and _state_t >= hit_at - 0.12:   # свист оружия — чуть до удара
 				_whooshed = true
@@ -832,10 +998,13 @@ func _phys(delta: float) -> void:
 			if not _struck and _state_t >= hit_at:
 				_struck = true
 				if dist <= ATTACK_RANGE + 0.5 and _on_hit.is_valid():
-					_on_hit.call(DAMAGE, self)
-			if _state == "attack" and _state_t >= _clip_len("attack") / ATTACK_SPEED * 0.85:
-				if _combo_n < 2 and dist <= ATTACK_RANGE + 1.0 and randf() < _combo_chance:
-					_combo_n += 1                        # серия: следующий удар сразу, без отката
+					var a: Dictionary = GOB_ATTACKS.get(_atk_kind, {})
+					_on_hit.call(DAMAGE * float(a.get("dmg", 1.0)), self, str(a.get("kind", "")))
+			if _state == "attack" and _state_t >= _clip_len("attack") / _atk_speed() * 0.85:
+				if _combo_n < 2 and _atk_kind != "leap" and dist <= ATTACK_RANGE + 1.0 and randf() < _combo_chance:
+					_combo_n += 1                        # серия: следующий удар сразу, без отката — быстрый
+					if _atk_kind != "":
+						_atk_kind = "quick"
 					_attack_begin()
 				else:
 					_combo_n = 0
@@ -902,7 +1071,9 @@ func _phys(delta: float) -> void:
 
 ## Замах — короткая пауза с предупреждением (у слабых врагов короче).
 func _f_windup() -> float:
-	return 0.25 if hero_broken else 0.45
+	if hero_broken:
+		return 0.25
+	return float((GOB_ATTACKS.get(_atk_kind, {}) as Dictionary).get("windup", 0.45))
 
 
 ## Начать удар: сам замах тратит концентрацию (усталость); на нуле — слом вместо удара.

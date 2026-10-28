@@ -20,8 +20,8 @@ func _initialize() -> void:
 	mod.set("id", "pax_rpg")
 	root.add_child(mod)
 	mod.call("_mod_loaded")
-	var items: Dictionary = root.get_node("Pax").get("menu_items")
-	(items["pax_rpg_test"] as Callable).call()
+	var commands: Dictionary = root.get_node("Pax").get("commands")
+	(commands["rpg_arena"] as Callable).call_deferred(PackedStringArray())
 	process_frame.connect(_tick)
 
 

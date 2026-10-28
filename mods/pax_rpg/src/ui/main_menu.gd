@@ -5,9 +5,15 @@ extends CanvasLayer
 ## Кнопки — свои: наведение — сдвиг, алое свечение, растущая черта; нажатие — искры. «Continue» и «Load» грузят
 ## партию сами (main.gd → mp_session().open_slot), меню игры показываем только для его экранов: новая игра,
 ## настройки, сеть; вернулся игрок на главный шаг меню — снова наш экран.
+## Два вида (настройка menu_bg, «Settings → Graphics → Main menu»): «cinematic» — фон-петля video/menu_loop.ogv
+## (золотой генерал над горящим городом, конец ролика), название и пункты справа, меню появляется на бочке
+## из саундтрека; при первом показе за запуск — вступительный ролик (intro.gd, пропускается). «classic» — фон
+## Юрумы с глубиной, как раньше.
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const MenuSettings := preload("res://mods/pax_rpg/src/ui/menu_settings.gd")
+const Intro := preload("res://mods/pax_rpg/src/ui/intro.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
 const RING := Vector2(0.766, 0.195)              # кольцо в небе — доля картинки
 const TIP := Vector2(0.1276, 0.4476)             # алый кончик копья
@@ -31,6 +37,14 @@ var _hot_want := 0.0
 var _mouse := Vector2.ZERO
 var _t := 0.0
 var _shown := false
+var _cine := false                               # новое меню: фон-видео (menu_bg = cinematic)
+var _video: VideoStreamPlayer
+var _drop: AudioStreamPlayer                     # бочка с басом из саундтрека — в кадр появления меню
+var _mus_tw: Tween
+var _intro: Intro
+static var _intro_seen := false                  # ролик — один раз за запуск игры
+var _world_up := false                           # мир игры загружен (world_ready → attach): ролик не идёт поверх загрузки
+var _boot_t := 0.0                               # сколько ждём мира; дольше 25 с — ролик всё равно (без сохранений мира нет)
 var _rocks: Array = []                           # [TextureRect, u, v, w, h, фаза, амплитуда, период, поворот, глубина]
 var _brush: FontFile                             # Katsuno (только латиница) — заголовок и пункты по-английски
 ## Стили (настройка menu_style): A — «Цусима»: название кистью, пункты — Cinzel, бледно-лиловые, выделение —
@@ -69,17 +83,69 @@ func _load_font(rel: String) -> FontFile:
 	return f
 
 
+static func cinematic(m: PaxMod) -> bool:
+	return str(m.get_setting("menu_bg", "cinematic")) == "cinematic" and m.list_files("video").has("menu_loop.ogv")
+
+
 func _build() -> void:
 	st = STYLES.get(str(mod.get_setting("menu_style", "B")), STYLES["B"])
 	_item_font = _load_font(str(st.font))
 	_sub_font = _load_font("fonts/cormorant_garamond.ttf")
+	_cine = cinematic(mod)
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP     # меню игры под нами не нажимается
 	add_child(_root)
+	if _cine:
+		_cine_bg()
+	else:
+		_classic_bg()
+	_texts()
+
+
+## Новое меню: петля конца ролика на весь экран (обрезка по краям, без полей), зерно — шейдером; справа, под
+## названием и пунктами, — тёмное пятно, чтобы они читались на горящем городе.
+func _cine_bg() -> void:
+	var box := AspectRatioContainer.new()
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.ratio = 16.0 / 9.0
+	box.stretch_mode = AspectRatioContainer.STRETCH_COVER
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(box)
+	_video = VideoStreamPlayer.new()
+	var vs := VideoStreamTheora.new()
+	vs.file = mod.path("video/menu_loop.ogv")
+	_video.stream = vs
+	_video.expand = true
+	_video.loop = true
+	_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_video.material = Intro.grain_material(0.045)
+	box.add_child(_video)
+	var shade := TextureRect.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(0.03, 0.01, 0.06, 0.78))
+	g.add_point(0.55, Color(0.03, 0.01, 0.06, 0.5))
+	g.set_color(g.get_point_count() - 1, Color(0.03, 0.01, 0.06, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	shade.texture = gt
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.anchor_left = 0.38
+	shade.anchor_right = 0.86
+	shade.anchor_top = 0.0
+	shade.anchor_bottom = 1.0
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(shade)
+
+
+func _classic_bg() -> void:
 	_bg = TextureRect.new()
 	_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_bg.texture = mod.texture("textures/menu/bg_clean.jpg")   # камни вырезаны (dev: menu_rocks) — они летают сами
+	_bg.texture = Assets.tex(mod, "textures/menu/bg_clean.jpg")   # камни вырезаны (dev: menu_rocks) — они летают сами
 	_bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -87,12 +153,12 @@ func _build() -> void:
 	sh.code = BG
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
-	_mat.set_shader_parameter("depth", mod.texture("textures/menu/depth.png"))
+	_mat.set_shader_parameter("depth", Assets.tex(mod, "textures/menu/depth.png"))
 	_mat.set_shader_parameter("ring", RING)
 	_mat.set_shader_parameter("tip", TIP)
-	_mat.set_shader_parameter("robe", mod.texture("textures/menu/robe.png"))
-	_mat.set_shader_parameter("plate", mod.texture("textures/menu/plate.jpg"))      # фон без скалы с самураем
-	_mat.set_shader_parameter("fgmask", mod.texture("textures/menu/fgmask.png"))    # передний план: скала, самурай
+	_mat.set_shader_parameter("robe", Assets.tex(mod, "textures/menu/robe.png"))
+	_mat.set_shader_parameter("plate", Assets.tex(mod, "textures/menu/plate.jpg"))      # фон без скалы с самураем
+	_mat.set_shader_parameter("fgmask", Assets.tex(mod, "textures/menu/fgmask.png"))    # передний план: скала, самурай
 	_bg.material = _mat
 	_root.add_child(_bg)
 	_make_rocks()
@@ -129,6 +195,10 @@ func _build() -> void:
 	shade.anchor_right = 0.42
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(shade)
+
+
+## Название, подпись и пункты. В новом меню — справа, по центру над городом, там же, где титр в конце ролика.
+func _texts() -> void:
 	var title := Label.new()
 	title.text = "PAX RPG"
 	_brush = FontFile.new()
@@ -142,6 +212,15 @@ func _build() -> void:
 	title.add_theme_constant_override("shadow_outline_size", 18)
 	title.position = Vector2(70, 26)
 	title.name = "Title"
+	if _cine:
+		title.add_theme_font_size_override("font_size", 104)
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.anchor_left = 0.62
+		title.anchor_right = 0.62
+		title.offset_left = -600.0
+		title.offset_right = 600.0
+		title.offset_top = 70.0
+		title.offset_bottom = 260.0
 	_root.add_child(title)
 	var sub := Label.new()                           # подпись: другой оттенок и шрифт — название на её фоне ярче
 	sub.text = "YURUMA   ·   YEAR MXLVII OF THE SHATTERED SKY"
@@ -156,7 +235,15 @@ func _build() -> void:
 	sub.add_theme_constant_override("shadow_offset_y", 2)
 	sub.add_theme_constant_override("shadow_outline_size", 6)
 	sub.name = "Sub"
-	if str(st.sub_at) == "under":
+	if _cine:
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub.anchor_left = 0.62
+		sub.anchor_right = 0.62
+		sub.offset_left = -600.0
+		sub.offset_right = 600.0
+		sub.offset_top = 286.0
+		sub.offset_bottom = 320.0
+	elif str(st.sub_at) == "under":
 		sub.position = Vector2(84, 214)
 		var tick := ColorRect.new()                  # алая черточка перед подписью — связь с названием
 		tick.color = Color(CRIMSON, 0.9)
@@ -171,6 +258,13 @@ func _build() -> void:
 	_root.add_child(sub)
 	_col = VBoxContainer.new()
 	_col.position = Vector2(60, 272)
+	if _cine:
+		_col.anchor_left = 0.62
+		_col.anchor_right = 0.62
+		_col.offset_left = -190.0
+		_col.offset_right = 250.0
+		_col.offset_top = 372.0
+		_col.offset_bottom = 900.0
 	_col.add_theme_constant_override("separation", int(st.gap))
 	_root.add_child(_col)
 	_main_items()
@@ -214,6 +308,9 @@ func _open_settings() -> void:
 func _close_settings() -> void:
 	if is_instance_valid(_settings):
 		_settings.queue_free()
+	if cinematic(mod) != _cine:                       # вид меню сменили в настройках — собрать заново
+		_rebuild()
+		return
 	for n: String in ["Title", "Sub"]:
 		var c := _root.get_node_or_null(n)
 		if c != null:
@@ -235,10 +332,24 @@ func _saves_items() -> void:
 	_col.add_child(_button("BACK", _main_items, false, true))
 
 
+func _rebuild() -> void:
+	_root.queue_free()
+	_rocks.clear()
+	_mat = null
+	_sparks = null
+	_video = null
+	_bg = null
+	_build()
+	_menu_music(true)
+	if _cine:
+		_video.play()
+
+
 ## main.gd на world_ready: меню игры. Его главный экран — сигнал о новой кнопке на нём (наша «Continue» —
 ## значит, игрок вернулся на главный шаг меню: из настроек, сети или из партии). Ни опроса, ни обхода дерева.
 func attach(menu: Node) -> void:
 	active = self
+	_world_up = true
 	if menu == null or menu == _menu:
 		return
 	_menu = menu
@@ -503,6 +614,8 @@ void fragment() {
 
 ## Музыка меню: на показ — нарастает за 2 с, на уход в игру — гаснет за 1 с.
 func _menu_music(on: bool) -> void:
+	if is_instance_valid(_mus_tw):
+		_mus_tw.kill()
 	if _music == null:
 		var st: AudioStream = mod.sound("sounds/music/mana_lullaby.ogg")
 		if st == null:
@@ -514,24 +627,64 @@ func _menu_music(on: bool) -> void:
 		_music.volume_db = -60.0
 		add_child(_music)
 	var tw := create_tween()
-	if on:
+	_mus_tw = tw
+	if on and _cine:                                  # новое меню: бочка дропа, колыбельная — когда трек отзвучит
+		if _drop == null:
+			_drop = AudioStreamPlayer.new()
+			_drop.stream = mod.sound("sounds/music/menu_drop.ogg")
+			_drop.volume_db = -5.0
+			add_child(_drop)
+		_drop.volume_db = -5.0
+		_drop.play()
+		_music.stop()
+		_music.volume_db = -60.0
+		tw.tween_interval(8.5)
+		tw.tween_callback(_music.play)
+		tw.tween_property(_music, "volume_db", -9.0, 4.0)
+	elif on:
+		if _drop != null:
+			_drop.stop()
 		if not _music.playing:
 			_music.play()
 		tw.tween_property(_music, "volume_db", -9.0, 2.0)
 	else:
+		tw.set_parallel(true)
 		tw.tween_property(_music, "volume_db", -60.0, 1.0)
-		tw.tween_callback(_music.stop)
+		if _drop != null and _drop.playing:
+			tw.tween_property(_drop, "volume_db", -60.0, 1.0)
+		tw.chain().tween_callback(func() -> void:
+			_music.stop()
+			if _drop != null:
+				_drop.stop())
 
 
 func _process(delta: float) -> void:
 	preload("res://mods/pax_rpg/src/trace.gd").tick("main_menu._process")
 	var want := _want
+	if want and not _shown and _cine and not _intro_seen and Intro.available(mod):
+		_boot_t += delta
+		if not _world_up and _boot_t < 25.0:          # игра ещё грузит мир — ни меню, ни ролика
+			return
+		_intro_seen = true                            # первый показ нового меню за запуск — сперва ролик
+		var intro := Intro.new()
+		intro.setup(mod)
+		intro.done.connect(func() -> void: _intro = null)
+		_intro = intro
+		get_parent().add_child(intro)
+	if is_instance_valid(_intro):
+		if not want:                                  # игрок уже в мире (автостарт арены, загрузка) — ролик гаснет
+			_intro.skip()
+		return
 	if want != _shown:
 		_shown = want
 		visible = want
 		if want:
-			_root.modulate.a = 0.0
-			create_tween().tween_property(_root, "modulate:a", 1.0, 0.5)
+			_root.modulate.a = 0.0                    # новое меню вспыхивает на бочке, старое проявляется
+			create_tween().tween_property(_root, "modulate:a", 1.0, 0.12 if _cine else 0.5)
+			if _cine:
+				_video.play()
+		elif _cine:
+			_video.stop()
 		_menu_music(want)
 	if not visible:
 		return
@@ -540,6 +693,8 @@ func _process(delta: float) -> void:
 	var m := (_root.get_local_mouse_position() / vs - Vector2(0.5, 0.5)) * 2.0
 	_mouse = _mouse.lerp(m.clamp(Vector2(-1, -1), Vector2(1, 1)), 1.0 - exp(-delta * 3.0))   # плавно, без дрожи
 	_hot = move_toward(_hot, _hot_want, delta * 3.0)
+	if _mat == null:                                  # новое меню: фон — видео, без шейдера и обломков
+		return
 	_mat.set_shader_parameter("mouse", _mouse)
 	_mat.set_shader_parameter("hot", _hot)
 	_mat.set_shader_parameter("time", fmod(_t, 600.0))   # время по кругу: шум тумана без потери точности

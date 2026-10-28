@@ -2,13 +2,23 @@ name: Проверка мода
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      city:
+        description: "Ещё стройка Гхарна и прогулка (~30 мин на программном OpenGL)"
+        type: boolean
+        default: false
+
+concurrency:                        # новый пуш отменяет прошлую проверку той же ветки
+  group: checks-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -16,7 +26,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/godot
-          key: godot-4.5.1-stable-linux
+          key: godot-4.7.2-stable-linux
 
       - name: Экран и шрифты для скриншота
         run: |
@@ -25,6 +35,8 @@ jobs:
 
       - name: Статика, компиляция, прогон арены
         run: tools/ci/run_checks.sh
+        env:
+          SMOKE_CITY: ${{ github.event.inputs.city == 'true' && '1' || '0' }}
 
       - name: Итог в отчёт
         if: always()

@@ -42,6 +42,17 @@ var _dyn_t := 0.0
 var _probe_step := -1
 var _rim: DirectionalLight3D
 const RIM_LAYER := 1 << 19          # слой видимости 20 — только герой, на него светит контровой свет
+## Тени огней (shadow_caster_mask). Движок держит тень огня в атласе и перерисовывает её (6 проходов сцены у куба), только
+## когда в её радиусе что-то сдвинулось или у отбрасывающего тень шейдер с TIME в вершинах (качание) — тогда каждый кадр.
+const LOD_LAYER := 1 << 17          # слой 18 — LOD-копии построек: в тенях огней дальность видимости не действует, и тень
+                                    # рисовали модель и обе её копии разом; форма та же — тень даёт полная модель
+const SWAY_LAYER := 1 << 16         # слой 17 — полотнища на ветру (flag.gdshader, TIME): тень от солнца; от огня — только
+                                    # рядом с героем (там тень огня и так перерисовывается — герой в её радиусе двигается)
+const NPC_LAYER := 1 << 15          # слой 16 — жители (npc.gd): тень от солнца; от огня — тоже только рядом с героем: шаг
+                                    # жителя в радиусе огня с тенью перерисовывал все 6 граней куба каждый кадр
+const NEAR_ONLY := SWAY_LAYER | NPC_LAYER
+const LAMP_SKIP := LOD_LAYER | NEAR_ONLY
+var _sh_fading: Array = []         # огни, у которых сила тени ещё в пути к цели (_fade_shadows — каждый кадр)
 var _time := 0.0                   # время ветра для шейдеров; иай замораживает этот узел — и трава замирает
 var _saved := {}
 var _mb: MotionBlur
@@ -88,8 +99,8 @@ func _f(key: String, fallback: float) -> float:
 
 
 ## Ключи меню «Графика» (pause_menu.gd) — их значения берутся из настроек мода.
-const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen", "cam_blur",
-	"flare", "auto_exposure", "grass_density", "shaders"]
+const MENU_KEYS := ["upscale", "resolution", "fps_limit", "vsync", "gi", "ssil", "ssao", "ssr", "aa", "fsr_scale", "lamp_shadows_n", "glow", "lens_sharpen",
+	"flare", "auto_exposure", "grass_density", "shaders", "shadow_q"]
 var _ovr := {}
 var _env: Environment
 var _we: WorldEnvironment
@@ -114,6 +125,11 @@ func set_option(key: String, value: Variant) -> void:
 				_apply_aa(view)
 		"fps_limit", "vsync":
 			apply_frame_limits()
+		"shadow_q":
+			if not _saved.is_empty():                    # глобальные настройки движка — только пока они сохранены (в локации)
+				_apply_shadow_q()
+			if is_instance_valid(sun):
+				apply_sun(sun)
 		"lens_sharpen":
 			if lens_mat != null:
 				lens_mat.set_shader_parameter("sharpen", float(value))
@@ -135,8 +151,12 @@ func apply_viewport(v: SubViewport) -> void:
 	_apply_aa(v)
 	v.use_debanding = _b("debanding", true)
 	_lens_layer(v)
-	v.use_occlusion_culling = _b("occlusion", false)     # выкл.: на краях стен модели пропадали и появлялись
+	# отсечение заслонённым: окклюдеры — коробки строго внутри стен (city.gd _occluder_box); растр окклюзии плотнее
+	# (лучей на поток 512 → 2048) — края стен точнее, модели у краёв не мигают (было причиной выключения в 0.3.x)
+	v.use_occlusion_culling = _b("occlusion", true)
 	occlusion_on = v.use_occlusion_culling
+	if occlusion_on:
+		RenderingServer.viewport_set_occlusion_rays_per_thread(2048)
 	v.mesh_lod_threshold = _f("mesh_lod_px", 1.0)        # пикселей ошибки LOD: больше — проще сетки вдали
 	v.set("anisotropic_filtering_level", 4)              # 16× анизотропия: земля и дороги чёткие под углом
 	v.positional_shadow_atlas_size = int(_f("lamp_shadow_atlas", 4096))
@@ -160,15 +180,17 @@ func _apply_upscale(v: SubViewport) -> void:
 	v.fsr_sharpness = {"quality": 0.2, "balanced": 0.1, "performance": 0.0}.get(mode, 0.2)
 
 
-## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте окна.
-## Выше окна (4K на мониторе 1440p) — суперсэмплинг: рендер больше и сжимается до окна (резче, дороже);
+## Разрешение 3D-картинки (меню «Графика» → resolution: native | 1080 | 1440 | 2160): масштаб рендера к высоте вида.
+## Выше вида (4K на мониторе 1440p) — суперсэмплинг: рендер больше и сжимается до окна (резче, дороже);
 ## ниже — рендер меньше и растягивается (FSR 2, если выбран, иначе билинейно).
+## Вид — по размеру контейнера в единицах интерфейса игры (база 1920×1080, canvas_items), а не по окну: в окне
+## 2560×1440 вид 1080 строк, и прежний масштаб «1440 / высота окна» = 1.0 давал те же 1080 (native — как было).
 func _apply_resolution(v: SubViewport) -> void:
 	var res := str(_v("resolution", "native")).to_int()
 	if res <= 0:
 		return
-	var win_h := float(maxi(DisplayServer.window_get_size().y, 1))
-	var k := clampf(float(res) / win_h, 0.25, 2.0)
+	var view_h := float(maxi(int(v.get_tree().root.get_visible_rect().size.y), 1))
+	var k := clampf(float(res) / view_h, 0.25, 2.0)
 	if v.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR2 and k <= 1.0:
 		v.scaling_3d_scale = k * v.scaling_3d_scale
 	else:
@@ -347,8 +369,28 @@ func _drop_camera_effects() -> void:
 	_lens = null
 
 
+## Качество теней (пресеты «Графики», ключ shadow_q): 0 — низкое, 1 — среднее, 2 — высокое (как было до 0.4.45Y).
+## Тени — самое дорогое в городе: фильтр считается на каждом освещённом пикселе (и на траве), атлас 8192 — 128 МБ.
+func _shadow_q() -> int:
+	return clampi(int(_f("shadow_q", 2.0)), 0, 2)
+
+
+func _apply_shadow_q() -> void:
+	var sq := _shadow_q()
+	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)) if sq == 2 else 4096, true)
+	var q := RenderingServer.SHADOW_QUALITY_SOFT_HIGH if _b("soft_shadows", true) else RenderingServer.SHADOW_QUALITY_SOFT_LOW
+	if sq == 1:
+		q = RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM
+	elif sq == 0:
+		q = RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW
+	RenderingServer.directional_soft_shadow_filter_set_quality(q)
+	RenderingServer.positional_soft_shadow_filter_set_quality(q)
+
+
 func apply_sun(s: DirectionalLight3D) -> void:
-	s.light_angular_distance = _f("sun_angle", 0.6)      # мягкий край тени растёт с расстоянием до заслона
+	var sq := _shadow_q()
+	# мягкий край тени растёт с расстоянием до заслона (PCSS — поиск заслона на каждом пикселе); на низком — выкл.
+	s.light_angular_distance = _f("sun_angle", 0.6) * (1.0 if sq == 2 else (0.5 if sq == 1 else 0.0))
 	s.shadow_blur = 1.0
 	s.directional_shadow_blend_splits = true              # без ступеньки на границе каскадов
 	s.directional_shadow_max_distance = _f("sun_shadow_distance", 110.0)
@@ -359,6 +401,11 @@ func apply_sun(s: DirectionalLight3D) -> void:
 		s.directional_shadow_split_2 = float(sp[1])
 		s.directional_shadow_split_3 = float(sp[2])
 	s.directional_shadow_fade_start = 0.85
+	if sq == 0:                                           # низкое: 2 каскада вместо 4 — сцена в тень солнца вдвое реже
+		s.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		s.directional_shadow_split_1 = float(sp[1]) if sp.size() >= 3 else 0.18
+	else:
+		s.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 
 
 ## Глобальные настройки теней — на время локации (атлас солнца, мягкий фильтр); restore_globals() возвращает.
@@ -392,13 +439,16 @@ func push_globals() -> void:
 	}
 	for k: String in PS_KEYS:                                # И-50: всё, что меняем ниже, — запомнить как было в игре
 		_saved[k] = ProjectSettings.get_setting(k, PS_KEYS[k])
-	RenderingServer.directional_shadow_atlas_set_size(int(_f("sun_shadow_atlas", 8192)), true)
-	# качество эффектов движка (рендер Godot): полное разрешение SSAO/SSIL, гладкие шероховатые отражения, больше лучей
+	_apply_shadow_q()
+	# качество эффектов движка (рендер Godot): SSAO/SSIL высокого качества, гладкие шероховатые отражения, больше лучей
 	# SDFGI, бикубический ореол, сглаженный объёмный туман, SSS кожи, анизотропные декали
-	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, false, 0.5, 2, 50.0, 300.0)
-	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, false, 0.5, 4, 50.0, 300.0)
+	# SSAO и SSIL — высокое качество в полразмера (как по умолчанию в Godot): с TAA разницы почти не видно, а полный
+	# размер стоил ~0.7 мс видеокарты (замер rpg_perf gpu, 0.4.16Y; решение автора)
+	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_HIGH, true, 0.5, 2, 50.0, 300.0)
+	RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_HIGH, true, 0.5, 4, 50.0, 300.0)
 	RenderingServer.environment_set_ssr_roughness_quality(RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_HIGH)
-	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_64)   # свет статичный, сходится за 30 кадров — 64 луча не видно
+	# 32 луча на пробу: свет копится за 30 кадров, так что разница с 64 почти не видна, а это −0.6 мс видеокарты
+	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_32)
 	RenderingServer.environment_glow_set_use_bicubic_upscale(true)
 	RenderingServer.environment_set_volumetric_fog_filter_active(true)
 	RenderingServer.environment_set_volumetric_fog_volume_size(64, 64)   # туман тонкий — грубая сетка незаметна
@@ -408,9 +458,6 @@ func push_globals() -> void:
 	# отражённый свет сходится за 30 кадров и обновляет свет за 16: без ступенек и мерцания при движении камеры
 	RenderingServer.environment_set_sdfgi_frames_to_converge(RenderingServer.ENV_SDFGI_CONVERGE_IN_30_FRAMES)
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_16_FRAMES)
-	var q := RenderingServer.SHADOW_QUALITY_SOFT_HIGH if _b("soft_shadows", true) else RenderingServer.SHADOW_QUALITY_SOFT_LOW
-	RenderingServer.directional_soft_shadow_filter_set_quality(q)
-	RenderingServer.positional_soft_shadow_filter_set_quality(q)
 
 
 func _ps(k: String) -> Variant:
@@ -420,6 +467,8 @@ func _ps(k: String) -> Variant:
 func restore_globals() -> void:
 	if _saved.is_empty():
 		return
+	RenderingServer.viewport_set_occlusion_rays_per_thread(int(ProjectSettings.get_setting(
+		"rendering/occlusion_culling/occlusion_rays_per_thread", 512)))
 	RenderingServer.directional_shadow_atlas_set_size(int(_saved["atlas"]), true)
 	RenderingServer.environment_set_sdfgi_frames_to_converge(int(_saved["conv"]) as RenderingServer.EnvironmentSDFGIFramesToConverge)
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(int(_saved["upd"]) as RenderingServer.EnvironmentSDFGIFramesToUpdateLight)
@@ -460,6 +509,7 @@ func _process(delta: float) -> void:
 	if _shadow_t <= 0.0:
 		_shadow_t = 0.5
 		_lamp_shadows()
+	_fade_shadows(delta)
 	_dyn_t -= delta
 	if _dyn_t <= 0.0:
 		_dyn_t = 1.0
@@ -473,8 +523,13 @@ func _process(delta: float) -> void:
 	_camera_lens(delta)
 	if is_instance_valid(player):
 		var pp := player.global_position
-		RenderingServer.global_shader_parameter_set(&"pax_rpg_player", Vector4(pp.x, pp.y, pp.z, 0.0))
+		if pp != _player_sent:                       # стоит — не пишем (глобальный параметр — запрос в сервер рендера)
+			_player_sent = pp
+			RenderingServer.global_shader_parameter_set(&"pax_rpg_player", Vector4(pp.x, pp.y, pp.z, 0.0))
 	Prof.add("графика", t0)
+
+
+var _player_sent := Vector3.INF
 
 
 ## Тени — у ближайших к камере горящих огней; дальние без теней (каждая тень огня — 6 проходов сцены).
@@ -491,7 +546,7 @@ static func _reaches_view(ol: OmniLight3D, frustum: Array[Plane]) -> bool:
 
 
 func _lamp_shadows() -> void:
-	var n := int(_f("lamp_shadows_n", 40))
+	var n := int(_f("lamp_shadows_n", 16))
 	if lights.is_empty() or not is_instance_valid(cam):
 		return
 	if not _fogs_made:
@@ -505,13 +560,23 @@ func _lamp_shadows() -> void:
 			continue
 		if not ol.has_meta("pax_rpg_lamp"):              # параметры — один раз: каждое присваивание пересчитывает свет
 			ol.set_meta("pax_rpg_lamp", true)
-			ol.light_size = 0.12                         # мягкий край тени фонаря
+			ol.light_size = 0.12 if _shadow_q() > 0 else 0.0   # мягкий край тени фонаря (PCSS); на низком — выкл.
 			ol.light_volumetric_fog_energy = _f("lamp_fog", 0.35)   # подсвечивает воздух рядом, а не туманный шар
+			ol.shadow_caster_mask &= ~LAMP_SKIP          # без LOD-копий и полотнищ (своё исключение каменного фонаря — остаётся)
 		# по расстоянию до героя, а не по кадру: тень огня за краем кадра всё равно лежит в кадре, а проверка «в кадре»
 		# от покачивания камеры включала и выключала тени — они прыгали. Яркость — базовая (без мерцания огня)
-		var d := ol.global_position.distance_to(hp)
+		var dh := ol.global_position.distance_to(hp)
+		var d := dh
 		if ol.shadow_enabled:
 			d -= 10.0                                    # запас: огонь с тенью держит её, пока не станет заметно дальше
+		# полотнища в тени огня — только когда герой в её радиусе (+1 м, отпускаем с +4 м): там тень огня и так
+		# перерисовывается каждый кадр, а дальше качание одного полотнища заставляло перерисовывать все 6 граней куба
+		var has_sway := (ol.shadow_caster_mask & SWAY_LAYER) != 0
+		if has_sway != (dh < ol.omni_range + (4.0 if has_sway else 1.0)):
+			if has_sway:
+				ol.shadow_caster_mask &= ~NEAR_ONLY
+			else:
+				ol.shadow_caster_mask |= NEAR_ONLY
 		var base_e: Variant = ol.get("base")
 		var e := float(base_e) if base_e != null else ol.light_energy
 		var seen := _reaches_view(ol, frustum)
@@ -526,7 +591,7 @@ func _lamp_shadows() -> void:
 		var want := i < n
 		lo.set_meta("pax_rpg_sh_want", want)
 	# тень не щёлкает: включается с нулевой силы и разгорается, гаснет плавно и только потом выключается
-	var dt := get_process_delta_time()
+	var dpf := _f("lamp_dp_far", 0.0)
 	for l: Array in lights:
 		var so := l[0] as OmniLight3D
 		if not is_instance_valid(so):
@@ -538,16 +603,48 @@ func _lamp_shadows() -> void:
 		if so.shadow_enabled and not w and not bool(so.get_meta("pax_rpg_in_view", true)):
 			so.shadow_enabled = false                      # свет ушёл из кадра — гасить тень плавно некому смотреть
 			continue
+		if so.shadow_enabled and not w and so.shadow_opacity <= 0.001:
+			so.shadow_enabled = false                      # уже погасла (или не успела разгореться)
+			continue
 		if so.shadow_enabled:
-			var far := clampf((so.global_position.distance_to(hp) - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
+			var dh := so.global_position.distance_to(hp)
+			var far := clampf((dh - 20.0) / 70.0, 0.0, 1.0)   # 20 м → 90 м
 			var bl := snappedf(lerpf(1.0, 3.0, far), 0.25)  # дальше — мягче (меньше ячейка атласа — без «лесенки»)
 			if not is_equal_approx(bl, so.shadow_blur):   # присваивание пересчитывает свет — только при смене ступени
 				so.shadow_blur = bl
-			var o := move_toward(so.shadow_opacity, (snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0), dt * 0.8)
-			if not is_equal_approx(o, so.shadow_opacity):
-				so.shadow_opacity = o
-			if not w and o <= 0.0:
-				so.shadow_enabled = false
+			var to := snappedf(lerpf(1.0, 0.55, far), 0.05) if w else 0.0
+			so.set_meta("pax_rpg_sh_to", to)
+			if not is_equal_approx(to, so.shadow_opacity) and not _sh_fading.has(so):
+				_sh_fading.append(so)                      # к цели — плавно, каждый кадр (_fade_shadows)
+			# lamp_dp_far > 0: дальше стольких метров от героя тень огня — две полусферы (2 прохода вместо 6 у куба;
+			# мягкая и бледная вдали, но на крупных плоских гранях полусферы чуть кривят тень) — по умолчанию выкл.
+			var dp := so.omni_shadow_mode == OmniLight3D.SHADOW_DUAL_PARABOLOID
+			var want_dp := dpf > 0.0 and dh > (dpf if dp else dpf + 5.0)
+			if want_dp != dp:
+				so.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID if want_dp else OmniLight3D.SHADOW_CUBE
+
+
+## Сила тени огня — к цели на 0.8 в секунду (от нуля до полной ~1.25 с), каждый кадр и только у тех, что в пути.
+## Раньше шаг считался от длины кадра (~0.013 с), а звался раз в 0.5 с: тень разгоралась и гасла около минуты,
+## и выбывшие из ближних огни столько же держали включённую тень (лишние проходы). Сила тени её не перерисовывает.
+func _fade_shadows(delta: float) -> void:
+	if _sh_fading.is_empty():
+		return
+	var keep: Array = []
+	for v: Variant in _sh_fading:
+		if not is_instance_valid(v):
+			continue
+		var so := v as OmniLight3D
+		if not so.shadow_enabled:
+			continue
+		var to := float(so.get_meta("pax_rpg_sh_to", 0.0))
+		var o := move_toward(so.shadow_opacity, to, minf(delta, 0.1) * 0.8)
+		so.shadow_opacity = o
+		if not is_equal_approx(o, to):
+			keep.append(so)
+		elif to <= 0.0 and not bool(so.get_meta("pax_rpg_sh_want", false)):
+			so.shadow_enabled = false
+	_sh_fading = keep
 
 
 ## Двигающиеся тела (герой, враги, жители) — динамические для отражённого света; новые (волны арены) — тоже.
@@ -555,7 +652,7 @@ func _lamp_shadows() -> void:
 ## дальше PART_FAR м от камеры прячутся (спрятанные не считаются), ближе — возвращаются. Прячем только свои
 ## (метка pax_rpg_culled), чужие скрытые не трогаем. Список узлов обновляется раз в 5 с.
 const PART_FAR := 45.0
-var _part_t := 0.0
+var _part_t := 0.25                  # не в одном кадре с _lamp_shadows (_shadow_t)
 var _parts: Array = []
 var _parts_age := 99.0
 

@@ -37,12 +37,14 @@ var cancelled := false             # локацию убрали посреди 
 func _slice() -> bool:
 	if cancelled or not is_instance_valid(root) or not root.is_inside_tree():
 		cancelled = true
+		_dress = null                                 # убранство держит город (city) — без этого оба не освобождаются
 		return false
 	if Time.get_ticks_usec() - _t0 > BUDGET_US:
 		await root.get_tree().process_frame
 		_t0 = Time.get_ticks_usec()
 		if not is_instance_valid(root) or not root.is_inside_tree():
 			cancelled = true
+			_dress = null
 			return false
 	return true
 
@@ -149,6 +151,8 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		if _movable(k):
 			pos = _off_road(pos)                         # реквизит не загораживает дорогу — к её краю
 		(groups[k] as Array).append([Transform3D(basis, pos), bool(d.get("c", false)), d.get("col", [])])
+	_dress = null                                     # убранство поставлено; оно держит ссылку на город — цикл ссылок
+	                                                  # RefCounted: город (с маской дорог, пакетами, материалами) не освобождался
 	print("[pax_rpg] load: city items placed, %d model groups" % groups.size())
 	for k: String in groups:
 		if not await _slice():
@@ -169,28 +173,66 @@ func build(m: PaxMod, parent: Node, data: Dictionary) -> void:
 		var l1 := k.trim_suffix(".glb") + "_lod1.glb"
 		var l2 := k.trim_suffix(".glb") + "_lod2.glb"
 		var lo := k.trim_suffix(".glb") + "_lo.glb"
-		if LOD_COPIES and mod.read_bytes(l1).size() > 0:
+		var sh := k.trim_suffix(".glb") + "_shadow.glb"
+		if SHADOW_PROXY and mod.read_bytes(sh).size() > 0:
+			# модель видна целой до LOD_MID и сама тень не бросает: тень ближе SHADOW_NEAR — от неё же (только тень,
+			# не для огней), дальше и для огней — от сваренной упрощённой копии без текстур (_shadow.glb, weld.mjs);
+			# за LOD_MID — копия _lod1 (её дыры там меньше пикселя), тоже без своей тени
+			_lod = 1
+			_vr = Vector2(0.0, LOD_MID if mod.read_bytes(l1).size() > 0 else FAR_DRAW)
+			_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_place(k, groups[k])
+			_lod = 2
+			_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			_copy_layer = GfxS.LOD_LAYER
+			_vr = Vector2(0.0, SHADOW_NEAR)
+			_place(k, groups[k])
+			_copy_layer = 0
+			_vr = Vector2(SHADOW_NEAR, FAR_DRAW)
+			_place(sh, groups[k])
+			if mod.read_bytes(l1).size() > 0:
+				_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				_copy_layer = GfxS.LOD_LAYER
+				_vr = Vector2(LOD_MID, FAR_DRAW)
+				_place(l1, groups[k])
+			_cast = -1
+			_lod = 0
+			_copy_layer = 0
+		elif LOD_COPIES and mod.read_bytes(l1).size() > 0:
 			# три уровня: вблизи (до LOD_NEAR) — модель, средняя даль (до LOD_MID) — _lod1 (~30 % граней),
 			# дальше — _lod2 (~12 %); у копий нет коллизий и окклюдеров (dev: make_lods.py)
 			var has2 := mod.read_bytes(l2).size() > 0
 			_lod = 1
 			_vr = Vector2(0.0, LOD_NEAR)
+			_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if LOD_SHADOW else -1
 			_place(k, groups[k])
 			_lod = 2
+			if LOD_SHADOW:                             # тень вблизи — от полной модели, дальше SHADOW_NEAR — от _lod1
+				_cast = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+				_vr = Vector2(0.0, SHADOW_NEAR)
+				_place(k, groups[k])                    # эту же копию видят тени огней (у них дальности нет)
+				_copy_layer = GfxS.LOD_LAYER
+				_vr = Vector2(SHADOW_NEAR, LOD_NEAR)
+				_place(l1, groups[k])
+				_cast = -1
+			_copy_layer = GfxS.LOD_LAYER               # копии — не в тенях огней (там их рисовали вместе с моделью)
 			_vr = Vector2(LOD_NEAR, LOD_MID if has2 else FAR_DRAW)
 			_place(l1, groups[k])
 			if has2:
 				_vr = Vector2(LOD_MID, FAR_DRAW)
 				_place(l2, groups[k])
 			_lod = 0
+			_copy_layer = 0
 		elif LOD_COPIES and not mod.read_bytes(lo).is_empty():
 			_lod = 1                                   # прежние копии _lo.glb: вблизи — модель, дальше LOD_NEAR — копия
 			_vr = Vector2(0.0, LOD_NEAR)
 			_place(k, groups[k])
 			_lod = 2
+			_copy_layer = GfxS.LOD_LAYER
 			_vr = Vector2(LOD_NEAR, FAR_DRAW)
 			_place(lo, groups[k])
 			_lod = 0
+			_copy_layer = 0
 		else:
 			_place(k, groups[k])
 		_lights(k, groups[k])
@@ -253,11 +295,45 @@ func _flush_batches() -> void:
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.cast_shadow = int(b.shadow)
+		if int(b.shadow) == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY:
+			mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED   # копия только для тени — не второй раз в отражённый свет
 		if float(b.vis) > 0.0:
 			mmi.visibility_range_end = float(b.vis)
 			mmi.visibility_range_end_margin = 4.0
 		root.add_child(mmi)
 	_batches.clear()
+
+
+## Простые сетки и материалы (столбы, верёвки, древки, доски вывесок) — общие на город: раньше у каждого столба свой
+## узел, своя сетка и свой материал того же цвета — отдельный вызов отрисовки в каждом проходе. Общие — в пакеты.
+## Граней по кругу — сколько нужно, чтобы край отличался от круга < 2 мм (у CylinderMesh по умолчанию 64).
+var _prims := {}
+var _plain_mats := {}
+
+
+func _cyl(top: float, bottom: float, h: float, seg: int, mat: Material) -> CylinderMesh:
+	var key := "%.3f|%.3f|%.2f|%d|%d" % [top, bottom, h, seg, mat.get_instance_id()]
+	if not _prims.has(key):
+		var cm := CylinderMesh.new()
+		cm.top_radius = top
+		cm.bottom_radius = bottom
+		cm.height = h
+		cm.radial_segments = seg
+		cm.rings = 0                                      # прямой бок — без поясов
+		cm.material = mat
+		_prims[key] = cm
+	return _prims[key]
+
+
+func _plain(col: Color, rough := 1.0, metal := 0.0) -> StandardMaterial3D:
+	var key := "%s|%.2f|%.2f" % [col.to_html(), rough, metal]
+	if not _plain_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = col
+		m.roughness = rough
+		m.metallic = metal
+		_plain_mats[key] = m
+	return _plain_mats[key]
 
 
 ## Земля: плоскость с шейдером (глина, кладка дорог и тропы по маске — shaders/ground.gdshader) и коробка-коллизия.
@@ -331,7 +407,7 @@ func _holed_plane(size: Vector2, center: Vector2, hc: Vector2, hr: float) -> Arr
 
 ## Картинка мода с мипмапами (без них плитка вдали рябит при движении камеры).
 func _tex(path: String, normal := false) -> Texture2D:
-	var t := mod.texture(path)
+	var t := Assets.tex(mod, path)                    # .dds рядом (BC7/BC5 с mip) — сразу он
 	if t == null:
 		return null
 	var img := t.get_image()
@@ -537,25 +613,14 @@ func _sign(sg: Array, pos: Vector3, ry: float) -> void:
 	n.position = pos
 	n.rotation.y = deg_to_rad(ry)
 	root.add_child(n)
-	var lac := StandardMaterial3D.new()
-	lac.albedo_color = Color(0.12, 0.05, 0.06)
-	lac.roughness = 0.35
-	var gold := StandardMaterial3D.new()
-	gold.albedo_color = Color(0.82, 0.62, 0.28)
-	gold.metallic = 1.0
-	gold.roughness = 0.35
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.2, 0.13, 0.09)
+	var lac := _plain(Color(0.12, 0.05, 0.06), 0.35)
+	var gold := _plain(Color(0.82, 0.62, 0.28), 0.35, 1.0)
+	var wood := _plain(Color(0.2, 0.13, 0.09))
+	var sb := Basis(Vector3.UP, deg_to_rad(ry))
 	for part: Array in [[Vector3(0.08, 2.6, 0.08), Vector3(-0.42, 1.3, 0), wood], [Vector3(0.08, 2.6, 0.08), Vector3(0.42, 1.3, 0), wood],
 			[Vector3(0.78, 1.62, 0.05), Vector3(0, 1.62, 0), gold], [Vector3(0.7, 1.54, 0.08), Vector3(0, 1.62, 0), lac],
 			[Vector3(1.0, 0.07, 0.1), Vector3(0, 2.55, 0), wood]]:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = part[0]
-		bm.material = part[2]
-		mi.mesh = bm
-		mi.position = part[1]
-		n.add_child(mi)
+		batch_box(part[0], sb, pos + sb * (part[1] as Vector3), part[2])   # стойки и доски — в пакеты города
 	for side: float in [1.0, -1.0]:
 		var k := Label3D.new()
 		k.text = str(sg[0])
@@ -596,34 +661,17 @@ func _laundry(l: Array, seed_v: int) -> void:
 	var b := Vector3(float(l[2]), 0, float(l[3]))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.25, 0.17, 0.11)
+	var wood := _plain(Color(0.25, 0.17, 0.11))
 	var top := float(l[4]) if l.size() > 4 else 2.3        # бельё над улицей — выше, от фасада к фасаду
 	var posts := not (l.size() > 5 and int(l[5]) == 0)
-	for p: Vector3 in ([a, b] if posts else []):
-		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.04
-		cm.bottom_radius = 0.055
-		cm.height = top + 0.15
-		cm.material = wood
-		mi.mesh = cm
-		mi.position = p + Vector3(0, (top + 0.15) * 0.5, 0)
-		root.add_child(mi)
+	for p: Vector3 in ([a, b] if posts else []):           # столбы и верёвка — в пакеты города (общие сетки)
+		batch_mesh(_cyl(0.04, 0.055, top + 0.15, 12, wood), Transform3D(Basis(), p + Vector3(0, (top + 0.15) * 0.5, 0)))
 	var dir := (b - a)
 	var length := dir.length()
-	var rope := MeshInstance3D.new()
-	var rm := CylinderMesh.new()
-	rm.top_radius = 0.012
-	rm.bottom_radius = 0.012
-	rm.height = length
-	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = Color(0.55, 0.45, 0.32)
-	rm.material = rmat
-	rope.mesh = rm
 	var basis := Basis.looking_at(dir.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5)
-	rope.transform = Transform3D(basis, a.lerp(b, 0.5) + Vector3(0, top, 0))
-	root.add_child(rope)
+	# верёвка — общая сетка длиной 1 м, длина — масштабом по её оси (бок прямой: нормали те же)
+	batch_mesh(_cyl(0.012, 0.012, 1.0, 6, _plain(Color(0.55, 0.45, 0.32))),
+		Transform3D(basis * Basis.from_scale(Vector3(1.0, length, 1.0)), a.lerp(b, 0.5) + Vector3(0, top, 0)))
 	var colors := [Color(0.72, 0.12, 0.14), Color(0.92, 0.86, 0.72), Color(0.18, 0.22, 0.45), Color(0.82, 0.6, 0.25),
 		Color(0.45, 0.3, 0.2), Color(0.55, 0.38, 0.26)]
 	var sh: Shader = mod.shader("shaders/flag.gdshader")
@@ -659,6 +707,7 @@ func _laundry(l: Array, seed_v: int) -> void:
 			m.set_shader_parameter("amp", 0.05)
 			m.set_shader_parameter("push", true)              # проходишь сквозь бельё — полотнища расступаются
 			mi.material_override = m
+			mi.layers = GfxS.SWAY_LAYER                       # качается в шейдере: в тенях огней — только у героя (gfx.gd)
 		mi.transform = Transform3D(Basis(Vector3.UP, yaw), a + dir.normalized() * (x + w * 0.5) + Vector3(0, top - h * 0.5 - 0.02, 0))
 		root.add_child(mi)
 		x += w + rng.randf_range(0.08, 0.3)
@@ -668,6 +717,8 @@ func _laundry(l: Array, seed_v: int) -> void:
 ## ободами качаются; посередине — тёплый свет (ночью ярче, daynight.gd). lanterns: [x1, z1, x2, z2, высота].
 var _lantern_mesh: SphereMesh
 var _rim_mesh: CylinderMesh
+var _lantern_sh: SphereMesh            # неподвижные копии для теней
+var _rim_sh: CylinderMesh
 
 
 ## Текстура бумажного фонаря-тётин: оранжевая бумага с волокнами, бамбуковые рёбра поперёк, тёмные
@@ -701,8 +752,10 @@ func _lantern_tex() -> ImageTexture:
 
 ## Фонарь-маятник в шейдере: наклон по ветру + порыв + лёгкая дрожь — то, что раньше считал Swing (скрипт) по
 ## каждому фонарю каждый кадр (сила ветра · 0.12 / ω², ω² = g / длина подвеса; дрожь 0.08 · 0.12 / ω²).
+## Вершины — сразу в мировых осях (world_vertex_coords): качание считается в мире, и обратно в оси сетки
+## переводить не нужно (прежде — inverse(MODEL_MATRIX) 4×4 в каждой вершине каждого прохода, ночью и в тенях огней).
 const LANTERN_SH := """shader_type spatial;
-render_mode diffuse_burley, specular_schlick_ggx;
+render_mode diffuse_burley, specular_schlick_ggx, world_vertex_coords;
 global uniform vec4 pax_rpg_wind;
 uniform bool paper = false;
 uniform sampler2D tex : source_color, filter_linear_mipmap;
@@ -719,14 +772,14 @@ void vertex() {
 	float ph = fract(sin(dot(pivot, vec3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.2832;
 	vec2 ang = (force + flutter) * 0.12 / k + 0.004 * vec2(sin(TIME * w + ph), cos(TIME * w * 0.9 + ph));
 	ang = clamp(ang, vec2(-0.45), vec2(0.45));
-	vec3 wv = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz - pivot;
+	vec3 wv = VERTEX - pivot;
 	float cx = cos(-ang.y);
 	float sx = sin(-ang.y);
 	float cz = cos(ang.x);
 	float sz = sin(ang.x);
 	wv = vec3(wv.x, cx * wv.y - sx * wv.z, sx * wv.y + cx * wv.z);
 	wv = vec3(cz * wv.x - sz * wv.y, sz * wv.x + cz * wv.y, wv.z);
-	VERTEX = (inverse(MODEL_MATRIX) * vec4(wv + pivot, 1.0)).xyz;
+	VERTEX = wv + pivot;
 }
 void fragment() {
 	if (paper) {
@@ -770,9 +823,13 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		paper.set_shader_parameter("tex", ptex)
 		paper.set_shader_parameter("paper", true)
 		paper_mats.append(paper)                          # мягко разгорается к ночи (daynight.gd → emission_energy)
+		# граней — 32×16 (было 64×32 по умолчанию: 4096 треугольников на шар 0.76 м, сотня фонарей в ячейке рынка —
+		# 160k в каждом проходе); край шара отличается от прежнего < 2 мм — меньше пикселя и вплотную
 		_lantern_mesh = SphereMesh.new()
 		_lantern_mesh.radius = 0.38
 		_lantern_mesh.height = 0.86
+		_lantern_mesh.radial_segments = 32
+		_lantern_mesh.rings = 16
 		_lantern_mesh.material = paper
 		var dark := ShaderMaterial.new()
 		dark.shader = _lantern_shader(false)
@@ -780,31 +837,30 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		_rim_mesh.top_radius = 0.2
 		_rim_mesh.bottom_radius = 0.2
 		_rim_mesh.height = 0.08
+		_rim_mesh.radial_segments = 24
+		_rim_mesh.rings = 0
 		_rim_mesh.material = dark
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.24, 0.16, 0.1)
+		# тень фонаря — от неподвижной простой копии: качание в шейдере (TIME) заставляло движок перерисовывать все
+		# 6 граней тени соседнего огня каждый кадр. Наклон фонаря на ветру — 1–3 см, копия чуть меньше (на 7 %) —
+		# качающийся шар не заходит в неё (без пятен самозатенения); в мягкой тени разницы не видно
+		var plain := _plain(Color(0.3, 0.15, 0.06))
+		_lantern_sh = SphereMesh.new()
+		_lantern_sh.radius = 0.38 * 0.93
+		_lantern_sh.height = 0.86 * 0.93
+		_lantern_sh.radial_segments = 16
+		_lantern_sh.rings = 8
+		_lantern_sh.material = plain
+		_rim_sh = _cyl(0.2 * 0.93, 0.2 * 0.93, 0.08, 12, plain)
+	var wood := _plain(Color(0.24, 0.16, 0.1))
 	var posts := not (l.size() > 6 and int(l[6]) == 0)    # 0 — верёвка от фасада к фасаду, без столбов
-	for p: Vector3 in ([a, b] if posts else []):
-		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.07
-		cm.bottom_radius = 0.09
-		cm.height = hgt + 0.3
-		cm.material = wood
-		mi.mesh = cm
-		mi.position = p + Vector3(0, (hgt + 0.3) * 0.5, 0)
-		root.add_child(mi)
+	for p: Vector3 in ([a, b] if posts else []):           # столбы и верёвка — в пакеты города (общие сетки)
+		batch_mesh(_cyl(0.07, 0.09, hgt + 0.3, 16, wood), Transform3D(Basis(), p + Vector3(0, (hgt + 0.3) * 0.5, 0)))
 	var dir := b - a
-	var rope := MeshInstance3D.new()
-	var rm := CylinderMesh.new()
-	rm.top_radius = 0.028                                 # верёвка видна: фонари не «плавают» в воздухе
-	rm.bottom_radius = 0.028
-	rm.height = dir.length()
-	rm.material = wood
-	rope.mesh = rm
-	rope.transform = Transform3D(Basis.looking_at(dir.normalized(), Vector3.UP) * Basis(Vector3.RIGHT, PI * 0.5),
-		a.lerp(b, 0.5) + Vector3(0, hgt, 0))
-	root.add_child(rope)
+	# верёвка видна: фонари не «плавают» в воздухе. Общая сетка длиной 1 м, длина — масштабом по её оси
+	batch_mesh(_cyl(0.028, 0.028, 1.0, 8, wood), Transform3D(Basis.looking_at(dir.normalized(), Vector3.UP)
+		* Basis(Vector3.RIGHT, PI * 0.5) * Basis.from_scale(Vector3(1.0, dir.length(), 1.0)), a.lerp(b, 0.5) + Vector3(0, hgt, 0)))
+	const OFF := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	const SH := GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	var n := maxi(2, int(dir.length() / 3.4))             # реже: ритм, а не облако шаров
 	for i: int in n:
 		var f := (i + 0.5) / n
@@ -813,11 +869,13 @@ func _lantern_line(l: Array, seed_v: int) -> void:
 		var swing_len := rng.randf_range(0.8, 1.25)         # длина подвеса — свой период у каждого фонаря
 		var sc := rng.randf_range(0.75, 1.25)
 		var cd := Color(pivot.x, pivot.y, pivot.z, swing_len)   # шейдеру — через INSTANCE_CUSTOM
-		batch_mesh(_lantern_mesh, Transform3D(Basis.from_scale(Vector3.ONE * sc), pivot + Vector3(0, -0.55 * sc, 0)),
-			GeometryInstance3D.SHADOW_CASTING_SETTING_ON, 0.0, cd)
+		var lx := Transform3D(Basis.from_scale(Vector3.ONE * sc), pivot + Vector3(0, -0.55 * sc, 0))
+		batch_mesh(_lantern_mesh, lx, OFF, 0.0, cd)
+		batch_mesh(_lantern_sh, lx, SH)
 		for y: float in [-0.12, -0.98]:
-			batch_mesh(_rim_mesh, Transform3D(Basis(), pivot + Vector3(0, y * sc, 0)),
-				GeometryInstance3D.SHADOW_CASTING_SETTING_ON, 0.0, cd)
+			var rx := Transform3D(Basis(), pivot + Vector3(0, y * sc, 0))
+			batch_mesh(_rim_mesh, rx, OFF, 0.0, cd)
+			batch_mesh(_rim_sh, rx, SH)
 	if l.size() > 5 and int(l[5]) == 0:
 		count += 1
 		return                                           # гирлянда без своего света (свет — у соседней): меньше огней в кадре
@@ -844,22 +902,27 @@ func _merchant(pos: Vector3, ry: float, seed_v: int) -> void:
 	root.add_child(m)
 	Assets.track("models/goblin/goblin_rigged.glb", m)
 	var ap := _find_player(m)
-	var src := Assets.model(mod, "models/goblin/idle.glb")
-	if ap != null and src != null:
-		var sa := _find_player(src)
+	if ap != null and _idle_lib == null:              # клип покоя — один на всех торговцев (раньше копия glb и клипа на каждого)
+		var src := Assets.model(mod, "models/goblin/idle.glb")
+		var sa: AnimationPlayer = _find_player(src) if src != null else null
 		if sa != null and sa.get_animation_list().size() > 0:
 			var an: Animation = sa.get_animation(sa.get_animation_list()[0]).duplicate()
 			an.loop_mode = Animation.LOOP_LINEAR
-			var lib := AnimationLibrary.new()
-			lib.add_animation("idle", an)
-			if not ap.has_animation_library("m"):
-				ap.add_animation_library("m", lib)
-			ap.play("m/idle")
-			ap.seek(rng.randf() * 2.0, true)
-			ap.speed_scale = rng.randf_range(0.85, 1.15)
-	if src != null:
-		src.free()
+			_idle_lib = AnimationLibrary.new()
+			_idle_lib.add_animation("idle", an)
+		if src != null:
+			src.free()
+	if ap != null and _idle_lib != null:
+		if not ap.has_animation_library("m"):
+			ap.add_animation_library("m", _idle_lib)
+		ap.play("m/idle")
+		ap.seek(rng.randf() * 2.0, true)
+		ap.speed_scale = rng.randf_range(0.85, 1.15)
+		_anim_track(ap, m, 1.5)
 	count += 1
+
+
+var _idle_lib: AnimationLibrary
 
 
 ## Листопад: с кроны каждого дерева медленно падают алые листья, кружатся, ветер сносит их (wind.gd: гуще в порыв).
@@ -933,6 +996,7 @@ func _animal(path: String, pos: Vector3, ry: float, sc: float, clips: Array, col
 			ap.play(str(clips[randi() % clips.size()]), 0.6)
 			t.wait_time = randf_range(6.0, 14.0))
 		m.add_child(t)
+		_anim_track(ap, m, 3.0 * sc)
 	if col.size() == 3:
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
@@ -960,24 +1024,17 @@ static func _find_player(n: Node) -> AnimationPlayer:
 func _flags(list: Array) -> void:
 	var tex := _tex("textures/gharn_flag.png")
 	var sh: Shader = mod.shader("shaders/flag.gdshader")
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.16, 0.1, 0.08)
-	wood.roughness = 0.8
-	var gold := StandardMaterial3D.new()
-	gold.albedo_color = Color(0.8, 0.6, 0.25)
-	gold.metallic = 1.0
-	gold.roughness = 0.35
-	var pole := CylinderMesh.new()
-	pole.top_radius = 0.05
-	pole.bottom_radius = 0.07
-	pole.height = 5.4
-	pole.material = wood
+	var wood := _plain(Color(0.16, 0.1, 0.08), 0.8)
+	var gold := _plain(Color(0.8, 0.6, 0.25), 0.35, 1.0)
+	var pole := _cyl(0.05, 0.07, 5.4, 16, wood)
 	var bar := BoxMesh.new()
 	bar.size = Vector3(1.45, 0.08, 0.08)
 	bar.material = wood
-	var tip := SphereMesh.new()
+	var tip := SphereMesh.new()                         # навершие 18 см: 16×8 граней (было 64×32 — 4096 треугольников)
 	tip.radius = 0.09
 	tip.height = 0.18
+	tip.radial_segments = 16
+	tip.rings = 8
 	tip.material = gold
 	var cloth := QuadMesh.new()
 	cloth.size = Vector2(1.25, 2.0)
@@ -996,14 +1053,13 @@ func _flags(list: Array) -> void:
 		root.add_child(n)
 		for part: Array in [[pole, Vector3(0, 2.7, 0)], [bar, Vector3(0, 5.05, 0)], [tip, Vector3(0, 5.45, 0)],
 				[tip, Vector3(0.74, 5.05, 0)], [tip, Vector3(-0.74, 5.05, 0)]]:
-			var mi := MeshInstance3D.new()
-			mi.mesh = part[0]
-			mi.position = part[1]
-			n.add_child(mi)
+			batch_mesh(part[0], t * Transform3D(Basis(), part[1] as Vector3))   # древко, перекладина, навершия — в пакеты
 		var c := MeshInstance3D.new()
 		c.mesh = cloth
 		c.material_override = mat
 		c.position = Vector3(0, 5.0 - 1.0, 0.07)
+		if mat != null:
+			c.layers = GfxS.SWAY_LAYER                    # качается в шейдере: в тенях огней — только у героя (gfx.gd)
 		n.add_child(c)
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()
@@ -1113,6 +1169,20 @@ func _occludes(path: String) -> bool:
 	return false
 
 
+## Коробка окклюдера постройки — строго внутри её стен: по стенам на высоте тела (_body_box — без крыш, свесов, навесов
+## и прилавков), ещё на 10 % уже, в высоту — 70 % модели (конёк и свесы крыши не заслоняют). Юрта круглая: коробка,
+## вписанная в круг (×0.7 — углы не выходят за стену). Прежняя (рамка модели × 0.8) у юрт торчала углами за стену,
+## у лавок закрывала просветы под навесами — модели за краями стен пропадали, и окклюзию выключили.
+func _occluder_box(path: String, parts: Array, aabb: AABB) -> AABB:
+	var bb := _body_box(parts)
+	if bb.size == Vector3.ZERO:
+		bb = AABB(aabb.position + aabb.size * 0.1, aabb.size * 0.8)
+	var k := 0.9 * (0.7 if path.get_file().begins_with("yurt") else 1.0)
+	var c := bb.get_center()
+	var sz := Vector3(bb.size.x * k, aabb.size.y * 0.7, bb.size.z * k)
+	return AABB(Vector3(c.x - sz.x * 0.5, aabb.position.y, c.z - sz.z * 0.5), sz)
+
+
 ## Окклюдер-коробка: рамка модели, ужатая shrink (крыши со свесами и проёмы не должны заслонять лишнего).
 func _occluder(t: Transform3D, box: AABB, shrink: Vector3) -> void:
 	if not GfxS.occlusion_on:                            # отсечение заслонённым выключено (location.json) — сотни узлов-
@@ -1176,11 +1246,12 @@ func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 	if sh == null or src == null:
 		return null
 	var m := ShaderMaterial.new()
-	m.shader = sh
+	var use_alpha := src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+	m.shader = sh if use_alpha else _foliage_opaque(sh)
 	if src.albedo_texture != null:
 		m.set_shader_parameter("albedo_tex", src.albedo_texture)
 	m.set_shader_parameter("albedo_col", src.albedo_color)
-	m.set_shader_parameter("use_alpha", src.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED)
+	m.set_shader_parameter("use_alpha", use_alpha)
 	var f := path.get_file()
 	if f.begins_with("grass_") or f.begins_with("plant_"):
 		m.set_shader_parameter("push", 0.35)              # трава и цветы раздвигаются героем
@@ -1199,6 +1270,17 @@ func _foliage_surface(path: String, mesh: Mesh, si: int) -> Material:
 	return m
 
 
+static var _fol_opaque: Shader
+
+
+## Шейдер ветра без альфа-среза (FOLIAGE_OPAQUE) — для непрозрачных поверхностей: глубина и тени без discard.
+static func _foliage_opaque(sh: Shader) -> Shader:
+	if _fol_opaque == null:
+		_fol_opaque = Shader.new()
+		_fol_opaque.code = sh.code.replace("shader_type spatial;", "shader_type spatial;\n#define FOLIAGE_OPAQUE")
+	return _fol_opaque
+
+
 ## Мелкий пропс → дальность, дальше которой не рисуется (0 — обычная модель, с тенью и всегда).
 func _small_prop(path: String) -> float:
 	for k: Array in [["grass_tuft", 40.0], ["grass_", 35.0], ["plant_", 40.0], ["mushrooms", 35.0], ["stone_small", 60.0],
@@ -1212,11 +1294,38 @@ func _small_prop(path: String) -> float:
 ## LOD-копии тяжёлых построек: <name>_lod1.glb (~30 % граней) — от LOD_NEAR до LOD_MID м, <name>_lod2.glb (~12 %) —
 ## дальше (pax_rpg/dev/blender/gharn/make_lods.py); прежние <name>_lo.glb — одна копия дальше LOD_NEAR. Материалы и
 ## текстуры копий — у основной (assets.gd → lod_base). У копий нет коллизий и окклюдеров — они у основной.
-const LOD_COPIES := true
+## Выкл. с 0.4.20Y: копии от make_lods.py (Decimate по несваренной сетке Meshy) выедали куски — дома вдали в дырах.
+## Без потерь их не пересобрать автоматически (pax_rpg/dev/assets/lods: швы UV у Meshy почти на каждом ребре, доски —
+## отдельные оболочки); постройки вдали — полной моделью.
+const LOD_COPIES := false
 const LOD_NEAR := 55.0
 const LOD_MID := 120.0
 var _lod := 0                                            # 0 — обычная, 1 — полная (ближе LOD_NEAR), 2 — лёгкая копия
 var _vr := Vector2.ZERO                                  # дальность показа этого уровня: от, до (м)
+var _copy_layer := 0                                     # слой копий (LOD-копии — GfxS.LOD_LAYER: не в тенях огней)
+var _cast := -1                                          # своя тень у этого уровня (-1 — как обычно)
+## Тень построек с LOD-копиями (требует решения автора, выкл.): ближе SHADOW_NEAR м — от полной модели, дальше — от
+## _lod1 (~30 % граней, только тень; сама модель видна как была). Каскады солнца 3–4 рисуют втрое меньше граней;
+## риск — пятна самозатенения там, где упрощённая копия выступает из стены на сантиметры.
+const LOD_SHADOW := false
+## Тени-заместители (0.4.21Y): у построек с <name>_shadow.glb тень дальше SHADOW_NEAR м и тень от огней — от сваренной
+## упрощённой копии (weld.mjs: точки сварены — дыр нет, отклонение у 99 % поверхности ≤ 1.5 см, вершин вчетверо меньше,
+## без UV и текстур); ближе — от самой модели. Модель видна целой до LOD_MID, дальше — _lod1.
+const SHADOW_PROXY := true
+const SHADOW_NEAR := 30.0
+const CELL_WIDE := 48.0
+const WIDE_TRIS := 5000
+
+
+static func _mesh_tris(mesh: Mesh) -> int:
+	var am := mesh as ArrayMesh
+	if am == null:
+		return 0
+	var t := 0
+	for si: int in am.get_surface_count():
+		var n := am.surface_get_array_index_len(si)
+		t += (n if n > 0 else am.surface_get_array_len(si)) / 3
+	return t
 
 
 ## Модель: её сетки (со своими сдвигами внутри модели) → MultiMesh на все места; коллизии — коробки.
@@ -1253,17 +1362,25 @@ func _place(path: String, list: Array) -> void:
 					(sm as BaseMaterial3D).cull_mode = BaseMaterial3D.CULL_BACK
 		# по ячейкам CELL м: у MultiMesh на весь город рамка на весь город — камера не отсекает ничего,
 		# и каждый каскад тени рисует всё заново. Ячейками — рисуется только то, что в кадре.
-		var cells := {}
-		for i: int in list.size():
-			var o: Vector3 = (list[i][0] as Transform3D).origin
-			var key := Vector2i(floori(o.x / CELL), floori(o.z / CELL))
-			if not cells.has(key):
-				cells[key] = []
-			(cells[key] as Array).append(i)
 		var small := _small_prop(path)
 		var fol := _foliage_mat(path, mesh)               # деревья, кусты, трава — качаются на ветру
 		var fol_mesh := _foliage_mesh(path, mesh)         # дуб: кора и крона — каждая со своим материалом ветра
-		for key: Vector2i in cells:
+		# лёгкие сетки без своей дальности (юрты, частокол, лавки, сено, знамёна) — ячейками CELL_WIDE: у 600 из 780
+		# ячеек было по 1–2 копии, а каждая ячейка — вызов отрисовки в каждом проходе; лишняя копия за кадром стоит
+		# сотни треугольников. Мелочь с дальностью — по-прежнему CELL (дальность считается от центра ячейки)
+		var cs := CELL_WIDE if _lod == 0 and small <= 0.0 and fol == null and fol_mesh == null and _mesh_tris(mesh) <= WIDE_TRIS \
+			else CELL
+		var cells := {}
+		for i: int in list.size():
+			var o: Vector3 = (list[i][0] as Transform3D).origin
+			var k24 := Vector2i(floori(o.x / CELL), floori(o.z / CELL))
+			var outer := absi(k24.x) * CELL > 96 or k24.y * CELL > 88 or (k24.y + 1) * CELL < -100   # слобода за стеной
+			var key := Vector3i(floori(o.x / cs), floori(o.z / cs), 1 if outer else 0)
+			if not cells.has(key):
+				cells[key] = []
+			(cells[key] as Array).append(i)
+		var house := BUILDINGS.any(func(b: String) -> bool: return path.contains(b)) and mesh.get_surface_count() > 0
+		for key: Vector3i in cells:
 			var ids: Array = cells[key]
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1273,7 +1390,9 @@ func _place(path: String, list: Array) -> void:
 				mm.set_instance_transform(j, (list[ids[j]][0] as Transform3D) * (pr[1] as Transform3D))
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
-			if BUILDINGS.any(func(b: String) -> bool: return path.contains(b)) and mesh.get_surface_count() > 0:   # постройки — детали камня и дерева
+			mi.set_meta("pax_rpg_src", path.get_file())        # чья это ячейка — для замера по моделям (rpg_perf vram)
+			var shadow_copy := _cast == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			if house and not shadow_copy:                  # постройки — детали камня и дерева (копии для тени — без них)
 				var hm := HouseDetail.material(mod, mesh.surface_get_material(0) as BaseMaterial3D)
 				if hm != null:
 					mi.material_override = hm
@@ -1296,11 +1415,17 @@ func _place(path: String, list: Array) -> void:
 				mi.visibility_range_begin_margin = 4.0
 				mi.visibility_range_end = _vr.y
 				mi.visibility_range_end_margin = 20.0 if _vr.y >= FAR_DRAW else 4.0
+				if _copy_layer != 0:
+					mi.layers = _copy_layer
 			else:                                         # дальше FAR_DRAW м всё равно в дымке — не рисуем
-				if absi(key.x) * CELL > 96 or key.y * CELL > 88 or (key.y + 1) * CELL < -100:
+				if key.z == 1:
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # слобода за стеной — силуэт без тени
 				mi.visibility_range_end = FAR_DRAW
 				mi.visibility_range_end_margin = 20.0
+			if _cast >= 0:
+				mi.cast_shadow = _cast as GeometryInstance3D.ShadowCastingSetting
+				if shadow_copy:
+					mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 			root.add_child(mi)
 	for e: Array in list:
 		count += 1
@@ -1336,8 +1461,9 @@ func _place(path: String, list: Array) -> void:
 			var sz := Vector2(bs.size.x, bs.size.z)
 			rects.append([Vector2(t.origin.x, t.origin.z), sz, Color(0.22, 0.27, 0.5)])
 	if not first and _lod != 2 and _occludes(path):                    # дома, юрты, стены — заслоняют то, что за ними (окклюзия)
+		var ob := _occluder_box(path, parts, aabb)
 		for e: Array in list:
-			_occluder(e[0] as Transform3D, aabb, Vector3(0.8, 0.85, 0.8))
+			_occluder(e[0] as Transform3D, ob, Vector3.ONE)
 	var pts: Array = []
 	for e: Array in list:
 		pts.append((e[0] as Transform3D).origin)
@@ -1454,7 +1580,16 @@ static var _grime_tex: ImageTexture
 static var _moss_tex: ImageTexture
 
 
+## GRIME выкл.: декали грязи никогда не появлялись в игре — у Decal нет visibility_range_end, присваивание падало
+## SCRIPT ERROR на первой же декали каждой группы (декаль оставалась вне дерева — утечка узла), остальные не ставились.
+## Картинка без них — та, что видел автор. Включить (true) — добавит ~300 декалей (дальность — distance_fade, 70 м):
+## решение автора, это и вид, и цена кадра.
+const GRIME := false
+
+
 func _grime(path: String, list: Array) -> void:
+	if not GRIME:
+		return
 	var f := path.get_file()
 	var moss := f.begins_with("rock_mossy") or f.begins_with("stone_") or f.begins_with("oak_")
 	var house := f.begins_with("house") or f.begins_with("yurt") or f.begins_with("tavern") or f.begins_with("guild") \
@@ -1488,7 +1623,9 @@ func _grime(path: String, list: Array) -> void:
 		d.lower_fade = 0.3
 		d.cull_mask = 0xFFFFF & ~(1 << 19)
 		d.modulate = Color(1, 1, 1, 0.75)
-		d.visibility_range_end = 70.0
+		d.distance_fade_enabled = true                # дальше 70 м не рисуется (у Decal — distance_fade, не visibility_range)
+		d.distance_fade_begin = 62.0
+		d.distance_fade_length = 8.0
 		root.add_child(d)
 		d.global_position = t.origin + Vector3(0, 0.2, 0)
 		d.rotation.y = randf() * TAU
@@ -1638,14 +1775,14 @@ func _block_mat(mat: String) -> StandardMaterial3D:
 		sm.uv1_scale = Vector3.ONE * 0.25
 	elif TEX_MATS.has(mat):
 		var tm: Array = TEX_MATS[mat]
-		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % tm[0])
-		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % tm[0])
+		var d := Assets.dds_tex(mod, "textures/arena/%s_diff.dds" % tm[0])
+		var n := Assets.dds_tex(mod, "textures/arena/%s_nor.dds" % tm[0])
 		sm.albedo_color = Color(0.62, 0.6, 0.58) if mat == "stone_dark" else Color.WHITE
 		if d != null:
-			sm.albedo_texture = ImageTexture.create_from_image(d)
+			sm.albedo_texture = d
 		if n != null:
 			sm.normal_enabled = true
-			sm.normal_texture = ImageTexture.create_from_image(n)
+			sm.normal_texture = n
 			sm.normal_scale = 1.2
 		sm.uv1_triplanar = true
 		sm.uv1_world_triplanar = true
@@ -1696,47 +1833,48 @@ func _amb(path: String, pos: Vector3, db: float, rng: float) -> void:
 	p.play(randf() * maxf(st.get_length() - 0.5, 0.0))
 
 
-var _swinger: Swing
+## Живые фигуры города (торговцы за прилавками, буйволы): анимацию ведёт один узел, как у жителей (npc.gd → _proc_tick).
+## Вне кадра и дальше HIDE м поза стоит — скелет не пересчитывается, и тени огней рядом не перерисовываются каждый кадр
+## (поза в скелете сдвигает сетку — для движка это движение в радиусе тени); дальше FAR м — 15 раз в секунду.
+var _anim_lod: AnimLod
 
 
-func _swing_node() -> Swing:
-	if _swinger == null:
-		_swinger = Swing.new()
-		_swinger.name = "LanternSwing"
-		root.add_child(_swinger)
-	return _swinger
+func _anim_track(ap: AnimationPlayer, body: Node3D, r: float) -> void:
+	if _anim_lod == null:
+		_anim_lod = AnimLod.new()
+		_anim_lod.name = "AnimLod"
+		root.add_child(_anim_lod)
+	ap.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
+	_anim_lod.items.append([ap, body, r, 0.0])
 
 
-## Фонари на верёвках — маятники: ветер (wind.gd → now) давит по своему направлению, в порыв сильнее; пружина
-## тянет обратно, затухание мягкое. У каждого своя длина подвеса (период) — гирлянда не машет в такт.
-## Дальше SWING_FAR м от камеры не считаются (замирают) — сотни фонарей стоят копейки.
-class Swing extends Node:
-	const SWING_FAR := 55.0
-	var items: Array = []                  # [Node3D, длина, угол Vector2, скорость Vector2]
-
-	func add(n: Node3D, length: float) -> void:
-		items.append([n, length, Vector2.ZERO, Vector2(randf_range(-0.2, 0.2), randf_range(-0.2, 0.2))])
+class AnimLod extends Node:
+	const FAR := 30.0
+	const HIDE := 90.0
+	var items: Array = []                  # [AnimationPlayer, Node3D, радиус шара в кадре, накопленное время]
 
 	func _process(delta: float) -> void:
 		var cam := get_viewport().get_camera_3d()
 		if cam == null:
 			return
 		var cp := cam.global_position
-		var w: Vector4 = preload("res://mods/pax_rpg/src/location/wind.gd").now
-		var force := Vector2(w.x, w.y) * (0.35 + 2.2 * w.w)
-		var t := Time.get_ticks_msec() * 0.001
+		var fr := cam.get_frustum()
 		for it: Array in items:
-			var n: Node3D = it[0]
-			if not is_instance_valid(n) or n.global_position.distance_squared_to(cp) > SWING_FAR * SWING_FAR:
+			var ap := it[0] as AnimationPlayer
+			var body := it[1] as Node3D
+			if not is_instance_valid(ap) or not is_instance_valid(body):
 				continue
-			var k := 9.8 / float(it[1])        # ω² маятника
-			var ang: Vector2 = it[2]
-			var vel: Vector2 = it[3]
-			var flutter := Vector2(sin(t * 1.7 + n.position.x), cos(t * 1.3 + n.position.z)) * 0.08
-			var acc := (force + flutter) * 0.12 - ang * k - vel * 0.9
-			vel += acc * delta
-			ang += vel * delta
-			ang = ang.limit_length(0.45)
-			it[2] = ang
-			it[3] = vel
-			n.rotation = Vector3(-ang.y, 0.0, ang.x)   # низ фонаря уходит по ветру (+x, +z мира; узел без поворота)
+			var acc := float(it[3]) + delta
+			var p := body.global_position + Vector3(0.0, 0.8, 0.0)
+			var d := p.distance_to(cp)
+			var seen := d < HIDE
+			if seen:
+				for pl: Plane in fr:
+					if pl.distance_to(p) > float(it[2]):
+						seen = false
+						break
+			if not seen or (d > FAR and acc < 1.0 / 15.0):
+				it[3] = acc                        # время копится — шаг клипа не дёрнется, когда фигура снова в кадре
+				continue
+			ap.advance(minf(acc, 0.5))
+			it[3] = 0.0

@@ -2,16 +2,16 @@
 	"$schema": "../../docs/modding/schemas/mod.schema.json",
 	"id": "pax_rpg",
 	"name": {
-		"en": "Pax RPG 0.2.10",
-		"ru": "Pax RPG 0.2.10"
+		"en": "Pax RPG 0.4.48Y",
+		"ru": "Pax RPG 0.4.48Y"
 	},
-	"version": "0.4.15Y",
+	"version": "0.4.48Y",
 	"api": 1,
 	"game_version": ">=0.28.0",
 	"authors": ["Babichev Maxim"],
 	"description": {
-		"en": "Prototype of an RPG in Pax Universe: the planet Yuruma instead of Earth, cities on the globe; a click on a city loads its location — a platform where a simple demon swordsman walks with WASD and draws his katana with F; the gate leads back to the world map. Scenario «Yuruma»: year 1047 of the Shattered Sky, five empires, own map of 420 provinces.",
-		"ru": "Прототип RPG в Pax Universe: планета Юрума вместо Земли, города на глобусе; щелчок по городу загружает его локацию — платформу, где простой демон-мечник ходит на WASD и достаёт катану на F; ворота возвращают на карту мира. Сценарий «Юрума»: 1047 год Эры Расколотого Неба, пять империй, своя карта из 420 провинций."
+		"en": "RPG on the planet Yuruma in Pax Universe: cities on the globe instead of Earth; a click on a city takes the hero into it. Gharn — a living steppe city with a bazaar, artisans' street, the Khan's palace and townsfolk with their own names and worries; the central arena with five stages of fights and an orc boss. Combo combat with block, parry, focus and ultimates. Scenario «Yuruma»: year 1047 of the Shattered Sky, five empires, own map of 420 provinces.",
+		"ru": "RPG на планете Юрума в Pax Universe: города на глобусе вместо Земли, щелчок по городу ведёт героя в него. Гхарн — живой степной город с базаром, Улицей Мастеров, дворцом Хана и жителями со своими именами и заботами; центральная арена с пятью этапами боёв и боссом-орком. Бой комбо с блоком, парированием, концентрацией и ультами. Сценарий «Юрума»: 1047 год Эры Расколотого Неба, пять империй, своя карта из 420 провинций."
 	},
 	"tags": ["rpg", "3d"],
 	"depends": [],

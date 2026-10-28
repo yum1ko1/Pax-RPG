@@ -79,10 +79,14 @@ func set_city(layout: Dictionary) -> void:
 	roads_rect = Rect2(float(mr[0]), float(mr[1]), float(mr[2]), float(mr[3])) if mr.size() >= 4 else ground
 	_roads_view.texture = roads
 	var mp: Variant = JSON.parse_string(mod.read_text(str(layout.get("map", "")))) if layout.has("map") else null
+	_art = {}
 	if mp is Dictionary:
 		zones = (mp as Dictionary).get("zones", [])
 		pois = (mp as Dictionary).get("pois", [])
 		kinds = (mp as Dictionary).get("kinds", {})
+		_art = (mp as Dictionary).get("art", {})
+	pin = Vector2(INF, INF)
+	_load_art()
 
 
 func has_city() -> bool:
@@ -90,8 +94,18 @@ func has_city() -> bool:
 
 
 func toggle() -> void:
-	visible = not visible and has_city()
+	set_open(not visible)
+
+
+## Открыть / закрыть: на запечённой карте мышь — карте (масштаб, перетаскивание, метка, подсказки).
+func set_open(on: bool) -> void:
+	visible = on and has_city()
+	if visible:
+		_center_on_hero()
+	mouse_filter = Control.MOUSE_FILTER_STOP if visible and _art_on() else Control.MOUSE_FILTER_IGNORE
+	_hover = ""
 	queue_redraw()
+	_ink.queue_redraw()
 
 
 func _process(_delta: float) -> void:
@@ -123,6 +137,9 @@ func _hex(c: String, a: float) -> Color:
 
 
 func _draw() -> void:
+	if _art_on():
+		_draw_art()
+		return
 	var sh := _sheet()
 	var vs: Vector2 = sh.vs
 	var s := float(sh.s)
@@ -163,6 +180,9 @@ func _draw() -> void:
 
 
 func _draw_ink() -> void:
+	if _art_on():
+		_draw_art_ink()
+		return
 	var sh := _sheet()
 	var vs: Vector2 = sh.vs
 	var s := float(sh.s)
@@ -307,3 +327,408 @@ func _legend(sh: Dictionary) -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED or what == NOTIFICATION_READY:
 		set_process(is_visible_in_tree())
+
+
+# ---------- запечённая карта (config/<город>_map.json → art): арт с подписями улиц, значки, легенда-фильтр ----------
+# Макет 1920×1080 (масштаб по высоте). Колесо — масштаб к курсору, ПКМ — двигать, ЛКМ — метка (её видят компас и
+# миникарта: static pin), L — легенда, Пробел — к герою, наведение на значок — подсказка.
+
+static var pin := Vector2(INF, INF)   # метка игрока на карте (мир x, z); INF — нет
+var _art: Dictionary = {}
+var _map_tex: Texture2D
+var _glyphs: Texture2D
+var _frame_tip: Texture2D
+var _div: Texture2D
+var _vign: GradientTexture2D
+var _f_sc: Font
+var _f_it: Font
+var _zoom := 1.0
+var _view := Vector2(-6, -8)          # мир в точке привязки экрана
+var _legend_on := true
+var _hidden := {}                     # вид места → скрыт фильтром легенды
+var _hover := ""
+var _drag := false
+var _press := Vector2.ZERO
+const ANCHOR := Vector2(830, 540)     # точка привязки вида (макет): левее середины — справа легенда
+const PPM := 5.2                      # px макета на метр при масштабе 1
+const LEG := Rect2(1570, 150, 300, 0) # легенда (x — от правого края: 1920 − 350)
+const KEYS_H := 46.0
+const IVORY := Color(0.945, 0.886, 0.769)
+const IVORY_DIM := Color(0.78, 0.69, 0.55)
+const GOLD := Color(0.84, 0.675, 0.384)
+const RED := Color(0.77, 0.125, 0.17)
+const KCOL := {"gate": Color8(120, 170, 200), "fight": Color8(196, 40, 52), "trade": Color8(200, 150, 60),
+	"rest": Color8(200, 150, 60), "craft": Color8(170, 110, 70), "power": Color8(140, 80, 160), "nature": Color8(90, 140, 90),
+	"beast": Color8(150, 120, 80), "home": Color8(130, 110, 90), "road": Color8(160, 120, 100)}
+
+
+func _art_on() -> bool:
+	return _map_tex != null
+
+
+func _load_art() -> void:
+	_map_tex = null
+	if _art.is_empty() or mod == null:
+		return
+	var lang := "ru" if mod.tr_key("pax_rpg_map_legend") == "Легенда" else "en"
+	var t := mod.texture(str(_art.get("map_" + lang, _art.get("map_ru", ""))))
+	if t == null:
+		return
+	var img := t.get_image()                              # мипмапы — при отдалении подписи не рябят
+	if img != null:
+		if img.is_compressed():
+			img.decompress()
+		img.generate_mipmaps()
+		t = ImageTexture.create_from_image(img)
+	_map_tex = t
+	_glyphs = mod.texture(str(_art.get("glyphs", "")))
+	_frame_tip = mod.texture("textures/inventory/frame_mini.png")
+	_div = mod.texture("textures/inventory/div_header.png")
+	if _f_sc == null:
+		_f_sc = _ff("fonts/cormorant_sc.ttf")
+		_f_it = _ff("fonts/cormorant_garamond_italic.ttf")
+	if _vign == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(0.03, 0.008, 0.016, 0.0))
+		g.add_point(0.62, Color(0.03, 0.008, 0.016, 0.0))
+		g.set_color(g.get_point_count() - 1, Color(0.03, 0.008, 0.016, 0.92))
+		_vign = GradientTexture2D.new()
+		_vign.gradient = g
+		_vign.fill = GradientTexture2D.FILL_RADIAL
+		_vign.fill_from = Vector2(0.5, 0.5)
+		_vign.fill_to = Vector2(1.05, 1.05)
+		_vign.width = 256
+		_vign.height = 256
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
+func _ff(path: String) -> Font:
+	var f := FontFile.new()
+	f.data = mod.read_bytes(path)
+	return f if not f.data.is_empty() else title_font
+
+
+func _s() -> float:
+	return get_viewport_rect().size.y / 1080.0
+
+
+## Мир (x, z) → экран.
+func _w2s(w: Vector2) -> Vector2:
+	return (ANCHOR + Vector2((get_viewport_rect().size.x / _s() - 1920.0) * 0.5, 0.0) + (w - _view) * PPM * _zoom) * _s()
+
+
+func _s2w(p: Vector2) -> Vector2:
+	return (p / _s() - ANCHOR - Vector2((get_viewport_rect().size.x / _s() - 1920.0) * 0.5, 0.0)) / (PPM * _zoom) + _view
+
+
+func _art_rect() -> Rect2:
+	var r: Array = _art.get("rect", [-132, -132, 264, 264])
+	return Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+
+
+func _center_on_hero() -> void:
+	if not _art_on():
+		return
+	_view = Vector2(-6, -8) if _zoom <= 1.0 else st.get("me", Vector2(-6, -8))   # весь город; приближено — к герою
+	_clamp_view()
+
+
+func _clamp_view() -> void:
+	var g := ground.grow(10.0)
+	_view = Vector2(clampf(_view.x, g.position.x, g.end.x), clampf(_view.y, g.position.y, g.end.y))
+
+
+func _legend_x() -> float:
+	return get_viewport_rect().size.x / _s() - 350.0
+
+
+## Значки мест, что есть на запечённой карте: [ключ, мир, номер значка, вид, крупный].
+func _markers() -> Array:
+	var out: Array = []
+	var mk: Dictionary = _art.get("markers", {})
+	var big: Array = _art.get("big", [])
+	for pv: Variant in pois:
+		var pd: Dictionary = pv
+		if mk.has(str(pd.key)):
+			out.append([str(pd.key), Vector2(float(pd.x), float(pd.z)), int(mk[str(pd.key)]), str(pd.kind), str(pd.key) in big])
+	return out
+
+
+func _gui_input(event: InputEvent) -> void:
+	if not visible or not _art_on():
+		return
+	var s := _s()
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			var before := _s2w(mb.position)
+			_zoom = clampf(_zoom * (1.15 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.15), 0.7, 2.6)
+			_view += before - _s2w(mb.position)               # масштаб — к курсору
+			_clamp_view()
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			_drag = mb.pressed
+		elif mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			_press = mb.position
+			if not _legend_click(mb.position / s):
+				var w := _s2w(mb.position)
+				pin = Vector2(INF, INF) if pin.x != INF and (_w2s(pin) - mb.position).length() < 16.0 * s else w
+		accept_event()
+		queue_redraw()
+		_ink.queue_redraw()
+	elif event is InputEventMouseMotion:
+		var mm: InputEventMouseMotion = event
+		if _drag:
+			_view -= mm.relative / (PPM * _zoom * s)
+			_clamp_view()
+		var best := ""
+		var bd := 22.0 * s
+		for m: Variant in _markers():
+			var ma: Array = m
+			if _hidden.get(str(ma[3]), false):
+				continue
+			var d := (_w2s(ma[1]) - mm.position).length()
+			if d < bd:
+				bd = d
+				best = str(ma[0])
+		_hover = best
+		accept_event()
+
+
+func _input(event: InputEvent) -> void:
+	if not visible or not _art_on() or not (event is InputEventKey):
+		return
+	var k: InputEventKey = event
+	if not k.pressed or k.echo:
+		return
+	if k.physical_keycode == KEY_L:
+		_legend_on = not _legend_on
+		get_viewport().set_input_as_handled()
+	elif k.physical_keycode == KEY_SPACE:
+		_zoom = maxf(_zoom, 1.3)
+		_view = st.get("me", _view)
+		_clamp_view()
+		get_viewport().set_input_as_handled()
+
+
+## Щелчок по строке легенды — скрыть / показать этот вид значков.
+func _legend_click(p: Vector2) -> bool:
+	if not _legend_on:
+		return false
+	var lx := _legend_x()
+	if p.x < lx or p.x > lx + LEG.size.x or p.y < LEG.position.y or p.y > LEG.position.y + 520.0:
+		return false
+	var y := LEG.position.y + 90.0
+	for kk: String in _legend_kinds():
+		if absf(p.y - y) < 20.0:
+			_hidden[kk] = not bool(_hidden.get(kk, false))
+			return true
+		y += 44.0
+	return true
+
+
+func _legend_kinds() -> Array:
+	var out: Array = []
+	for m: Variant in _markers():
+		var kd := str((m as Array)[3])
+		if not kd in out:
+			out.append(kd)
+	var order := ["gate", "fight", "trade", "rest", "craft", "power", "nature", "beast", "home", "road"]
+	out.sort_custom(func(a: String, b: String) -> bool: return order.find(a) < order.find(b))
+	return out
+
+
+func _draw_art() -> void:
+	_roads_view.visible = false
+	var vs := get_viewport_rect().size
+	draw_rect(Rect2(Vector2.ZERO, vs), Color8(12, 4, 6))
+	var ar := _art_rect()
+	var a := _w2s(ar.position)
+	var b := _w2s(ar.end)
+	draw_texture_rect(_map_tex, Rect2(a, b - a), false)
+	draw_texture_rect(_vign, Rect2(Vector2.ZERO, vs), false)
+
+
+## Буквы вразрядку (заголовки): x — левый край или середина (center).
+func _spaced(ci: CanvasItem, p: Vector2, txt: String, f: Font, fs: int, col: Color, sp: float, center := false, outline := 0) -> void:
+	var w := 0.0
+	for ch: String in txt:
+		w += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sp
+	w -= sp
+	var x := p.x - w * 0.5 if center else p.x
+	for ch: String in txt:
+		if outline > 0:
+			ci.draw_string_outline(f, Vector2(x, p.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, outline, Color(0.04, 0.01, 0.015, 0.85))
+		ci.draw_string(f, Vector2(x, p.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+		x += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + sp
+
+
+## Ромб места (как на запечённой миникарте): тень, тёмная заливка, золотой кант, кант цвета вида, значок.
+func _marker(c: Vector2, idx: int, kind: String, sz: float, hl := false) -> void:
+	var r := sz * 0.62
+	_ink.draw_circle(c + Vector2(0, r * 0.35), r * 1.05, Color(0, 0, 0, 0.35))
+	var dm := PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)])
+	_ink.draw_colored_polygon(dm, Color8(24, 8, 10, 235))
+	_ink.draw_polyline(dm + PackedVector2Array([dm[0]]), Color(1.0, 0.86, 0.59) if hl else GOLD, 3.0 if hl else 2.0, true)
+	var i := r - sz * 0.18
+	var dm2 := PackedVector2Array([c + Vector2(0, -i), c + Vector2(i, 0), c + Vector2(0, i), c + Vector2(-i, 0)])
+	_ink.draw_polyline(dm2 + PackedVector2Array([dm2[0]]), Color(KCOL.get(kind, Color8(120, 40, 40)), 0.8), 1.0, true)
+	if _glyphs != null:
+		var cols := int(_art.get("glyph_cols", 5))
+		var cell := float(_glyphs.get_width()) / cols
+		var src := Rect2((idx % cols) * cell, (idx / cols) * cell, cell, cell)
+		var gs := sz * 0.74
+		_ink.draw_texture_rect_region(_glyphs, Rect2(c - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), src)
+
+
+func _draw_art_ink() -> void:
+	var s := _s()
+	var vs := get_viewport_rect().size
+	_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var mk := _markers()
+	for m: Variant in mk:                                  # значки мест
+		var ma: Array = m
+		if _hidden.get(str(ma[3]), false):
+			continue
+		_marker(_w2s(ma[1]), int(ma[2]), str(ma[3]), (34.0 if bool(ma[4]) else 28.0) * s * clampf(sqrt(_zoom), 0.85, 1.35),
+			str(ma[0]) == _hover)
+	for e: Variant in st.get("enemies", []):              # враги
+		var p := _w2s((e as Dictionary).pos)
+		var dm := PackedVector2Array([p + Vector2(0, -6) * s, p + Vector2(6, 0) * s, p + Vector2(0, 6) * s, p + Vector2(-6, 0) * s])
+		_ink.draw_colored_polygon(dm, RED)
+		_ink.draw_polyline(dm + PackedVector2Array([dm[0]]), Color(0.08, 0.0, 0.0), 1.0, true)
+	if pin.x != INF:                                       # метка игрока
+		var pp := _w2s(pin)
+		_ink.draw_line(pp, pp + Vector2(0, -22) * s, GOLD, 2.0 * s, true)
+		var fl := PackedVector2Array([pp + Vector2(0, -22) * s, pp + Vector2(14, -17) * s, pp + Vector2(0, -12) * s])
+		_ink.draw_colored_polygon(fl, RED)
+		_ink.draw_polyline(fl + PackedVector2Array([fl[0]]), GOLD, 1.2 * s, true)
+		_ink.draw_circle(pp, 3.0 * s, GOLD)
+	var me: Vector2 = st.get("me", Vector2.ZERO)          # герой: конус взгляда камеры и стрелка по телу
+	var hp := _w2s(me)
+	var yaw := float(st.get("yaw", 0.0))
+	var cone := PackedVector2Array([hp])
+	for i: int in 11:
+		var an := -yaw - 0.5 + i * 0.1
+		cone.append(hp + Vector2(sin(an), -cos(an)) * 60.0 * s)
+	_ink.draw_colored_polygon(cone, Color(1.0, 0.86, 0.63, 0.2))
+	var body := float(st.get("body_yaw", yaw))
+	var arrow := PackedVector2Array()
+	for v: Vector2 in [Vector2(0, -13), Vector2(9, 10), Vector2(0, 5), Vector2(-9, 10)]:
+		arrow.append(hp + v.rotated(-body) * s)
+	_ink.draw_colored_polygon(arrow, Color(1.0, 0.91, 0.7))
+	_ink.draw_polyline(arrow + PackedVector2Array([arrow[0]]), Color(0.35, 0.08, 0.08), 1.5 * s, true)
+	_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
+	var W := vs.x / s
+	var H := 1080.0
+	# заголовок — город вразрядку, под ним — золотой разделитель
+	_spaced(_ink, Vector2(70, 78), str(st.get("place", "")).to_upper(), _f_sc, 46, Color(0.965, 0.886, 0.73), 10.0, false, 6)
+	if _div != null:
+		_ink.draw_texture_rect(_div, Rect2(52, 92, 300, 30), false)
+	# компас справа сверху: север всегда вверху
+	var cc := Vector2(W - 180.0, 80.0)
+	_ink.draw_arc(cc, 30.0, 0.0, TAU, 48, Color8(150, 104, 56), 1.0, true)
+	var nd := PackedVector2Array([cc + Vector2(0, -26), cc + Vector2(6, 0), cc + Vector2(0, 26), cc + Vector2(-6, 0)])
+	_ink.draw_colored_polygon(nd, Color8(150, 30, 36))
+	_ink.draw_polyline(nd + PackedVector2Array([nd[0]]), GOLD, 1.2, true)
+	_spaced(_ink, Vector2(cc.x, cc.y - 36.0), _north(), _f_sc, 20, GOLD, 0.0, true)
+	if _legend_on:
+		_draw_art_legend(mk)
+	if _hover != "":
+		_draw_tip(mk)
+	# строка клавиш внизу
+	_ink.draw_rect(Rect2(0, H - KEYS_H, W, KEYS_H), Color8(8, 2, 4, 210))
+	_ink.draw_line(Vector2(0, H - KEYS_H), Vector2(W, H - KEYS_H), Color8(120, 84, 48), 1.0)
+	var keys := [[mod.tr_key("pax_rpg_key_lmb"), "pax_rpg_map_key_pin"], [mod.tr_key("pax_rpg_key_wheel"), "pax_rpg_map_key_zoom"],
+		[mod.tr_key("pax_rpg_key_rmb"), "pax_rpg_map_key_pan"], ["L", "pax_rpg_map_key_legend"],
+		[mod.tr_key("pax_rpg_key_space"), "pax_rpg_map_key_center"], ["M", "pax_rpg_map_key_close"]]
+	var tot := 0.0
+	for kv: Variant in keys:
+		tot += _f_sc.get_string_size(str((kv as Array)[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 26.0
+		tot += title_font.get_string_size(mod.tr_key(str((kv as Array)[1])), HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 36.0
+	var x := (W - tot) * 0.5
+	for kv: Variant in keys:
+		var cap := str((kv as Array)[0])
+		var cw := _f_sc.get_string_size(cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 18.0
+		_ink.draw_rect(Rect2(x, H - 34.0, cw, 22.0), GOLD, false, 1.0)
+		_ink.draw_string(_f_sc, Vector2(x + 9.0, H - 17.0), cap, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, IVORY)
+		x += cw + 8.0
+		var lab := mod.tr_key(str((kv as Array)[1]))
+		_ink.draw_string(title_font, Vector2(x, H - 17.0), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color8(200, 176, 140))
+		x += title_font.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 36.0
+
+
+func _north() -> String:
+	return "С" if mod.tr_key("pax_rpg_map_legend") == "Легенда" else "N"
+
+
+func _draw_art_legend(mk: Array) -> void:
+	var lx := _legend_x()
+	var ly := LEG.position.y
+	var lw := LEG.size.x
+	var kinds_l := _legend_kinds()
+	var lh := 90.0 + kinds_l.size() * 44.0 + 6.0 + 26.0 + 3.0 * 36.0
+	_ink.draw_rect(Rect2(lx, ly, lw, lh), Color8(14, 5, 7, 200))
+	_ink.draw_rect(Rect2(lx, ly, lw, lh), Color8(150, 104, 56), false, 1.0)
+	_ink.draw_rect(Rect2(lx + 4, ly + 4, lw - 8, lh - 8), Color8(90, 60, 34), false, 1.0)
+	_spaced(_ink, Vector2(lx + lw * 0.5, ly + 38.0), mod.tr_key("pax_rpg_map_legend").to_upper(), _f_sc, 22, Color8(240, 220, 180), 5.0, true)
+	if _div != null:
+		_ink.draw_texture_rect(_div, Rect2(lx + 20, ly + 46, 260, 24), false)
+	var cnt := {}
+	for m: Variant in mk:
+		cnt[str((m as Array)[3])] = int(cnt.get(str((m as Array)[3]), 0)) + 1
+	var y := ly + 90.0
+	for kk: String in kinds_l:
+		var off := bool(_hidden.get(kk, false))
+		var idx := 0
+		for m: Variant in mk:
+			if str((m as Array)[3]) == kk:
+				idx = int((m as Array)[2])
+				break
+		_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_marker(Vector2(lx + 34.0, y) * _s(), idx, kk, 26.0 * _s())
+		_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s(), _s()))
+		var col := IVORY if not off else Color(IVORY_DIM, 0.6)
+		_ink.draw_string(title_font, Vector2(lx + 60.0, y + 6.0), mod.tr_key("pax_rpg_map_k_" + kk), HORIZONTAL_ALIGNMENT_LEFT, lw - 120.0, 18, col)
+		_ink.draw_string(title_font, Vector2(lx + lw - 84.0, y + 6.0), str(cnt.get(kk, 0)), HORIZONTAL_ALIGNMENT_RIGHT, 40.0, 18, Color8(180, 150, 110))
+		_ink.draw_rect(Rect2(lx + lw - 34.0, y - 8.0, 16.0, 16.0), GOLD, false, 1.0)
+		if not off:
+			_ink.draw_polyline(PackedVector2Array([Vector2(lx + lw - 31.0, y), Vector2(lx + lw - 27.0, y + 5.0),
+				Vector2(lx + lw - 21.0, y - 5.0)]), GOLD, 2.0, true)
+		y += 44.0
+	y += 6.0
+	_ink.draw_line(Vector2(lx + 20.0, y), Vector2(lx + lw - 20.0, y), Color8(110, 76, 44), 1.0)
+	y += 26.0
+	_ink.draw_colored_polygon(PackedVector2Array([Vector2(lx + 34, y - 10), Vector2(lx + 41, y + 7), Vector2(lx + 34, y + 3),
+		Vector2(lx + 27, y + 7)]), Color(1.0, 0.91, 0.7))
+	_ink.draw_string(title_font, Vector2(lx + 60.0, y + 6.0), mod.tr_key("pax_rpg_map_me"), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, IVORY)
+	y += 36.0
+	_ink.draw_colored_polygon(PackedVector2Array([Vector2(lx + 34, y - 6), Vector2(lx + 40, y), Vector2(lx + 34, y + 6),
+		Vector2(lx + 28, y)]), RED)
+	_ink.draw_string(title_font, Vector2(lx + 60.0, y + 6.0), mod.tr_key("pax_rpg_map_foe"), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, IVORY)
+	y += 36.0
+	_ink.draw_line(Vector2(lx + 34, y + 6), Vector2(lx + 34, y - 12), GOLD, 2.0, true)
+	_ink.draw_colored_polygon(PackedVector2Array([Vector2(lx + 34, y - 12), Vector2(lx + 46, y - 8), Vector2(lx + 34, y - 4)]), RED)
+	_ink.draw_string(title_font, Vector2(lx + 60.0, y + 6.0), mod.tr_key("pax_rpg_map_pin"), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, IVORY)
+
+
+## Подсказка у значка под курсором: название, вид места, сколько идти.
+func _draw_tip(mk: Array) -> void:
+	for m: Variant in mk:
+		var ma: Array = m
+		if str(ma[0]) != _hover:
+			continue
+		var q := _w2s(ma[1]) / _s()
+		var r := Rect2(q + Vector2(30, 10), Vector2(340, 118))
+		if r.end.x > _legend_x() - 10.0 and _legend_on:
+			r.position.x = q.x - 30.0 - r.size.x
+		if _frame_tip != null:
+			_ink.draw_texture_rect(_frame_tip, r, false)
+		else:
+			_ink.draw_rect(r, Color8(14, 5, 7, 230))
+		_ink.draw_string(title_font, r.position + Vector2(24, 40), mod.tr_key(str(ma[0])), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 26, IVORY)
+		_ink.draw_string(_f_it, r.position + Vector2(24, 66), mod.tr_key("pax_rpg_map_k_" + str(ma[3])), HORIZONTAL_ALIGNMENT_LEFT,
+			r.size.x - 48.0, 18, Color8(200, 170, 130))
+		var me: Vector2 = st.get("me", Vector2.ZERO)
+		_ink.draw_string(title_font, r.position + Vector2(24, 94), mod.tr_key("pax_rpg_map_dist") % int((ma[1] as Vector2).distance_to(me)),
+			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 18, Color8(240, 190, 100))
+		return

@@ -231,20 +231,21 @@ func _show_gfx(on: bool) -> void:
 
 # ---------- «Графика» ----------
 
-## Качество одной кнопкой: значения настроек (ключи gfx.gd; vol_fog — ползунок объёмного тумана).
+## Качество одной кнопкой: значения настроек (ключи gfx.gd; vol_fog — ползунок объёмного тумана; grass_distance /
+## grass_far — дальность травы, м: на Low трава дальше 22 м — только дальние карточки; со следующего входа в город).
 const PRESETS := {
 	"low": {"gi": false, "ssil": false, "ssao": false, "ssr": false, "aa": "fsr2", "fsr_scale": 0.77, "lamp_shadows_n": 8.0,
-		"glow": 0.3, "lens_sharpen": 0.3, "cam_blur": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0,
-		"vol_fog": 0.0, "shaders": 0.0},
-	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 16.0,
-		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.25, "flare": true, "auto_exposure": true, "grass_density": 4.0,
-		"vol_fog": 0.3, "shaders": 0.6},
-	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 32.0,
-		"glow": 0.4, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 6.0,
-		"vol_fog": 0.5, "shaders": 0.85},
-	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 40.0,
-		"glow": 0.45, "lens_sharpen": 0.3, "cam_blur": 0.35, "flare": true, "auto_exposure": true, "grass_density": 9.0,
-		"vol_fog": 0.6, "shaders": 1.0},
+		"glow": 0.3, "lens_sharpen": 0.0, "flare": true, "auto_exposure": false, "grass_density": 2.0, "grass_distance": 22.0, "grass_far": 60.0,
+		"vol_fog": 0.0, "shaders": 0.0, "shadow_q": 0.0},
+	"mid": {"gi": false, "ssil": false, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 12.0,
+		"glow": 0.4, "lens_sharpen": 0.3, "flare": true, "auto_exposure": true, "grass_density": 4.0, "grass_distance": 30.0, "grass_far": 80.0,
+		"vol_fog": 0.3, "shaders": 0.6, "shadow_q": 1.0},
+	"high": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 16.0,
+		"glow": 0.4, "lens_sharpen": 0.3, "flare": true, "auto_exposure": true, "grass_density": 6.0, "grass_distance": 40.0, "grass_far": 100.0,
+		"vol_fog": 0.5, "shaders": 0.85, "shadow_q": 2.0},
+	"ultra": {"gi": true, "ssil": true, "ssao": true, "ssr": true, "aa": "taa", "fsr_scale": 1.0, "lamp_shadows_n": 24.0,
+		"glow": 0.45, "lens_sharpen": 0.3, "flare": true, "auto_exposure": true, "grass_density": 9.0, "grass_distance": 45.0, "grass_far": 110.0,
+		"vol_fog": 0.6, "shaders": 1.0, "shadow_q": 2.0},
 }
 
 
@@ -290,7 +291,7 @@ func _fill_gfx() -> void:
 	_choice("pax_rpg_gfx_upscale", "upscale", [["native", "pax_rpg_gfx_up_native"], ["quality", "pax_rpg_gfx_up_quality"],
 		["balanced", "pax_rpg_gfx_up_balanced"], ["performance", "pax_rpg_gfx_up_performance"]], str(_gfx_cfg.get("upscale", "native")))
 	_gslider("pax_rpg_gfx_scale", "fsr_scale", float(_gfx_cfg.get("fsr_scale", 1.0)), 0.5, 1.0, 0.01)
-	_gslider("pax_rpg_gfx_lamps", "lamp_shadows_n", float(_gfx_cfg.get("lamp_shadows_n", 40.0)), 0.0, 40.0, 4.0)
+	_gslider("pax_rpg_gfx_lamps", "lamp_shadows_n", float(_gfx_cfg.get("lamp_shadows_n", 16.0)), 0.0, 40.0, 4.0)
 	_slider(_mod.tr_key("pax_rpg_set_volfog"), "vol_fog", 0.5, 0.0, 1.0, func(v: float) -> void:
 		fog_changed.emit(v), _gfx_rows)
 	_gslider("pax_rpg_gfx_shaders", "shaders", float(_gfx_cfg.get("shaders", 1.0)), 0.0, 1.0, 0.01)

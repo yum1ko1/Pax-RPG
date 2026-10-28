@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pax-images": {
+      "command": "python",
+      "args": ["pax_rpg/dev/openai/openai_image_mcp.py"],
+      "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY:-}"
+      }
+    }
+  }
+}

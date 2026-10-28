@@ -16,17 +16,22 @@ const SCRIPT := [
 	[530, "lmb"], [546, "lmb"],
 ]
 const END := 600
-const CITY_END := 1100              # потом — город Гхарн: прогулка по Тракту, скриншоты
+const CITY_END := 1100              # потом — город Гхарн: прогулка по Тракту, скриншоты (только с --city: на программном
+                                    # OpenGL в CI одна стройка Гхарна идёт ~30 мин)
 
 var frame := 0
 var mod: Node
 var out_dir := ""
+var city := false
+var _open_arena: Callable
 
 
 func _initialize() -> void:
 	for a: String in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out_dir = a.trim_prefix("--out=")
+		elif a == "--city":
+			city = true
 	root.size = Vector2i(1920, 1080)
 	var main_script := load("res://mods/pax_rpg/main.gd") as GDScript
 	if main_script == null:
@@ -38,17 +43,20 @@ func _initialize() -> void:
 	root.add_child(mod)
 	mod.call("_mod_loaded")
 	var pax := root.get_node_or_null("Pax")
-	var items: Dictionary = pax.get("menu_items") if pax != null else {}
-	if not items.has("pax_rpg_test"):
-		print("smoke: FAIL нет пункта меню pax_rpg_test")
+	# Арена открывается командой консоли rpg_arena (пункт меню «Тест: арена» убран из меню в 0.4.x).
+	var commands: Dictionary = pax.get("commands") if pax != null else {}
+	if not commands.has("rpg_arena"):
+		print("smoke: FAIL нет команды rpg_arena")
 		quit(1)
 		return
-	(items["pax_rpg_test"] as Callable).call()
+	_open_arena = commands["rpg_arena"] as Callable   # на первом кадре: мод уже в дереве (get_tree() не null)
 	process_frame.connect(_tick)
 
 
 func _tick() -> void:
 	frame += 1
+	if frame == 1:
+		_open_arena.call(PackedStringArray())
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	for step: Array in SCRIPT:
 		if int(step[0]) == frame:
@@ -68,6 +76,10 @@ func _tick() -> void:
 			if img != null:
 				img.save_png(out_dir.path_join("arena.png"))
 				print("smoke: скриншот ", out_dir.path_join("arena.png"))
+		if not city:
+			print("smoke: ok")
+			quit(0)
+			return
 		loc.call("build", {"id": "gharn"})
 		print("smoke: город Гхарн построен")
 	if frame == END + 40:

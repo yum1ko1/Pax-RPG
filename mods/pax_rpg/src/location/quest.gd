@@ -45,8 +45,9 @@ static func finish(mod: PaxMod) -> void:
 
 static func relation(mod: PaxMod, city: String, idx: int, def: int) -> int:
 	var all: Variant = mod.get_setting("npc_rel", {})
-	if all is Dictionary and (all as Dictionary).get(city, {}) is Dictionary:
-		return int(((all as Dictionary)[city] as Dictionary).get(str(idx), def))
+	var c: Variant = (all as Dictionary).get(city, {}) if all is Dictionary else {}
+	if c is Dictionary:
+		return int((c as Dictionary).get(str(idx), def))
 	return def
 
 

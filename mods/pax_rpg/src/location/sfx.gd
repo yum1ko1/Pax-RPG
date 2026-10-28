@@ -103,9 +103,9 @@ func _place(p: AudioStreamPlayer3D) -> void:
 func hero(cfg: Dictionary, at: Node3D) -> void:
 	_at = at
 	if str(cfg.get("sfx_steps", "")) == "heel":
-		for p: Node in [_step, _sand]:
-			if p != null:
-				p.queue_free()
+		for p: Variant in [_step, _sand]:               # без типа — см. location.gd clear()
+			if is_instance_valid(p):
+				(p as Node).queue_free()
 		_step = _rand(_mod, "sounds/heel_step_%d.wav", 10, 0.06, -9.0)    # нарезка «на каблуках по каменному полу»
 		_sand = _rand(_mod, "sounds/heel_soft_%d.wav", 10, 0.08, -9.0)    # тот же каблук глуше + хруст песка
 		_land_db = -9.0

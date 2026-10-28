@@ -11,3 +11,4 @@ tools/ci/project/stubs/
 tools/ci/project/.godot/
 pax_rpg/dev/models_graded/
 pax_rpg/dev/models_src/gharn/central/central_plaza.glb
+pax_rpg/reference/openai/

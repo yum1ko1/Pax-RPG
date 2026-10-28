@@ -38,6 +38,7 @@ const FLAT_OUT := 27.0                       # куда выходит геро�
 var _depth := DEPTH
 var _flat := false
 var fighting := false
+var last_result := ""                        # чем кончился последний бой: won / lost / left (строка боя в лог)
 var _root: Node3D                             # трибуны со зрителями, решётки
 var _crowd: Node3D
 var _gates: Node3D
@@ -79,6 +80,13 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	_fade_label.add_theme_font_size_override("font_size", 34)
 	_fade_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.92, 0.0))
 	_fade.add_child(_fade_label)
+
+
+## Затемнение с подписью этапа живёт в интерфейсе локации (ui), а не под ареной: уходит вместе с ареной — раньше
+## каждый вход в город оставлял на локации ещё один невидимый ColorRect с Label.
+func _exit_tree() -> void:
+	if is_instance_valid(_fade):
+		_fade.queue_free()
 
 
 ## Выбранный этап (0…4).
@@ -162,6 +170,7 @@ func start() -> void:
 
 
 func _win() -> void:
+	last_result = "won"
 	fighting = false
 	_foes.clear()
 	var i := stage()
@@ -178,6 +187,7 @@ func _win() -> void:
 func leave(lost := false) -> void:
 	if _busy or (not fighting and _root.get_child_count() == 0):
 		return
+	last_result = "lost" if lost else "left"
 	var out := func() -> void:
 		for f: Variant in _foes:
 			if is_instance_valid(f):
@@ -235,6 +245,10 @@ func _fill_crowd(on: bool) -> void:
 			idle = ap.get_animation(ap.get_animation_list()[0]).duplicate()
 			idle.loop_mode = Animation.LOOP_LINEAR
 		anim_src.free()
+	var lib: AnimationLibrary = null                   # одна библиотека на всех зрителей, а не своя у каждого
+	if idle != null:
+		lib = AnimationLibrary.new()
+		lib.add_animation("idle", idle)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1047
 	var tiers: Array = FLAT_SEATS if _flat else [[15.3, 0.05], [16.4, 0.05]]   # трибуны (старая яма — обод у забора)
@@ -249,20 +263,22 @@ func _fill_crowd(on: bool) -> void:
 				else (absf(deg - 68.0) > 14.0 and absf(deg - 292.0) > 14.0)
 			if gap and rng.randf() < 0.6:                  # не в проходах к лестницам
 				var g := src.duplicate() as Node3D
+				# толпа без теней: ~55 скинов в каскадах солнца стоили дороже всех бойцов арены
+				for gi: Node in g.find_children("*", "GeometryInstance3D", true, false):
+					(gi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				g.position = center + Vector3(sin(a) * rr, h, cos(a) * rr)
 				g.rotation.y = a + PI                      # лицом к яме
 				_crowd.add_child(g)
 				var ap2 := _find_anim(g)
-				if ap2 != null and idle != null:
-					var lib := AnimationLibrary.new()
-					lib.add_animation("idle", idle)
+				if ap2 != null and lib != null:
 					if ap2.has_animation_library(""):
 						ap2.remove_animation_library("")
 					ap2.add_animation_library("", lib)
 					ap2.play("idle")
 					ap2.speed_scale = rng.randf_range(0.8, 1.25)
 					ap2.seek(rng.randf_range(0.0, 2.0), true)
-				(_crowd as Crowd).fans.append([g, g.position.y, rng.randf() * TAU])
+					ap2.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL   # Crowd двигает сам
+				(_crowd as Crowd).fans.append([g, g.position.y, rng.randf() * TAU, ap2 if lib != null else null])
 			a += step * rng.randf_range(0.8, 1.2)
 	src.free()
 
@@ -412,13 +428,13 @@ func _bowl_mat(key: String) -> Material:
 		"arena_seat": ["large_sandstone_blocks", 0.4]}
 	if tex.has(key):
 		var t: Array = tex[key]
-		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % t[0])
-		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % t[0])
+		var d := Assets.dds_tex(mod, "textures/arena/%s_diff.dds" % t[0])
+		var n := Assets.dds_tex(mod, "textures/arena/%s_nor.dds" % t[0])
 		if d != null:
-			sm.albedo_texture = ImageTexture.create_from_image(d)
+			sm.albedo_texture = d
 		if n != null:
 			sm.normal_enabled = true
-			sm.normal_texture = ImageTexture.create_from_image(n)
+			sm.normal_texture = n
 		sm.uv1_triplanar = true
 		sm.uv1_world_triplanar = true
 		sm.uv1_scale = Vector3.ONE * float(t[1])
@@ -451,20 +467,27 @@ static func _find_anim(n: Node) -> AnimationPlayer:
 	return null
 
 
-## Толпа: зрители подпрыгивают — каждый в своём ритме.
+## Толпа: зрители подпрыгивают — каждый в своём ритме. Анимация (скелет и скин) — у трети зрителей за кадр по кругу,
+## с тройным шагом: ~55 скинов каждый кадр стоили несколько мс, а для покачивания на месте 20 Гц хватает.
 class Crowd extends Node3D:
 	var fans: Array = []
 	var _t := 0.0
+	var _phase := 0
 
 	func _process(delta: float) -> void:
 		_t += delta
 		var cam := get_viewport().get_camera_3d()          # толпу дальше 70 м не качаем — подскок 12 см не виден
 		if cam != null and cam.global_position.distance_squared_to(global_position) > 4900.0:
 			return
-		for f: Array in fans:
+		_phase = (_phase + 1) % 3
+		for i: int in fans.size():
+			var f: Array = fans[i]
 			var n: Node3D = f[0]
-			if is_instance_valid(n):
-				n.position.y = float(f[1]) + maxf(0.0, sin(_t * 5.0 + float(f[2]))) * 0.12
+			if not is_instance_valid(n):
+				continue
+			n.position.y = float(f[1]) + maxf(0.0, sin(_t * 5.0 + float(f[2]))) * 0.12
+			if i % 3 == _phase and f[3] != null:
+				(f[3] as AnimationPlayer).advance(delta * 3.0)
 
 
 ## Огонёк в каменном фонаре (сердцевина фонаря сплошная — огонь выдвинут к камере, как в городе).

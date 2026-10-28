@@ -112,28 +112,51 @@ func _to_gpu() -> void:
 	var map := Vfx.to_gpu_list(list)
 	_dust = map.get(_dust, _dust)
 	_flies = map.get(_flies, _flies)
+	_cam_last = Vector3.INF
 	_moth_lamps.clear()
 
 
 # ---------- тени облаков ----------
 
-func _make_cloud_shadows() -> void:
-	if overcast <= 0.05 and kind == "clear":
-		overcast = 0.25                                    # и в ясный день — редкие облака
-	var img := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+## Карта теней облаков: шум считает движок одним вызовом (get_image), порог — таблицей на 256 значений; раньше
+## 65 536 вызовов get_noise_2d и set_pixel из GDScript — до 0.1 с на главном потоке при каждой загрузке города.
+## Одинаковая погода — одна и та же карта (кэш по покрытию).
+static var _cloud_cache := {}
+
+
+static func _cloud_tex(cover: float) -> ImageTexture:
+	var key := snappedf(cover, 0.01)
+	if _cloud_cache.has(key):
+		return _cloud_cache[key]
 	var n := FastNoiseLite.new()
 	n.seed = 77
 	n.frequency = 0.012
 	n.fractal_octaves = 4
-	var cover := lerpf(0.25, 0.65, overcast)
-	for y: int in 256:
-		for x: int in 256:
-			var v := n.get_noise_2d(x, y) * 0.5 + 0.5
-			var a := smoothstep(1.0 - cover, 1.0 - cover + 0.25, v) * 0.55
-			img.set_pixel(x, y, Color(0.0, 0.0, 0.02, a))
+	var src := n.get_image(256, 256, false, false, false)   # без нормировки: шум [-1, 1] → [0, 255], как noise*0.5+0.5
+	if src.get_format() != Image.FORMAT_L8:
+		src.convert(Image.FORMAT_L8)
+	var lut := PackedByteArray()
+	lut.resize(256)
+	for i: int in 256:
+		lut[i] = int(round(smoothstep(1.0 - key, 1.0 - key + 0.25, i / 255.0) * 0.55 * 255.0))
+	var d := src.get_data()
+	var px := PackedByteArray()
+	px.resize(d.size() * 4)
+	for i: int in d.size():
+		px[i * 4 + 2] = 5                                     # чуть синевы в тени, как было (0.02)
+		px[i * 4 + 3] = lut[d[i]]
+	var img := Image.create_from_data(256, 256, false, Image.FORMAT_RGBA8, px)
 	img.generate_mipmaps()
+	var t := ImageTexture.create_from_image(img)
+	_cloud_cache[key] = t
+	return t
+
+
+func _make_cloud_shadows() -> void:
+	if overcast <= 0.05 and kind == "clear":
+		overcast = 0.25                                    # и в ясный день — редкие облака
 	_shadow = Decal.new()
-	_shadow.texture_albedo = ImageTexture.create_from_image(img)
+	_shadow.texture_albedo = _cloud_tex(lerpf(0.25, 0.65, overcast))
 	_shadow.size = Vector3(420.0, 120.0, 420.0)
 	_shadow.albedo_mix = 1.0
 	_shadow.normal_fade = 0.6                              # на стенах гаснет — только земля и крыши
@@ -148,6 +171,7 @@ func _make_cloud_shadows() -> void:
 # ---------- дождь ----------
 
 func _make_rain() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_rain = GPUParticles3D.new()
 	_rain.amount = 7000
 	_rain.lifetime = 1.0                                   # долетают до земли и в низинах, и на ровном
@@ -199,6 +223,7 @@ var _splash: GPUParticles3D
 
 
 func _make_splashes() -> void:
+	_splash_last = Vector3.INF
 	_splash = GPUParticles3D.new()
 	_splash.amount = 700
 	_splash.lifetime = 0.25
@@ -261,6 +286,7 @@ static func _radial() -> ImageTexture:
 
 
 func _make_dust() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_dust = CPUParticles3D.new()
 	_dust.mesh = _soft_dot(Color(1.0, 0.95, 0.85, 0.5), 0.04, 0.2)
 	_dust.amount = 220
@@ -283,6 +309,7 @@ func _make_dust() -> void:
 
 
 func _make_flies() -> void:
+	_cam_last = Vector3.INF                                 # новая система — встать к камере в ближайший кадр
 	_flies = CPUParticles3D.new()
 	_flies.mesh = _soft_dot(Color(0.75, 1.0, 0.45, 1.0), 0.07, 2.0)
 	_flies.amount = 90
@@ -370,6 +397,10 @@ func puddle_at(pos: Vector3) -> bool:
 	return pn > 0.612
 
 
+var _drop_mesh: QuadMesh
+var _ring_mesh: TorusMesh
+
+
 ## Шаг в луже: брызги-капли вверх и в стороны, кольцо по воде.
 func splash(pos: Vector3) -> void:
 	var p := CPUParticles3D.new()
@@ -385,27 +416,29 @@ func splash(pos: Vector3) -> void:
 	p.gravity = Vector3(0, -9.8, 0)
 	p.scale_amount_min = 0.5
 	p.scale_amount_max = 1.0
-	var q := QuadMesh.new()
-	q.size = Vector2(0.035, 0.035)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.82, 0.88, 0.95, 0.65)
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	q.material = mat
-	p.mesh = q
+	if _drop_mesh == null:                                  # капля — одна сетка и материал на все шаги (были новые на каждый)
+		_drop_mesh = QuadMesh.new()
+		_drop_mesh.size = Vector2(0.035, 0.035)
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.82, 0.88, 0.95, 0.65)
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_drop_mesh.material = mat
+	p.mesh = _drop_mesh
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(p)
 	p.global_position = pos + Vector3(0, 0.04, 0)
 	p.emitting = true
 	# кольцо по воде: плоское, растёт и тает
 	var ring := MeshInstance3D.new()
-	var rm := TorusMesh.new()
-	rm.inner_radius = 0.16
-	rm.outer_radius = 0.2
-	rm.rings = 24
-	rm.ring_segments = 4
-	ring.mesh = rm
+	if _ring_mesh == null:                                  # сетка кольца — общая; материал свой (тает альфой)
+		_ring_mesh = TorusMesh.new()
+		_ring_mesh.inner_radius = 0.16
+		_ring_mesh.outer_radius = 0.2
+		_ring_mesh.rings = 24
+		_ring_mesh.ring_segments = 4
+	ring.mesh = _ring_mesh
 	var rmat := StandardMaterial3D.new()
 	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -461,12 +494,19 @@ func footprint(pos: Vector3, yaw: float, left: bool) -> void:
 	d.modulate = Color(1, 1, 1, 0.9 if wet > 0.3 else 0.6)
 	_prints.append(d)
 	if _prints.size() > 60:
-		var old: Decal = _prints.pop_front()
+		var old: Variant = _prints.pop_front()             # мог уже истаять и уйти (ниже) — без типа
 		if is_instance_valid(old):
-			old.queue_free()
+			(old as Decal).queue_free()
 	var tw := d.create_tween()
 	tw.tween_interval(14.0)
 	tw.tween_property(d, "modulate:a", 0.0, 4.0)
+	tw.tween_callback(d.queue_free)                         # истаявший след — вон: невидимая декаль всё равно
+	                                                        # считалась в кластерах и на каждом пикселе земли рядом
+
+
+var _cam_last := Vector3.INF
+var _splash_last := Vector3.INF
+var _shadow_at := Vector3.INF
 
 
 func _process(delta: float) -> void:
@@ -474,17 +514,26 @@ func _process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	if is_instance_valid(_cam):
 		var cp := _cam.global_position
-		if _rain != null:
-			_rain.global_position = cp + Vector3(0, 14, 0)
-		if _splash != null and _player_pos != Vector3.INF:
+		# дождь, пыль и светлячки едут за камерой — только когда она сдвинулась (каждое присваивание — пересчёт
+		# трансформа и вызов в сервер рендера на каждую систему частиц)
+		if cp != _cam_last:
+			_cam_last = cp
+			if _rain != null:
+				_rain.global_position = cp + Vector3(0, 14, 0)
+			if _dust != null:
+				_dust.global_position = cp + Vector3(0, -0.5, 0)
+			if _flies != null:
+				_flies.global_position = Vector3(cp.x, cp.y - 1.8, cp.z)
+		if _splash != null and _player_pos != Vector3.INF and _player_pos != _splash_last:
+			_splash_last = _player_pos
 			_splash.global_position = _player_pos + Vector3(0, 0.05, 0)
-		if _dust != null:
-			_dust.global_position = cp + Vector3(0, -0.5, 0)
-		if _flies != null:
-			_flies.global_position = Vector3(cp.x, cp.y - 1.8, cp.z)
 		if _shadow != null:                                 # облака плывут по ветру
 			_drift += Vector2(delta, delta)                 # плавно туда-обратно (без скачка при повторе)
-			_shadow.global_position = Vector3(sin(_drift.x * 0.006) * 70.0, 20.0, sin(_drift.y * 0.0041 + 1.3) * 70.0)
+			var sp := Vector3(sin(_drift.x * 0.006) * 70.0, 20.0, sin(_drift.y * 0.0041 + 1.3) * 70.0)
+			# плывут ≤ 0.42 м/с, клетка тени — 1.6 м и мягкая: ставим раз в 2 см (раз в ~5 кадров), а не каждый кадр
+			if sp.distance_squared_to(_shadow_at) > 0.0004:
+				_shadow_at = sp
+				_shadow.global_position = sp
 	if _flash != null:
 		_storm_tick(delta)
 	Prof.add("погода", t0)
@@ -523,7 +572,7 @@ func _storm_tick(delta: float) -> void:
 		_flash_t -= delta
 		var k := _flash_t / 0.45
 		_flash.light_energy = (6.0 if fmod(_flash_t, 0.15) > 0.07 else 1.5) * k
-	else:
+	elif _flash.light_energy != 0.0:                       # погасла — один раз, а не запись нуля каждый кадр
 		_flash.light_energy = 0.0
 	if _thunder_in > 0.0:
 		_thunder_in -= delta

@@ -1,9 +1,15 @@
 // Небо Юрумы со сменой суток: цвет зенита и горизонта (день — лазурь и розовая мана, закат — алый и золото,
-// ночь — глубокая синь), диск светила (LIGHT0: днём солнце, ночью луна), плывущие облака (fbm), звёзды ночью.
-// daynight.gd задаёт day (0 ночь … 1 день) и dusk (0..1 — насколько сейчас закат/рассвет).
+// ночь — глубокая синь), диск светила (LIGHT0: днём солнце), плывущие облака (fbm), звёзды ночью.
+// daynight.gd задаёт day (0 ночь … 1 день) и dusk (0..1 — насколько сейчас закат/рассвет), а с heavens = 1 —
+// и небесные тела по часам мира (sky_clock.gd): Око Раскола — белое кольцо окаменевшего света с неровными вихрями
+// розовой маны и осколками, что кружат вокруг него, и луны Селунэ (серая, по трещинам красная мана) и Иру
+// (лиловая, пропитана розовой маной) с фазами от Хоэна. Луна по ту сторону Ока — за кольцом, по эту — перед ним.
+// Без use_half_res_pass: HALF_RES_COLOR не читается — проход в полразрешения (каждый кадр, весь экран, и ещё один
+// в карте отражений) считал то же небо впустую.
 shader_type sky;
-render_mode use_half_res_pass;
 
+// часы мода (gfx.gd), а не встроенное время: с ним движок пересчитывает радианс неба каждый кадр, хотя свет от неба не меняется
+global uniform float pax_rpg_time;
 uniform float day = 1.0;
 uniform float dusk = 0.0;
 uniform vec3 zenith_day : source_color = vec3(0.22, 0.42, 0.85);
@@ -14,6 +20,17 @@ uniform vec3 horizon_dusk : source_color = vec3(1.0, 0.42, 0.3);
 uniform vec3 ground : source_color = vec3(0.32, 0.24, 0.26);
 uniform float cloud_cover = 0.48;
 uniform float cloud_speed = 0.006;
+// небесные тела: положения — от наблюдателя (x восток, y вверх, z юг), в радиусах Юрумы
+uniform float heavens = 0.0;
+uniform vec3 sun_dir = vec3(0.0, 1.0, 0.0);      // Хоэн по часам мира — им освещены луны
+uniform vec3 eye_c = vec3(0.0, 4.4, 0.0);        // центр Ока
+uniform vec3 eye_n = vec3(1.0, 0.0, 0.0);        // ось кольца
+uniform float eye_r = 1.0;
+uniform float breath = 1.0;                      // насколько Око пульсирует
+uniform vec3 selune_c = vec3(0.0, -5.0, 0.0);
+uniform vec3 iru_c = vec3(0.0, -5.0, 0.0);
+uniform float selune_r = 0.24;
+uniform float iru_r = 0.2;
 
 // хэш без sin (Dave Hoskins, hash12): sin больших чисел на GPU теряет точность — облака шли квадратами
 float hash(vec2 p) {
@@ -32,6 +49,212 @@ float fbm(vec2 p) {
 	return v;
 }
 
+// ---------- Око Раскола и луны ----------
+float sq(float x) {
+	return x * x;
+}
+float hash3(vec3 p3) {
+	p3 = fract(p3 * 0.1031);
+	p3 += dot(p3, p3.zyx + 31.32);
+	return fract((p3.x + p3.y) * p3.z);
+}
+float noise3(vec3 p) {
+	vec3 i = floor(p), f = fract(p);
+	vec3 u = f * f * (3.0 - 2.0 * f);
+	float a = mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), u.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), u.x), u.y);
+	float b = mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), u.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0)), u.x), u.y);
+	return mix(a, b, u.z);
+}
+float fbm3(vec3 p) {
+	float v = 0.0, a = 0.5;
+	for (int i = 0; i < 5; i++) { v += a * noise3(p); p = p * 2.07 + vec3(1.7, 9.2, 3.1); a *= 0.5; }
+	return v;
+}
+
+// Обод Ока: x — расстояние от центра в радиусах кольца, a — угол. Тонкий раскалённый добела обод в трещинах,
+// в розовом ореоле, легко пульсирует.
+vec3 eye_rim(float x, float a, float time) {
+	float b = 1.0 + breath * (0.1 * sin(time * 1.4) + 0.05 * sin(time * 3.3 + 1.0));
+	float crack = 0.75 + 0.25 * noise(vec2(a * 38.2, 1.0)) + 0.15 * noise(vec2(a * 162.3, 7.0));
+	float core = exp(-sq((x - 1.0) / 0.03)) * crack;
+	float glow = exp(-sq((x - 1.0) / 0.14)) * 0.35 + exp(-sq((x - 1.0) / 0.5)) * 0.08;
+	return (vec3(1.0, 0.97, 0.93) * core * 1.6 + vec3(1.0, 0.55, 0.78) * glow) * b;
+}
+
+// Неустойчивые вихри розовой маны вокруг Ока: спиральные рукава крутятся, рвутся, вспыхивают и гаснут.
+// q — точка в плоскости Ока, в его радиусах.
+vec3 mana_swirl(vec2 q, float time) {
+	float r = length(q), a = atan(q.y, q.x);
+	float mask = exp(-sq((r - 1.0) / 0.42)) + 0.35 * exp(-r * r / 0.2);
+	if (mask < 0.01) {
+		return vec3(0.0);
+	}
+	vec2 ca = vec2(cos(a), sin(a));
+	float s = a + r * 2.4 - time * 0.22;
+	float w = fbm(ca * 1.7 * r + vec2(time * 0.11, -time * 0.07));
+	float f = fbm(q * 2.6 + w * 2.2 + vec2(time * 0.17, -time * 0.12));
+	float arms = pow(0.5 + 0.5 * sin(3.0 * s + f * 7.0), 2.5);
+	float burst = smoothstep(0.45, 0.95, noise(ca * 1.3 + vec2(time * 0.45, 3.0)));
+	float flick = 0.7 + 0.3 * noise(vec2(time * 2.3, r * 3.0));
+	float v = mask * smoothstep(0.35, 0.8, f) * arms * (0.35 + 1.1 * burst) * flick;
+	return mix(vec3(0.95, 0.25, 0.65), vec3(1.0, 0.72, 0.92), smoothstep(0.6, 1.0, f)) * v * 0.9;
+}
+
+// Селунэ (kind 0): серый камень, по жилам бежит красная мана; Иру (kind 1): лиловая, насквозь в розовой мане.
+// p — точка на сфере луны; albedo — под светом Хоэна, glow светит сам.
+void moon_look(float kind, vec3 p, float time, out vec3 albedo, out vec3 glow) {
+	if (kind < 0.5) {
+		float g = 0.42 + 0.3 * fbm3(p * 3.0 + 3.0);
+		float mar = smoothstep(0.48, 0.66, fbm3(p * 1.7 + 7.0));
+		float c = noise3(p * 9.0 + 2.0);
+		float rim = smoothstep(0.64, 0.68, c) - smoothstep(0.7, 0.76, c);
+		albedo = vec3(0.62, 0.62, 0.66) * (g * (1.0 - 0.35 * mar) + 0.12 * rim) * 1.4;
+		vec3 wq = p * 2.3 + vec3(fbm3(p * 2.0 + time * 0.03), fbm3(p * 2.0 + 5.0 - time * 0.02), 0.0) * 1.6;
+		float v1 = pow(1.0 - abs(2.0 * noise3(wq) - 1.0), 34.0);
+		float v2 = pow(1.0 - abs(2.0 * noise3(wq * 2.7 + 4.0) - 1.0), 44.0) * 0.5;
+		float pulse = 0.55 + 0.45 * sin(time * 1.6 - fbm3(p * 4.0) * 14.0);
+		glow = vec3(1.0, 0.1, 0.12) * (v1 * 1.7 + v2) * pulse + vec3(0.5, 0.02, 0.05) * mar * 0.08;
+	} else {
+		vec3 sp = vec3(p.x * 1.4, p.y * 5.0, p.z * 1.4);
+		float bands = fbm3(sp + vec3(time * 0.02, 0.0, 0.0) + fbm3(p * 2.0 + 1.0) * 1.3);
+		albedo = mix(vec3(0.6, 0.48, 0.9), vec3(1.0, 0.56, 0.86), smoothstep(0.42, 0.72, bands));
+		float sw = fbm3(p * 3.0 + vec3(time * 0.05, 0.0, -time * 0.03) + fbm3(p * 2.0 - time * 0.04) * 2.0);
+		glow = vec3(1.0, 0.35, 0.75) * pow(smoothstep(0.5, 0.86, sw), 2.0) * 1.3 * (0.8 + 0.2 * sin(time * 0.9));
+	}
+}
+
+// Око над головой: обод, вихри и осколки — плоские, в его плоскости. air — у горизонта тает в дымке.
+vec3 hover_eye(vec3 d, vec3 col, float air, float night, float time) {
+	vec3 cd = normalize(eye_c);
+	col += vec3(1.0, 0.5, 0.75) * pow(max(dot(d, cd), 0.0), 60.0) * 0.22 * air;      // мановая дымка вокруг
+	float den = dot(d, eye_n);
+	if (abs(den) < 1e-5) {
+		return col;
+	}
+	float t = dot(eye_c, eye_n) / den;
+	if (t <= 0.0) {
+		return col;
+	}
+	vec3 hp = d * t - eye_c;
+	vec3 a1 = normalize(cross(eye_n, vec3(0.0, 1.0, 0.0) + vec3(1e-4, 0.0, 0.0)));
+	vec3 a2 = cross(eye_n, a1);
+	vec2 q = vec2(dot(hp, a1), dot(hp, a2)) / eye_r;
+	float r = length(q);
+	if (r > 2.4) {
+		return col;
+	}
+	float a = atan(q.y, q.x);
+	col += (eye_rim(r, a, time) + mana_swirl(q, time)) * mix(0.75, 1.0, night) * air;
+	// осколки: кольца ячеек, каждое кольцо крутится со своей скоростью (внутренние быстрее), осколок качается и
+	// кувыркается
+	float bw = 0.075;
+	float bi = floor(r / bw);
+	for (int k = -1; k <= 1; k++) {
+		float b = bi + float(k);
+		float rc = (b + 0.5) * bw;
+		if (b < 2.0 || rc > 2.05) {
+			continue;
+		}
+		float wsp = 0.28 / pow(rc, 1.5) * (0.85 + 0.3 * hash(vec2(b, 1.0)));
+		float ncell = max(8.0, floor(6.2832 * rc / 0.075));
+		float ar = a - time * wsp;
+		float ai = floor(ar / 6.2832 * ncell);
+		float pr = 0.6 * exp(-sq((rc - 1.0) / 0.42)) + 0.05;
+		for (int j = -1; j <= 1; j++) {
+			float c = mod(ai + float(j), ncell);
+			vec2 id = vec2(b, c);
+			if (hash(id + 17.0) > pr) {
+				continue;
+			}
+			float ca = (c + 0.25 + 0.5 * hash(id + 3.0)) / ncell * 6.2832;
+			float cr = rc + (hash(id + 5.0) - 0.5) * bw * 0.4 + sin(time * 0.3 + hash(id) * 6.28) * 0.012;
+			vec2 ctr = vec2(cos(ca), sin(ca)) * cr;
+			vec2 pq = vec2(cos(ar), sin(ar)) * r;
+			float sz = (0.008 + 0.026 * pow(hash(id + 9.0), 2.5)) * (0.6 + exp(-sq((rc - 1.0) / 0.3)));
+			float an = hash(id + 11.0) * 6.28 + time * (hash(id + 13.0) - 0.5) * 1.6;
+			vec2 o = pq - ctr;
+			o = mat2(vec2(cos(an), sin(an)), vec2(-sin(an), cos(an))) * o;
+			float sdf = max(abs(o.x) * 0.8 + abs(o.y) * 0.5, abs(o.y) * 1.2) - sz;
+			if (sdf < 0.0) {
+				float lit = clamp(dot(normalize(-ctr), normalize(o + 1e-5)), 0.0, 1.0);
+				vec3 rcol = mix(vec3(0.2, 0.14, 0.18), vec3(0.1, 0.07, 0.1), night)
+						+ vec3(1.0, 0.45, 0.75) * lit * 0.3 * smoothstep(-sz * 0.5, 0.0, sdf);
+				col = mix(col, rcol, air * smoothstep(0.0, -0.002, sdf));
+			}
+		}
+	}
+	return col;
+}
+
+// Луна диском: m — её центр от наблюдателя, rad — радиус, kind — 0 Селунэ, 1 Иру. Тёмная сторона — от Хоэна.
+vec3 moon_disc(vec3 d, vec3 m, float rad, float kind, vec3 base, float night, float time) {
+	float dist = length(m);
+	vec3 md = m / dist;
+	float ang = asin(min(0.5, rad / dist));
+	float cd = dot(d, md);
+	if (cd < cos(min(ang * 7.0, 1.5))) {
+		return base;
+	}
+	vec3 t1 = normalize(cross(md, vec3(0.0, 1.0, 1e-3)));
+	vec3 t2 = cross(md, t1);
+	vec2 o = vec2(dot(d, t1), dot(d, t2)) / ang;
+	float rr = dot(o, o);
+	vec3 hc = kind < 0.5 ? vec3(1.0, 0.25, 0.3) : vec3(1.0, 0.45, 0.85);
+	float halo = exp(-max(acos(clamp(cd, -1.0, 1.0)) / ang - 1.0, 0.0) * (kind < 0.5 ? 2.2 : 1.2))
+			* (kind < 0.5 ? 0.12 : 0.3) * (0.3 + 0.7 * night);
+	vec3 outc = base + hc * halo;
+	if (rr < 1.0) {
+		vec3 n = o.x * t1 + o.y * t2 - sqrt(1.0 - rr) * md;
+		vec3 alb, gl;
+		moon_look(kind, n, time, alb, gl);
+		float l = max(dot(n, sun_dir), 0.0);
+		float edge = smoothstep(1.0, 0.9, rr);
+		vec3 mc = alb * (0.05 + 1.15 * l) + gl * (1.0 + 0.5 * (1.0 - l));
+		mc += hc * rr * rr * rr * (kind < 0.5 ? 0.15 : 0.45);
+		outc = mix(outc, mix(base, mc, 0.85 + 0.15 * night) + mc * 0.15, edge);
+	}
+	return outc;
+}
+
+// Луна по эту сторону Ока (рисуется поверх него): луч к ней встречает плоскость кольца за ней или не встречает.
+bool moon_front(vec3 m) {
+	vec3 md = normalize(m);
+	float den = dot(md, eye_n);
+	if (abs(den) < 1e-5) {
+		return true;
+	}
+	float t = dot(eye_c, eye_n) / den;
+	return t <= 0.0 || t > length(m);
+}
+
+vec3 heaven_bodies(vec3 d, vec3 col, float h) {
+	float night = 1.0 - day;
+	float air = smoothstep(-0.01, 0.15, h);
+	float time = pax_rpg_time;
+	bool far_s = length(selune_c) > length(iru_c);      // Селунэ дальше Иру
+	vec3 m_far = far_s ? selune_c : iru_c;
+	vec3 m_near = far_s ? iru_c : selune_c;
+	float r_far = far_s ? selune_r : iru_r;
+	float r_near = far_s ? iru_r : selune_r;
+	float k_far = far_s ? 0.0 : 1.0;
+	bool f_far = moon_front(m_far);
+	bool f_near = moon_front(m_near);
+	if (!f_far) {
+		col = moon_disc(d, m_far, r_far, k_far, col, night, time);
+	}
+	if (!f_near) {
+		col = moon_disc(d, m_near, r_near, 1.0 - k_far, col, night, time);
+	}
+	col = hover_eye(d, col, air, night, time);
+	if (f_far) {
+		col = moon_disc(d, m_far, r_far, k_far, col, night, time);
+	}
+	if (f_near) {
+		col = moon_disc(d, m_near, r_near, 1.0 - k_far, col, night, time);
+	}
+	return col;
+}
+
 void sky() {
 	vec3 d = EYEDIR;
 	float h = clamp(d.y, -1.0, 1.0);
@@ -40,27 +263,34 @@ void sky() {
 	hor = mix(hor, horizon_dusk, dusk);
 	float t = pow(1.0 - clamp(h, 0.0, 1.0), 2.6);
 	vec3 col = mix(zen, hor, t);
-	// солнце и ореол
+	// солнце и ореол (ночью LIGHT0 — лунный свет: диска нет, луны рисуются сами)
 	if (LIGHT0_ENABLED) {
 		float sd = dot(d, LIGHT0_DIRECTION);
-		col += LIGHT0_COLOR * (pow(max(sd, 0.0), 900.0) * 18.0 + pow(max(sd, 0.0), 12.0) * 0.35 * (0.4 + dusk));
+		float up = heavens > 0.5 ? smoothstep(-0.1, -0.02, sun_dir.y) : 1.0;
+		col += LIGHT0_COLOR * (pow(max(sd, 0.0), 900.0) * 18.0 + pow(max(sd, 0.0), 12.0) * 0.35 * (0.4 + dusk)) * up;
 	}
 	// звёзды
 	if (h > 0.0 && day < 0.6) {
 		vec2 sp = d.xz / (d.y + 0.15) * 90.0;
-		float st = step(0.996, hash(floor(sp))) * (0.5 + 0.5 * sin(TIME * 2.0 + hash(floor(sp) + 3.0) * 40.0));
+		float st = step(0.996, hash(floor(sp))) * (0.5 + 0.5 * sin(pax_rpg_time * 2.0 + hash(floor(sp) + 3.0) * 40.0));
 		col += vec3(st) * (1.0 - day / 0.6) * smoothstep(0.0, 0.25, h);
+	}
+	// Око Раскола и луны — за облаками; в карту отражений не идут (там они не видны, а считать дорого)
+	if (heavens > 0.5 && !AT_CUBEMAP_PASS && h > -0.02) {
+		col = heaven_bodies(d, col, h);
 	}
 	// облака: плоскость над миром
 	if (h > 0.02) {
-		vec2 cp = d.xz / (d.y + 0.12) * 1.6 + mod(vec2(TIME * cloud_speed, TIME * cloud_speed * 0.4), 1000.0);
+		vec2 cp = d.xz / (d.y + 0.12) * 1.6 + mod(vec2(pax_rpg_time * cloud_speed, pax_rpg_time * cloud_speed * 0.4), 1000.0);
 		float c = fbm(cp);
 		float m = smoothstep(cloud_cover, cloud_cover + 0.25, c) * smoothstep(0.02, 0.2, h);
-		vec3 lit = mix(vec3(0.16, 0.14, 0.24), vec3(1.0, 0.95, 0.98), day);
-		lit = mix(lit, vec3(1.0, 0.6, 0.5), dusk * 0.8);
-		vec3 shade = mix(vec3(0.08, 0.07, 0.14), vec3(0.7, 0.62, 0.8), day);
-		vec3 cc = mix(shade, lit, smoothstep(0.35, 0.9, fbm(cp * 1.7 + 4.0)));
-		col = mix(col, cc, m * 0.9);
+		if (m > 0.0) {                               // в просветах облака нет — второй fbm (его свет) не нужен
+			vec3 lit = mix(vec3(0.16, 0.14, 0.24), vec3(1.0, 0.95, 0.98), day);
+			lit = mix(lit, vec3(1.0, 0.6, 0.5), dusk * 0.8);
+			vec3 shade = mix(vec3(0.08, 0.07, 0.14), vec3(0.7, 0.62, 0.8), day);
+			vec3 cc = mix(shade, lit, smoothstep(0.35, 0.9, fbm(cp * 1.7 + 4.0)));
+			col = mix(col, cc, m * 0.9);
+		}
 	}
 	// под горизонтом — земля в дымке
 	col = mix(col, mix(ground * (0.25 + 0.75 * day), hor, 0.55), smoothstep(0.0, -0.08, h));
