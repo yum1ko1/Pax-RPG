@@ -16,7 +16,7 @@ GLYPH = {
     "tavern": ("酒", "rest"), "bazaar": ("市", "trade"), "barracks": ("兵", "fight"), "shamans": ("巫", "power"),
     "buffalo": ("牛", "beast"), "kurgans": ("墓", "power"), "garden": ("庭", "nature"), "kennels": ("犬", "beast"),
     "masters": ("匠", "craft"), "clans": ("族", "home"), "forge": ("鍛", "craft"), "stable": ("馬", "beast"),
-    "goblins": ("鬼", "home"),
+    "goblins": ("鬼", "home"), "oath": ("樹", "nature"),
 }
 KIND_COL = {"gate": "#7cc8ff", "fight": "#ff3a4a", "trade": "#ffb547", "rest": "#ffd27a", "craft": "#e8916b",
             "power": "#c98cff", "nature": "#7fdca0", "beast": "#d9b98a", "home": "#e8dcc8", "road": "#ff8cc6"}
@@ -33,8 +33,11 @@ data = {"_note": "Сгенерировано pax_rpg/dev/gharn/map_data.py.",
                 "mini_ru": "textures/map/gharn_mini_ru.jpg", "mini_en": "textures/map/gharn_mini_en.jpg",
                 "rect": [-132, -132, 264, 264], "glyphs": "textures/map/glyphs.png", "glyph_cols": 5,
                 "markers": {"pax_rpg_lm_gate": 0, "pax_rpg_lm_khan": 1, "pax_rpg_lm_arena": 2, "pax_rpg_lm_guild": 4,
-                            "pax_rpg_lm_tavern": 5, "pax_rpg_lm_bazaar": 6, "pax_rpg_lm_shamans": 8, "pax_rpg_lm_forge": 15},
-                "big": ["pax_rpg_lm_gate", "pax_rpg_lm_khan", "pax_rpg_lm_arena"]}}
+                            "pax_rpg_lm_tavern": 5, "pax_rpg_lm_bazaar": 6, "pax_rpg_lm_shamans": 8, "pax_rpg_lm_forge": 15,
+                            "pax_rpg_lm_masters": 13, "pax_rpg_lm_oath": 11},
+                # шесть мест хаба (фаза 3 плана) и кузня — крупные: у каждого своя функция (подсказка карты — pax_rpg_map_why_*)
+                "big": ["pax_rpg_lm_gate", "pax_rpg_lm_khan", "pax_rpg_lm_arena", "pax_rpg_lm_bazaar", "pax_rpg_lm_masters",
+                        "pax_rpg_lm_oath", "pax_rpg_lm_forge"]}}
 out = os.path.join(ROOT, "mods", "pax_rpg", "config", "gharn_map.json")
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(out, len(pois), "pois", len(ZONES), "zones")

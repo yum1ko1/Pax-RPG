@@ -10,6 +10,7 @@ signal closed
 signal rewarded(coins: int)          # сдано задание — награда золотом (location.gd → progress.add_gold)
 signal quest_changed                 # выдано или сдано задание — точка на глобусе меняется (location → travel → planet)
 signal shop_requested                # «Лавка» у торговца (location.gd → shop_view.gd)
+signal smith_requested               # hub: «Заточка» у кузнеца (location.gd → smith.gd)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
@@ -108,6 +109,17 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_shop_btn.visible = false
 	_shop_btn.pressed.connect(func() -> void: shop_requested.emit())
 	_panel.add_child(_shop_btn)
+	_smith_btn = Button.new()                           # hub: «Заточка» — у кузнеца (роль blacksmith), на месте «Лавки»
+	_smith_btn.position = Vector2(W - 28 - 180, 20)
+	_smith_btn.size = Vector2(180, 36)
+	_smith_btn.focus_mode = Control.FOCUS_NONE
+	_smith_btn.text = mod.tr_key("pax_rpg_talk_smith")
+	_smith_btn.add_theme_font_override("font", sans)
+	_smith_btn.add_theme_font_size_override("font_size", 15)
+	_smith_btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.4))
+	_smith_btn.visible = false
+	_smith_btn.pressed.connect(func() -> void: smith_requested.emit())
+	_panel.add_child(_smith_btn)
 	_edit = LineEdit.new()
 	_edit.position = Vector2(28, 314)
 	_edit.size = Vector2(W - 56, 40)
@@ -155,10 +167,12 @@ func open(npc: Node) -> void:
 	_edit.text = ""
 	_edit.grab_focus()
 	_update_give()
+	_smith_btn.visible = str(npc.get("role")) == "blacksmith"
 	_panel.queue_redraw()
 
 
 var _shop_btn: Button
+var _smith_btn: Button
 
 
 func close() -> void:
