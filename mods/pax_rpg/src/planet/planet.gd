@@ -472,10 +472,10 @@ func _make_markers() -> void:
 		if bool(city.get("player", false)):
 			lb.text = "▲ " + mod.tr_key("pax_rpg_map_you")
 		if bool(city.get("quest_back", false)):
-			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_back") % [mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))),
+			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_back") % [Quest.short(mod, q),
 				str(q.get("npc_name", ""))]
 		if bool(city.get("quest", false)):
-			lb.text = "❖ " + mod.tr_key("pax_rpg_quest_marker") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
+			lb.text = "❖ " + (Quest.place(mod, q) if q.has("contract") else mod.tr_key("pax_rpg_quest_marker") % Quest.short(mod, q))
 		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_style(lb, src, Color(0.55, 1.0, 0.75) if bool(city.get("player", false)) else Color(1.0, 0.8, 0.35) if bool(city.get("quest", false)) or bool(city.get("quest_back", false)) else
 			Color.from_string(str(colors.get(str(city.get("empire", "")), "#ffffff")), Color.WHITE))

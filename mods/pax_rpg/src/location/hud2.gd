@@ -364,9 +364,8 @@ func _draw_quest2() -> void:
 	var head := _tr("pax_rpg_hud_quest")
 	var rows: Array = []                                  # [текст, главное ли]
 	if not _quest.is_empty():
-		var item := _tr("pax_rpg_qitem_" + str(_quest.get("item", "")))
 		var found := str(_quest.get("state", "")) == "found"
-		rows.append([_tr("pax_rpg_journal_find") % item, not found])
+		rows.append([preload("res://mods/pax_rpg/src/location/quest.gd").goal(mod, _quest), not found])
 		rows.append([_tr("pax_rpg_journal_found") if found else _tr("pax_rpg_journal_active"), found])
 	else:
 		head = _tr("pax_rpg_quest_title")

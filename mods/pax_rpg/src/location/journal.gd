@@ -6,7 +6,7 @@ extends Control
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
 const W := 640.0
-const H := 420.0
+const H := 520.0
 
 var mod: PaxMod
 var hud: Hud
@@ -59,15 +59,32 @@ func _draw() -> void:
 		draw_string(_sans, Vector2(x, y), mod.tr_key("pax_rpg_journal_none"), HORIZONTAL_ALIGNMENT_LEFT, w, int(20 * s), muted)
 		draw_multiline_string(_sans, Vector2(x, y + 36.0 * s), mod.tr_key("pax_rpg_journal_how"), HORIZONTAL_ALIGNMENT_LEFT, w,
 			int(16 * s), -1, Color(muted, 0.8))
+		y += 120.0 * s
+		for id: String in Quest.ORDER:                        # поручения Гхарна: сдано / можно взять / позже
+			var st := "done" if Quest.is_done(mod, id) else ("open" if Quest.available(mod, id) else "locked")
+			draw_string(_sans, Vector2(x, y), ("✓ " if st == "done" else "❖ " if st == "open" else "· ") +
+				mod.tr_key("pax_rpg_contract_name_" + id), HORIZONTAL_ALIGNMENT_LEFT, w * 0.6, int(18 * s),
+				Color(1.0, 0.8, 0.35) if st == "open" else (text if st == "done" else Color(muted, 0.7)))
+			draw_string(_sans, Vector2(x + w * 0.6, y), mod.tr_key("pax_rpg_journal_c_" + st), HORIZONTAL_ALIGNMENT_RIGHT, w * 0.4,
+				int(14 * s), Color(muted, 0.85))
+			y += 30.0 * s
+		var pk: Variant = (mod.get_setting("progress", {}) as Dictionary).get("perks", []) if mod.get_setting("progress", {}) is Dictionary else []
+		if pk is Array and not (pk as Array).is_empty():
+			var names: Array = (pk as Array).map(func(p: Variant) -> String: return mod.tr_key("pax_rpg_perk_" + str(p)))
+			draw_multiline_string(_sans, Vector2(x, y + 10.0 * s), mod.tr_key("pax_rpg_journal_perks") % ", ".join(PackedStringArray(names)),
+				HORIZONTAL_ALIGNMENT_LEFT, w, int(15 * s), -1, accent)
 		return
-	var item := mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
 	var found := str(q.get("state", "")) == "found"
-	draw_string(_serif, Vector2(x, y), "❖ " + mod.tr_key("pax_rpg_journal_find") % item, HORIZONTAL_ALIGNMENT_LEFT, w,
+	var cid := str(q.get("contract", ""))
+	if cid != "":
+		draw_string(_sans, Vector2(x, y - 30.0 * s), mod.tr_key("pax_rpg_contract_name_" + cid).to_upper(), HORIZONTAL_ALIGNMENT_LEFT,
+			w, int(13 * s), Color(gold, 0.85))
+	draw_string(_serif, Vector2(x, y), "❖ " + Quest.goal(mod, q), HORIZONTAL_ALIGNMENT_LEFT, w,
 		int(28 * s), Color(1.0, 0.8, 0.35))
 	y += 44.0 * s
 	var rows := [
 		[mod.tr_key("pax_rpg_journal_giver"), "%s · %s" % [str(q.get("npc_name", "")), mod.tr_key("pax_rpg_city_" + str(q.get("city", "")))]],
-		[mod.tr_key("pax_rpg_journal_where"), mod.tr_key("pax_rpg_city_forest")],
+		[mod.tr_key("pax_rpg_journal_where"), Quest.place(mod, q)],
 		[mod.tr_key("pax_rpg_journal_status"), mod.tr_key("pax_rpg_journal_found" if found else "pax_rpg_journal_active")],
 	]
 	for row: Array in rows:
@@ -77,4 +94,7 @@ func _draw() -> void:
 	y += 14.0 * s
 	var todo := mod.tr_key("pax_rpg_journal_todo_found") % [str(q.get("npc_name", "")),
 		mod.tr_key("pax_rpg_city_" + str(q.get("city", "")))] if found else mod.tr_key("pax_rpg_journal_todo_active")
+	if cid != "":
+		todo = mod.tr_key("pax_rpg_contract_todo_found" if found else "pax_rpg_contract_todo_" + str(q.get("kind", ""))) % [
+			str(q.get("npc_name", "")), mod.tr_key("pax_rpg_city_" + str(q.get("city", "")))]
 	draw_multiline_string(_sans, Vector2(x, y), "→ " + todo, HORIZONTAL_ALIGNMENT_LEFT, w, int(18 * s), -1, accent)

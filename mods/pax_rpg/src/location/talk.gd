@@ -10,6 +10,7 @@ signal closed
 signal rewarded(coins: int)          # сдано задание — награда золотом (location.gd → progress.add_gold)
 signal quest_changed                 # выдано или сдано задание — точка на глобусе меняется (location → travel → planet)
 signal shop_requested                # «Лавка» у торговца (location.gd → shop_view.gd)
+signal contract_done(q: Dictionary)  # сдано поручение — награда и выбор приёма (location.gd → _contract_reward)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
@@ -97,6 +98,16 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_give_btn.visible = false
 	_give_btn.pressed.connect(_hand_over)
 	_panel.add_child(_give_btn)
+	_contract_btn = Button.new()                        # «❖ Поручение» → «Принять» — у квестодателя (quest.gd → marker)
+	_contract_btn.position = _give_btn.position
+	_contract_btn.size = _give_btn.size
+	_contract_btn.focus_mode = Control.FOCUS_NONE
+	_contract_btn.add_theme_font_override("font", sans)
+	_contract_btn.add_theme_font_size_override("font_size", 15)
+	_contract_btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.4))
+	_contract_btn.visible = false
+	_contract_btn.pressed.connect(_contract_press)
+	_panel.add_child(_contract_btn)
 	_shop_btn = Button.new()                            # «Лавка» — у торговцев базара (npc.shop, лавочник trader)
 	_shop_btn.position = Vector2(W - 28 - 180, 20)
 	_shop_btn.size = Vector2(180, 36)
@@ -154,6 +165,7 @@ func open(npc: Node) -> void:
 	_sub.add_theme_color_override("font_color", hud.c_muted if hud != null else Hud.MUTED)
 	_edit.text = ""
 	_edit.grab_focus()
+	_offer_shown = false
 	_update_give()
 	_panel.queue_redraw()
 
@@ -272,7 +284,7 @@ func _context(text: String, key: String, guessed: String, eff: String) -> Dictio
 		str(context.get("city", "")), mod.tr_key("pax_rpg_talk_city_about"), str(context.get("time", ""))]
 	scene += "Ты — %s, %s, %s. Характер: %s. Сегодня тебя заботит: %s. К собеседнику ты относишься: %s (%d из 100). " % [
 		str(_npc.get("npc_name")), mod.tr_key("pax_rpg_npc_race_" + str(_npc.get("race"))), _trade_of(_npc).to_lower(),
-		str(_npc.get("temper")), str(_npc.get("worry")) if str(_npc.get("worry")) != "" else str(CONCERNS.get(role, "")), _relation_text(), int(_npc.get("relation"))]
+		str(_npc.get("temper")), _worry_now(role), _relation_text(), int(_npc.get("relation"))]
 	scene += "Собеседник — %s, %s: %s. " % [str(context.get("hero", "")), str(context.get("hero_title", "")),
 		mod.tr_key("pax_rpg_talk_hero_looks")]
 	if not lines.is_empty():
@@ -397,10 +409,17 @@ func _update_give() -> void:
 	var q := Quest.get_q(mod)
 	var on := _is_giver() and str(q.get("state", "")) == "found"
 	_give_btn.visible = on
+	var offer := is_instance_valid(_npc) and _marker() == "offer"
+	_contract_btn.visible = offer
+	_contract_btn.position.x = _give_btn.position.x
+	if offer:
+		_contract_btn.text = mod.tr_key("pax_rpg_contract_accept" if _offer_shown else "pax_rpg_contract_btn")
 	_shop_btn.visible = is_instance_valid(_npc) and (str(_npc.get("role")) == "trader" or bool(_npc.get("shop")))
 	_give_btn.position.x = W - 28 - 230 - (190.0 if _shop_btn.visible else 0.0)   # рядом с «Лавкой», не под ней
+	_contract_btn.position.x = _give_btn.position.x
 	if on:
-		_give_btn.text = mod.tr_key("pax_rpg_talk_give") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
+		_give_btn.text = mod.tr_key("pax_rpg_talk_give") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))) \
+			if not q.has("contract") else mod.tr_key("pax_rpg_contract_turn_in")
 
 
 ## Отдать найденную вещь: реплика героя от его имени, задание сдаётся по ответу.
@@ -408,6 +427,9 @@ func _hand_over() -> void:
 	if _waiting:
 		return
 	var q := Quest.get_q(mod)
+	if q.has("contract"):                                # поручение сдаётся сразу, без ожидания нейросети
+		_turn_in_contract()
+		return
 	_giving = true
 	_say(mod.tr_key("pax_rpg_talk_give_line") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))))
 
@@ -416,11 +438,11 @@ func _hand_over() -> void:
 func _quest_info(key: String) -> Dictionary:
 	var q := Quest.get_q(mod)
 	if q.is_empty():
-		if key == "quest" and int(_npc.get("npc_index")) >= 0:
+		if key == "quest" and int(_npc.get("npc_index")) >= 0 and _contract_id() == "":   # у квестодателя — поручение
 			_pending_item = Quest.ITEMS[randi() % Quest.ITEMS.size()]
 			return {"state": "give", "item": mod.tr_key("pax_rpg_qitem_" + _pending_item)}
 		return {"state": "none"}
-	var item := mod.tr_key("pax_rpg_qitem_" + str(q.get("item", "")))
+	var item := Quest.short(mod, q)
 	if _is_giver():
 		if str(q.get("state", "")) == "found":
 			return {"state": "return" if _giving else "has_it", "item": item}
@@ -525,3 +547,70 @@ func _speak(text: String) -> void:
 	if not voices.is_empty():
 		DisplayServer.tts_stop()
 		DisplayServer.tts_speak(text, voices[0])
+
+
+
+# ---------- поручения (quest.gd → CONTRACTS) ----------
+
+var _contract_btn: Button
+var _offer_shown := false            # описание поручения уже в ленте — кнопка стала «Принять»
+
+
+func _city_id() -> String:
+	return str((context.get("city_data", {}) as Dictionary).get("id", ""))
+
+
+func _contract_id() -> String:
+	return Quest.contract_of(mod, _city_id(), int(_npc.get("npc_index"))) if is_instance_valid(_npc) else ""
+
+
+func _marker() -> String:
+	return Quest.marker(mod, _city_id(), int(_npc.get("npc_index")))
+
+
+## Забота жителя для нейросети: у квестодателя с несданным поручением — его беда (о ней он и попросит).
+func _worry_now(role: String) -> String:
+	var id := _contract_id()
+	if id != "" and not Quest.is_done(mod, id):
+		return mod.tr_key("pax_rpg_contract_worry_" + id)
+	return str(_npc.get("worry")) if str(_npc.get("worry")) != "" else str(CONCERNS.get(role, ""))
+
+
+## Первое нажатие — житель рассказывает о деле (описание, награда); второе — герой берётся.
+func _contract_press() -> void:
+	var id := _contract_id()
+	if id == "" or _marker() != "offer":
+		return
+	var c: Dictionary = Quest.CONTRACTS[id]
+	if not _offer_shown:
+		_offer_shown = true
+		_line(str(_npc.get("npc_name")), mod.tr_key("pax_rpg_contract_ask_" + id), false)
+		_log.append_text("[color=#e8c070]◆ %s[/color]\n\n" % _esc(mod.tr_key("pax_rpg_contract_terms") % [
+			mod.tr_key("pax_rpg_contract_name_" + id), int(c.gold), int(c.xp)]))
+		_update_give()
+		return
+	var q := Quest.take(mod, context.get("city_data", {}), id, int(_npc.get("npc_index")), str(_npc.get("npc_name")))
+	_line(str(context.get("hero", "")), mod.tr_key("pax_rpg_contract_yes"), true)
+	_log.append_text("[color=#e8c070]◆ %s[/color]\n\n" % _esc(mod.tr_key("pax_rpg_contract_taken") % [Quest.goal(mod, q),
+		Quest.place(mod, q)]))
+	_npc.set("relation", clampi(int(_npc.get("relation")) + 3, 0, 100))
+	Quest.set_relation(mod, _city_id(), int(_npc.get("npc_index")), int(_npc.get("relation")))
+	_update_give()
+	quest_changed.emit()
+
+
+## Сдать поручение: благодарность жителя (заготовка), запись стёрта, награда — location.gd (contract_done).
+func _turn_in_contract() -> void:
+	var q := Quest.complete(mod)
+	var id := str(q.get("contract", ""))
+	_line(str(_npc.get("npc_name")), mod.tr_key("pax_rpg_contract_thanks_" + id), false)
+	var coins := roundi(Quest.reward_gold(q))
+	_log.append_text("[color=#e8c070]◆ %s[/color]\n\n" % _esc(mod.tr_key("pax_rpg_contract_done") % mod.tr_key("pax_rpg_contract_name_" + id)))
+	_npc.set("relation", clampi(int(_npc.get("relation")) + 15, 0, 100))
+	Quest.set_relation(mod, _city_id(), int(_npc.get("npc_index")), int(_npc.get("relation")))
+	_sub.text = "%s · %s" % [_trade_of(_npc), _relation_text()]
+	_update_give()
+	contract_done.emit(q)
+	quest_changed.emit()
+	if coins > 0:
+		_log.append_text("[i][color=#9a9080]%s[/color][/i]\n" % _esc(mod.tr_key("pax_rpg_contract_close_hint")))
