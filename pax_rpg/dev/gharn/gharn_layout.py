@@ -873,7 +873,7 @@ for hx, hz in ((80.5, 13.5), (81.2, 15), (80.6, 29)):
 add("sack_grain", 71.5, 29.5)
 
 LANDMARKS_V3 = [["pax_rpg_lm_kurgans", -62, -76], ["pax_rpg_lm_garden", 0, -83], ["pax_rpg_lm_kennels", 35, -74],
-                ["pax_rpg_lm_masters", 55, 57], ["pax_rpg_lm_clans", -54, 58], ["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48], ["pax_rpg_lm_oath", 25, -27]]
+                ["pax_rpg_lm_masters", 78, 57], ["pax_rpg_lm_clans", -54, 58], ["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48], ["pax_rpg_lm_oath", 25, -27]]
 
 grass, rocks, bushes = 0, 0, 0
 tries = 0

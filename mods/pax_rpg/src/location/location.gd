@@ -928,6 +928,17 @@ func _make_sky() -> void:
 	_sun = sun
 
 
+## Консоль F8: rpg_tp X Z [курс°] — герой в точку города (проверка мест хаба).
+func teleport(x: float, z: float, deg := NAN) -> String:
+	if not is_instance_valid(_player):
+		return "no location"
+	_player.global_position = Vector3(x, _player.global_position.y + 0.5, z)
+	_player.velocity = Vector3.ZERO
+	if not is_nan(deg):
+		_yaw = deg_to_rad(deg)
+	return "tp: %.1f, %.1f" % [x, z]
+
+
 ## Консоль F8: rpg_time <час> — поставить время суток (для скриншотов).
 func set_hour(h: float) -> String:
 	if _daynight == null or not is_instance_valid(_daynight):

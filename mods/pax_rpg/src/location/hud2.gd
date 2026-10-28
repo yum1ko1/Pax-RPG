@@ -651,8 +651,8 @@ func _draw_cmp2() -> void:
 			_cmp2.draw_line(Vector2(x, cy + 8.0), Vector2(x, cy - 8.0), Color(1.0, 0.85, 0.55), 1.5, true)
 			_cmp2.draw_colored_polygon(PackedVector2Array([Vector2(x, cy - 8.0), Vector2(x + 9.0, cy - 5.0), Vector2(x, cy - 2.0)]),
 				CRIMSON_HI)
-			_center(Vector2(x, ch.end.y + 16.0), "%d м" % int(d.length()) if mod == null or mod.tr_key("pax_rpg_map_legend") == "Легенда"
-				else "%d m" % int(d.length()), _f_sc, 16, IVORY, 0, 80.0)   # hub: сколько идти до метки
+			var dist := ("%d м" if mod == null or mod.tr_key("pax_rpg_map_legend") == "Легенда" else "%d m") % int(d.length())
+			_cmp2.draw_string(_f_sc, Vector2(x + 11.0, cy + 5.0), dist, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, IVORY)   # hub: сколько идти
 	_ci = self
 
 
@@ -714,8 +714,10 @@ func _draw_map() -> void:
 		_map.draw_circle(sp, 5.5 * _s, Color(0.09, 0.03, 0.04, 0.95))
 		_map.draw_arc(sp, 5.5 * _s, 0.0, TAU, 20, col, 1.8 * _s, true)
 		_map.draw_circle(sp, 2.2 * _s, col)
-	if CityMap.pin.x != INF:                              # метка с карты города
+	if CityMap.pin.x != INF:                              # метка с карты города (дальше края — флажок на краю круга)
 		var pp: Vector2 = to_map.call(CityMap.pin)
+		if (pp - c).length() > rad - 10.0 * _s:
+			pp = c + (pp - c).normalized() * (rad - 10.0 * _s)
 		_map.draw_line(pp, pp + Vector2(0, -16) * _s, Color(1.0, 0.85, 0.55), 1.5 * _s, true)
 		_map.draw_colored_polygon(PackedVector2Array([pp + Vector2(0, -16) * _s, pp + Vector2(10, -12) * _s, pp + Vector2(0, -8) * _s]),
 			CRIMSON_HI)
