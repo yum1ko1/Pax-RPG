@@ -27,6 +27,7 @@
 	"pax_rpg_map_pin": "Marker",
 	"pax_rpg_map_dist": "≈ %d m away",
 	"pax_rpg_conc_broken": "Concentration broken! The enemy will execute you",
+	"pax_rpg_guard_broken": "Guard broken — parry or dodge the veteran",
 	"pax_rpg_conc_enemy_broken": "Enemy broken — LMB: Bloodthirsty Strike",
 	"pax_rpg_hero_executed": "Enemy's Bloodthirsty Strike — a third of your health",
 	"pax_rpg_bloodthirsty": "Bloodthirsty Strike",

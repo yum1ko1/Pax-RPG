@@ -2821,6 +2821,39 @@ func _combat_fx_hit(gob: Goblin, hit: Dictionary) -> void:
 		_cam_roll += _hf("cam_final_roll", 0.045) * (1.0 if randf() < 0.5 else -1.0)
 
 
+## Эффекты защиты (парирование, блок, след клинка на промахе) — по настройке «эффекты боя»; null — выключены.
+func _guard_fx() -> HitVfx:
+	return _landing_fx() if bool(mod.get_setting("combat_fx", true)) else null
+
+
+func _mana_col() -> Color:
+	var col: Array = hero_cfg.get("mana_color", [1.0, 0.08, 0.16])
+	return Color(float(col[0]), float(col[1]), float(col[2]))
+
+
+## Куда шёл удар врага по герою (по горизонтали); без атакующего — в лицо герою.
+func _from_foe(attacker: Node3D, fwd: Vector3) -> Vector3:
+	if attacker == null or not is_instance_valid(attacker):
+		return -fwd
+	var dir := _player.global_position - attacker.global_position
+	dir.y = 0.0
+	return dir if dir.length() > 0.01 else -fwd
+
+
+## Враг принял («guard») или отбил («parry») удар героя: эффект на линии удара, у груди врага.
+func _guard_fx_at(gob: Goblin, res: String) -> void:
+	var hfx := _guard_fx()
+	if hfx == null:
+		return
+	var to := gob.global_position - _player.global_position
+	to.y = 0.0
+	var at := gob.global_position + Vector3(0.0, 1.1, 0.0) - to.normalized() * 0.4
+	if res == "parry":
+		hfx.parry(at, to, _mana_col())
+	else:
+		hfx.block(at, to, _mana_col())
+
+
 ## Каждый удар по hit_times — алая вспышка маны на острие, попал он или нет (видно, что удар был).
 func _combat_fx_swing(hit: Dictionary) -> void:
 	var tip: Vector3 = hit.get("tip", Vector3.INF)
@@ -2950,6 +2983,7 @@ func _strike(hit: Dictionary) -> void:
 	var fwd := -_body_mesh.global_transform.basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized()
+	var contact := false
 	for g: Variant in _goblins:
 		if not is_instance_valid(g) or not (g as Goblin).is_alive():
 			continue
@@ -2961,6 +2995,7 @@ func _strike(hit: Dictionary) -> void:
 			continue
 		if d > 0.3 and fwd.dot(to / d) < float(hit.arc):
 			continue
+		contact = true
 		var res := gob.take_damage(float(hit.damage) * _dmg_mult(), _player.global_position, bool(hit.get("knock", false)))
 		if _strike_result(gob, res, float(hit.damage)):
 			continue
@@ -2977,6 +3012,11 @@ func _strike(hit: Dictionary) -> void:
 		if bool(hit.get("final", false)) and gob.is_alive() and not gob.boss:   # финал серии — алой энергией отбрасывает
 			var away := to / d if d > 0.3 else fwd
 			gob.launch(away * _hf("final_push", 6.5) + Vector3(0.0, _hf("final_push_up", 2.2), 0.0))
+	if not contact:                                      # промах: след клинка — видно, куда ушёл взмах
+		var hfx := _guard_fx()
+		if hfx != null:
+			hfx.trail(_player.global_position + Vector3(0.0, 1.2, 0.0), fwd, _mana_col(),
+				1.0 if int(hit.get("step", 0)) % 2 == 0 else -1.0)
 
 
 ## Масса в ударе: импульс p = m·v (острие v = ω·r), враг отлетает на Δv = p/m_врага (сохранение импульса), герою —
@@ -3097,6 +3137,7 @@ func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
 			_spend(base_dmg * _hf("conc_hit_blocked", 0.5) * (1.5 if _conc < _conc_max() / 3.0 else 1.0), gob)
 			_sfx_once("sounds/katana_hit_%d.ogg" % randi_range(0, 3), -5.0)
 			_sparks(gob.global_position + Vector3(0.0, 1.0, 0.0), Color(1.0, 0.65, 0.3), 16, 3.5)
+			_guard_fx_at(gob, "guard")
 			if _hero != null:
 				_hero.hitstop(0.05)
 			return true
@@ -3104,6 +3145,7 @@ func _strike_result(gob: Goblin, res: String, base_dmg: float) -> bool:
 			_cs_add("parried_me")
 			_parry_sound()
 			_sparks(gob.global_position + Vector3(0.0, 1.1, 0.0), Color(1.0, 0.85, 0.4), 44, 5.5)
+			_guard_fx_at(gob, "parry")
 			_shake = 0.25
 			_shake_amp = 0.06
 			_hero_break(gob)
@@ -3386,11 +3428,12 @@ func _cs_tick() -> void:
 		return
 	var res := "lost" if _cs_lost else str(_arena.get("last_result")) if is_instance_valid(_arena) else "left"
 	var sw := int(_cs.get("swings", 0))
-	var line := "[pax_rpg combat] stage=%d result=%s time=%.1f swings=%d hits=%d acc=%d%% kills=%d guarded=%d parried_me=%d parries=%d blocks=%d dodges=%d taken=%d executions=%d hp=%d aim_assist=%s" % [
+	var line := "[pax_rpg combat] stage=%d result=%s time=%.1f swings=%d hits=%d acc=%d%% kills=%d guarded=%d parried_me=%d parries=%d blocks=%d dodges=%d taken=%d executions=%d guard_broken=%d hp=%d aim_assist=%s" % [
 		(_arena.stage() + 1) if is_instance_valid(_arena) else 0, res, (Time.get_ticks_msec() - _cs_t0) / 1000.0,
 		sw, int(_cs.get("hits", 0)), int(100.0 * float(_cs.get("hits", 0)) / maxf(float(sw), 1.0)), int(_cs.get("kills", 0)),
 		int(_cs.get("guarded", 0)), int(_cs.get("parried_me", 0)), int(_cs.get("parries", 0)), int(_cs.get("blocks", 0)),
-		int(_cs.get("dodges", 0)), int(_cs.get("taken", 0)), int(_cs.get("executions", 0)), int(_hp), str(_aim_assist())]
+		int(_cs.get("dodges", 0)), int(_cs.get("taken", 0)), int(_cs.get("executions", 0)), int(_cs.get("guard_broken", 0)), int(_hp),
+		str(_aim_assist())]
 	print(line)
 
 
@@ -3564,6 +3607,9 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_parry_feel(attacker)
 		_parry_sound(attacker != null and str(attacker.get("_atk")) == "Kick")   # пинок — глухой шлепок, не звон стали
 		_sparks(spark_at, Color(1.0, 0.8, 0.35), 40, 5.0)
+		var pfx := _guard_fx()
+		if pfx != null:
+			pfx.parry(spark_at, _from_foe(attacker, fwd), _mana_col())
 		_shake = maxf(_shake, 0.12)
 		_shake_amp = 0.04
 		if attacker is Goblin:
@@ -3577,6 +3623,19 @@ func _on_hero_hit(damage: float, attacker: Node3D = null, kind := "") -> void:
 		_since_hit = 0.0
 		_cs_add("blocks")
 		_sparks(spark_at, Color(1.0, 0.6, 0.25), 14, 3.0)
+		var bfx := _guard_fx()
+		if bfx != null:
+			bfx.block(spark_at, _from_foe(attacker, fwd), _mana_col())
+		if kind == "breaker":                           # пролом защиты ветерана: блок держит удар, но не концентрацию
+			_hero.block_hit(true)
+			_cs_add("guard_broken")
+			_armor_hit_sound(damage)
+			_shake = maxf(_shake, 0.2)
+			_shake_amp = 0.06
+			_hp = maxf(1.0, _hp - damage * 0.35)
+			_toast = {"text": mod.tr_key("pax_rpg_guard_broken"), "t": 0.0}
+			_spend(_conc_max() * _hf("conc_guard_break", 0.7) * tired * guard, attacker)
+			return
 		_hero.block_hit(heavy)                          # отдача: сдвиг назад — root motion клипа
 		if attacker is Goblin:
 			(attacker as Goblin).on_blocked(damage, heavy)   # атакующий тратит больше блокирующего
