@@ -54,8 +54,12 @@ void vertex() {
 void fragment() {
 	vec4 a = texture(albedo_tex, UV) * albedo_col;
 	ALBEDO = a.rgb * tint;
+#ifndef FOLIAGE_OPAQUE
+	// FOLIAGE_OPAQUE (city.gd → непрозрачные поверхности: кора, кусты без карточек) — без альфа-среза: там ALPHA = 1
+	// и так ничего не срезала, а с ALPHA_SCISSOR_THRESHOLD глубина и тени шли через фрагментный шейдер с discard
 	ALPHA = use_alpha ? a.a : 1.0;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
+#endif
 	ROUGHNESS = use_rough_tex ? texture(rough_tex, UV).g * roughness : roughness;
 	SPECULAR = 0.35;
 	BACKLIGHT = a.rgb * backlight;

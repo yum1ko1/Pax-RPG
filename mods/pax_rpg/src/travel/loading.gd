@@ -9,6 +9,7 @@ extends CanvasLayer
 
 const Katana := preload("res://mods/pax_rpg/src/ui/katana.gd")
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const FADE := 0.35
 const ARTS := 4
 # катаны: отрезок между костями (от нижней к верхней), где на нём, угол рукояти к отрезку (рад)
@@ -62,7 +63,7 @@ func setup(m: PaxMod = null) -> void:
 	_text.add_theme_font_override("font", _serif)
 	if mod == null:
 		return
-	_sheet = mod.texture("textures/loading/death_sheet.png")
+	_sheet = Assets.tex(mod, "textures/loading/death_sheet.png")
 	var parsed: Variant = JSON.parse_string(mod.read_text("textures/loading/death.json"))
 	_anim = parsed if parsed is Dictionary else {}
 	var sh: Shader = mod.shader("shaders/reveal.gdshader")

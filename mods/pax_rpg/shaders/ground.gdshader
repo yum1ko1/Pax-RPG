@@ -45,39 +45,68 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
+// Есть ли в квадрате 2×2 пикселя (по нему видеокарта считает мип выборки) хоть один v > 0 — ответ один на все
+// четыре: выборки внутри такой ветки получают верный мип, на границе ветки нет шва. В Compatibility (GLES3)
+// точных производных нет — там считается всё, как раньше.
+vec4 quad_any(vec4 v) {
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	return vec4(1.0);
+#else
+	v = max(v, vec4(0.0));
+	v += abs(dFdxFine(v));
+	return v + abs(dFdyFine(v));
+#endif
+}
+
 void fragment() {
 	vec2 p = wpos.xz;
 	vec2 m = texture(mask, (p - mask_rect.xy) / mask_rect.zw).rg;
 	float n = noise(p * 0.45) * 0.55 + noise(p * 1.7) * 0.3 + noise(p * 5.0) * 0.15;
+	// доля кладки w = smoothstep(0.42, 0.62, rw + (h − 0.45) · 0.5), высота камня h — 0..1: при rw ≤ 0.145 кладки
+	// нет при любом h (w = 0 — её выборки не нужны), при rw ≥ 0.845 — сплошная кладка (w = 1 — не нужна глина)
+	float rw = m.r + (n - 0.5) * 0.55;
+	vec4 need = quad_any(vec4(rw - 0.145, 0.845 - rw, 0.0, 0.0));   // нужна кладка · нужна глина
 
 	// глина: два слоя (второй — повёрнут и крупнее), пятна цвета
-	vec2 g1 = p / g_tile;
-	vec2 g2 = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8)) * p / (g_tile * 2.3) + vec2(0.37, 0.71);
-	float gb = smoothstep(0.3, 0.7, noise(p * 0.07));
-	vec3 gc = mix(texture(g_col, g1).rgb, texture(g_col, g2).rgb, gb * 0.6);
-	vec3 gn = mix(texture(g_nrm, g1).rgb, texture(g_nrm, g2).rgb, gb * 0.6);
-	float gr = texture(g_rgh, g1).r;
-	gc *= mix(vec3(0.82, 0.8, 0.78), vec3(1.1, 1.06, 1.0), noise(p * 0.035));
-	// тропы: темнее, глаже, без травы — утоптано
-	float path = smoothstep(0.2, 0.7, m.g + (n - 0.5) * 0.5);
-	gc = mix(gc, gc * vec3(0.78, 0.72, 0.66), path * 0.8);
-	gn = mix(gn, vec3(0.5, 0.5, 1.0), path * 0.45);
-	gr = mix(gr, 0.78, path * 0.6);
+	vec3 gc = vec3(0.0);
+	vec3 gn = vec3(0.0);
+	float gr = 0.0;
+	if (need.y > 0.0) {
+		vec2 g1 = p / g_tile;
+		vec2 g2 = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8)) * p / (g_tile * 2.3) + vec2(0.37, 0.71);
+		float gb = smoothstep(0.3, 0.7, noise(p * 0.07));
+		gc = mix(texture(g_col, g1).rgb, texture(g_col, g2).rgb, gb * 0.6);
+		gn = mix(texture(g_nrm, g1).rgb, texture(g_nrm, g2).rgb, gb * 0.6);
+		gr = texture(g_rgh, g1).r;
+		gc *= mix(vec3(0.82, 0.8, 0.78), vec3(1.1, 1.06, 1.0), noise(p * 0.035));
+		// тропы: темнее, глаже, без травы — утоптано
+		float path = smoothstep(0.2, 0.7, m.g + (n - 0.5) * 0.5);
+		gc = mix(gc, gc * vec3(0.78, 0.72, 0.66), path * 0.8);
+		gn = mix(gn, vec3(0.5, 0.5, 1.0), path * 0.45);
+		gr = mix(gr, 0.78, path * 0.6);
+	}
 
 	// кладка: параллакс по высоте (смещение UV к глазу)
-	vec3 vw = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
-	vec2 cuv = p / c_tile;
-	float h = texture(c_hgt, cuv).r;
-	cuv += vw.xz / max(vw.y, 0.3) * (h - 0.5) * c_depth / c_tile;
-	h = texture(c_hgt, cuv).r;
-	vec3 cc = texture(c_col, cuv).rgb;
-	vec3 cn = texture(c_nrm, cuv).rgb;
-	float cr = texture(c_rgh, cuv).r;
-	// край дороги: камни выступают в глину, между ними — грязь
-	float w = smoothstep(0.42, 0.62, m.r + (n - 0.5) * 0.55 + (h - 0.45) * 0.5);
-	float edge = w * (1.0 - smoothstep(0.75, 1.0, m.r + n * 0.2));
-	cc = mix(cc, cc * vec3(0.62, 0.56, 0.5), edge * (1.0 - h) * 0.9);     // грязь у края забивает щели
-	cr = mix(cr, 0.5, edge * (1.0 - h) * 0.5);
+	vec3 cc = vec3(0.0);
+	vec3 cn = vec3(0.0);
+	float cr = 0.0;
+	float h = 0.0;
+	float w = 0.0;
+	if (need.x > 0.0) {
+		vec3 vw = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+		vec2 cuv = p / c_tile;
+		h = texture(c_hgt, cuv).r;
+		cuv += vw.xz / max(vw.y, 0.3) * (h - 0.5) * c_depth / c_tile;
+		h = texture(c_hgt, cuv).r;
+		cc = texture(c_col, cuv).rgb;
+		cn = texture(c_nrm, cuv).rgb;
+		cr = texture(c_rgh, cuv).r;
+		// край дороги: камни выступают в глину, между ними — грязь
+		w = smoothstep(0.42, 0.62, rw + (h - 0.45) * 0.5);
+		float edge = w * (1.0 - smoothstep(0.75, 1.0, m.r + n * 0.2));
+		cc = mix(cc, cc * vec3(0.62, 0.56, 0.5), edge * (1.0 - h) * 0.9);     // грязь у края забивает щели
+		cr = mix(cr, 0.5, edge * (1.0 - h) * 0.5);
+	}
 
 	vec3 alb = mix(gc, cc, w);
 	vec3 nm = mix(gn, cn, w);

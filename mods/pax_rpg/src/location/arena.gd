@@ -38,6 +38,7 @@ const FLAT_OUT := 27.0                       # куда выходит геро�
 var _depth := DEPTH
 var _flat := false
 var fighting := false
+var last_result := ""                        # чем кончился последний бой: won / lost / left (строка боя в лог)
 var _root: Node3D                             # трибуны со зрителями, решётки
 var _crowd: Node3D
 var _gates: Node3D
@@ -79,6 +80,13 @@ func setup(m: PaxMod, view: Node, ui: Node, arena: Array, player: Node3D, spawn_
 	_fade_label.add_theme_font_size_override("font_size", 34)
 	_fade_label.add_theme_color_override("font_color", Color(1.0, 0.86, 0.92, 0.0))
 	_fade.add_child(_fade_label)
+
+
+## Затемнение с подписью этапа живёт в интерфейсе локации (ui), а не под ареной: уходит вместе с ареной — раньше
+## каждый вход в город оставлял на локации ещё один невидимый ColorRect с Label.
+func _exit_tree() -> void:
+	if is_instance_valid(_fade):
+		_fade.queue_free()
 
 
 ## Выбранный этап (0…4).
@@ -162,6 +170,7 @@ func start() -> void:
 
 
 func _win() -> void:
+	last_result = "won"
 	fighting = false
 	_foes.clear()
 	var i := stage()
@@ -178,6 +187,7 @@ func _win() -> void:
 func leave(lost := false) -> void:
 	if _busy or (not fighting and _root.get_child_count() == 0):
 		return
+	last_result = "lost" if lost else "left"
 	var out := func() -> void:
 		for f: Variant in _foes:
 			if is_instance_valid(f):
@@ -249,6 +259,9 @@ func _fill_crowd(on: bool) -> void:
 				else (absf(deg - 68.0) > 14.0 and absf(deg - 292.0) > 14.0)
 			if gap and rng.randf() < 0.6:                  # не в проходах к лестницам
 				var g := src.duplicate() as Node3D
+				# толпа без теней: ~55 скинов в каскадах солнца стоили дороже всех бойцов арены
+				for gi: Node in g.find_children("*", "GeometryInstance3D", true, false):
+					(gi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				g.position = center + Vector3(sin(a) * rr, h, cos(a) * rr)
 				g.rotation.y = a + PI                      # лицом к яме
 				_crowd.add_child(g)
@@ -412,13 +425,13 @@ func _bowl_mat(key: String) -> Material:
 		"arena_seat": ["large_sandstone_blocks", 0.4]}
 	if tex.has(key):
 		var t: Array = tex[key]
-		var d := Assets._dds(mod, "textures/arena/%s_diff.dds" % t[0])
-		var n := Assets._dds(mod, "textures/arena/%s_nor.dds" % t[0])
+		var d := Assets.dds_tex(mod, "textures/arena/%s_diff.dds" % t[0])
+		var n := Assets.dds_tex(mod, "textures/arena/%s_nor.dds" % t[0])
 		if d != null:
-			sm.albedo_texture = ImageTexture.create_from_image(d)
+			sm.albedo_texture = d
 		if n != null:
 			sm.normal_enabled = true
-			sm.normal_texture = ImageTexture.create_from_image(n)
+			sm.normal_texture = n
 		sm.uv1_triplanar = true
 		sm.uv1_world_triplanar = true
 		sm.uv1_scale = Vector3.ONE * float(t[1])

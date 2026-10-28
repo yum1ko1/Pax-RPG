@@ -271,7 +271,7 @@ func _mountain_mat() -> Material:
 
 ## Картинка мода с мипмапами (без них даль рябит).
 func _tex(path: String, normal: bool) -> Texture2D:
-	var tex := mod.texture(path)
+	var tex := Assets.tex(mod, path)                 # .dds рядом (BC7/BC5 с mip) — сразу он
 	if tex == null:
 		return null
 	var img := tex.get_image()
@@ -337,9 +337,10 @@ func yurt_y(x: float, z: float) -> float:
 
 
 ## Фон за стеной (без деталей, только силуэты в дымке): три тракта от ворот и концов Аллеи уходят в степь,
-## вдоль них деревни (срубы и юрты — лёгкие LOD-копии), по холмам — рощи дубов и сакуры. Всё одним MultiMesh на
-## модель, без теней и коллизий, дальше BACK_FAR м не рисуется.
-const BACK_FAR := 520.0
+## вдоль них деревни (срубы и юрты — лёгкие LOD-копии), по холмам — рощи дубов и сакуры. MultiMesh на модель
+## в каждом секторе по 45° вокруг города (сектор вне кадра не рисуется), без теней и коллизий.
+## Прежняя дальность 520 м не срабатывала (центр рамки общего MultiMesh — в ≤ 400 м от любой точки Гхарна) — не ставим.
+const BACK_SECTORS := 8
 const YURT := "models/gharn/props/yurt_large.glb"
 
 
@@ -368,7 +369,8 @@ func _backdrop() -> void:
 		roads.append(pts)
 		_road_strip(pts, 5.0)
 	# деревни у трактов: дома фасадом к дороге по обе стороны
-	var houses := ["models/gharn/house_timber_a_lo.glb", "models/gharn/house_timber_b_lo.glb", "models/gharn/house_two_b_lo.glb"]
+	# дальние копии (_lod2): прежних *_lo.glb нет — две трети мест в деревнях оставались пустыми
+	var houses := ["models/gharn/house_timber_a_lod2.glb", "models/gharn/house_timber_b_lod2.glb", "models/gharn/house_two_b_lod2.glb"]
 	for pts: Array in roads:
 		for vi: int in [8, 17, 26]:
 			var a: Vector2 = pts[vi]
@@ -407,24 +409,33 @@ func _backdrop() -> void:
 		var src := Assets.model(mod, path)
 		if src == null:
 			continue
-		var list: Array = places[path]
+		# секторами вокруг города: один MultiMesh на весь круг (рамка ~1.2 км) камера не отсекала — рощи и деревни
+		# за спиной рисовались каждый кадр (~1 млн треугольников)
+		var sectors := {}
+		for t: Variant in places[path]:
+			var o := (t as Transform3D).origin
+			var s := posmod(floori((atan2(o.z - c.y, o.x - c.x) + PI) / TAU * BACK_SECTORS), BACK_SECTORS)
+			if not sectors.has(s):
+				sectors[s] = []
+			(sectors[s] as Array).append(t)
 		for mi: Node in src.find_children("*", "MeshInstance3D", true, false):
 			var g := mi as MeshInstance3D
 			if g.mesh == null:
 				continue
 			var rel := src.global_transform.affine_inverse() * g.global_transform if src.is_inside_tree() else _rel(src, g)
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = g.mesh
-			mm.instance_count = list.size()
-			for i: int in list.size():
-				mm.set_instance_transform(i, (list[i] as Transform3D) * rel)
-			var mmi := MultiMeshInstance3D.new()
-			mmi.multimesh = mm
-			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-			mmi.visibility_range_end = BACK_FAR
-			root.add_child(mmi)
+			for s: Variant in sectors:
+				var list: Array = sectors[s]
+				var mm := MultiMesh.new()
+				mm.transform_format = MultiMesh.TRANSFORM_3D
+				mm.mesh = g.mesh
+				mm.instance_count = list.size()
+				for i: int in list.size():
+					mm.set_instance_transform(i, (list[i] as Transform3D) * rel)
+				var mmi := MultiMeshInstance3D.new()
+				mmi.multimesh = mm
+				mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+				root.add_child(mmi)
 		src.free()
 
 

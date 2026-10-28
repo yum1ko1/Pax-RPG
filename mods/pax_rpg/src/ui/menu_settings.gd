@@ -6,6 +6,7 @@ extends Control
 ## иначе фон меню под тёмной вуалью.
 
 const PauseMenu := preload("res://mods/pax_rpg/src/location/pause_menu.gd")
+const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const AudioBus := preload("res://mods/pax_rpg/src/location/audio_bus.gd")
 const CRIMSON := Color(1.0, 0.16, 0.22)
 const TEXT := Color(0.74, 0.71, 0.79)
@@ -42,7 +43,7 @@ func setup(m: PaxMod, item_font: FontFile, value_font: FontFile, find_menu: Call
 	_value_font = vv
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bg_tex: Texture2D = mod.texture("textures/menu/settings_bg.jpg")   # самурай молится на выступе, катана на коленях
+	var bg_tex: Texture2D = Assets.tex(mod, "textures/menu/settings_bg.jpg")   # самурай молится на выступе, катана на коленях
 	if bg_tex != null:
 		var bg := TextureRect.new()
 		bg.texture = bg_tex
@@ -54,8 +55,8 @@ func setup(m: PaxMod, item_font: FontFile, value_font: FontFile, find_menu: Call
 		sh.code = BG
 		_mat = ShaderMaterial.new()
 		_mat.shader = sh
-		_mat.set_shader_parameter("plate", mod.texture("textures/menu/settings_plate.jpg"))   # фон без скалы
-		_mat.set_shader_parameter("fgmask", mod.texture("textures/menu/settings_fg.png"))     # скала с самураем
+		_mat.set_shader_parameter("plate", Assets.tex(mod, "textures/menu/settings_plate.jpg"))   # фон без скалы
+		_mat.set_shader_parameter("fgmask", Assets.tex(mod, "textures/menu/settings_fg.png"))     # скала с самураем
 		bg.material = _mat
 		add_child(bg)
 	_embers = CPUParticles2D.new()                   # искры пламени снизу справа: лёгкие, поднимаются и гаснут
@@ -210,6 +211,10 @@ func _open(t: String) -> void:
 				DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if v == "full" else DisplayServer.WINDOW_MODE_WINDOWED))
 			_gcycle("Frame limit", "fps_limit", [["0", "Off"], ["60", "60"], ["144", "144"], ["165", "165"], ["240", "240"]], "0")
 			_gtoggle("V-Sync", "vsync", false)
+			_section("MAIN MENU")
+			_cycle("Menu", [["cinematic", "Cinematic (intro video)"], ["classic", "Classic"]],
+				str(mod.get_setting("menu_bg", "cinematic")), func(v: String) -> void: mod.set_setting("menu_bg", v))
+			_note("Cinematic: the intro plays once at startup (Esc, Space or a click skips it), the menu is the living end shot. The menu switches when you leave Settings.")
 		"CITY":
 			_cycle("Preset", [["custom", "Custom"], ["low", "Low"], ["mid", "Medium"], ["high", "High"], ["ultra", "Ultra"]],
 				"custom", func(v: String) -> void:
@@ -229,6 +234,7 @@ func _open(t: String) -> void:
 			_gtoggle("Ambient occlusion", "ssao", true)
 			_gtoggle("Reflections", "ssr", true)
 			_gslider("Lamp shadows (nearest lights; farther ones get softer, never vanish)", "lamp_shadows_n", 40.0, 0.0, 40.0, 4.0, false)
+			_gcycle("Shadow quality", "shadow_q", [["0", "Low"], ["1", "Medium"], ["2", "High"]], "2")
 			_slider("Volumetric fog", float(mod.get_setting("vol_fog", 0.5)), 0.0, 1.0, 0.01, true, func(v: float) -> void:
 				mod.set_setting("vol_fog", v))
 			_section("CAMERA")

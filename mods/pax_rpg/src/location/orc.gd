@@ -87,6 +87,7 @@ func setup(m: PaxMod, target: Node3D, on_hit: Callable, at: Vector3, hero_attack
 	hp = max_hp
 	display_key = "pax_rpg_orc"
 	boss = true
+	flinch_pitch = false                             # наклон корпуса вперёд/назад ведёт сам (торможение)
 	mass = 150.0                                     # кг с топором и бронёй: удары его почти не сдвигают
 	title_key = "pax_rpg_orc_title"
 	_snd_swing = _sound("sounds/foe_swing_%d.mp3", 1, 1, 0.75, 8.0)      # тяжёлый топор — тот же свист, ниже       # тяжёлый топор — ниже и громче
@@ -613,8 +614,8 @@ func _attack_tick(delta: float, dist: float, dir: Vector3) -> Vector3:
 		_snd(_snd_swing)
 	if _atk == "JumpAttack" and not _slam_done and hits.size() > 0 and frac >= float(hits[0]):
 		_slam_done = true
-		var fw := -global_transform.basis.z
-		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.2)
+		var fw := _model.global_transform.basis.z if _model != null else -global_transform.basis.z   # модель смотрит по +Z
+		slammed.emit(global_position + Vector3(fw.x, 0.0, fw.z).normalized() * 1.7)   # куда вбит топор
 	if _hits_done < hits.size():
 		var ht := float(hits[_hits_done])
 		if not holding and frac >= ht - float(WINDOW[0]):
@@ -780,3 +781,12 @@ func _respawn() -> void:
 	_atk = ""
 	_roar_phase = false
 	_since_special = 4.0
+
+
+## Угроза для указателя у края экрана: таран и вихрь — не парировать (2), прочие замахи — 1.
+func threat() -> int:
+	if dead:
+		return 0
+	if _state in ["charge_wind", "charge", "spin"]:
+		return 2
+	return 1 if _state == "attack" else 0

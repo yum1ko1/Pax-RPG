@@ -1,0 +1,64 @@
+// Луна у глобуса (planet/heavens3d.gd): Селунэ (kind 0) — серый камень с красной маной в трещинах, Иру (kind 1) —
+// лиловая, пропитана розовой маной. Свет — от Хоэна (sun — в осях луны), своё свечение маны видно и в тени.
+// Узор — тот же, что у лун в небе локаций (sky.gdshader: moon_look).
+shader_type spatial;
+render_mode unshaded, cull_back, shadows_disabled;
+
+uniform float kind = 0.0;
+uniform vec3 sun = vec3(1.0, 0.0, 0.0);
+
+varying vec3 v_p;
+
+float hash3(vec3 p3) {
+	p3 = fract(p3 * 0.1031);
+	p3 += dot(p3, p3.zyx + 31.32);
+	return fract((p3.x + p3.y) * p3.z);
+}
+float noise3(vec3 p) {
+	vec3 i = floor(p), f = fract(p);
+	vec3 u = f * f * (3.0 - 2.0 * f);
+	float a = mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), u.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), u.x), u.y);
+	float b = mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), u.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0)), u.x), u.y);
+	return mix(a, b, u.z);
+}
+float fbm3(vec3 p) {
+	float v = 0.0, a = 0.5;
+	for (int i = 0; i < 5; i++) { v += a * noise3(p); p = p * 2.07 + vec3(1.7, 9.2, 3.1); a *= 0.5; }
+	return v;
+}
+
+// Селунэ (kind 0): серый камень, по жилам бежит красная мана; Иру (kind 1): лиловая, насквозь в розовой мане.
+// p — точка на сфере луны; albedo — под светом Хоэна, glow светит сам.
+void moon_look(float k, vec3 p, float time, out vec3 albedo, out vec3 glow) {
+	if (k < 0.5) {
+		float g = 0.42 + 0.3 * fbm3(p * 3.0 + 3.0);
+		float mar = smoothstep(0.48, 0.66, fbm3(p * 1.7 + 7.0));
+		float c = noise3(p * 9.0 + 2.0);
+		float rim = smoothstep(0.64, 0.68, c) - smoothstep(0.7, 0.76, c);
+		albedo = vec3(0.62, 0.62, 0.66) * (g * (1.0 - 0.35 * mar) + 0.12 * rim) * 1.4;
+		vec3 wq = p * 2.3 + vec3(fbm3(p * 2.0 + time * 0.03), fbm3(p * 2.0 + 5.0 - time * 0.02), 0.0) * 1.6;
+		float v1 = pow(1.0 - abs(2.0 * noise3(wq) - 1.0), 34.0);
+		float v2 = pow(1.0 - abs(2.0 * noise3(wq * 2.7 + 4.0) - 1.0), 44.0) * 0.5;
+		float pulse = 0.55 + 0.45 * sin(time * 1.6 - fbm3(p * 4.0) * 14.0);
+		glow = vec3(1.0, 0.1, 0.12) * (v1 * 1.7 + v2) * pulse + vec3(0.5, 0.02, 0.05) * mar * 0.08;
+	} else {
+		vec3 sp = vec3(p.x * 1.4, p.y * 5.0, p.z * 1.4);
+		float bands = fbm3(sp + vec3(time * 0.02, 0.0, 0.0) + fbm3(p * 2.0 + 1.0) * 1.3);
+		albedo = mix(vec3(0.6, 0.48, 0.9), vec3(1.0, 0.56, 0.86), smoothstep(0.42, 0.72, bands));
+		float sw = fbm3(p * 3.0 + vec3(time * 0.05, 0.0, -time * 0.03) + fbm3(p * 2.0 - time * 0.04) * 2.0);
+		glow = vec3(1.0, 0.35, 0.75) * pow(smoothstep(0.5, 0.86, sw), 2.0) * 1.3 * (0.8 + 0.2 * sin(time * 0.9));
+	}
+}
+
+void vertex() {
+	v_p = normalize(VERTEX);
+}
+
+void fragment() {
+	vec3 alb, gl;
+	moon_look(kind, v_p, TIME, alb, gl);
+	float l = max(dot(v_p, normalize(sun)), 0.0);
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+	vec3 rimc = kind < 0.5 ? vec3(0.9, 0.15, 0.2) : vec3(1.0, 0.45, 0.85);
+	ALBEDO = alb * (0.04 + 1.05 * l) + gl * (1.0 + 0.5 * (1.0 - l)) + rimc * fres * (kind < 0.5 ? 0.35 : 0.8);
+}

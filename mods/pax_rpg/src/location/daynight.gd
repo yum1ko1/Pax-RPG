@@ -3,8 +3,10 @@ const Vfx := preload("res://mods/pax_rpg/src/location/vfx.gd")
 ## Смена суток в локации: час идёт (config/location.json → day_minutes — длина суток в минутах, start_hour),
 ## солнце ходит по дуге (восход 6:00, закат 18:00), ночью тот же свет — луна, голубая и слабая; небо
 ## (shaders/sky.gdshader: day, dusk), окружение и туман следуют; ночью фонари, костры и кристаллы разгораются,
-## окна светятся тёплым. Консоль F8: rpg_time <час>.
+## окна светятся тёплым. Хоэн, луны Селунэ и Иру и Око Раскола в небе — по часам и дню мира (sky_clock.gd).
+## Консоль F8: rpg_time <час>.
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
+const SkyClock := preload("res://mods/pax_rpg/src/sky_clock.gd")
 
 var hour := 17.0
 var day_minutes := 20.0
@@ -32,7 +34,8 @@ func setup(e: Environment, s: DirectionalLight3D, sm: ShaderMaterial, cfg: Dicti
 
 
 ## Часы мира: время идёт только в пути — пока игрок стоит (на глобусе или в городе), час не меняется. Хранится в
-## настройке мода «world_hour» (clock — мод, ставит travel.gd); переход добавляет часы пути (advance).
+## настройках мода «world_hour» и «world_day» (clock — мод, ставит travel.gd); переход добавляет часы пути (advance),
+## полночь — день.
 static var clock: PaxMod
 
 
@@ -42,9 +45,22 @@ static func world_hour(cfg: Dictionary) -> float:
 	return fmod(float(clock.get_setting("world_hour", cfg.get("start_hour", 17.0))), 24.0)
 
 
+static func world_day() -> int:
+	if clock == null:
+		return 0
+	return int(clock.get_setting("world_day", 0))
+
+
+## Время мира в днях от начала игры: день + час / 24 (по нему ходят луны, sky_clock.gd).
+static func world_time(cfg: Dictionary) -> float:
+	return float(world_day()) + world_hour(cfg) / 24.0
+
+
 static func advance(cfg: Dictionary, hours: float) -> void:
 	if clock != null:
-		clock.set_setting("world_hour", fmod(world_hour(cfg) + hours, 24.0))
+		var total := world_hour(cfg) + hours
+		clock.set_setting("world_day", world_day() + int(floor(total / 24.0)))
+		clock.set_setting("world_hour", fmod(total, 24.0))
 
 
 ## Ключ перевода части суток: pax_rpg_tod_night / morning / day / evening.
@@ -79,12 +95,16 @@ func _process(delta: float) -> void:
 
 
 var frozen := true                 # время суток стоит, пока игрок в городе (часы мира идут на глобусе)
+var _days := 0                     # сколько полуночей прошло в локации, пока время шло (для лун)
 
 
 func _proc(delta: float) -> void:
 	if frozen:
 		return
-	hour = fmod(hour + delta * 24.0 / (day_minutes * 60.0), 24.0)
+	var h := hour + delta * 24.0 / (day_minutes * 60.0)
+	if h >= 24.0:
+		_days += 1
+	hour = fmod(h, 24.0)
 	_since += delta
 	if _since >= STEP:
 		_since = 0.0
@@ -125,6 +145,7 @@ func apply() -> void:
 	if sky_mat != null:
 		sky_mat.set_shader_parameter("day", day)
 		sky_mat.set_shader_parameter("dusk", dusk)
+		_heavens()
 	if env != null:
 		env.ambient_light_energy = lerpf(0.07, 0.42, day)       # ночью — чуть лунного подсвета
 		var fog_night := Color(0.18, 0.14, 0.32)
@@ -152,3 +173,16 @@ func apply() -> void:
 		var m := g as BaseMaterial3D
 		if m != null:
 			m.emission_energy_multiplier = lerpf(0.1, 1.3, night)
+
+
+## Небо над Гхарном: куда смотреть на Хоэн, Око Раскола и луны в этот час этого дня (sky.gdshader рисует их сам).
+func _heavens() -> void:
+	var s := SkyClock.sky_state(float(world_day() + _days) + hour / 24.0)
+	sky_mat.set_shader_parameter("heavens", 1.0)
+	sky_mat.set_shader_parameter("sun_dir", s["sun"])
+	sky_mat.set_shader_parameter("eye_c", s["eye_c"])
+	sky_mat.set_shader_parameter("eye_n", s["eye_n"])
+	sky_mat.set_shader_parameter("eye_r", SkyClock.EYE_R)
+	for id: String in ["selune", "iru"]:
+		sky_mat.set_shader_parameter(id + "_c", s[id])
+		sky_mat.set_shader_parameter(id + "_r", float((SkyClock.MOONS[id] as Dictionary)["size"]))

@@ -5,6 +5,7 @@ extends CharacterBody3D
 const Assets := preload("res://mods/pax_rpg/src/location/assets.gd")
 const Prof := preload("res://mods/pax_rpg/src/location/prof.gd")
 const Names := preload("res://mods/pax_rpg/src/location/names.gd")
+const NPC_LAYER := 1 << 15          # = gfx.gd NPC_LAYER
 
 const DIR := "models/goblin/"
 ## Облики: горожане — гоблин Meshy (клипы — models/goblin/walk.glb, idle.glb) и гоблин с рюкзаком, их много;
@@ -12,7 +13,8 @@ const DIR := "models/goblin/"
 ## У моделей Tripo (models/goblin/variants/) клипы walk/idle — ходьба и стойка гоблина, перенесённые на их скелет
 ## (pax_rpg/dev/gharn/npc_variant.py). Размер — как у модели, без случайного масштаба.
 const COMMON := [["goblin_rigged.glb", 60], ["variants/goblin_b.glb", 40]]
-const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb"}
+const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb",
+	"trader": "variants/goblin_b.glb"}
 const RACE_OF := {"variants/elf_warrior.glb": "elf", "variants/orc_citizen.glb": "orc"}
 const SPEED := 1.3
 
@@ -36,6 +38,7 @@ var worry := ""                     # что заботит сегодня
 var race := "goblin"
 var temper := ""
 var relation := 50
+var shop := false                   # торгует за прилавком базара: в разговоре кнопка «Лавка» (свой товар дня)
 var npc_index := -1                 # номер жителя в городе (задания и отношения — по нему, quest.gd)
 var talking := false
 var _prompt: Label3D
@@ -43,12 +46,18 @@ var _prompt: Label3D
 # дальше FAR м — анимация 15 раз в секунду (с 30+ м глаз разницы не видит); за кадром — не рисуется, анимация стоит, шаг пути —
 # раз в PHYS_SKIP тактов физики с накопленным временем (маршрут тот же, просто реже считается)
 const FAR := 30.0
+const HIDE := 85.0                   # = visibility_range_end 80 + запас 5 (setup)
 const PHYS_SKIP := 4
 var _anim_acc := 0.0
 var _phys_acc := 0.0
 var _tick := 0
 var _seen := true
 var _far := false
+# лучи жителей (земля — раз в 0.2 с, «упёрся» — раз в 0.25 с) разнесены по тактам: раньше у всех таймеры стартовали
+# с нуля и шли в ногу — 44 луча в одном такте (пик TIME_PHYSICS_PROCESS — это максимум такта за секунду)
+static var _stagger := 0
+var _q: PhysicsRayQueryParameters3D   # один запрос на жителя (свой exclude), а не новый объект на каждый луч
+var _clip_now := ""                   # клип, что уже играет: _play зовут каждый такт — без вопросов к плееру
 
 
 ## as_role — род занятий места (стража у ворот, торговец за прилавком, единственные — arena_master, seer); пусто — любой.
@@ -78,6 +87,10 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int, as_ro
 	_prompt.visible = false
 	add_child(_prompt)
 	position = path[_i]
+	_stagger += 1
+	var ph := fmod(_stagger * 0.618034, 1.0)              # золотое сечение: фазы ровно по тактам, без случайных чисел
+	_ground_t = 0.2 * ph
+	_block_t = 0.25 * ph
 	floor_snap_length = 0.4
 	floor_max_angle = deg_to_rad(50.0)
 	var shape := CollisionShape3D.new()
@@ -99,6 +112,7 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int, as_ro
 	for g: Node in _model.find_children("*", "GeometryInstance3D", true, false):   # дальше 80 м жителя не видно в дымке
 		(g as GeometryInstance3D).visibility_range_end = 80.0
 		(g as GeometryInstance3D).visibility_range_end_margin = 5.0
+		(g as GeometryInstance3D).layers |= NPC_LAYER   # в тенях огней — только рядом с героем (gfx.gd NPC_LAYER)
 	Assets.track(DIR + look, _model)
 	_anim = _find(_model)
 	if _anim != null:
@@ -147,8 +161,12 @@ static func _find(n: Node) -> AnimationPlayer:
 
 
 func _play(c: String) -> void:
-	if _anim != null and _anim.has_animation(c) and _anim.current_animation != c:
+	if _anim == null or (c == _clip_now and _anim.is_playing()):
+		return
+	if _anim.has_animation(c) and _anim.current_animation != c:
 		_anim.play(c, 0.3)
+	if _anim.current_animation == c:
+		_clip_now = c
 
 
 # ---------- один ведущий житель ведёт всех: 2 вызова из движка в кадр вместо 2 × N (как менеджеры толпы) ----------
@@ -182,26 +200,29 @@ func _process(delta: float) -> void:
 	if _driver != self:
 		set_process(false)
 		return
+	var t0 := Time.get_ticks_usec()
 	for n: Variant in all:
 		n._proc_tick(delta)
+	Prof.add("NPC анимация", t0)                      # видимость и позы жителей (кадр; физика — «NPC»)
 
 
 func _physics_process(delta: float) -> void:
 	if _driver != self:
 		set_physics_process(false)
 		return
+	var t0 := Time.get_ticks_usec()
 	for n: Variant in all:
 		n._phys_tick(delta)
+	Prof.add("NPC", t0)                                 # все жители за такт — одной меткой (и её пик)
+	Prof.peak("NPC", t0)
 
 
 func _phys_tick(delta: float) -> void:
-	var t0 := Time.get_ticks_usec()
 	_tick += 1
 	_phys_acc += delta
 	if _seen or _tick % PHYS_SKIP == get_instance_id() % PHYS_SKIP:   # за кадром — реже, такты разнесены по жителям
 		_phys(_phys_acc)
 		_phys_acc = 0.0
-	Prof.add("NPC", t0)
 
 
 func _proc_tick(delta: float) -> void:
@@ -219,7 +240,12 @@ func _proc_tick(delta: float) -> void:
 			if pl.distance_to(p) > 1.0:
 				_seen = false
 				break
-		_far = p.distance_to(cam.global_position) > FAR
+		var dc := p.distance_to(cam.global_position)
+		_far = dc > FAR
+		if dc > HIDE:
+			_seen = false                               # дальше дальности видимости модели (80 + 5 м) его и так не видно,
+			                                            # но тени огней дальность не проверяют: поза двигалась — тень огня
+			                                            # перерисовывалась каждый кадр (и с тенью невидимого жителя)
 		if _model != null and _model.visible != _seen:
 			_model.visible = _seen                      # вне кадра не рисуется совсем (и тень не считается)
 	_anim_acc += delta
@@ -243,14 +269,14 @@ func _probe_ground() -> void:
 	var space := get_world_3d().direct_space_state if is_inside_tree() else null
 	if space == null:
 		return
+	var t0 := Time.get_ticks_usec()
 	var p := global_position
-	var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 1.2, 0), p - Vector3(0, 3.0, 0))
-	q.exclude = [get_rid()]
-	var hit := space.intersect_ray(q)
+	var hit := space.intersect_ray(_query(p + Vector3(0, 1.2, 0), p - Vector3(0, 3.0, 0)))
 	if not hit.is_empty():
 		_ground_y = (hit.position as Vector3).y + _foot_off
 	else:
 		_ground_y = p.y
+	Prof.add("NPC лучи", t0)
 
 
 ## Впереди на шаг кто-то стоит (герой, другой житель, телега) — луч на уровне груди.
@@ -258,10 +284,21 @@ func _blocked(d: Vector3) -> bool:
 	var space := get_world_3d().direct_space_state if is_inside_tree() else null
 	if space == null:
 		return false
+	var t0 := Time.get_ticks_usec()
 	var p := global_position + Vector3(0, 0.6, 0)
-	var q := PhysicsRayQueryParameters3D.create(p, p + d * 0.7)
-	q.exclude = [get_rid()]
-	return not space.intersect_ray(q).is_empty()
+	var hit := not space.intersect_ray(_query(p, p + d * 0.7)).is_empty()
+	Prof.add("NPC лучи", t0)
+	return hit
+
+
+## Запрос луча — тот же, что давал create(): маска 0xFFFFFFFF, без зон, сам житель исключён.
+func _query(from: Vector3, to: Vector3) -> PhysicsRayQueryParameters3D:
+	if _q == null:
+		_q = PhysicsRayQueryParameters3D.new()
+		_q.exclude = [get_rid()]
+	_q.from = from
+	_q.to = to
+	return _q
 
 
 static var _frustum: Array[Plane] = []
@@ -285,6 +322,24 @@ func set_giver(on: bool) -> void:
 		add_child(_giver)
 	if _giver != null:
 		_giver.visible = on
+
+
+var _sign: Label3D
+
+
+## Над торговцем лавки — вывеска «⚖ Лавка» (видно издалека, как метку задания, но выше и своим цветом).
+func set_sign(text: String) -> void:
+	if _sign == null:
+		_sign = Label3D.new()
+		_sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_sign.font_size = 48
+		_sign.outline_size = 12
+		_sign.pixel_size = 0.004
+		_sign.position = Vector3(0.0, 2.15, 0.0)
+		_sign.modulate = Color(1.0, 0.72, 0.42)
+		add_child(_sign)
+	_sign.text = text
+	_sign.visible = text != ""
 
 
 func show_prompt(on: bool) -> void:
@@ -372,4 +427,6 @@ func _phys(delta: float) -> void:
 	global_position += Vector3(d.x, 0.0, d.z) * _speed * delta
 	_play("walk")
 	if _model != null:
-		_model.rotation.y = lerp_angle(_model.rotation.y, atan2(d.x, d.z), minf(1.0, delta * 6.0))
+		var ry := atan2(d.x, d.z)
+		if absf(angle_difference(_model.rotation.y, ry)) > 0.0005:   # уже смотрит по ходу (< 0.03°) — поворот не пишем
+			_model.rotation.y = lerp_angle(_model.rotation.y, ry, minf(1.0, delta * 6.0))

@@ -30,6 +30,9 @@ void fragment() {
 	float fade = smoothstep(0.0, 0.2, life) * (1.0 - smoothstep(0.65, 1.0, life));
 	float a = 0.0;
 	int strands = 1 + int(hash(phase * 3.1) > 0.45);       // одна или две пряди
+	if (seg * fade <= 0.0) {
+		strands = 0;                                       // вне головы и хвоста прядь прозрачна — пряди не считаем
+	}
 	for (int k = 0; k < strands; k++) {
 		float fk = float(k);
 		float ph = phase + fk * 1.7;
