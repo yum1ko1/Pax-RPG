@@ -6,6 +6,7 @@
 # Итог и логи — в tools/ci/out/. Код выхода 1 — есть ошибки.
 #   GODOT=<путь к godot> — свой бинарник (иначе скачивается Godot $GODOT_VERSION в .cache/godot)
 #   NO_SMOKE=1 — без прогона арены
+#   SMOKE_CITY=1 — после арены ещё стройка Гхарна и прогулка (на программном OpenGL ~30 мин)
 set -uo pipefail
 CI="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$CI/../.." && pwd)"
@@ -47,11 +48,13 @@ if errors_only "$OUT/compile.log" | grep -qE "$PAT"; then fail=1; fi
 
 if [ "${NO_SMOKE:-0}" != "1" ]; then
   echo "== 3. прогон арены"
+  CITY_ARG=""
+  if [ "${SMOKE_CITY:-0}" = "1" ]; then CITY_ARG="--city"; fi
   if command -v xvfb-run > /dev/null; then
     xvfb-run -a -s "-screen 0 1920x1080x24" "$GODOT" --path "$PROJ" --rendering-driver opengl3 \
-      --resolution 1920x1080 --fixed-fps 60 -s res://ci/smoke.gd -- "--out=$OUT" > "$OUT/smoke.log" 2>&1
+      --resolution 1920x1080 --fixed-fps 60 -s res://ci/smoke.gd -- "--out=$OUT" $CITY_ARG > "$OUT/smoke.log" 2>&1
   else
-    "$GODOT" --headless --path "$PROJ" --fixed-fps 60 -s res://ci/smoke.gd > "$OUT/smoke.log" 2>&1
+    "$GODOT" --headless --path "$PROJ" --fixed-fps 60 -s res://ci/smoke.gd -- $CITY_ARG > "$OUT/smoke.log" 2>&1
   fi
   grep -E -B2 -A4 "smoke:|SCRIPT ERROR|GDScript backtrace" "$OUT/smoke.log" | head -60
   if errors_only "$OUT/smoke.log" | grep -qE "$PAT" || ! grep -q "smoke: ok" "$OUT/smoke.log"; then fail=1; fi

@@ -16,11 +16,13 @@ const SCRIPT := [
 	[530, "lmb"], [546, "lmb"],
 ]
 const END := 600
-const CITY_END := 1100              # потом — город Гхарн: прогулка по Тракту, скриншоты
+const CITY_END := 1100              # потом — город Гхарн: прогулка по Тракту, скриншоты (только с --city: на программном
+                                    # OpenGL в CI одна стройка Гхарна идёт ~30 мин)
 
 var frame := 0
 var mod: Node
 var out_dir := ""
+var city := false
 var _open_arena: Callable
 
 
@@ -28,6 +30,8 @@ func _initialize() -> void:
 	for a: String in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out_dir = a.trim_prefix("--out=")
+		elif a == "--city":
+			city = true
 	root.size = Vector2i(1920, 1080)
 	var main_script := load("res://mods/pax_rpg/main.gd") as GDScript
 	if main_script == null:
@@ -72,6 +76,10 @@ func _tick() -> void:
 			if img != null:
 				img.save_png(out_dir.path_join("arena.png"))
 				print("smoke: скриншот ", out_dir.path_join("arena.png"))
+		if not city:
+			print("smoke: ok")
+			quit(0)
+			return
 		loc.call("build", {"id": "gharn"})
 		print("smoke: город Гхарн построен")
 	if frame == END + 40:

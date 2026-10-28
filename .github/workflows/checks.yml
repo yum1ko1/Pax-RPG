@@ -2,8 +2,18 @@ name: Проверка мода
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      city:
+        description: "Ещё стройка Гхарна и прогулка (~30 мин на программном OpenGL)"
+        type: boolean
+        default: false
+
+concurrency:                        # новый пуш отменяет прошлую проверку той же ветки
+  group: checks-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
@@ -25,6 +35,8 @@ jobs:
 
       - name: Статика, компиляция, прогон арены
         run: tools/ci/run_checks.sh
+        env:
+          SMOKE_CITY: ${{ github.event.inputs.city == 'true' && '1' || '0' }}
 
       - name: Итог в отчёт
         if: always()
