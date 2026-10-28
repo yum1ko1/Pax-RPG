@@ -329,6 +329,13 @@
    "z": -48,
    "glyph": "鬼",
    "kind": "home"
+  },
+  {
+   "key": "pax_rpg_lm_oath",
+   "x": 25,
+   "z": -27,
+   "glyph": "樹",
+   "kind": "nature"
   }
  ],
  "kinds": {
@@ -364,12 +371,18 @@
    "pax_rpg_lm_tavern": 5,
    "pax_rpg_lm_bazaar": 6,
    "pax_rpg_lm_shamans": 8,
-   "pax_rpg_lm_forge": 15
+   "pax_rpg_lm_forge": 15,
+   "pax_rpg_lm_masters": 13,
+   "pax_rpg_lm_oath": 11
   },
   "big": [
    "pax_rpg_lm_gate",
    "pax_rpg_lm_khan",
-   "pax_rpg_lm_arena"
+   "pax_rpg_lm_arena",
+   "pax_rpg_lm_bazaar",
+   "pax_rpg_lm_masters",
+   "pax_rpg_lm_oath",
+   "pax_rpg_lm_forge"
   ]
  }
 }

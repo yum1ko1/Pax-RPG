@@ -873,7 +873,7 @@ for hx, hz in ((80.5, 13.5), (81.2, 15), (80.6, 29)):
 add("sack_grain", 71.5, 29.5)
 
 LANDMARKS_V3 = [["pax_rpg_lm_kurgans", -62, -76], ["pax_rpg_lm_garden", 0, -83], ["pax_rpg_lm_kennels", 35, -74],
-                ["pax_rpg_lm_masters", 55, 57], ["pax_rpg_lm_clans", -54, 58], ["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48]]
+                ["pax_rpg_lm_masters", 55, 57], ["pax_rpg_lm_clans", -54, 58], ["pax_rpg_lm_forge", -32, -24], ["pax_rpg_lm_stable", 76, 21], ["pax_rpg_lm_goblins", 46, -48], ["pax_rpg_lm_oath", 25, -27]]
 
 grass, rocks, bushes = 0, 0, 0
 tries = 0
@@ -1272,6 +1272,8 @@ items[:] = [i for i in items if not ("proxy" in i and math.hypot(i["p"][0], i["p
 # напротив вывески; ведунья — у Древа Клятв, лицом к площади
 proxy("arena_master", 7.4, 0, 25.6, -18)
 proxy("seer", 20.0, 0, -30.0, -34)
+# кузнец (заточка оружия, smith.gd) — во дворе кузни, у стойки с оружием, лицом к Аллее Знамён
+proxy("blacksmith", -28.5, 0, -18.8, 10)
 mask_rect = draw_mask(os.path.join(ROOT, "mods", "pax_rpg", "models", "gharn", "tex", "roads_mask.png"))
 data = {"_note": "Сгенерировано pax_rpg/dev/gharn/gharn_layout.py — правки вносить там.",
         "start": [0, 1.2, 74], "exit": [0, 86], "exit_radius": 5.0, "ground": GROUND, "ground_mask": {"tex": "models/gharn/tex/roads_mask.png", "rect": mask_rect}, "goblins": 0, "landmarks": LANDMARKS, "map": "config/gharn_map.json", "arena": [AX, AZ, PIT, A_IN, 0.0], "paths": paths, "npcs": npcs, "shots": shots, "outer": OUTER,

@@ -651,6 +651,8 @@ func _draw_cmp2() -> void:
 			_cmp2.draw_line(Vector2(x, cy + 8.0), Vector2(x, cy - 8.0), Color(1.0, 0.85, 0.55), 1.5, true)
 			_cmp2.draw_colored_polygon(PackedVector2Array([Vector2(x, cy - 8.0), Vector2(x + 9.0, cy - 5.0), Vector2(x, cy - 2.0)]),
 				CRIMSON_HI)
+			_center(Vector2(x, ch.end.y + 16.0), "%d м" % int(d.length()) if mod == null or mod.tr_key("pax_rpg_map_legend") == "Легенда"
+				else "%d m" % int(d.length()), _f_sc, 16, IVORY, 0, 80.0)   # hub: сколько идти до метки
 	_ci = self
 
 
@@ -692,6 +694,26 @@ func _draw_map() -> void:
 			dm.append(v)
 		_map.draw_colored_polygon(dm, CRIMSON_HI if bool(ed.get("locked", false)) else CRIMSON2)
 		_map.draw_polyline(dm + PackedVector2Array([dm[0]]), Color(0.1, 0.0, 0.0), 1.0 * _s, true)
+	for sv: Variant in _g("services", []):                # hub: жители-службы — цветные печати (как на карте M)
+		var sd: Dictionary = sv
+		var kind := str(sd.kind)
+		var col: Color = CityMap.SVC_COL.get(kind, IVORY)
+		var sp: Vector2 = to_map.call(sd.pos)
+		if (sp - c).length() > rad - 4.0 * _s:
+			continue
+		if kind == "stall":
+			_map.draw_circle(sp, 2.2 * _s, col)
+			continue
+		if kind.begins_with("quest_"):
+			var dq := PackedVector2Array()
+			for v: Vector2 in _diamond(sp, 6.5 * _s):
+				dq.append(v)
+			_map.draw_colored_polygon(dq, col)
+			_map.draw_polyline(dq + PackedVector2Array([dq[0]]), Color(0.12, 0.04, 0.02), 1.0 * _s, true)
+			continue
+		_map.draw_circle(sp, 5.5 * _s, Color(0.09, 0.03, 0.04, 0.95))
+		_map.draw_arc(sp, 5.5 * _s, 0.0, TAU, 20, col, 1.8 * _s, true)
+		_map.draw_circle(sp, 2.2 * _s, col)
 	if CityMap.pin.x != INF:                              # метка с карты города
 		var pp: Vector2 = to_map.call(CityMap.pin)
 		_map.draw_line(pp, pp + Vector2(0, -16) * _s, Color(1.0, 0.85, 0.55), 1.5 * _s, true)

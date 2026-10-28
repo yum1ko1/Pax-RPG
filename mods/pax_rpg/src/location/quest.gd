@@ -30,6 +30,15 @@ static func give(mod: PaxMod, city: Dictionary, npc_index: int, npc_name: String
 	return q
 
 
+## Метка жителя на карте и миникарте (location.gd → _hub_services): "offer" — есть поручение, "turn_in" — можно сдать,
+## "wait" — взято, ждёт; "" — нет. Пока — по одному текущему заданию.
+static func marker(mod: PaxMod, city_id: String, npc_index: int) -> String:
+	var q := get_q(mod)
+	if q.is_empty() or str(q.get("city", "")) != city_id or int(q.get("npc", -1)) != npc_index:
+		return ""
+	return "turn_in" if str(q.get("state", "")) == "found" else "wait"
+
+
 static func found(mod: PaxMod) -> void:
 	var q := get_q(mod)
 	if q.is_empty():

@@ -471,6 +471,9 @@ func _gui_input(event: InputEvent) -> void:
 			_press = mb.position
 			if not _legend_click(mb.position / s):
 				var w := _s2w(mb.position)
+				var hv := _hover_pos()                       # hub: щелчок по значку — метка ровно на нём (цель)
+				if hv.x != INF:
+					w = hv
 				pin = Vector2(INF, INF) if pin.x != INF and (_w2s(pin) - mb.position).length() < 16.0 * s else w
 		accept_event()
 		queue_redraw()
@@ -490,6 +493,13 @@ func _gui_input(event: InputEvent) -> void:
 			if d < bd:
 				bd = d
 				best = str(ma[0])
+		if not _hidden.get("svc", false):
+			var sv: Array = st.get("services", [])
+			for i: int in sv.size():
+				var d := (_w2s((sv[i] as Dictionary).pos) - mm.position).length()
+				if d < bd:
+					bd = d
+					best = "svc:%d" % i
 		_hover = best
 		accept_event()
 
@@ -526,6 +536,18 @@ func _legend_click(p: Vector2) -> bool:
 	return true
 
 
+## Мир под значком под курсором (место или житель-служба); INF — ничего.
+func _hover_pos() -> Vector2:
+	if _hover.begins_with("svc:"):
+		var sv: Array = st.get("services", [])
+		var i := int(_hover.substr(4))
+		return (sv[i] as Dictionary).pos if i < sv.size() else Vector2(INF, INF)
+	for m: Variant in _markers():
+		if str((m as Array)[0]) == _hover:
+			return (m as Array)[1]
+	return Vector2(INF, INF)
+
+
 func _legend_kinds() -> Array:
 	var out: Array = []
 	for m: Variant in _markers():
@@ -534,6 +556,8 @@ func _legend_kinds() -> Array:
 			out.append(kd)
 	var order := ["gate", "fight", "trade", "rest", "craft", "power", "nature", "beast", "home", "road"]
 	out.sort_custom(func(a: String, b: String) -> bool: return order.find(a) < order.find(b))
+	if not (st.get("services", []) as Array).is_empty():
+		out.append("svc")                                # hub: жители-службы — своей строкой
 	return out
 
 
@@ -591,6 +615,11 @@ func _draw_art_ink() -> void:
 			continue
 		_marker(_w2s(ma[1]), int(ma[2]), str(ma[3]), (34.0 if bool(ma[4]) else 28.0) * s * clampf(sqrt(_zoom), 0.85, 1.35),
 			str(ma[0]) == _hover)
+	if not _hidden.get("svc", false):                     # hub: жители-службы — круглые печати поверх мест
+		var sv: Array = st.get("services", [])
+		for i: int in sv.size():
+			var sd: Dictionary = sv[i]
+			_svc_coin(_w2s(sd.pos), str(sd.kind), s * clampf(sqrt(_zoom), 0.85, 1.35), _hover == "svc:%d" % i)
 	for e: Variant in st.get("enemies", []):              # враги
 		var p := _w2s((e as Dictionary).pos)
 		var dm := PackedVector2Array([p + Vector2(0, -6) * s, p + Vector2(6, 0) * s, p + Vector2(0, 6) * s, p + Vector2(-6, 0) * s])
@@ -685,7 +714,11 @@ func _draw_art_legend(mk: Array) -> void:
 				idx = int((m as Array)[2])
 				break
 		_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		_marker(Vector2(lx + 34.0, y) * _s(), idx, kk, 26.0 * _s())
+		if kk == "svc":
+			cnt["svc"] = (st.get("services", []) as Array).size()
+			_svc_coin(Vector2(lx + 34.0, y) * _s(), "smith", _s() * 1.1)
+		else:
+			_marker(Vector2(lx + 34.0, y) * _s(), idx, kk, 26.0 * _s())
 		_ink.draw_set_transform(Vector2.ZERO, 0.0, Vector2(_s(), _s()))
 		var col := IVORY if not off else Color(IVORY_DIM, 0.6)
 		_ink.draw_string(title_font, Vector2(lx + 60.0, y + 6.0), mod.tr_key("pax_rpg_map_k_" + kk), HORIZONTAL_ALIGNMENT_LEFT, lw - 120.0, 18, col)
@@ -713,12 +746,18 @@ func _draw_art_legend(mk: Array) -> void:
 
 ## Подсказка у значка под курсором: название, вид места, сколько идти.
 func _draw_tip(mk: Array) -> void:
+	if _hover.begins_with("svc:"):
+		_draw_svc_tip()
+		return
 	for m: Variant in mk:
 		var ma: Array = m
 		if str(ma[0]) != _hover:
 			continue
 		var q := _w2s(ma[1]) / _s()
-		var r := Rect2(q + Vector2(30, 10), Vector2(340, 118))
+		var why_k := "pax_rpg_map_why_" + str(ma[0]).trim_prefix("pax_rpg_lm_")
+		var why := mod.tr_key(why_k)
+		var has_why := why != why_k and why != ""
+		var r := Rect2(q + Vector2(30, 10), Vector2(380 if has_why else 340, 150 if has_why else 118))
 		if r.end.x > _legend_x() - 10.0 and _legend_on:
 			r.position.x = q.x - 30.0 - r.size.x
 		if _frame_tip != null:
@@ -729,6 +768,67 @@ func _draw_tip(mk: Array) -> void:
 		_ink.draw_string(_f_it, r.position + Vector2(24, 66), mod.tr_key("pax_rpg_map_k_" + str(ma[3])), HORIZONTAL_ALIGNMENT_LEFT,
 			r.size.x - 48.0, 18, Color8(200, 170, 130))
 		var me: Vector2 = st.get("me", Vector2.ZERO)
-		_ink.draw_string(title_font, r.position + Vector2(24, 94), mod.tr_key("pax_rpg_map_dist") % int((ma[1] as Vector2).distance_to(me)),
+		var dy := 0.0
+		if has_why:                                       # hub: зачем сюда идти
+			_ink.draw_string(title_font, r.position + Vector2(24, 94), why, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 18, IVORY)
+			dy = 30.0
+		_ink.draw_string(title_font, r.position + Vector2(24, 94 + dy), mod.tr_key("pax_rpg_map_dist") % int((ma[1] as Vector2).distance_to(me)),
 			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 18, Color8(240, 190, 100))
 		return
+
+
+# ── hub: жители-службы (location.gd → st.services): лавка, кузнец, арена, ведунья, поручения ──
+
+const SVC_GLYPH := {"shop": 6, "stall": 6, "smith": 15, "arena": 2, "seer": 8, "quest_offer": 18, "quest_turn_in": 18,
+	"quest_wait": 18}
+const SVC_COL := {"shop": Color8(230, 170, 70), "stall": Color8(200, 150, 60), "smith": Color8(232, 130, 80),
+	"arena": Color8(220, 50, 60), "seer": Color8(170, 110, 220), "quest_offer": Color8(255, 200, 70),
+	"quest_turn_in": Color8(120, 230, 120), "quest_wait": Color8(170, 150, 110)}
+
+
+## Круглая печать жителя-службы: тёмный круг, кольцо цвета службы, значок из glyphs.png; прилавки базара — точкой.
+func _svc_coin(c: Vector2, kind: String, s: float, hl := false) -> void:
+	var col: Color = SVC_COL.get(kind, GOLD)
+	if kind == "stall":
+		_ink.draw_circle(c, 4.0 * s, Color8(24, 8, 10, 235))
+		_ink.draw_arc(c, 4.0 * s, 0.0, TAU, 16, Color(1.0, 0.86, 0.59) if hl else col, 1.5 * s, true)
+		return
+	var r := 12.0 * s
+	if kind.begins_with("quest_") and kind != "quest_wait":      # поручение — мерцающий ореол, видно издалека
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.005)
+		_ink.draw_circle(c, r * (1.35 + 0.25 * pulse), Color(col, 0.18 + 0.12 * pulse))
+	_ink.draw_circle(c + Vector2(0, r * 0.3), r * 1.05, Color(0, 0, 0, 0.35))
+	_ink.draw_circle(c, r, Color8(24, 8, 10, 240))
+	_ink.draw_arc(c, r, 0.0, TAU, 32, Color(1.0, 0.86, 0.59) if hl else col, (2.6 if hl else 2.0) * s, true)
+	_ink.draw_arc(c, r - 3.0 * s, 0.0, TAU, 32, Color(col, 0.5), 1.0, true)
+	if _glyphs != null:
+		var cols := int(_art.get("glyph_cols", 5))
+		var idx := int(SVC_GLYPH.get(kind, 18))
+		var cell := float(_glyphs.get_width()) / cols
+		var gs := r * 1.4
+		_ink.draw_texture_rect_region(_glyphs, Rect2(c - Vector2(gs, gs) * 0.5, Vector2(gs, gs)),
+			Rect2((idx % cols) * cell, (idx / cols) * cell, cell, cell), col.lerp(Color.WHITE, 0.45))
+
+
+func _draw_svc_tip() -> void:
+	var sv: Array = st.get("services", [])
+	var i := int(_hover.substr(4))
+	if i >= sv.size():
+		return
+	var sd: Dictionary = sv[i]
+	var q := _w2s(sd.pos) / _s()
+	var r := Rect2(q + Vector2(30, 10), Vector2(380, 150))
+	if r.end.x > _legend_x() - 10.0 and _legend_on:
+		r.position.x = q.x - 30.0 - r.size.x
+	if _frame_tip != null:
+		_ink.draw_texture_rect(_frame_tip, r, false)
+	else:
+		_ink.draw_rect(r, Color8(14, 5, 7, 230))
+	_ink.draw_string(title_font, r.position + Vector2(24, 40), str(sd.name), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 26, IVORY)
+	_ink.draw_string(_f_it, r.position + Vector2(24, 66), str(sd.what), HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 18,
+		SVC_COL.get(str(sd.kind), Color8(200, 170, 130)))
+	_ink.draw_string(title_font, r.position + Vector2(24, 94), mod.tr_key("pax_rpg_map_svc_pin"), HORIZONTAL_ALIGNMENT_LEFT,
+		r.size.x - 48.0, 17, Color8(200, 176, 140))
+	var me: Vector2 = st.get("me", Vector2.ZERO)
+	_ink.draw_string(title_font, r.position + Vector2(24, 124), mod.tr_key("pax_rpg_map_dist") % int((sd.pos as Vector2).distance_to(me)),
+		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 48.0, 18, Color8(240, 190, 100))

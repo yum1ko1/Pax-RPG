@@ -55,6 +55,8 @@ const Inventory := preload("res://mods/pax_rpg/src/location/inventory.gd")
 const Loot := preload("res://mods/pax_rpg/src/location/loot/loot.gd")
 const Shop := preload("res://mods/pax_rpg/src/location/shop.gd")
 const ShopView := preload("res://mods/pax_rpg/src/location/shop_view.gd")
+const Smith := preload("res://mods/pax_rpg/src/location/smith.gd")     # hub: кузня, заточка +1…+5
+const Fame := preload("res://mods/pax_rpg/src/location/fame.gd")       # hub: слава арены
 const HERO_HP := 100.0
 const HERO_CONC := 100.0
 const BROKEN_TIME := 2.6             # с слома героя (концентрация 0): управление отнято, враг может казнить
@@ -176,6 +178,7 @@ var city_data: Dictionary = {}     # что за место построено (
 var _journal: Journal              # журнал заданий (J)
 var _shop: Shop                    # лавка торговца и рулетка (товар дня, гаранты — сохраняются)
 var _shop_view: ShopView           # окно лавки (разговор с торговцем → «Лавка»)
+var _smith: Smith                  # hub: окно кузни (кузнец Кузнечного двора → «Заточка»)
 var _gold_flash := 0.0
 var _style := Style.new()           # шкала стиля (D … SSS): очки за попадания, множит награду
 var _weather: Weather
@@ -478,6 +481,7 @@ func build(city: Dictionary) -> void:
 		_spawn_npcs(layout)
 		_spawn_merchants()
 		_mark_giver()
+		_hub_dress()
 		if layout.has("quest_item"):
 			_make_quest_item.call_deferred(layout)       # после героя (гоблинам нужен герой)
 		_shots = layout.get("shots", [])
@@ -590,6 +594,7 @@ func build(city: Dictionary) -> void:
 		_gold_flash = 1.0
 		_toast = {"text": mod.tr_key("pax_rpg_gold_got") % coins, "t": 0.0})
 	_talk.shop_requested.connect(_open_shop)
+	_talk.smith_requested.connect(_open_smith)
 	_shop_view = ShopView.new()
 	_shop_view.setup(mod)
 	_shop_view.closed.connect(_close_shop)
@@ -598,6 +603,16 @@ func build(city: Dictionary) -> void:
 		_start_talk())
 	_shop_view.sound.connect(_sfx_once)
 	add_child(_shop_view)
+	_smith = Smith.new()                              # hub: кузня
+	_smith.setup(mod)
+	_smith.closed.connect(_close_shop)
+	_smith.talk_requested.connect(func() -> void:
+		_smith.close()
+		_start_talk())
+	_smith.sound.connect(_sfx_once)
+	_smith.sharpened.connect(func(l: int) -> void:
+		_toast = {"text": _t("pax_rpg_smith_toast") % l, "t": 0.0})
+	add_child(_smith)
 	_journal = Journal.new()
 	_journal.setup(mod, _hud)
 	add_child(_journal)
@@ -985,7 +1000,8 @@ func _spawn_merchants() -> void:
 ## караванщики у костра, единственные в городе — распорядительница Арены и ведунья Древа Клятв. Номера — после
 ## маршрутных (задания и отношения по номеру).
 func _spawn_dressing_npcs(layout: Dictionary) -> void:
-	var roles := {"guard": "guard", "crier": "merchant", "person": "", "arena_master": "arena_master", "seer": "seer"}
+	var roles := {"guard": "guard", "crier": "merchant", "person": "", "arena_master": "arena_master", "seer": "seer",
+		"blacksmith": "blacksmith"}
 	var n := int(layout.get("npcs", 0))
 	for it: Variant in layout.get("items", []):
 		var d: Dictionary = it
@@ -1373,13 +1389,13 @@ func _weapon_scaling() -> Dictionary:
 
 ## Урон героя: рост от уровня × масштабирование оружия от характеристик.
 func _dmg_mult() -> float:
-	return _prog.damage_mult() * Progress.scaling_mult(_weapon_scaling(), _attributes())
+	return _prog.damage_mult() * Progress.scaling_mult(_weapon_scaling(), _attributes()) * Smith.mult(mod)
 
 
 func paused() -> bool:
 	return (is_instance_valid(_pause) and _pause.visible) or (is_instance_valid(_inv) and _inv.visible) 		or (is_instance_valid(_wrist) and _wrist.visible) or (is_instance_valid(_talk) and _talk.visible) \
 		or (is_instance_valid(_journal) and _journal.visible) or (is_instance_valid(_city_map) and _city_map.visible) \
-		or (is_instance_valid(_shop_view) and _shop_view.visible)
+		or (is_instance_valid(_shop_view) and _shop_view.visible) or (is_instance_valid(_smith) and _smith.visible)
 
 
 ## Житель, давший задание, — с меткой ❖ над головой (в его городе).
@@ -1429,6 +1445,7 @@ func _talk_scan(delta: float) -> void:
 		_talk_npc = best
 	if is_instance_valid(_talk_npc) and not (is_instance_valid(_talk) and _talk.visible):
 		_talk_npc.call("show_prompt", true)
+	_fame_barks()
 
 
 func _on_voice(text: String) -> void:
@@ -1453,6 +1470,8 @@ func _start_talk() -> void:
 		return                                       # в бою не до разговоров
 	_talk_npc.call("talk", true, _player.global_position)
 	var place := {"city": _city_name, "hero": mod.tr_key("pax_rpg_hero_name"), "hero_title": mod.tr_key("pax_rpg_hero_title")}
+	if Fame.level(mod) > 0:                          # hub: житель знает, кто перед ним на арене
+		place["hero_title"] = "%s, %s" % [place["hero_title"], Fame.title(mod)]
 	if _daynight != null and is_instance_valid(_daynight):
 		place["time"] = DayNight.label(mod, _daynight.hour)
 	place["city_data"] = city_data
@@ -4086,6 +4105,7 @@ func _hud_tick(delta: float) -> void:
 		"color": Color(0.47, 0.84, 1.0), "ring": true})
 	st["targets"] = targets
 	st["enemies"] = enemies
+	st["services"] = _hub_services(delta)
 	if e != null:
 		st["enemy"] = {"name": _t(e.display_key), "hp": e.hp / e.max_hp,
 			"conc": e.conc / e.conc_max, "broken": e.can_deathblow(), "boss": e.boss, "phase": e.phase,
@@ -4209,6 +4229,9 @@ func _input(event: InputEvent) -> void:
 			if bool(_talk_npc.get("shop")) or str(_talk_npc.get("role")) == "trader":
 				if not (is_instance_valid(_arena) and _arena.fighting):
 					_open_shop()                         # торговец базара — сразу лавка, без разговора
+			elif str(_talk_npc.get("role")) == "blacksmith":
+				if not (is_instance_valid(_arena) and _arena.fighting):
+					_open_smith()                        # hub: кузнец — сразу кузня, «Поговорить» — из неё
 			else:
 				_start_talk()                            # житель рядом — разговор
 		elif key.pressed and not key.echo and key.physical_keycode == KEY_E and _near_gate:
@@ -4345,3 +4368,105 @@ func _dust(at: Vector3, soft: bool, running: bool) -> void:
 	p.emitting = true
 	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
 
+
+
+# ── hub: Гхарн как хаб (фаза 3) — службы жителей, кузня, слава арены ─────────────────────────────
+
+## Подпись «E · …» и вывеска над жителями служб: лавка, кузня, арена, Древо Клятв.
+func _hub_dress() -> void:
+	for n: Variant in _npcs:
+		if not is_instance_valid(n):
+			continue
+		var npc: Node = n
+		var role := str(npc.get("role"))
+		if bool(npc.get("shop")) or role == "trader":
+			npc.call("set_action", _t("pax_rpg_hub_act_shop"))
+		elif role == "blacksmith":
+			npc.call("set_action", _t("pax_rpg_hub_act_smith"))
+			npc.call("set_sign", "⚒ " + _t("pax_rpg_smith_title"))
+		elif role == "arena_master":
+			npc.call("set_action", _t("pax_rpg_hub_act_arena"))
+			npc.call("set_sign", "闘 " + _t("pax_rpg_lm_arena"))
+
+
+var _svc_t := 0.0
+var _svc: Array = []
+
+
+## Что дают жители-службы на карте и миникарте: [{pos, kind, name, what}] — раз в полсекунды.
+func _hub_services(delta: float) -> Array:
+	_svc_t -= delta
+	if _svc_t > 0.0:
+		return _svc
+	_svc_t = 0.5
+	if CityMap.pin.x != INF and is_instance_valid(_player) \
+			and CityMap.pin.distance_to(Vector2(_player.global_position.x, _player.global_position.z)) < 4.0:
+		CityMap.pin = Vector2(INF, INF)                  # дошёл до метки — она своё отслужила
+		_toast = {"text": _t("pax_rpg_hub_arrived"), "t": 0.0}
+	_svc = []
+	var cid := str(city_data.get("id", ""))
+	for n: Variant in _npcs:
+		if not is_instance_valid(n):
+			continue
+		var npc: Node3D = n
+		var role := str(npc.get("role"))
+		var kind := ""
+		if role == "trader":
+			kind = "shop"
+		elif bool(npc.get("shop")):
+			kind = "stall"
+		elif role == "blacksmith":
+			kind = "smith"
+		elif role == "arena_master":
+			kind = "arena"
+		elif role == "seer":
+			kind = "seer"
+		var idx := int(npc.get("npc_index"))
+		var qm := Quest.marker(mod, cid, idx)
+		if qm != "":
+			kind = "quest_" + qm
+		if kind == "":
+			continue
+		_svc.append({"pos": Vector2(npc.global_position.x, npc.global_position.z), "kind": kind,
+			"name": str(npc.get("npc_name")), "what": _t("pax_rpg_hub_svc_" + kind)})
+	return _svc
+
+
+func _open_smith() -> void:
+	if not is_instance_valid(_smith) or _prog == null:
+		return
+	if is_instance_valid(_talk) and _talk.visible:
+		_talk.close()
+	var who := str(_talk_npc.get("npc_name")) if is_instance_valid(_talk_npc) else ""
+	var w: Variant = _character().get("weapon", {})
+	var wn := _t(str((w as Dictionary).get("name", ""))) if w is Dictionary else ""
+	_talk_focus(true)
+	_smith.open(_prog, who, wn)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_rmb = false
+	_lmb_queued = false
+
+
+var _bark_cd := 0.0
+var _barked := {}                   # кто уже узнал героя за этот заход в город
+
+
+## Слава арены: житель или страж в 5 м узнаёт героя — реплика над головой (не чаще раза в 6 с, каждый — раз за заход).
+func _fame_barks() -> void:
+	_bark_cd -= 0.2
+	if _bark_cd > 0.0 or Fame.level(mod) < 1 or not is_instance_valid(_player) or paused():
+		return
+	for n: Variant in _npcs:
+		if not is_instance_valid(n) or n == _talk_npc or _barked.has(n):
+			continue
+		var npc: Node3D = n
+		var d := npc.global_position.distance_to(_player.global_position)
+		if d > 5.0 or d < 1.2:
+			continue
+		var line := Fame.bark(mod, str(npc.get("role")), randi())
+		if line == "":
+			return
+		npc.call("bark", line)
+		_barked[n] = true
+		_bark_cd = 6.0
+		return

@@ -12,6 +12,7 @@ signal granted(effect: String, amount: int)   # свой товар выдан (
 const Names := preload("res://mods/pax_rpg/src/location/names.gd")
 const Progress := preload("res://mods/pax_rpg/src/location/progress.gd")
 const Equip := preload("res://mods/pax_rpg/src/location/inv/equip.gd")
+const Fame := preload("res://mods/pax_rpg/src/location/fame.gd")
 
 var mod: PaxMod
 var prog: Progress                   # золото, уровень, заряды фляги
@@ -159,7 +160,7 @@ func _build_goods() -> void:
 		if it.is_empty():
 			continue
 		goods.append({"kind": "item", "id": str(id), "r": int(it.r), "left": 0 if sold.has(str(id)) else 1,
-			"price": maxi(1, roundi(int(it.price) * float(cfg.get("markup", 1.0))))})
+			"price": maxi(1, roundi(int(it.price) * float(cfg.get("markup", 1.0)) * Fame.discount_mult(mod)))})
 	for id: Variant in st.get("goods", []):
 		var g := good(str(id))
 		if g.is_empty():
@@ -171,7 +172,7 @@ func _build_goods() -> void:
 ## Цена своего товара: растёт с каждой купленной (price · grow^куплено); круглая до 5.
 func _price(id: String) -> int:
 	var g := good(id)
-	var p := float(g.get("price", 0)) * pow(float(g.get("grow", 1.0)), int(owned.get(id, 0)))
+	var p := float(g.get("price", 0)) * pow(float(g.get("grow", 1.0)), int(owned.get(id, 0))) * Fame.discount_mult(mod)
 	return maxi(5, roundi(p / 5.0) * 5)
 
 
