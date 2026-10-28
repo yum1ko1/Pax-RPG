@@ -42,12 +42,16 @@ const DAMAGE := 12.0
 ##   quick — тычок: короткий замах, быстрый удар, слабее; блик белый;
 ##   heavy — рубящий с задержкой: длинный замах, удар медленнее (не поймать «по привычке»), сильнее, блок дороже;
 ##          вспышка оранжевая;
-##   leap — прыжок: неблокируемый и непарируемый (危 над головой и свой звук), от него только уворот.
+##   leap — прыжок: неблокируемый и непарируемый (危 над головой и свой звук), от него только уворот;
+##   breaker — пролом защиты (только ветеран, герой долго сидит в блоке): блок не спасает — концентрация героя
+##          почти вся уходит, парирование и уворот спасают; вспышка оранжевая, как у тяжёлого, но крупнее.
 const GOB_ATTACKS := {
 	"quick": {"windup": 0.3, "speed": 1.25, "dmg": 0.75, "kind": "", "col": Color(0.75, 0.9, 1.0)},
 	"heavy": {"windup": 0.7, "speed": 0.75, "dmg": 1.35, "kind": "heavy", "col": Color(1.0, 0.5, 0.1)},
 	"leap": {"windup": 0.6, "speed": 1.0, "dmg": 1.5, "kind": "perilous", "col": Color(1.0, 0.1, 0.08)},
+	"breaker": {"windup": 0.55, "speed": 0.9, "dmg": 1.0, "kind": "breaker", "col": Color(1.0, 0.42, 0.05)},
 }
+const BLOCK_SPAM := 1.2        # с героя в блоке рядом с ветераном — и тот ломает защиту
 const LEAP_UP := 4.2           # м/с вверх в начале прыжка
 const LEAP_FWD := 5.5          # м/с вперёд, пока не ударил
 const HURT_TIME := 0.45
@@ -90,6 +94,7 @@ var _combo_chance := 0.4
 var _atk_kind := ""            # атака гоблина (GOB_ATTACKS); "" — прежний один удар (так у наследников — орка)
 var _warn: Label3D             # 危 над головой — перед прыжком
 var _warn_snd: AudioStreamPlayer3D
+var _hero_block_t := 0.0       # сколько герой уже держит блок рядом (ветеран наказывает пассивный блок)
 var _combo_n := 0
 var _riposte := false          # на арене — нет: павший уходит насовсем
 var _target: Node3D
@@ -581,7 +586,7 @@ static func _burst_mesh(color: Color, size: float, glow: bool) -> SphereMesh:
 func _telegraph() -> void:
 	var a: Dictionary = GOB_ATTACKS.get(_atk_kind, {})
 	var col: Color = a.get("col", Color(1.0, 0.35, 0.2))
-	var n := {"quick": 8, "heavy": 20, "leap": 24}.get(_atk_kind, 14) as int
+	var n := {"quick": 8, "heavy": 20, "leap": 24, "breaker": 30}.get(_atk_kind, 14) as int
 	_burst(global_position + Vector3(0.0, 1.25, 0.0), Vector3.UP, col, n, 0.6, 0.0, 0.45, 0.05, true)
 	if _atk_kind == "leap":
 		_warn_show(true)
@@ -881,6 +886,12 @@ func _phys(delta: float) -> void:
 	var flat := Vector3.ZERO
 	var swinging := _hero_attacking.is_valid() and bool(_hero_attacking.call())
 	var new_swing := swinging and not _swing_seen
+	if veteran and dist < 5.0 and _hero_blocking.is_valid() and bool(_hero_blocking.call()):
+		_hero_block_t += delta
+	else:
+		_hero_block_t = 0.0
+	if _state == "windup" and _atk_kind == "breaker":
+		_hero_block_t = 0.0
 	match _state:
 		"idle":
 			if not dead and dist < DETECT:
@@ -924,7 +935,11 @@ func _phys(delta: float) -> void:
 				_wait -= delta
 				if hero_broken and dist < 7.0:
 					_wait = minf(_wait, 0.05)                # герой сломлен — не ждать, наказать
-				if _wait <= 0.0:
+				if veteran and _hero_block_t >= BLOCK_SPAM and not hero_broken and _wait <= 0.6 and _take_token():
+					_feint = false                       # ветеран: герой отсиживается в блоке — пролом защиты
+					_atk_kind = "breaker"
+					_set_state("stalk")
+				elif _wait <= 0.0:
 					if not hero_broken and _hero_blocking.is_valid() and bool(_hero_blocking.call()) and randf() < 0.4:
 						_wait = randf_range(0.8, 1.6)    # герой в блоке — подождать, пусть раскроется
 					elif _take_token():
