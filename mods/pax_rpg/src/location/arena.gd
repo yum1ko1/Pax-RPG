@@ -178,6 +178,8 @@ func _win() -> void:
 	if not last:
 		mod.set_setting("arena_stage", maxi(unlocked(), i + 1))
 		_pick = i + 1                                # E — следующий этап
+	else:
+		mod.set_setting("arena_champion", int(mod.get_setting("arena_champion", 0)) + 1)   # слава арены (fame.gd)
 	_open(true)                                        # решётки поднимаются: выход свободен, E — следующий бой
 	var txt := mod.tr_key("pax_rpg_arena_champion") if last else (mod.tr_key("pax_rpg_arena_next") % _foe_text(i + 1))
 	toast.emit(txt)

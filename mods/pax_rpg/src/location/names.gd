@@ -6,7 +6,7 @@ extends RefCounted
 
 const ROLES := ["merchant", "guard", "herder", "shaman", "smith", "beggar", "cook", "porter", "craftsman", "hunter",
 	"entertainer"]
-const UNIQUE := ["arena_master", "seer", "trader"]   # единственные в городе: имя и ремесло — свои (data/lang)
+const UNIQUE := ["arena_master", "seer", "trader", "blacksmith"]   # единственные в городе: имя и ремесло — свои (data/lang)
 
 static var _used := {}                            # имена, уже данные в этом городе (без двойников)
 static var _lists := {}                           # ключ → PackedStringArray (разбор строки один раз)
@@ -26,6 +26,8 @@ static func new_run(mod: PaxMod) -> int:
 	var s := rng.randi_range(1, 2147483646)
 	mod.set_setting("run_seed", s)
 	mod.set_setting("npc_rel", {})
+	for k: String in ["quest", "contracts_done", "givers", "rescued", "lost_purse"]:   # поручения — у мира, не у героя
+		mod.set_setting(k, [] if k in ["contracts_done", "rescued"] else {})
 	return s
 
 

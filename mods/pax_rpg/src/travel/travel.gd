@@ -36,6 +36,13 @@ func setup(m: PaxMod, p: Planet, l: Location, ld: Loading) -> void:
 	planet.city_chosen.connect(_chosen)
 	DayNight.clock = m
 	location.exit_requested.connect(leave)
+	location.contract_go.connect(go)
+	location.back_requested.connect(func(id: String) -> void:
+		for c: Variant in planet.cities:
+			if c is Dictionary and str((c as Dictionary).get("id", "")) == id:
+				go(c)
+				return
+		leave())
 
 
 func suspend() -> void:                           # мир пересобирается (см. Planet.suspend)
@@ -81,6 +88,16 @@ func enter(city: Dictionary) -> void:
 		game.set_speed(0)
 	loading.run(city_name, _line("pax_rpg_narrator_enter", ENTER_LINES, city_name),
 		float(cfg.get("loading_seconds", 1.6)), location.build.bind(city), func() -> void: pass, location.is_ready)
+
+
+## Из локации сразу в другую, без карты мира: ворота города → логово поручения, логово → город квестодателя.
+func go(city: Dictionary) -> void:
+	if loading.busy():
+		return
+	var title := str(city.get("name", "")) if city.has("name") else mod.tr_key("pax_rpg_city_" + str(city.get("id", "")))
+	_move_to(city)
+	loading.run(title, _line("pax_rpg_narrator_enter", ENTER_LINES, title), float(location.cfg.get("loading_seconds", 1.6)),
+		location.build.bind(city), func() -> void: pass, location.is_ready)
 
 
 func leave() -> void:

@@ -14,7 +14,7 @@ const DIR := "models/goblin/"
 ## (pax_rpg/dev/gharn/npc_variant.py). Размер — как у модели, без случайного масштаба.
 const COMMON := [["goblin_rigged.glb", 60], ["variants/goblin_b.glb", 40]]
 const LOOK_OF := {"guard": "variants/elf_warrior.glb", "arena_master": "variants/orc_citizen.glb", "seer": "variants/witch.glb",
-	"trader": "variants/goblin_b.glb"}
+	"trader": "variants/goblin_b.glb", "blacksmith": "goblin_rigged.glb"}
 const RACE_OF := {"variants/elf_warrior.glb": "elf", "variants/orc_citizen.glb": "orc"}
 const SPEED := 1.3
 
@@ -75,13 +75,14 @@ func setup(m: PaxMod, path: PackedVector3Array, start_i: int, seed_v: int, as_ro
 	worry = Names.worry(mod, role, rng)
 	temper = TEMPERS[rng.randi() % TEMPERS.size()]
 	relation = rng.randi_range(35, 65)
-	_prompt = Label3D.new()                           # «E — поговорить», когда герой рядом (location.gd → show_prompt)
-	_prompt.text = "E · " + npc_name
+	_prompt = Label3D.new()                           # имя и «E · что можно», когда герой рядом (location.gd → show_prompt)
+	_prompt.text = "%s\nE · %s" % [npc_name, mod.tr_key("pax_rpg_hub_act_talk")]
 	_prompt.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_prompt.font_size = 40
 	_prompt.outline_size = 10
 	_prompt.pixel_size = 0.004
-	_prompt.position = Vector3(0.0, 1.55, 0.0)
+	_prompt.line_spacing = -6.0
+	_prompt.position = Vector3(0.0, 1.62, 0.0)
 	_prompt.no_depth_test = true
 	_prompt.modulate = Color(1.0, 0.9, 0.75)
 	_prompt.visible = false
@@ -226,6 +227,10 @@ func _phys_tick(delta: float) -> void:
 
 
 func _proc_tick(delta: float) -> void:
+	if _bark_t > 0.0:
+		_bark_t -= delta
+		if _bark_t <= 0.0:
+			_bark.visible = false
 	if _anim == null:
 		return
 	var cam := get_viewport().get_camera_3d()
@@ -340,6 +345,37 @@ func set_sign(text: String) -> void:
 		add_child(_sign)
 	_sign.text = text
 	_sign.visible = text != ""
+
+
+## Что даёт E у этого жителя (location.gd → _hub_dress): «Поговорить», «Лавка», «Заточка»… — под именем.
+func set_action(text: String) -> void:
+	if _prompt != null:
+		_prompt.text = "%s\nE · %s" % [npc_name, text]
+
+
+var _bark: Label3D
+var _bark_t := 0.0
+
+
+## Житель узнал героя (слава арены, fame.gd): реплика над головой на пару секунд.
+func bark(text: String) -> void:
+	if text == "" or talking:
+		return
+	if _bark == null:
+		_bark = Label3D.new()
+		_bark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_bark.font_size = 38
+		_bark.outline_size = 10
+		_bark.pixel_size = 0.004
+		_bark.width = 520.0
+		_bark.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bark.position = Vector3(0.0, 2.05, 0.0)
+		_bark.modulate = Color(1.0, 0.93, 0.8)
+		_bark.outline_modulate = Color(0.2, 0.04, 0.05)
+		add_child(_bark)
+	_bark.text = "«%s»" % text
+	_bark.visible = true
+	_bark_t = 3.2
 
 
 func show_prompt(on: bool) -> void:

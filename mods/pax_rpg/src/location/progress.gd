@@ -13,6 +13,7 @@ var skill_points := 0
 var gold := 0                      # золотые монеты (враги, задания; HUD — слева вверху)
 var stats_added: Dictionary = {}   # очки характеристик, вложенные игроком: ключ характеристики → сколько
 var flask_bonus := 0               # заряды эликсира сверх героя (тыква-фляга из лавки — shop.gd)
+var perks: Array = []              # приёмы, выбранные за сданные поручения (PERKS; по одному из двух — perk_pick.gd)
 var cfg: Dictionary = {}
 
 
@@ -28,6 +29,8 @@ func setup(m: PaxMod, c: Dictionary) -> void:
 		flask_bonus = int((saved as Dictionary).get("flask_bonus", 0))
 		var sa: Variant = (saved as Dictionary).get("stats_added", {})
 		stats_added = sa if sa is Dictionary else {}
+		var pk: Variant = (saved as Dictionary).get("perks", [])
+		perks = (pk as Array).duplicate() if pk is Array else []
 
 
 func _f(k: String, d: float) -> float:
@@ -60,7 +63,7 @@ func add_xp(v: float) -> int:
 
 func _save() -> void:
 	mod.set_setting("progress", {"level": level, "xp": xp, "skill_points": skill_points, "stats_added": stats_added,
-		"gold": gold, "flask_bonus": flask_bonus})
+		"gold": gold, "flask_bonus": flask_bonus, "perks": perks})
 
 
 func add_gold(v: int) -> void:
@@ -127,12 +130,61 @@ static func scaling_mult(scaling: Dictionary, attrs: Dictionary) -> float:
 
 ## Множители статов от уровня: здоровье +4 %, урон +3 %, концентрация +2 % за уровень (по умолчанию).
 func hp_mult() -> float:
-	return 1.0 + _f("hp_per_level", 0.04) * (level - 1)
+	return (1.0 + _f("hp_per_level", 0.04) * (level - 1)) * (1.0 + perk("hp"))
 
 
 func damage_mult() -> float:
-	return 1.0 + _f("damage_per_level", 0.03) * (level - 1)
+	return (1.0 + _f("damage_per_level", 0.03) * (level - 1)) * (1.0 + perk("dmg"))
 
 
 func posture_mult() -> float:
 	return 1.0 + _f("posture_per_level", 0.02) * (level - 1)
+
+
+
+# ---------- приёмы ----------
+
+## Приёмы за поручения: сдал — выбор одного из двух ещё не взятых (perk_pick.gd). Числа — здесь, слова — data/lang
+## (pax_rpg_perk_<id>, pax_rpg_perk_<id>_desc). Действуют через location.gd: _hp_max, _dmg_mult, _regen_conc,
+## _block_reduce, _flask_max, hero.parry_bonus, Кровожадная атака, монеты с врагов и за поручения.
+const PERKS := {
+	"iron_skin": {"hp": 0.15},
+	"heavy_hand": {"dmg": 0.12},
+	"steppe_breath": {"conc_regen": 0.35},
+	"wide_stance": {"block": 0.15},
+	"blood_price": {"deathblow_heal": 0.2},
+	"spare_flask": {"flask": 1},
+	"keen_eye": {"parry": 0.08},
+	"merc_luck": {"gold": 0.25},
+}
+
+
+func has_perk(id: String) -> bool:
+	return perks.has(id)
+
+
+## Сумма свойства k по взятым приёмам (0 — нет такого).
+func perk(k: String) -> float:
+	var v := 0.0
+	for id: Variant in perks:
+		v += float((PERKS.get(str(id), {}) as Dictionary).get(k, 0.0))
+	return v
+
+
+## Два разных ещё не взятых приёма на выбор (зерно — чтобы предложение не менялось от перезахода).
+func offer(seed_v: int) -> Array:
+	var free: Array = PERKS.keys().filter(func(k: Variant) -> bool: return not perks.has(k))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_v
+	for i: int in range(free.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var t: Variant = free[i]
+		free[i] = free[j]
+		free[j] = t
+	return free.slice(0, 2)
+
+
+func add_perk(id: String) -> void:
+	if PERKS.has(id) and not perks.has(id):
+		perks.append(id)
+		_save()
