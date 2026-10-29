@@ -5,7 +5,7 @@ extends RefCounted
 ## Отношения жителей к герою — «npc_rel» (город → номер жителя → 0..100): переживают выход из города.
 ##
 ## Поручения (контракты) Гхарна — четыре заготовки CONTRACTS из забот жителей: кузнец (принести), стражник и охотник
-## (убить), пастух (спасти). Квестодатель — первый житель своей роли в городе (bind_givers, на прохождение).
+## (убить), пастух (спасти). Квестодатель — кузнец Кузнечного двора и первые жители своей роли (bind_givers).
 ## Поручение — та же запись «quest» с полем «contract» (id заготовки) и «kind»: fetch — вещь в лагере, kill — вожак
 ## лагеря, rescue — пленник в клетке. «found» — дело сделано, осталось вернуться. Сданные — «contracts_done»,
 ## спасённые — «rescued» (ждут героя у ворот города). Логово — тот же лес (forest.gd) с лагерем в конце.
@@ -15,7 +15,7 @@ const ITEMS := ["amulet", "pouch", "dagger", "lamp", "ring", "scroll"]
 ## id → роль квестодателя, вид, вещь (fetch), ступень (сколько поручений сдано до него), награда, кто в лагере и
 ## на полпути (дозор), вожак лагеря (kind для location._arena_spawn), реквизит лагеря.
 const CONTRACTS := {
-	"coal": {"role": "smith", "kind": "fetch", "item": "coal", "tier": 0, "gold": 120, "xp": 90,
+	"coal": {"role": "blacksmith", "alt": "smith", "kind": "fetch", "item": "coal", "tier": 0, "gold": 120, "xp": 90,
 		"patrol": 2, "camp": 2, "leader": "", "props": "caravan"},
 	"scouts": {"role": "guard", "kind": "kill", "tier": 0, "gold": 150, "xp": 120,
 		"patrol": 2, "camp": 2, "leader": "veteran", "props": "camp"},
@@ -112,20 +112,20 @@ static func bind_givers(mod: PaxMod, city_id: String, npcs: Array) -> Dictionary
 		return g.npc
 	var by: Dictionary = {}
 	var used: Dictionary = {}
-	for pass_i: int in 2:
+	for pass_i: int in 3:                                    # своя роль, запасная роль, любой мирный житель
 		for id: String in ORDER:
 			if by.has(id):
 				continue
-			var want := str((CONTRACTS[id] as Dictionary).role)
+			var want := str((CONTRACTS[id] as Dictionary).role) if pass_i == 0 else str((CONTRACTS[id] as Dictionary).get("alt", ""))
 			for n: Variant in npcs:
 				if not is_instance_valid(n):
 					continue
 				var idx := int((n as Node).get("npc_index"))
 				if idx < 0 or idx >= 1000 or used.has(idx):           # 1000+ — торговцы базара, 2000+ — спасённые
 					continue
-				if pass_i == 0 and str((n as Node).get("role")) != want:
+				if pass_i < 2 and str((n as Node).get("role")) != want:
 					continue
-				if pass_i == 1 and str((n as Node).get("role")) in ["arena_master", "seer", "trader"]:
+				if pass_i == 2 and str((n as Node).get("role")) in ["arena_master", "seer", "trader", "blacksmith"]:
 					continue
 				by[id] = idx
 				used[idx] = true

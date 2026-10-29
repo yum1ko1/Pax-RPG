@@ -11,6 +11,7 @@ signal rewarded(coins: int)          # сдано задание — награ�
 signal quest_changed                 # выдано или сдано задание — точка на глобусе меняется (location → travel → planet)
 signal shop_requested                # «Лавка» у торговца (location.gd → shop_view.gd)
 signal contract_done(q: Dictionary)  # сдано поручение — награда и выбор приёма (location.gd → _contract_reward)
+signal smith_requested               # hub: «Заточка» у кузнеца (location.gd → smith.gd)
 
 const Hud := preload("res://mods/pax_rpg/src/location/hud.gd")
 const Quest := preload("res://mods/pax_rpg/src/location/quest.gd")
@@ -119,6 +120,17 @@ func setup(m: PaxMod, h: Hud) -> void:
 	_shop_btn.visible = false
 	_shop_btn.pressed.connect(func() -> void: shop_requested.emit())
 	_panel.add_child(_shop_btn)
+	_smith_btn = Button.new()                           # hub: «Заточка» — у кузнеца (роль blacksmith), на месте «Лавки»
+	_smith_btn.position = Vector2(W - 28 - 180, 20)
+	_smith_btn.size = Vector2(180, 36)
+	_smith_btn.focus_mode = Control.FOCUS_NONE
+	_smith_btn.text = mod.tr_key("pax_rpg_talk_smith")
+	_smith_btn.add_theme_font_override("font", sans)
+	_smith_btn.add_theme_font_size_override("font_size", 15)
+	_smith_btn.add_theme_color_override("font_color", Color(1.0, 0.82, 0.4))
+	_smith_btn.visible = false
+	_smith_btn.pressed.connect(func() -> void: smith_requested.emit())
+	_panel.add_child(_smith_btn)
 	_edit = LineEdit.new()
 	_edit.position = Vector2(28, 314)
 	_edit.size = Vector2(W - 56, 40)
@@ -166,11 +178,13 @@ func open(npc: Node) -> void:
 	_edit.text = ""
 	_edit.grab_focus()
 	_offer_shown = false
+	_smith_btn.visible = str(npc.get("role")) == "blacksmith"
 	_update_give()
 	_panel.queue_redraw()
 
 
 var _shop_btn: Button
+var _smith_btn: Button
 
 
 func close() -> void:
@@ -415,7 +429,7 @@ func _update_give() -> void:
 	if offer:
 		_contract_btn.text = mod.tr_key("pax_rpg_contract_accept" if _offer_shown else "pax_rpg_contract_btn")
 	_shop_btn.visible = is_instance_valid(_npc) and (str(_npc.get("role")) == "trader" or bool(_npc.get("shop")))
-	_give_btn.position.x = W - 28 - 230 - (190.0 if _shop_btn.visible else 0.0)   # рядом с «Лавкой», не под ней
+	_give_btn.position.x = W - 28 - 230 - (190.0 if _shop_btn.visible or _smith_btn.visible else 0.0)   # рядом с «Лавкой», не под ней
 	_contract_btn.position.x = _give_btn.position.x
 	if on:
 		_give_btn.text = mod.tr_key("pax_rpg_talk_give") % mod.tr_key("pax_rpg_qitem_" + str(q.get("item", ""))) \
