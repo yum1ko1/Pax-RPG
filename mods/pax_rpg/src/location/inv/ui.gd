@@ -91,6 +91,42 @@ func tex(name: String) -> Texture2D:
 	return _tex[p]
 
 
+## Чёткий текст экрана, растянутого scale-ом (макет 1536 × 1024 на 1440p — ×1,4): буквы растрируются сразу в размере
+## экрана (oversampling окна), а не растягиваются картинкой — иначе текст мыльный и «тонкий». Пока экран открыт;
+## закрыли — прежнее значение окна. prev — то, что вернул прошлый вызов (−1 — ещё не меняли).
+static func sharp_text(ci: CanvasItem, on: bool, prev: float) -> float:
+	var vp := ci.get_viewport()
+	if vp == null:
+		return prev
+	if on:
+		if prev < 0.0:
+			prev = vp.oversampling_override
+		var k := ci.get_global_transform_with_canvas().get_scale().x * vp.get_final_transform().get_scale().x
+		vp.oversampling_override = clampf(k, 0.5, 4.0)
+		return prev
+	if prev >= 0.0:
+		vp.oversampling_override = prev
+	return -1.0
+
+
+## Подсветка наведения, как :hover прототипа: тонкая светлая рамка по краю и мягкое свечение наружу; fill — заливка.
+static func hover_glow(ci: CanvasItem, r: Rect2, c: Color, fill := 0.0) -> void:
+	if fill > 0.0:
+		ci.draw_rect(r, Color(c.r, c.g, c.b, fill))
+	for i: int in 7:
+		ci.draw_rect(r.grow(1.0 + i * 2.0), Color(c.r, c.g, c.b, 0.3 * (1.0 - i / 7.0)), false, 2.0)
+	ci.draw_rect(r.grow(-0.75), Color(c.r, c.g, c.b, 0.95), false, 1.5)
+
+
+## Круглая подсветка (медальоны ранга, репутации, приёмов): светлое кольцо и ореол.
+static func hover_ring(ci: CanvasItem, r: Rect2, c: Color) -> void:
+	var o := r.get_center()
+	var rad := minf(r.size.x, r.size.y) * 0.5
+	for i: int in 7:
+		ci.draw_arc(o, rad + 1.0 + i * 2.0, 0.0, TAU, 64, Color(c.r, c.g, c.b, 0.3 * (1.0 - i / 7.0)), 2.0, true)
+	ci.draw_arc(o, rad - 0.5, 0.0, TAU, 64, Color(c.r, c.g, c.b, 0.85), 1.5, true)
+
+
 ## Рамка 9-slice: margins (л, в, п, н) — в пикселях картинки, k — масштаб углов. Узел-обёртка размером size.
 func frame(parent: Control, name: String, margins: Array, k: float, rect: Rect2) -> Control:
 	var box := Control.new()

@@ -6,6 +6,7 @@ extends SceneTree
 var mod: Node
 var inv: Control
 var out_dir := "/tmp"
+var screen := Vector2i(1920, 1080)
 var frame := 0
 # кадр → [действие, аргумент]
 const STEPS := {
@@ -16,6 +17,7 @@ const STEPS := {
 	135: ["move", "stat0"],
 	150: ["shot", "inv_d_mini"],
 	160: ["click", Vector2(1020, 450)],        # перчатки — выбор вещи
+	175: ["move", "tile3"],                    # вещь в окне выбора — обводка цветом редкости
 	180: ["shot", "inv_e_menu"],
 	185: ["key_esc", null],
 	190: ["move", Vector2(800, 30)],
@@ -40,7 +42,10 @@ func _initialize() -> void:
 	for a: String in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out_dir = a.trim_prefix("--out=")
-	root.size = Vector2i(1920, 1080)
+		elif a.begins_with("--size="):                  # --size=2560x1440 — экран автора (макет ×1,4)
+			var wh := a.trim_prefix("--size=").split("x")
+			screen = Vector2i(int(wh[0]), int(wh[1]))
+	root.size = screen
 	mod = (load("res://mods/pax_rpg/main.gd") as GDScript).new()
 	mod.set("id", "pax_rpg")
 	root.add_child(mod)
@@ -78,7 +83,11 @@ func _tick() -> void:
 		"shot":
 			_shot(str(s[1]))
 		"move":
-			if s[1] is String:                 # на первую строку стата закреплённой подсказки
+			if str(s[1]) == "tile3":
+				var tiles: Array = inv.get("_menu_tiles")
+				if tiles.size() > 3:
+					_move((tiles[3]["rect"] as Rect2).get_center())
+			elif s[1] is String:                 # на первую строку стата закреплённой подсказки
 				var tip: Control = inv.get("_tip")
 				var lines: Array = tip.get("lines") if tip != null else []
 				if not lines.is_empty():
