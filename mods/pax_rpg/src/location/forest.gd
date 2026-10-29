@@ -68,11 +68,18 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 	var exit := start + Vector2(0.0, 7.0)
 	var ang := rng.randf_range(-0.9, 0.9)
 	var item := start + Vector2(sin(ang), -cos(ang)) * rng.randf_range(55.0, 80.0)
+	var camp := quest.has("contract")                   # поручение: лагерь шире, на полпути — дозор
+	var patrol := start.lerp(item, 0.5) + Vector2(cos(ang), sin(ang)) * rng.randf_range(-8.0, 8.0)
 	var t := {"seed": seed_v, "size": SIZE, "amp": AMP, "flats": [[start.x, start.y, 8.0], [exit.x, exit.y, 5.0],
-		[item.x, item.y, 6.0]]}
+		[item.x, item.y, 11.0 if camp else 6.0]]}
+	if camp:
+		(t["flats"] as Array).append([patrol.x, patrol.y, 6.0])
 	var n := noise(seed_v)
 	var items: Array = []
-	var clear: Array = [[start, 9.0], [exit, 6.0], [item, 5.0]]
+	var clear: Array = [[start, 9.0], [exit, 6.0], [item, 12.0 if camp else 5.0]]
+	if camp:
+		clear.append([patrol, 6.0])
+		items.append_array(camp_props(str(CONTRACTS_PROPS.get(str(quest.get("contract", "")), "camp")), item, rng))
 	var free := func(p: Vector2, r: float) -> bool:
 		for c: Array in clear:
 			if p.distance_to(c[0]) < float(c[1]) + r:
@@ -126,12 +133,46 @@ static func generate(seed_v: int, quest: Dictionary) -> Dictionary:
 			if bool(sc[4]):
 				e["c"] = true
 			items.append(e)
-	return {
+	var out := {
 		"forest": true, "terrain": t, "landscape": true, "ground": [SIZE, SIZE, 0.0, 0.0],
 		"start": [start.x, 1.4, start.y], "exit": [exit.x, exit.y], "exit_radius": 3.5, "goblins": 0,
 		"quest_item": [item.x, item.y], "quest_goblins": int(quest.get("goblins", 2)), "items": items, "npcs": 0,
 		"paths": [], "arena": [],
 	}
+	if camp:
+		out["patrol"] = [patrol.x, patrol.y]
+	return out
+
+
+const CONTRACTS_PROPS := {"coal": "caravan", "scouts": "camp", "shepherd": "cage", "beast": "lair"}
+
+
+## Реквизит лагеря поручения (из моделей Гхарна) вокруг центра c: разбитый караван, стоянка дозора, клетка с
+## пленником, логово вожака. Всё на ровной поляне (flats), центр свободен — там находка, пленник или бой.
+static func camp_props(kind: String, c: Vector2, rng: RandomNumberGenerator) -> Array:
+	var sets := {
+		"caravan": [["models/gharn/hay_wagon.glb", 7.0], ["models/gharn/props/cart.glb", 7.5], ["models/gharn/props/crate.glb", 4.0],
+			["models/gharn/props/crate.glb", 4.5], ["models/gharn/props/sack_grain.glb", 5.0], ["models/gharn/props/barrel_water.glb", 5.5],
+			["models/gharn/props/firepit.glb", 8.5]],
+		"camp": [["models/gharn/props/firepit.glb", 3.0], ["models/gharn/bone_banner.glb", 8.0], ["models/gharn/bone_banner.glb", 8.0],
+			["models/gharn/spear_rack.glb", 7.0], ["models/gharn/hide_frame.glb", 8.5], ["models/gharn/props/sack_grain.glb", 6.5]],
+		"cage": [["models/gharn/props/firepit.glb", 5.0], ["models/gharn/bone_banner.glb", 8.5], ["models/gharn/spear_rack.glb", 7.5],
+			["models/gharn/hide_frame.glb", 8.0], ["models/gharn/props/crate.glb", 6.5]],
+		"lair": [["models/gharn/bone_banner.glb", 8.5], ["models/gharn/bone_banner.glb", 8.5], ["models/gharn/bone_banner.glb", 9.0],
+			["models/gharn/loot_pile.glb", 9.0], ["models/gharn/spit_roast.glb", 6.5], ["models/gharn/brazier_tusk.glb", 7.0],
+			["models/gharn/brazier_tusk.glb", 7.0], ["models/gharn/mana_totem.glb", 9.5]],
+	}
+	var out: Array = []
+	if kind == "cage":                                   # клетка — над пленником, без коллизии (он стоит внутри)
+		out.append({"m": "models/gharn/beast_cage.glb", "p": [c.x, 0.0, c.y], "r": rng.randf_range(0.0, 360.0), "s": 1.0})
+	var list: Array = sets.get(kind, sets.camp)
+	for i: int in list.size():
+		var e: Array = list[i]
+		var a := TAU * i / list.size() + rng.randf_range(-0.25, 0.25)
+		var p := c + Vector2(cos(a), sin(a)) * float(e[1])
+		out.append({"m": str(e[0]), "p": [p.x, 0.0, p.y], "r": rad_to_deg(-a) + 90.0 + rng.randf_range(-20.0, 20.0), "s": 1.0,
+			"c": true})
+	return out
 
 
 ## Земля леса: сетка с высотами (цвет — трава на ровном, земля на склонах) и коллизия HeightMapShape3D.

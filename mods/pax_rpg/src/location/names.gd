@@ -26,6 +26,8 @@ static func new_run(mod: PaxMod) -> int:
 	var s := rng.randi_range(1, 2147483646)
 	mod.set_setting("run_seed", s)
 	mod.set_setting("npc_rel", {})
+	for k: String in ["quest", "contracts_done", "givers", "rescued", "lost_purse"]:   # поручения — у мира, не у героя
+		mod.set_setting(k, [] if k in ["contracts_done", "rescued"] else {})
 	return s
 
 

@@ -2421,8 +2421,11 @@ func bone_holder(bone: String) -> Node3D:
 	return ba
 
 
+var parry_bonus := 0.0               # с к окну парирования (приём «Зоркий глаз», location.gd → progress.perk)
+
+
 func parry_window() -> bool:
-	return blocking and _block_t <= _f("parry_window", 0.25)
+	return blocking and _block_t <= _f("parry_window", 0.25) + parry_bonus
 
 
 ## Парировал: меч вздрагивает в блоке (как от удара о сталь). Окно парирования не продлевается — следующий удар

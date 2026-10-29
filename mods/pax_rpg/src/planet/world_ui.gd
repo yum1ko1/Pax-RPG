@@ -487,9 +487,8 @@ func _draw_quest() -> void:
 	var w := r.size.x - 76.0
 	var rows: Array = []
 	if not q.is_empty():
-		var item := _tr("pax_rpg_qitem_" + str(q.get("item", "")))
 		var found := str(q.get("state", "")) == "found"
-		rows.append([_tr("pax_rpg_journal_find") % item, not found])
+		rows.append([Quest.goal(mod, q), not found])
 		rows.append([(_tr("pax_rpg_journal_found") if found else _tr("pax_rpg_journal_active")) + " · " +
 			_tr("pax_rpg_city_" + str(q.get("city", ""))), found])
 	else:
@@ -829,7 +828,7 @@ func _city_quests(id: String) -> Array:
 	var q := Quest.get_q(mod)
 	if q.is_empty() or str(q.get("city", "")) != id:
 		return []
-	var item := _tr("pax_rpg_qitem_" + str(q.get("item", "")))
+	var item := Quest.short(mod, q)
 	return [[_tr("pax_rpg_wui_quest_row") % [item, str(q.get("npc_name", ""))], str(q.get("state", "")) == "found"]]
 
 
